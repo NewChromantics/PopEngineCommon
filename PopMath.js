@@ -31,11 +31,13 @@ Math.range = function(Min,Max,Value)
 {
 	return (Value-Min) / (Max-Min);
 }
+Math.Range = Math.range;
 
 Math.rangeClamped = function(Min,Max,Value)
 {
 	return Math.clamp( 0, 1, Math.range( Min, Max, Value ) );
 }
+Math.RangeClamped = Math.rangeClamped;
 
 Math.lerp = function(Min,Max,Time)
 {
