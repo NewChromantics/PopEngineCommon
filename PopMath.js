@@ -366,3 +366,47 @@ function GetOverlapArea(Recta,Rectb)
 	let BigSize = Math.max( GetRectArea(Recta), GetRectArea(Rectb) );
 	return OverlapSize / BigSize;
 }
+
+
+
+
+
+function HexToRgb(HexRgb)
+{
+	if ( HexRgb[0] != '#' )
+		throw HexRgb + " doesn't begin with #";
+	
+	let GetNibble = function(CharIndex)
+	{
+		let Char = HexRgb.charCodeAt(CharIndex);
+		let a = 'a'.charCodeAt(0);
+		let zero = '0'.charCodeAt(0);
+		let nine = '9'.charCodeAt(0);
+		return (Char >= zero && Char <= nine) ? (0+Char-zero) : (10+Char-a);
+	}
+	
+	let a = GetNibble(1);
+	let b = GetNibble(2);
+	let c = GetNibble(3);
+	let d = GetNibble(4);
+	let e = GetNibble(5);
+	let f = GetNibble(6);
+	
+	let Red = (a<<4) | b;
+	let Green = (c<<4) | d;
+	let Blue = (e<<4) | f;
+	//Pop.Debug(a,b,c,d,e,f);
+	//Pop.Debug(Red,Green,Blue);
+	return [Red,Green,Blue];
+}
+
+function HexToRgbf(HexRgb)
+{
+	let rgb = HexToRgb( HexRgb );
+	rgb[0] /= 255;
+	rgb[1] /= 255;
+	rgb[2] /= 255;
+	return rgb;
+}
+
+
