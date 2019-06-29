@@ -29,7 +29,7 @@ Math.clamp = function(min, max,Value)
 
 Math.range = function(Min,Max,Value)
 {
-	return (Value-Min) / (Max-Min);
+	return (Max==Min) ? 0 : (Value-Min) / (Max-Min);
 }
 Math.Range = Math.range;
 
