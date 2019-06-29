@@ -373,24 +373,40 @@ function GetOverlapArea(Recta,Rectb)
 
 function HexToRgb(HexRgb)
 {
-	if ( HexRgb[0] != '#' )
-		throw HexRgb + " doesn't begin with #";
+	let GetNibble = function(){};
 	
-	let GetNibble = function(CharIndex)
+	if ( typeof HexRgb == 'string' )
 	{
-		let Char = HexRgb.charCodeAt(CharIndex);
-		let a = 'a'.charCodeAt(0);
-		let zero = '0'.charCodeAt(0);
-		let nine = '9'.charCodeAt(0);
-		return (Char >= zero && Char <= nine) ? (0+Char-zero) : (10+Char-a);
+		if ( HexRgb[0] != '#' )
+			throw HexRgb + " doesn't begin with #";
+	
+		GetNibble = function(CharIndex)
+		{
+			let Char = HexRgb.charCodeAt(CharIndex+1);
+			let a = 'a'.charCodeAt(0);
+			let zero = '0'.charCodeAt(0);
+			let nine = '9'.charCodeAt(0);
+			return (Char >= zero && Char <= nine) ? (0+Char-zero) : (10+Char-a);
+		}
+	}
+	else	//	int 0xffaa00
+	{
+		GetNibble = function(Index)
+		{
+			Index = 5-Index;
+			let i = HexRgb >> (4*Index);
+			i &= 0xf;
+			return i;
+		}
 	}
 	
-	let a = GetNibble(1);
-	let b = GetNibble(2);
-	let c = GetNibble(3);
-	let d = GetNibble(4);
-	let e = GetNibble(5);
-	let f = GetNibble(6);
+	
+	let a = GetNibble(0);
+	let b = GetNibble(1);
+	let c = GetNibble(2);
+	let d = GetNibble(3);
+	let e = GetNibble(4);
+	let f = GetNibble(5);
 	
 	let Red = (a<<4) | b;
 	let Green = (c<<4) | d;
