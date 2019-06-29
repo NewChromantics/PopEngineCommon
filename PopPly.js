@@ -31,6 +31,11 @@ Pop.ParsePlyFile = function(Filename,OnVertex)
 		let x = parseFloat(xyz[0]);
 		let y = parseFloat(xyz[1]);
 		let z = parseFloat(xyz[2]);
+		if ( x === NaN || y === NaN || z === NaN )
+		{
+			Pop.Debug("Nan parsed; ignoring line " + Line, x,y,z);
+			return;
+		}
 		OnVertex( x,y,z);
 	}
 	PlyLines.forEach(ProcessLine);
