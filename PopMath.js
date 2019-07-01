@@ -394,9 +394,15 @@ function HexToRgb(HexRgb)
 		{
 			let Char = HexRgb.charCodeAt(CharIndex+1);
 			let a = 'a'.charCodeAt(0);
+			let z = 'z'.charCodeAt(0);
+			let A = 'A'.charCodeAt(0);
+			let Z = 'Z'.charCodeAt(0);
 			let zero = '0'.charCodeAt(0);
 			let nine = '9'.charCodeAt(0);
-			return (Char >= zero && Char <= nine) ? (0+Char-zero) : (10+Char-a);
+			if (Char >= zero && Char <= nine) return (0+Char-zero);
+			if (Char >= a && Char <= z) return (10+Char-a);
+			if (Char >= A && Char <= Z) return (10+Char-A);
+			throw "Non hex-char " + Char;
 		}
 	}
 	else	//	int 0xffaa00
