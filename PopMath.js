@@ -43,6 +43,16 @@ Math.lerp = function(Min,Max,Time)
 {
 	return Min + (( Max - Min ) * Time);
 }
+Math.Lerp = Math.lerp;
+
+Math.LerpArray = function(Min,Max,Time)
+{
+	let Values = Min.slice();
+	for ( let i=0;	i<Min.length;	i++ )
+		Values[i] = Math.Lerp( Min[i], Max[i], Time );
+	return Values;
+}
+
 
 Math.Dot2 = function(a,b)
 {
