@@ -67,10 +67,13 @@ Math.Dot3 = function(a,b)
 }
 
 
-Math.LengthSq2 = function(x0,y0,x1,y1)
+Math.LengthSq2 = function(xy)
 {
-	let dx = x1-x0;
-	let dy = y1-y0;
+	if ( !Array.isArray(xy) )
+		throw "LengthSq2() expecting 2D xy array";
+
+	let dx = xy[0];
+	let dy = xy[1];
 	let LengthSq = dx*dx + dy*dy;
 	return LengthSq;
 }
@@ -86,9 +89,12 @@ Math.LengthSq3 = function(a,b=[0,0,0])
 }
 
 
-Math.Length2 = function(x0,y0,x1,y1)
+Math.Length2 = function(xy)
 {
-	let LengthSq = Math.LengthSq2(x0,y0,x1,y1);
+	if ( !Array.isArray(xy) )
+		throw "Length2() expecting 2D xy array";
+
+	let LengthSq = Math.LengthSq2( xy );
 	let Len = Math.sqrt( LengthSq );
 	return Len;
 }
@@ -101,10 +107,10 @@ Math.Length3 = function(a)
 	return Len;
 }
 
-Math.Normalise2 = function(a)
+Math.Normalise2 = function(xy)
 {
-	let Length = Math.Length2( 0, 0, a[0], a[1] );
-	return [ a[0]/Length, a[1]/Length ];
+	let Length = Math.Length2( xy );
+	return [ xy[0]/Length, xy[1]/Length ];
 }
 
 Math.Normalise3 = function(a)
@@ -129,6 +135,12 @@ Math.Cross3 = function(a,b)
 	let y = b[1] * a[3] - a[1] * b[3];
 	let z = a[1] * b[2] - b[1] * a[2];
 	return [x,y,z];
+}
+
+Math.Distance2 = function(a,b)
+{
+	let Delta = Math.Subtract2( a,b );
+	return Math.Length2( Delta );
 }
 
 Math.Rotate2 = function(xy,AngleDegrees)
