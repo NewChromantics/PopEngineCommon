@@ -460,3 +460,21 @@ function HexToRgbf(HexRgb)
 }
 
 
+Math.GetSphereSphereIntersection = function(Sphere4a,Sphere4b)
+{
+	let Delta = Math.Subtract3( Sphere4b, Sphere4a );
+	let Distance = Math.Length3( Delta );
+	let RadiusA = Sphere4a[3];
+	let RadiusB = Sphere4b[3];
+	if ( Distance > RadiusA + RadiusB )
+		return null;
+
+	
+	let MidDistance = (RadiusA + RadiusB)/2;
+	let Intersection = [];
+	Intersection[0] = Sphere4a[0] + Delta[0] * MidDistance;
+	Intersection[1] = Sphere4a[1] + Delta[1] * MidDistance;
+	Intersection[2] = Sphere4a[2] + Delta[2] * MidDistance;
+	return Intersection;
+}
+
