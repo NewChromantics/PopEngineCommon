@@ -71,7 +71,7 @@ Math.LengthSq2 = function(xy)
 {
 	if ( !Array.isArray(xy) )
 		throw "LengthSq2() expecting 2D xy array";
-
+	
 	let dx = xy[0];
 	let dy = xy[1];
 	let LengthSq = dx*dx + dy*dy;
@@ -93,7 +93,7 @@ Math.Length2 = function(xy)
 {
 	if ( !Array.isArray(xy) )
 		throw "Length2() expecting 2D xy array";
-
+	
 	let LengthSq = Math.LengthSq2( xy );
 	let Len = Math.sqrt( LengthSq );
 	return Len;
@@ -143,6 +143,12 @@ Math.Distance2 = function(a,b)
 	return Math.Length2( Delta );
 }
 
+Math.Distance3 = function(a,b)
+{
+	let Delta = Math.Subtract3( a,b );
+	return Math.Length3( Delta );
+}
+
 Math.Rotate2 = function(xy,AngleDegrees)
 {
 	const AngleRad = Math.DegToRad( AngleDegrees );
@@ -162,7 +168,7 @@ Math.GetAngleDiffDegrees = function(a,b)
 	if ( a < -180 )	a += 360;
 	if ( b > 180 )	b -= 360;
 	if ( b < -180 )	b += 360;
-
+	
 	return b - a;
 }
 
@@ -185,16 +191,16 @@ function SnapRectInsideParent(Rect,ParentRect)
 	//	now fit top left
 	if ( Rect[0] < ParentRect[0] )
 		Rect[0] = ParentRect[0];
-
+	
 	if ( Rect[1] < ParentRect[1] )
 		Rect[1] = ParentRect[1];
-
+	
 	//	todo: clip, if right/bottom > parent, rect is too big
 	if ( Rect[2] > ParentRect[2] )
 		Rect[2] = ParentRect[2];
 	if ( Rect[3] > ParentRect[3] )
 		Rect[3] = ParentRect[3];
-
+	
 	return Rect;
 }
 
@@ -358,7 +364,7 @@ function RectIsOverlapped(RectA,RectB)
 	let rb = RectB[0] + RectB[2];
 	let ba = RectA[1] + RectA[3];
 	let bb = RectB[1] + RectB[3];
-
+	
 	//	there's a better way of doing this by putting rectB into RectA space
 	//	but lets do that later
 	if ( PointInsideRect( [la,ta], RectB ) )	return true;
@@ -401,7 +407,7 @@ function HexToRgb(HexRgb)
 	{
 		if ( HexRgb[0] != '#' )
 			throw HexRgb + " doesn't begin with #";
-	
+		
 		GetNibble = function(CharIndex)
 		{
 			let Char = HexRgb.charCodeAt(CharIndex+1);
