@@ -59,6 +59,48 @@ function CreateParamsWindow(Params,OnAnyChanged)
 			//	init label
 			Control.OnChanged( Params[Name] );
 		}
+		else if ( Min == 'Colour' )
+		{
+			Control = new Pop.Gui.TickBox( Window, [ControlLeft,ControlTop,ControlWidth,ControlHeight] );
+			Control.SetValue(false);
+			
+			let GetValue8 = function(Rgbf)
+			{
+				let Rgb8 = [ Rgbf[0]*255, Rgbf[1]*255, Rgbf[2]*255 ];
+				return Rgb8;
+			}
+			
+			Control.OnChanged = function(Value)
+			{
+				let Rgbf = Params[Name];
+				let Rgb8 = GetValue8( Rgbf );
+				let ColourPicker = new Pop.Gui.ColourPicker( Rgb8 );
+				
+				//	gr: if this deletes, things crash, need to fix it
+				Control.ColourPicker = ColourPicker;
+				
+				ColourPicker.OnChanged = function(Rgb8)
+				{
+					let r = Rgb8[0] / 255.0;
+					let g = Rgb8[1] / 255.0;
+					let b = Rgb8[2] / 255.0;
+					Value = [r,g,b];
+					Value = CleanValue(Value);
+					Params[Name] = Value;
+					Control.UpdateLabel( Value );
+					OnAnyChanged(Params);
+				}
+			}
+			
+			Control.UpdateLabel = function(Value)
+			{
+				let Value8 = GetValue8( Value );
+				Control.SetLabel("RGB " + Value8 );
+			}
+			
+			//	init label
+			Control.UpdateLabel( Params[Name] );
+		}
 		else
 		{
 			const TickScalar = (CleanValue===Math.floor) ? Max : 1000;
