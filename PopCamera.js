@@ -122,7 +122,6 @@ Pop.Camera = function()
 	
 	this.SetOrbit = function(Pitch,Yaw,Roll,Distance)
 	{
-		Pop.Debug("SetOrbit",...arguments);
 		let Pitchr = -Math.radians(Pitch);
 		let Yawr = -Math.radians(Yaw);
 		
@@ -132,7 +131,7 @@ Pop.Camera = function()
 		Deltax *= Distance;
 		Deltay *= Distance;
 		Deltaz *= Distance;
-		Pop.Debug( "SetOrbit deltas", Deltax, Deltay, Deltaz );
+		//Pop.Debug( "SetOrbit deltas", Deltax, Deltay, Deltaz );
 		this.Position[0] = this.LookAt[0] + Deltax;
 		this.Position[1] = this.LookAt[1] + Deltay;
 		this.Position[2] = this.LookAt[2] + Deltaz;
@@ -140,14 +139,16 @@ Pop.Camera = function()
 	
 	this.OnCameraOrbit = function(x,y,z,FirstClick)
 	{
+		//	remap input from xy to yaw, pitch
 		let yxz = [y,-x,z];
 		x = yxz[0];
 		y = yxz[1];
 		z = yxz[2];
+		
 		if ( FirstClick )
 		{
 			this.Start_OrbitPyrd = this.GetPitchYawRollDistance();
-			Pop.Debug("this.Start_OrbitPyrd",this.Start_OrbitPyrd);
+			//Pop.Debug("this.Start_OrbitPyrd",this.Start_OrbitPyrd);
 			this.Last_OrbitPos = [x,y,z];
 		}
 		
