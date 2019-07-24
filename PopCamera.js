@@ -106,29 +106,51 @@ Pop.Camera = function()
 	}
 	
 	this.OnCameraPan = function(x,y,FirstClick)
+	this.OnCameraPan = function(x,y,z,FirstClick)
 	{
 		if ( FirstClick )
-			this.LastPanPos = [x,y];
+			this.LastPos_PanPos = [x,y,z];
 		
-		let Deltax = this.LastPanPos[0] - x;
-		let Deltay = this.LastPanPos[1] - y;
+		let Deltax = this.LastPos_PanPos[0] - x;
+		let Deltay = this.LastPos_PanPos[1] - y;
+		let Deltaz = this.LastPos_PanPos[2] - z;
 		this.Position[0] += Deltax * 0.01
 		this.Position[1] -= Deltay * 0.01
+		this.Position[2] += Deltaz * 0.01
 		
-		this.LastPanPos = [x,y];
+		this.LastPos_PanPos = [x,y,z];
 	}
+	
+	this.OnLookAtPan = function(x,y,z,FirstClick)
+	{
+		if ( FirstClick )
+			this.LastPos_PanPos = [x,y,z];
+		
+		let Deltax = this.LastPos_PanPos[0] - x;
+		let Deltay = this.LastPos_PanPos[1] - y;
+		let Deltaz = this.LastPos_PanPos[2] - z;
+		this.Position[0] += Deltax * 0.01
+		this.Position[1] -= Deltay * 0.01
+		this.Position[2] += Deltaz * 0.01
+		
+		this.LastPos_PanPos = [x,y,z];
+	}
+	
+	
 	
 	this.OnCameraZoom = function(x,y,FirstClick)
 	{
-		if ( FirstClick )
-			this.LastZoomPos = [x,y];
+		Pop.Debug("OnCameraZoom deprecated, pass z to CameraPan");
 		
-		let Deltax = this.LastZoomPos[0] - x;
-		let Deltay = this.LastZoomPos[1] - y;
+		if ( FirstClick )
+			this.LastPosZoomPos = [x,y];
+		
+		let Deltax = this.LastPosZoomPos[0] - x;
+		let Deltay = this.LastPosZoomPos[1] - y;
 		//this.Position[0] -= Deltax * 0.01
 		this.Position[2] -= Deltay * 0.01
 		
-		this.LastZoomPos = [x,y];
+		this.LastPosZoomPos = [x,y];
 	}
 	
 }
