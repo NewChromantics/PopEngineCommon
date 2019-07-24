@@ -81,6 +81,29 @@ Pop.Camera = function()
 		return Matrix;
 	}
 	
+	this.GetWorldToCameraMatrix = function()
+	{
+		//	https://stackoverflow.com/questions/349050/calculating-a-lookat-matrix
+		let Up = [0,-1,0];
+		let DirToLookAt = Math.Subtract3( this.LookAt, this.Position );
+		let zaxis = Math.Normalise3( DirToLookAt );
+		let Right = Math.Cross3( Up, zaxis);
+		let xaxis = Math.Normalise3( Right );
+		let yaxis = Math.Cross3( zaxis, xaxis );
+		let MinusPos = Math.Subtract3( [0,0,0], this.Position );
+		let tx = -Math.Dot3( xaxis, MinusPos );
+		let ty = -Math.Dot3( yaxis, MinusPos );
+		let tz = -Math.Dot3( zaxis, MinusPos );
+
+		let Matrix =
+		[
+		 xaxis[0], yaxis[0], zaxis[0], 0,
+		 xaxis[1], yaxis[1], zaxis[1], 0,
+		 xaxis[2], yaxis[2], zaxis[2], 0,
+		 tx, ty, tz, 1
+		];
+		return Matrix;
+	}
 	
 	this.OnCameraPan = function(x,y,FirstClick)
 	{
