@@ -3,7 +3,7 @@ Pop.Camera = function()
 {
 	this.FovVertical = 45;
 	
-	this.Position = [ 0,0.5,1 ];
+	this.Position = [ 0,1,20 ];
 	this.LookAt = [ 0,0,0 ];
 	
 	this.NearDistance = 0.01;
@@ -84,9 +84,9 @@ Pop.Camera = function()
 	this.GetWorldToCameraMatrix = function()
 	{
 		//	https://stackoverflow.com/questions/349050/calculating-a-lookat-matrix
-		let Up = [0,-1,0];
-		let DirToLookAt = Math.Subtract3( this.LookAt, this.Position );
-		let zaxis = Math.Normalise3( DirToLookAt );
+		let Up = [0,1,0];
+		let Forward = Math.Subtract3( this.LookAt, this.Position );
+		let zaxis = Math.Normalise3( Forward );
 		let Right = Math.Cross3( Up, zaxis);
 		let xaxis = Math.Normalise3( Right );
 		let yaxis = Math.Cross3( zaxis, xaxis );
@@ -122,19 +122,23 @@ Pop.Camera = function()
 	
 	this.SetOrbit = function(Pitch,Yaw,Roll,Distance)
 	{
-		let Pitchr = -Math.radians(Pitch);
-		let Yawr = -Math.radians(Yaw);
+		let Pitchr = Math.radians(Pitch);
+		let Yawr = Math.radians(Yaw);
+		Pop.Debug("SetOrbit()", ...arguments );
+		Pop.Debug("Pitch = "+Pitch);
 		
-		let Deltax = -Math.sin(Yawr) * Math.cos(Pitchr);
-		let Deltay = Math.sin(Pitchr);
+		let Deltax = Math.sin(Yawr) * Math.cos(Pitchr);
+		let Deltay = -Math.sin(Pitchr);
 		let Deltaz = Math.cos(Yawr) * Math.cos(Pitchr);
 		Deltax *= Distance;
 		Deltay *= Distance;
 		Deltaz *= Distance;
-		//Pop.Debug( "SetOrbit deltas", Deltax, Deltay, Deltaz );
+		
+		Pop.Debug( "SetOrbit deltas", Deltax, Deltay, Deltaz );
 		this.Position[0] = this.LookAt[0] + Deltax;
 		this.Position[1] = this.LookAt[1] + Deltay;
 		this.Position[2] = this.LookAt[2] + Deltaz;
+		
 	}
 	
 	this.OnCameraOrbit = function(x,y,z,FirstClick)
