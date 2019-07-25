@@ -141,9 +141,9 @@ Math.Multiply3 = function(a,b)
 
 Math.Cross3 = function(a,b)
 {
-	let x = a[1] * b[2] - b[1] * a[2];
-	let y = b[0] * a[2] - a[0] * b[2];
-	let z = a[0] * b[1] - b[0] * a[1];
+	let x = a[1] * b[2] - a[2] * b[1];
+	let y = a[2] * b[0] - a[0] * b[2];
+	let z = a[0] * b[1] - a[1] * b[0];
 	return [x,y,z];
 }
 
