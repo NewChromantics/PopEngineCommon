@@ -82,40 +82,9 @@ Pop.Camera = function()
 	}
 	
 	
-	function GetRotationMatrix(eye,up,center)
-	{
-		let z = Math.Subtract3( eye, center );
-		z = Math.Normalise3( z );
-		
-		let x = Math.Cross3( up, z );
-		x = Math.Normalise3( x );
-		
-		let y = Math.Cross3( z,x );
-		y = Math.Normalise3( y );
-		
-		let tx = 0;
-		let ty = 0;
-		let tz = 0;
-		
-		let out =
-		[
-		 x[0],	y[0],	z[0],	0,
-		 x[1],	y[1],	z[1],	0,
-		 x[2],	y[2],	z[2],	0,
-		 tx,	ty,	tz,	1,
-		 ];
-		
-		return out;
-	}
-	
-	function GetTranslationMatrix(x,y,z)
-	{
-		return [ 1,0,0,0,	0,1,0,0,	0,0,1,0,	x,y,z,1	];
-	}
-	
 	//	this generates a pos & rot matrix already multiplied together
 	//	would be nice to seperate to be more readable
-	function GetLookAtMatrix(eye,up,center)
+	function CreateLookAtMatrix(eye,up,center)
 	{
 		let z = Math.Subtract3( eye, center );
 		z = Math.Normalise3( z );
@@ -138,11 +107,11 @@ Pop.Camera = function()
 		 x[1],	y[1],	z[1],	0,
 		 x[2],	y[2],	z[2],	0,
 		 tx,	ty,	tz,	1,
-		];
+		 ];
 		
 		return out;
 	}
-	
+
 	
 	//	camera's modelview transform
 	this.GetWorldToCameraMatrix = function()
@@ -152,13 +121,12 @@ Pop.Camera = function()
 		
 		//	gr: these now match
 		//	but is that translation correct...
-		let Rotation = GetRotationMatrix( this.Position, Up, this.LookAt );
+		let Rotation = Math.CreateLookAtRotationMatrix( this.Position, Up, this.LookAt );
 		let Trans = Math.Subtract3( this.LookAt, this.Position );
-		let Translation = GetTranslationMatrix( Trans[0], Trans[1], Trans[2] );
+		let Translation = Math.CreateTranslationMatrix( Trans[0], Trans[1], Trans[2] );
 		let Matrix = Math.MatrixMultiply4x4( Rotation, Translation );
 		return Matrix;
-		
-		return GetLookAtMatrix( this.Position, Up, this.LookAt );
+		//return GetLookAtMatrix( this.Position, Up, this.LookAt );
 	}
 	
 	this.GetLocalToWorldMatrix = function()
@@ -213,7 +181,7 @@ Pop.Camera = function()
 	this.OnCameraOrbit = function(x,y,z,FirstClick)
 	{
 		//	remap input from xy to yaw, pitch
-		let yxz = [y,-x,z];
+		let yxz = [y,x,z];
 		x = yxz[0];
 		y = yxz[1];
 		z = yxz[2];

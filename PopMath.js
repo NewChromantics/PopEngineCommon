@@ -521,6 +521,21 @@ Math.MatrixInverse4x4 = function(Matrix)
 
 }
 
+Math.MatrixMultiply4x4Multiple = function()
+{
+	//	apply in the right order!
+	let Matrix = null;
+	for ( let m=arguments.length-1;	m>=0;	m-- )
+	{
+		let ParentMatrix = arguments[m];
+		if ( Matrix == null )
+			Matrix = ParentMatrix;
+		else
+			Matrix = Math.MatrixMultiply4x4( ParentMatrix, Matrix );
+	}
+	return Matrix;
+}
+
 Math.MatrixMultiply4x4 = function(a,b)
 {
 	var a00 = a[0],
@@ -570,5 +585,44 @@ Math.MatrixMultiply4x4 = function(a,b)
 	out[14] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
 	out[15] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
 	return out;
+}
+
+Math.CreateLookAtRotationMatrix = function(eye,up,center)
+{
+	let z = Math.Subtract3( eye, center );
+	z = Math.Normalise3( z );
+	
+	let x = Math.Cross3( up, z );
+	x = Math.Normalise3( x );
+	
+	let y = Math.Cross3( z,x );
+	y = Math.Normalise3( y );
+	
+	let tx = 0;
+	let ty = 0;
+	let tz = 0;
+	
+	let out =
+	[
+	 x[0],	y[0],	z[0],	0,
+	 x[1],	y[1],	z[1],	0,
+	 x[2],	y[2],	z[2],	0,
+	 tx,	ty,	tz,	1,
+	 ];
+	
+	return out;
+}
+
+Math.CreateTranslationMatrix = function(x,y,z)
+{
+	return [ 1,0,0,0,	0,1,0,0,	0,0,1,0,	x,y,z,1	];
+}
+
+Math.CreateScaleMatrix = function(x,y,z)
+{
+	y = (y === undefined) ? x : y;
+	z = (z === undefined) ? x : z;
+
+	return [ x,0,0,0,	0,y,0,0,	0,0,z,0,	0,0,0,1	];
 }
 
