@@ -72,11 +72,17 @@ function CreateParamsWindow(Params,OnAnyChanged)
 			
 			Control.OnChanged = function(Value)
 			{
+				//	unticked, hide (should remove all references... but isn't)
+				if ( !Value )
+				{
+					Control.ColourPicker = null;
+					return;
+				}
+				
 				let Rgbf = Params[Name];
 				let Rgb8 = GetValue8( Rgbf );
-				let ColourPicker = new Pop.Gui.ColourPicker( Rgb8 );
 				
-				//	gr: if this deletes, things crash, need to fix it
+				let ColourPicker = new Pop.Gui.ColourPicker( Rgb8 );
 				Control.ColourPicker = ColourPicker;
 				
 				ColourPicker.OnChanged = function(Rgb8)
@@ -89,6 +95,12 @@ function CreateParamsWindow(Params,OnAnyChanged)
 					Params[Name] = Value;
 					Control.UpdateLabel( Value );
 					OnAnyChanged(Params);
+				}
+				
+				ColourPicker.OnClosed = function()
+				{
+					Control.ColourPicker = null;
+					Control.SetValue(false);	//	untick
 				}
 			}
 			
