@@ -521,11 +521,13 @@ Math.MatrixInverse4x4 = function(Matrix)
 
 }
 
+//	gr: I've made this simpler, but its backwards to the other, and usual multiply notation, so maybe no...
+//	order is left-to-right of significance. eg. scale, then move.
 Math.MatrixMultiply4x4Multiple = function()
 {
 	//	apply in the right order!
 	let Matrix = null;
-	for ( let m=arguments.length-1;	m>=0;	m-- )
+	for ( let m=0;	m<arguments.length;	m++ )
 	{
 		let ParentMatrix = arguments[m];
 		if ( Matrix == null )
@@ -533,9 +535,12 @@ Math.MatrixMultiply4x4Multiple = function()
 		else
 			Matrix = Math.MatrixMultiply4x4( ParentMatrix, Matrix );
 	}
+	
 	return Matrix;
 }
 
+//	apply A, then B. So A is child, B is parent
+//	gr: but that doesn't seem to be riht
 Math.MatrixMultiply4x4 = function(a,b)
 {
 	var a00 = a[0],
