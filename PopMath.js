@@ -626,3 +626,19 @@ Math.CreateScaleMatrix = function(x,y,z)
 	return [ x,0,0,0,	0,y,0,0,	0,0,z,0,	0,0,0,1	];
 }
 
+Math.Matrix3x3ToMatrix4x4 = function(Matrix3,Row4=[0,0,0,1])
+{
+	let Matrix4 =
+	[
+		Matrix3[0],	Matrix3[1],	Matrix3[2], 0,
+		Matrix3[3],	Matrix3[4],	Matrix3[5],	0,
+		Matrix3[6],	Matrix3[7],	Matrix3[8],	0,
+		Row4[0],	Row4[1],	Row4[2],	Row4[3]
+	];
+	return Matrix4;
+}
+
+Math.CreateIdentityMatrix = function()
+{
+	return Math.CreateTranslationMatrix( 0,0,0 );
+}
