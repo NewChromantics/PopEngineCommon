@@ -93,14 +93,14 @@ function TTrack(Track,TrackIndex)
 			let NalUnitHeader = NalUnits[0][0];
 			let NalUnitZero = (NalUnitHeader >> 7) & 0x01;
 			if ( NalUnitZero!= 0)
-				console.log("NalUnitZero=="+NalUnitZero+" NalUnitHeader=="+NalUnitHeader);
+				Pop.Debug("NalUnitZero=="+NalUnitZero+" NalUnitHeader=="+NalUnitHeader);
 			let NalUnitKeyframe = (NalUnitHeader >> 5) & 0x03;
 			let NalUnitType = (NalUnitHeader >> 0) & 0x1F;
-			//console.log("Nal unit type: " +NalUnitType);
+			//Pop.Debug("Nal unit type: " +NalUnitType);
 			if ( NalUnitType==5 )
 			{
 				if ( !Meta.IsKeyframe )
-					console.log("i frame isnt keyframe");
+					Pop.Debug("i frame isnt keyframe");
 				Meta.IsKeyframe |= NalUnitType==5;
 			}
 			
@@ -140,7 +140,6 @@ Pop.Media.VideoSource = function(Filename)
 	
 	this.GetNextFrame = async function(ImageBuffer,StreamIndex,Latest)
 	{
-		Pop.Debug("GetNextFrame",this);
 		//	gr: if !Latest, change Time to just the next frame in sequence
 		//	get correct time
 		//	grab samples we want to process
@@ -161,7 +160,7 @@ Pop.Media.VideoSource = function(Filename)
 					Frame = this.LastFrame+1;
 			}
 			
-			Pop.Debug("decoding frame", Frame, "last frame", this.LastFrame);
+			//Pop.Debug("decoding frame", Frame, "last frame", this.LastFrame);
 			const ExtractPlanes = true;
 			const NewFrame = await this.DecodeFrame( Frame, ExtractPlanes, ImageBuffer );
 			if ( !NewFrame )
@@ -179,7 +178,6 @@ Pop.Media.VideoSource = function(Filename)
 	
 	this.DecodeFrame = async function(FrameIndex,ExtractPlanes,ImageFrameBuffer)
 	{
-		Pop.Debug("DecodeFrame",this);
 		//	replace with our frame buffer
 		//	the avc decoder needs updating to specify the buffer I think,
 		//	then we can control it at a high level
