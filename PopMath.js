@@ -141,9 +141,9 @@ Math.Multiply3 = function(a,b)
 
 Math.Cross3 = function(a,b)
 {
-	let x = a[2] * b[3] - b[2] * a[3];
-	let y = b[1] * a[3] - a[1] * b[3];
-	let z = a[1] * b[2] - b[1] * a[2];
+	let x = a[1] * b[2] - a[2] * b[1];
+	let y = a[2] * b[0] - a[0] * b[2];
+	let z = a[0] * b[1] - a[1] * b[0];
 	return [x,y,z];
 }
 
@@ -178,7 +178,7 @@ Math.GetAngleDiffDegrees = function(a,b)
 	if ( a < -180 )	a += 360;
 	if ( b > 180 )	b -= 360;
 	if ( b < -180 )	b += 360;
-	
+
 	return b - a;
 }
 
@@ -201,16 +201,16 @@ function SnapRectInsideParent(Rect,ParentRect)
 	//	now fit top left
 	if ( Rect[0] < ParentRect[0] )
 		Rect[0] = ParentRect[0];
-	
+
 	if ( Rect[1] < ParentRect[1] )
 		Rect[1] = ParentRect[1];
-	
+
 	//	todo: clip, if right/bottom > parent, rect is too big
 	if ( Rect[2] > ParentRect[2] )
 		Rect[2] = ParentRect[2];
 	if ( Rect[3] > ParentRect[3] )
 		Rect[3] = ParentRect[3];
-	
+
 	return Rect;
 }
 
@@ -374,7 +374,7 @@ function RectIsOverlapped(RectA,RectB)
 	let rb = RectB[0] + RectB[2];
 	let ba = RectA[1] + RectA[3];
 	let bb = RectB[1] + RectB[3];
-	
+
 	//	there's a better way of doing this by putting rectB into RectA space
 	//	but lets do that later
 	if ( PointInsideRect( [la,ta], RectB ) )	return true;
@@ -488,3 +488,162 @@ Math.GetSphereSphereIntersection = function(Sphere4a,Sphere4b)
 	return Intersection;
 }
 
+Math.MatrixInverse4x4 = function(Matrix)
+{
+	let m = Matrix;
+	let r = [];
+	
+	r[0] = m[5]*m[10]*m[15] - m[5]*m[14]*m[11] - m[6]*m[9]*m[15] + m[6]*m[13]*m[11] + m[7]*m[9]*m[14] - m[7]*m[13]*m[10];
+	r[1] = -m[1]*m[10]*m[15] + m[1]*m[14]*m[11] + m[2]*m[9]*m[15] - m[2]*m[13]*m[11] - m[3]*m[9]*m[14] + m[3]*m[13]*m[10];
+	r[2] = m[1]*m[6]*m[15] - m[1]*m[14]*m[7] - m[2]*m[5]*m[15] + m[2]*m[13]*m[7] + m[3]*m[5]*m[14] - m[3]*m[13]*m[6];
+	r[3] = -m[1]*m[6]*m[11] + m[1]*m[10]*m[7] + m[2]*m[5]*m[11] - m[2]*m[9]*m[7] - m[3]*m[5]*m[10] + m[3]*m[9]*m[6];
+	
+	r[4] = -m[4]*m[10]*m[15] + m[4]*m[14]*m[11] + m[6]*m[8]*m[15] - m[6]*m[12]*m[11] - m[7]*m[8]*m[14] + m[7]*m[12]*m[10];
+	r[5] = m[0]*m[10]*m[15] - m[0]*m[14]*m[11] - m[2]*m[8]*m[15] + m[2]*m[12]*m[11] + m[3]*m[8]*m[14] - m[3]*m[12]*m[10];
+	r[6] = -m[0]*m[6]*m[15] + m[0]*m[14]*m[7] + m[2]*m[4]*m[15] - m[2]*m[12]*m[7] - m[3]*m[4]*m[14] + m[3]*m[12]*m[6];
+	r[7] = m[0]*m[6]*m[11] - m[0]*m[10]*m[7] - m[2]*m[4]*m[11] + m[2]*m[8]*m[7] + m[3]*m[4]*m[10] - m[3]*m[8]*m[6];
+	
+	r[8] = m[4]*m[9]*m[15] - m[4]*m[13]*m[11] - m[5]*m[8]*m[15] + m[5]*m[12]*m[11] + m[7]*m[8]*m[13] - m[7]*m[12]*m[9];
+	r[9] = -m[0]*m[9]*m[15] + m[0]*m[13]*m[11] + m[1]*m[8]*m[15] - m[1]*m[12]*m[11] - m[3]*m[8]*m[13] + m[3]*m[12]*m[9];
+	r[10] = m[0]*m[5]*m[15] - m[0]*m[13]*m[7] - m[1]*m[4]*m[15] + m[1]*m[12]*m[7] + m[3]*m[4]*m[13] - m[3]*m[12]*m[5];
+	r[11] = -m[0]*m[5]*m[11] + m[0]*m[9]*m[7] + m[1]*m[4]*m[11] - m[1]*m[8]*m[7] - m[3]*m[4]*m[9] + m[3]*m[8]*m[5];
+	
+	r[12] = -m[4]*m[9]*m[14] + m[4]*m[13]*m[10] + m[5]*m[8]*m[14] - m[5]*m[12]*m[10] - m[6]*m[8]*m[13] + m[6]*m[12]*m[9];
+	r[13] = m[0]*m[9]*m[14] - m[0]*m[13]*m[10] - m[1]*m[8]*m[14] + m[1]*m[12]*m[10] + m[2]*m[8]*m[13] - m[2]*m[12]*m[9];
+	r[14] = -m[0]*m[5]*m[14] + m[0]*m[13]*m[6] + m[1]*m[4]*m[14] - m[1]*m[12]*m[6] - m[2]*m[4]*m[13] + m[2]*m[12]*m[5];
+	r[15] = m[0]*m[5]*m[10] - m[0]*m[9]*m[6] - m[1]*m[4]*m[10] + m[1]*m[8]*m[6] + m[2]*m[4]*m[9] - m[2]*m[8]*m[5];
+	
+	let det = m[0]*r[0] + m[1]*r[4] + m[2]*r[8] + m[3]*r[12];
+	for ( let i=0;	i<16;	i++ )
+		r[i] /= det;
+	
+	return r;
+
+}
+
+//	gr: I've made this simpler, but its backwards to the other, and usual multiply notation, so maybe no...
+//	order is left-to-right of significance. eg. scale, then move.
+Math.MatrixMultiply4x4Multiple = function()
+{
+	//	apply in the right order!
+	let Matrix = null;
+	for ( let m=0;	m<arguments.length;	m++ )
+	{
+		let ParentMatrix = arguments[m];
+		if ( Matrix == null )
+			Matrix = ParentMatrix;
+		else
+			Matrix = Math.MatrixMultiply4x4( ParentMatrix, Matrix );
+	}
+	
+	return Matrix;
+}
+
+//	apply A, then B. So A is child, B is parent
+//	gr: but that doesn't seem to be riht
+Math.MatrixMultiply4x4 = function(a,b)
+{
+	var a00 = a[0],
+	a01 = a[1],
+	a02 = a[2],
+	a03 = a[3];
+	var a10 = a[4],
+	a11 = a[5],
+	a12 = a[6],
+	a13 = a[7];
+	var a20 = a[8],
+	a21 = a[9],
+	a22 = a[10],
+	a23 = a[11];
+	var a30 = a[12],
+	a31 = a[13],
+	a32 = a[14],
+	a33 = a[15];
+	
+	// Cache only the current line of the second matrix
+	var b0 = b[0],
+	b1 = b[1],
+	b2 = b[2],
+	b3 = b[3];
+
+	let out = [];
+	out[0] = b0 * a00 + b1 * a10 + b2 * a20 + b3 * a30;
+	out[1] = b0 * a01 + b1 * a11 + b2 * a21 + b3 * a31;
+	out[2] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
+	out[3] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
+	
+	b0 = b[4];b1 = b[5];b2 = b[6];b3 = b[7];
+	out[4] = b0 * a00 + b1 * a10 + b2 * a20 + b3 * a30;
+	out[5] = b0 * a01 + b1 * a11 + b2 * a21 + b3 * a31;
+	out[6] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
+	out[7] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
+	
+	b0 = b[8];b1 = b[9];b2 = b[10];b3 = b[11];
+	out[8] = b0 * a00 + b1 * a10 + b2 * a20 + b3 * a30;
+	out[9] = b0 * a01 + b1 * a11 + b2 * a21 + b3 * a31;
+	out[10] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
+	out[11] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
+	
+	b0 = b[12];b1 = b[13];b2 = b[14];b3 = b[15];
+	out[12] = b0 * a00 + b1 * a10 + b2 * a20 + b3 * a30;
+	out[13] = b0 * a01 + b1 * a11 + b2 * a21 + b3 * a31;
+	out[14] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
+	out[15] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
+	return out;
+}
+
+Math.CreateLookAtRotationMatrix = function(eye,up,center)
+{
+	let z = Math.Subtract3( eye, center );
+	z = Math.Normalise3( z );
+	
+	let x = Math.Cross3( up, z );
+	x = Math.Normalise3( x );
+	
+	let y = Math.Cross3( z,x );
+	y = Math.Normalise3( y );
+	
+	let tx = 0;
+	let ty = 0;
+	let tz = 0;
+	
+	let out =
+	[
+	 x[0],	y[0],	z[0],	0,
+	 x[1],	y[1],	z[1],	0,
+	 x[2],	y[2],	z[2],	0,
+	 tx,	ty,	tz,	1,
+	 ];
+	
+	return out;
+}
+
+Math.CreateTranslationMatrix = function(x,y,z)
+{
+	return [ 1,0,0,0,	0,1,0,0,	0,0,1,0,	x,y,z,1	];
+}
+
+Math.CreateScaleMatrix = function(x,y,z)
+{
+	y = (y === undefined) ? x : y;
+	z = (z === undefined) ? x : z;
+
+	return [ x,0,0,0,	0,y,0,0,	0,0,z,0,	0,0,0,1	];
+}
+
+Math.Matrix3x3ToMatrix4x4 = function(Matrix3,Row4=[0,0,0,1])
+{
+	let Matrix4 =
+	[
+		Matrix3[0],	Matrix3[1],	Matrix3[2], 0,
+		Matrix3[3],	Matrix3[4],	Matrix3[5],	0,
+		Matrix3[6],	Matrix3[7],	Matrix3[8],	0,
+		Row4[0],	Row4[1],	Row4[2],	Row4[3]
+	];
+	return Matrix4;
+}
+
+Math.CreateIdentityMatrix = function()
+{
+	return Math.CreateTranslationMatrix( 0,0,0 );
+}
