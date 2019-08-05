@@ -676,3 +676,41 @@ Math.GetMatrixTranslation = function(Matrix)
 	let xyz = Matrix.slice(10,10+3);
 	return xyz;
 }
+
+Math.CreateAxisRotationMatrix = function(Axis,Degrees)
+{
+	let Radians = Math.DegToRad( Degrees );
+	
+	let x = Axis[0];
+	let y = Axis[1];
+	let z = Axis[2];
+	let len = Math.sqrt(x * x + y * y + z * z);
+	len = 1 / len;
+	x *= len;
+	y *= len;
+	z *= len;
+		
+	let s = Math.sin(Radians);
+	let c = Math.cos(Radians);
+	let t = 1 - c;
+		
+	// Perform rotation-specific matrix multiplication
+	let out = [];
+	out[0] = x * x * t + c;
+	out[1] = y * x * t + z * s;
+	out[2] = z * x * t - y * s;
+	out[3] = 0;
+	out[4] = x * y * t - z * s;
+	out[5] = y * y * t + c;
+	out[6] = z * y * t + x * s;
+	out[7] = 0;
+	out[8] = x * z * t + y * s;
+	out[9] = y * z * t - x * s;
+	out[10] = z * z * t + c;
+	out[11] = 0;
+	out[12] = 0;
+	out[13] = 0;
+	out[14] = 0;
+	out[15] = 1;
+	return out;
+}
