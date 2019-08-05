@@ -319,6 +319,29 @@ function GetNormalisedRect(ChildRect,ParentRect)
 	return [l,t,w,h];
 }
 
+
+Math.ScaleRect = function(ChildRect,ParentRect)
+{
+	let pl = ParentRect[0];
+	let pr = pl + ParentRect[2];
+	let pt = ParentRect[1];
+	let pb = pt + ParentRect[3];
+	
+	let cl = ChildRect[0];
+	let cr = cl + ChildRect[2];
+	let ct = ChildRect[1];
+	let cb = ct + ChildRect[3];
+	
+	let l = Math.Lerp( pl, pr, cl );
+	let r = Math.Lerp( pl, pr, cr );
+	let t = Math.Lerp( pt, pb, ct );
+	let b = Math.Lerp( pt, pb, cb );
+	let w = r-l;
+	let h = b-t;
+	
+	return [l,t,w,h];
+}
+
 function AccumulateRects(RectA,RectB)
 {
 	let ra = RectA[0] + RectA[2];
@@ -646,4 +669,10 @@ Math.Matrix3x3ToMatrix4x4 = function(Matrix3,Row4=[0,0,0,1])
 Math.CreateIdentityMatrix = function()
 {
 	return Math.CreateTranslationMatrix( 0,0,0 );
+}
+
+Math.GetMatrixTranslation = function(Matrix)
+{
+	let xyz = Matrix.slice(10,10+3);
+	return xyz;
 }
