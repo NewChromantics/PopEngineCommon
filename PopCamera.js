@@ -23,24 +23,19 @@ Pop.Camera = function()
 		//let h = 364.19 * 2;
 		//let cx = 400;
 		//let cy = 400;
+		
+		//	gr: this works far better if square
 		let w = ViewRect[2];
-		let h = ViewRect[3];
+		//let h = ViewRect[3];
+		let h = w;
 		let cx = w/2;
 		let cy = h/2;
 		
 		let Matrix =
 		[
-			w/2,
-		 	0,
-		 	cx,
-		 
-		 	0,
-			h/2,
-			cy,
-		 
-		 	0,
-		 	0,
-		 	1
+			w, 	0, 	cx,
+		  	0,	h,	cy,
+		  	0, 	0, 	1
 		];
 		return Matrix;
 	}
