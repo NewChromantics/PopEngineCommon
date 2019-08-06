@@ -34,7 +34,7 @@ Pop.GetShader = function(RenderContext, FragSource, VertSource)
 	//	assume caller is handling this, if we did this here and stored object references
 	//	https://stackoverflow.com/questions/194846/is-there-any-kind-of-hash-code-function-in-javascript
 	let ContextKey = GetUniqueHash( RenderContext );
-	let SourceKey = GetUniqueHash( FragSource );
+	let SourceKey = GetUniqueHash( FragSource ) + GetUniqueHash( VertSource );
 
 	if ( !Pop.Opengl.ShaderCache[ContextKey] )
 	{
