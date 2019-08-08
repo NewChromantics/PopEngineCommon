@@ -28,8 +28,8 @@ Pop.Opengl.RefactorVertShader = function(Source)
 	
 	if ( Pop.GlslVersion == 100 )
 	{
-		Source = Source.replace(/in /gi,'attribute ');
-		Source = Source.replace(/out /gi,'varying ');
+		Source = Source.replace(/\nin /gi,'\nattribute ');
+		Source = Source.replace(/\nout /gi,'\nvarying ');
 	}
 	else if ( Pop.GlslVersion >= 300 )
 	{
@@ -52,7 +52,8 @@ Pop.Opengl.RefactorFragShader = function(Source)
 
 	if ( Pop.GlslVersion == 100 )
 	{
-		Source = Source.replace(/in /gi,'varying ');
+		//	in but only at the start of line (well, after the end of prev line)
+		Source = Source.replace(/\nin /gi,'varying ');
 	}
 	else if ( Pop.GlslVersion >= 300 )
 	{
