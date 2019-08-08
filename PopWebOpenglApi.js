@@ -181,6 +181,21 @@ function WindowRenderTarget(Window)
 	
 	this.DrawGeometry = function(Geometry,Shader,SetUniforms)
 	{
+		let gl = this.GetGlContext();
+
+		gl.useProgram( Shader.Program );
+		
+		gl.bindBuffer( gl.ARRAY_BUFFER, Geometry.Buffer );
+		
+		let Attrib = Geometry.Attributes[0];
+		let AttribLocation = Attrib.Location;
+		//let AttribLocation = gl.getAttribLocation( Shader.Program, Attrib.Name );
+		//Pop.Debug("AttribLocation",AttribLocation);
+		gl.enableVertexAttribArray( AttribLocation );
+		
+		SetUniforms( Shader, Geometry );
+		
+		gl.drawArrays( Geometry.PrimitiveType, 0, Geometry.IndexCount );
 	}
 }
 
@@ -249,12 +264,15 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 	//	gr: can't tell the difference between int and float, so err that wont work
 	this.SetUniform = function(Uniform,Value)
 	{
+		let UniformMeta = this.GetUniformMeta(Uniform);
+		if ( !UniformMeta )
+			return;
 		if( Array.isArray(Value) )				this.SetUniformArray( Uniform, Value );
-		else if ( Value instanceof TTexture )	this.SetUniformTexture( Uniform, Value, this.CurrentTextureIndex++ );
-		else if ( Value instanceof float2 )		this.SetUniformFloat2( Uniform, Value );
-		else if ( Value instanceof float3 )		this.SetUniformFloat3( Uniform, Value );
-		else if ( Value instanceof float4 )		this.SetUniformFloat4( Uniform, Value );
-		else if ( Value instanceof Matrix4x4 )	this.SetUniformMatrix4x4( Uniform, Value );
+		//else if ( Value instanceof TTexture )	this.SetUniformTexture( Uniform, Value, this.CurrentTextureIndex++ );
+		//else if ( Value instanceof float2 )		this.SetUniformFloat2( Uniform, Value );
+		//else if ( Value instanceof float3 )		this.SetUniformFloat3( Uniform, Value );
+		//else if ( Value instanceof float4 )		this.SetUniformFloat4( Uniform, Value );
+		//else if ( Value instanceof Matrix4x4 )	this.SetUniformMatrix4x4( Uniform, Value );
 		else if ( typeof Value === 'number' )	this.SetUniformNumber( Uniform, Value );
 		else
 		{
@@ -421,7 +439,8 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 			}
 			return UniformMeta;
 		}
-		throw "No uniform named " + MatchUniformName;
+		//throw "No uniform named " + MatchUniformName;
+		Pop.Debug("No uniform named " + MatchUniformName);
 	}
 	
 	
@@ -433,8 +452,42 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 }
 
 
-Pop.Opengl.TriangleBuffer = function(RenderContext)
+Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexData,VertexSize,TriangleIndexes)
 {
-	Pop.Debug("todo create triangle buffer");
+	const gl = RenderContext.GetGlContext();
+	
+	this.Buffer = gl.createBuffer();
+	this.PrimitiveType = gl.TRIANGLES;
+	this.IndexCount = TriangleIndexes.length;
+	
+	let Attributes = [];
+	let PushAttribute = function(Name,Floats,Location,Type,Size)
+	{
+		let Attrib = {};
+		Attrib.Name = Name;
+		Attrib.Floats = VertexData;
+		Attrib.Size = Size;
+		Attrib.Type = Type;
+		Attributes.push( Attrib );
+	}
+	PushAttribute( VertexAttributeName, VertexData, 0, gl.FLOAT,VertexSize );
+	
+	this.Attributes = Attributes;
+	
+	
+	gl.bindBuffer( gl.ARRAY_BUFFER, this.Buffer );
+	gl.bufferData( gl.ARRAY_BUFFER, VertexData, gl.STATIC_DRAW );
+	
+	//	setup offset in buffer
+	let InitAttribute = function(Attrib)
+	{
+		//gl.getAttribLocation( Shader.Program, Attrib.Uniform );
+		gl.enableVertexAttribArray( Attrib.Location );
+		let Normalised = false;
+		let StrideBytes = 0;
+		let OffsetBytes = 0;
+		gl.vertexAttribPointer( Attrib.Location, Attrib.Size, Attrib.Type, Normalised, StrideBytes, OffsetBytes );
+	}
+	this.Attributes.forEach( InitAttribute );
 }
 
