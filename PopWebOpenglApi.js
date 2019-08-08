@@ -125,7 +125,14 @@ Pop.Opengl.Window = function(Name,Rect)
 		const gl = this.Context;
 		//	enable float textures on GLES1
 		//	https://developer.mozilla.org/en-US/docs/Web/API/OES_texture_float
-		var ext = gl.getExtension('OES_texture_float');
+		try
+		{
+			var ext = gl.getExtension('OES_texture_float');
+		}
+		catch(e)
+		{
+			Pop.Debug("Error enabling OES_texture_float",e);
+		}
 	}
 	
 	//	we could make this async for some more control...
