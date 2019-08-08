@@ -146,9 +146,7 @@ Pop.Gui.TickBox = function(Parent,Rect)
 	
 	this.RefreshLabel = function()
 	{
-		let TickString = this.GetValue() ? '[true]' : '[false]';
-		this.LabelElement.innerText = TickString + ' ' + this.Label;
-		//this.Element.innerText = TickString + ' ' + this.Label;
+		this.LabelElement.innerText = this.Label;
 	}
 
 	this.OnElementChanged = function(Event)
@@ -173,7 +171,7 @@ Pop.Gui.TickBox = function(Parent,Rect)
 		let Label = document.createElement('label');
 		this.LabelElement = Label;
 		Label.innerText = 'checkbox';
-		SetGuiControl_SubElementStyle( Label, 50, 0 );
+		SetGuiControl_SubElementStyle( Label, 50, 100 );
 	
 		
 		let Div = document.createElement('div');
@@ -188,4 +186,65 @@ Pop.Gui.TickBox = function(Parent,Rect)
 	
 	this.Element = this.CreateElement(Parent.Element);
 	this.RefreshLabel();
+}
+
+
+
+Pop.Gui.Colour = function(Parent,Rect)
+{
+	this.InputElement = null;
+	this.LabelElement = null;
+	
+	this.GetValue = function()
+	{
+		let RgbHex = this.InputElement.value;
+		let Rgbf = Pop.Colour.HexToRgbf( RgbHex );
+		return Rgbf;
+	}
+	
+	this.SetValue = function(Value)
+	{
+		let RgbHex = Pop.Colour.RgbfToHex( Value );
+		this.InputElement.value = RgbHex;
+	}
+	
+	this.SetLabel = function(Value)
+	{
+		this.LabelElement.innerText = Value;
+	}
+	
+	this.OnElementChanged = function(Event)
+	{
+		//	call our callback
+		let Value = this.GetValue();
+		this.OnChanged( Value );
+	}
+	
+	this.CreateElement = function(Parent)
+	{
+		let Input = document.createElement('input');
+		this.InputElement = Input;
+		
+		//	gr: what are defaults in pop?
+		Input.checked = true;
+		Input.type = 'color';
+		SetGuiControl_SubElementStyle( Input, 0, 20 );
+		Input.oninput = this.OnElementChanged.bind(this);
+		
+		let Label = document.createElement('label');
+		this.LabelElement = Label;
+		SetGuiControl_SubElementStyle( Label, 30, 100 );
+		
+		
+		let Div = document.createElement('div');
+		SetGuiControlStyle( Div, Rect );
+		
+		Div.appendChild( Input );
+		Div.appendChild( Label );
+		Parent.appendChild( Div );
+		
+		return Div;
+	}
+	
+	this.Element = this.CreateElement(Parent.Element);
 }
