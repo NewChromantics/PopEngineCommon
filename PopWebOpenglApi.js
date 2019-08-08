@@ -274,6 +274,7 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		//else if ( Value instanceof float4 )		this.SetUniformFloat4( Uniform, Value );
 		//else if ( Value instanceof Matrix4x4 )	this.SetUniformMatrix4x4( Uniform, Value );
 		else if ( typeof Value === 'number' )	this.SetUniformNumber( Uniform, Value );
+		else if ( typeof Value === 'boolean' )	this.SetUniformNumber( Uniform, Value );
 		else
 		{
 			console.log(typeof Value);
@@ -429,18 +430,24 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 				case gl.FLOAT_VEC4:
 					UniformMeta.SetValues = function(v)	{	gl.uniform4fv( UniformMeta.Location, v );	};
 					break;
-					
-				default:
 				case gl.FLOAT_MAT2:
+					UniformMeta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix2fv( UniformMeta.Location, Transpose, v );	};
+					break;
 				case gl.FLOAT_MAT3:
+					UniformMeta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix3fv( UniformMeta.Location, Transpose, v );	};
+					break;
 				case gl.FLOAT_MAT4:
-					UniformMeta.SetValues = function(v)	{	throw "Unhandled type " + Uniform.type + " on " + MatchUniformName;	};
+					UniformMeta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix4fv( UniformMeta.Location, Transpose, v );	};
+					break;
+
+				default:
+					UniformMeta.SetValues = function(v)	{	throw "Unhandled type " + UniformMeta.type + " on " + MatchUniformName;	};
 					break;
 			}
 			return UniformMeta;
 		}
 		//throw "No uniform named " + MatchUniformName;
-		Pop.Debug("No uniform named " + MatchUniformName);
+		//Pop.Debug("No uniform named " + MatchUniformName);
 	}
 	
 	
