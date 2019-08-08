@@ -3,15 +3,19 @@ let Pop = {};
 
 Pop._AssetCache = [];
 
-//	alias
+//	simple aliases
 Pop.Debug = console.log;
+
+
+Pop.GetTimeNowMs = function()
+{
+	return performance.now();
+}
 
 Pop.LoadFileAsStringAsync = async function(Filename)
 {
 	const Fetched = await fetch(Filename);
-	Pop.Debug( "Fetched", Fetched );
 	const Contents = Fetched.text();
-	Pop.Debug( "Contents", Contents );
 	return Contents;
 }
 
@@ -43,11 +47,11 @@ Pop.CompileAndRun = function(Source,Filename)
 {
 	let OnLoaded = function(x)
 	{
-		Pop.Debug(Filename + " script loaded",this,x);
+		//Pop.Debug(Filename + " script loaded",this,x);
 	}
 	let OnError = function(x)
 	{
-		Pop.Debug(Filename + " script error",this,x);
+		//Pop.Debug(Filename + " script error",this,x);
 	}
 	
 	//	create a new script element and execute immediately
@@ -90,136 +94,4 @@ Pop.LeapMotion.Input = function()
 	throw "Leap motion not supported";
 }
 
-//	probably should have a seperate file for these modules
-Pop.Opengl = {};
 
-Pop.Opengl.Window = function(Name)
-{
-	this.OnRender = function(){}
-	
-	//	setup canvas element, webgl context etc
-}
-
-
-Pop.Gui = {};
-
-//	todo: DOM wrapper for gui
-Pop.Gui.Window = function(Name,Rect,Resizable)
-{
-	this.CreateElement = function(Parent)
-	{
-		let Div = document.createElement('div');
-		Div.style.position = 'absolute';
-		Div.style.left = Rect[0];
-		Div.style.right = Rect[0] + Rect[2];
-		Div.style.top = Rect[1];
-		Div.style.bottom = Rect[1] +  Rect[3];
-		Div.style.border = '1px solid #000';
-		Div.innerText = 'Pop.Gui.Window';
-		Parent.appendChild( Div );
-		return Div;
-	}
-	
-	this.EnableScrollbars = function(Horizontal,Vertical)
-	{
-		
-	}
-
-	this.Element = this.CreateElement(document.body);
-}
-
-Pop.Gui.Label = function(Parent, Rect)
-{
-	this.SetValue = function(Value)
-	{
-		this.Element.innerText = Value;
-	}
-
-	this.CreateElement = function(Parent)
-	{
-		let Div = document.createElement('div');
-		Div.style.position = 'relative';
-		Div.style.left = Rect[0];
-		Div.style.right = Rect[0] + Rect[2];
-		Div.style.top = Rect[1];
-		Div.style.bottom = Rect[1] +  Rect[3];
-		Div.style.border = '1px solid #000';
-		Div.innerText = 'Pop.Gui.Label';
-		Parent.appendChild( Div );
-		return Div;
-	}
-
-	this.Element = this.CreateElement(Parent.Element);
-}
-
-
-Pop.Gui.Slider = function(Parent,Rect,Notches)
-{
-	this.SetMinMax = function(Min,Max)
-	{
-		
-	}
-	
-	this.SetValue = function(Value)
-	{
-		
-	}
-	
-	this.CreateElement = function(Parent)
-	{
-		let Div = document.createElement('div');
-		Div.style.position = 'relative';
-		Div.style.left = Rect[0];
-		Div.style.right = Rect[0] + Rect[2];
-		Div.style.top = Rect[1];
-		Div.style.bottom = Rect[1] +  Rect[3];
-		Div.style.border = '1px solid #000';
-		Div.innerText = 'Pop.Gui.Slider';
-		Parent.appendChild( Div );
-		return Div;
-	}
-	
-	this.Element = this.CreateElement(Parent.Element);
-}
-
-
-
-Pop.Gui.TickBox = function(Parent,Rect)
-{
-	this.Value = false;
-	this.Label = '';
-	
-	this.SetValue = function(Value)
-	{
-		this.Value = Value;
-		this.RefreshLabel();
-	}
-	
-	this.SetLabel = function(Value)
-	{
-		this.Label = Value;
-		this.RefreshLabel();
-	}
-	
-	this.RefreshLabel = function()
-	{
-		let TickString = this.Value ? '[true]' : '[false]';
-		this.Element.innerText = TickString + ' ' + this.Label;
-	}
-
-	this.CreateElement = function(Parent)
-	{
-		let Div = document.createElement('div');
-		Div.style.position = 'relative';
-		Div.style.left = Rect[0];
-		Div.style.right = Rect[0] + Rect[2];
-		Div.style.top = Rect[1];
-		Div.style.bottom = Rect[1] +  Rect[3];
-		Div.style.border = '1px solid #000';
-		Parent.appendChild( Div );
-		return Div;
-	}
-	
-	this.Element = this.CreateElement(Parent.Element);
-	this.RefreshLabel();
-}

@@ -3,7 +3,7 @@ function CreateParamsWindow(Params,OnAnyChanged)
 {
 	OnAnyChanged = OnAnyChanged || function(){};
 	
-	let WindowRect = [20,20,500,300];
+	let WindowRect = [800,20,500,300];
 	let ControlTop = 10;
 
 	const LabelLeft = 10;
