@@ -84,6 +84,8 @@ Pop.Opengl.Window = function(Name,Rect)
 		//	create!
 		Element = document.createElement('canvas');
 		Element.id = Name;
+		Element.width = Rect[2];
+		Element.height = Rect[3];
 		if ( Rect !== undefined )
 		{
 			Element.style.display = 'block';
