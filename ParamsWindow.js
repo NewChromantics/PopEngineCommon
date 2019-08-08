@@ -3,7 +3,7 @@ function CreateParamsWindow(Params,OnAnyChanged)
 {
 	OnAnyChanged = OnAnyChanged || function(){};
 	
-	let WindowRect = [800,20,500,300];
+	let WindowRect = [800,20,600,300];
 	let ControlTop = 10;
 
 	const LabelLeft = 10;
@@ -107,7 +107,11 @@ function CreateParamsWindow(Params,OnAnyChanged)
 			Control.UpdateLabel = function(Value)
 			{
 				let Value8 = GetValue8( Value );
-				Control.SetLabel("RGB " + Value8 );
+				let r = Value[0].toFixed(2);
+				let g = Value[1].toFixed(2);
+				let b = Value[2].toFixed(2);
+				let Valuef = [r,g,b];
+				Control.SetLabel( Name + " [" + Value8 +"] [" + Valuef + "]" );
 			}
 			
 			//	init label
