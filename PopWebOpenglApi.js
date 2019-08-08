@@ -118,7 +118,7 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.InitialiseContext = function()
 	{
 		const Canvas = this.GetCanvasElement();
-		this.Context = Canvas.getContext("webgl2");
+		this.Context = Canvas.getContext("webgl");
 		if ( !this.Context )
 			throw "Failed to initialise webgl";
 
