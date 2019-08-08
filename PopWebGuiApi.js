@@ -18,13 +18,13 @@ function SetGuiControlStyle(Element,Rect)
 	Element.style.border = '1px solid #000';
 }
 
-function SetGuiControl_SubElementStyle(Element)
+function SetGuiControl_SubElementStyle(Element,LeftPercent=0,RightPercent=100)
 {
 	Element.style.display = 'block';
-	Element.style.width = '100%';
+	Element.style.width = (RightPercent-LeftPercent) + '%';
 	Element.style.position = 'absolute';
-	Element.style.left = '0px';
-	Element.style.right = '0px';
+	Element.style.left = LeftPercent + '%';
+	Element.style.right = (100-RightPercent) + '%';
 	Element.style.top = '0px';
 	Element.style.bottom = '0px';
 }
@@ -86,7 +86,7 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		this.InputElement.value = Value;
 	}
 	
-	this.OnInputChanged = function(Event)
+	this.OnElementChanged = function(Event)
 	{
 		//	call our callback
 		let Value = this.InputElement.value;
@@ -96,13 +96,15 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 	this.CreateElement = function(Parent)
 	{
 		let Input = document.createElement('input');
+		this.InputElement = Input;
+		
 		//	gr: what are defaults in pop?
 		Input.min = 0;
 		Input.max = 100;
 		Input.value = 0;
 		Input.type = 'range';
 		SetGuiControl_SubElementStyle( Input );
-		Input.oninput = this.OnInputChanged.bind(this);
+		Input.oninput = this.OnElementChanged.bind(this);
 		
 		
 		let Div = document.createElement('div');
@@ -112,7 +114,6 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		Div.appendChild( Input );
 		Parent.appendChild( Div );
 		
-		this.InputElement = Input;
 		return Div;
 	}
 	
@@ -122,12 +123,18 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 
 Pop.Gui.TickBox = function(Parent,Rect)
 {
-	this.Value = false;
 	this.Label = '';
+	this.InputElement = null;
+	this.LabelElement = null;
+
+	this.GetValue = function()
+	{
+		return this.InputElement.checked;
+	}
 	
 	this.SetValue = function(Value)
 	{
-		this.Value = Value;
+		this.InputElement.checked = Value;
 		this.RefreshLabel();
 	}
 	
@@ -139,15 +146,43 @@ Pop.Gui.TickBox = function(Parent,Rect)
 	
 	this.RefreshLabel = function()
 	{
-		let TickString = this.Value ? '[true]' : '[false]';
-		this.Element.innerText = TickString + ' ' + this.Label;
+		let TickString = this.GetValue() ? '[true]' : '[false]';
+		this.LabelElement.innerText = TickString + ' ' + this.Label;
+		//this.Element.innerText = TickString + ' ' + this.Label;
 	}
 
+	this.OnElementChanged = function(Event)
+	{
+		//	call our callback
+		let Value = this.GetValue();
+		this.RefreshLabel();
+		this.OnChanged( Value );
+	}
+	
 	this.CreateElement = function(Parent)
 	{
+		let Input = document.createElement('input');
+		this.InputElement = Input;
+		
+		//	gr: what are defaults in pop?
+		Input.checked = true;
+		Input.type = 'checkbox';
+		SetGuiControl_SubElementStyle( Input, 0, 50 );
+		Input.oninput = this.OnElementChanged.bind(this);
+	
+		let Label = document.createElement('label');
+		this.LabelElement = Label;
+		Label.innerText = 'checkbox';
+		SetGuiControl_SubElementStyle( Label, 50, 0 );
+	
+		
 		let Div = document.createElement('div');
 		SetGuiControlStyle( Div, Rect );
+
+		Div.appendChild( Input );
+		Div.appendChild( Label );
 		Parent.appendChild( Div );
+
 		return Div;
 	}
 	
