@@ -4,6 +4,17 @@ Pop.Opengl = {};
 Pop.GlslVersion = 100;
 
 
+//	need to sort this!, should be in gui
+//	currently named to match c++
+Pop.SoyMouseButton = Pop.SoyMouseButton || {};
+//	matching SoyMouseButton
+Pop.SoyMouseButton.None = -1;	//	todo: in api, change this to undefined
+Pop.SoyMouseButton.Left = 0;
+Pop.SoyMouseButton.Middle = 2;
+Pop.SoyMouseButton.Right = 1;
+Pop.SoyMouseButton.Back = 3;
+Pop.SoyMouseButton.Forward = 4;
+
 
 //	this is currenly in c++ in the engine. need to swap to javascript
 Pop.Opengl.RefactorGlslShader = function(Source)
@@ -64,13 +75,165 @@ Pop.Opengl.RefactorFragShader = function(Source)
 }
 
 
+//	wrapper for a generic element which converts input (touch, mouse etc) into
+//	our mouse functions
+function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp)
+{
+	//	annoying distinctions
+	let GetButtonFromMouseEventButton = function(MouseButton,AlternativeButton)
+	{
+		//	handle event & button arg
+		if ( typeof MouseButton == "object" )
+		{
+			let MouseEvent = MouseButton;
+			MouseButton = MouseEvent.button;
+			AlternativeButton = (MouseEvent.ctrlKey == true);
+		}
+		
+		//	html/browser definitions
+		const BrowserMouseLeft = 0;
+		const BrowserMouseMiddle = 1;
+		const BrowserMouseRight = 2;
+		
+		if ( AlternativeButton )
+		{
+			switch ( MouseButton )
+			{
+				case BrowserMouseLeft:	return Pop.SoyMouseButton.Back;
+				case BrowserMouseRight:	return Pop.SoyMouseButton.Forward;
+			}
+		}
+		
+		switch ( MouseButton )
+		{
+			case BrowserMouseLeft:		return Pop.SoyMouseButton.Left;
+			case BrowserMouseMiddle:	return Pop.SoyMouseButton.Middle;
+			case BrowserMouseRight:		return Pop.SoyMouseButton.Right;
+		}
+		throw "Unhandled MouseEvent.button (" + MouseButton + ")";
+	}
+	
+	let GetButtonsFromMouseEventButtons = function(MouseEvent)
+	{
+		//	note: button bits don't match mousebutton!
+		//	https://www.w3schools.com/jsref/event_buttons.asp
+		//	https://www.w3schools.com/jsref/event_button.asp
+		//	index = 0 left, 1 middle, 2 right (DO NOT MATCH the bits!)
+		//	gr: ignore back and forward as they're not triggered from mouse down, just use the alt mode
+		//let ButtonMasks = [ 1<<0, 1<<2, 1<<1, 1<<3, 1<<4 ];
+		let ButtonMasks = [ 1<<0, 1<<2, 1<<1 ];
+		let ButtonMask = MouseEvent.buttons;
+		let AltButton = (MouseEvent.ctrlKey==true);
+		let Buttons = [];
+		
+		for ( let i=0;	i<ButtonMasks.length;	i++ )
+		{
+			if ( ( ButtonMask & ButtonMasks[i] ) == 0 )
+				continue;
+			let ButtonIndex = i;
+			let ButtonName = GetButtonFromMouseEventButton( ButtonIndex, AltButton );
+			if ( ButtonName === null )
+				continue;
+			Buttons.push( ButtonName );
+		}
+		return Buttons;
+	}
+	
+	//	gr: should api revert to uv?
+	let GetMousePos = function(MouseEvent)
+	{
+		let Rect = Element.getBoundingClientRect();
+		let x = MouseEvent.clientX - Rect.left;
+		let y = MouseEvent.clientY - Rect.top;
+		return [x,y];
+	}
+	
+	let MouseMove = function(MouseEvent)
+	{
+		let Pos = GetMousePos(MouseEvent);
+		let Buttons = GetButtonsFromMouseEventButtons( MouseEvent );
+		if ( Buttons.length == 0 )
+		{
+			MouseEvent.preventDefault();
+			OnMouseMove( Pos[0], Pos[1], Pop.SoyMouseButton.None );
+			return;
+		}
+		
+		//	for now, do a callback on the first button we find
+		//	later, we might want one for each button, but to avoid
+		//	slow performance stuff now lets just do one
+		//	gr: maybe API should change to an array
+		OnMouseMove( Pos[0], Pos[1], Buttons[0] );
+		MouseEvent.preventDefault();
+	}
+	
+	let MouseDown = function(MouseEvent)
+	{
+		let Pos = GetMousePos(MouseEvent);
+		let Button = GetButtonFromMouseEventButton(MouseEvent);
+		OnMouseDown( Pos[0], Pos[1], Button );
+		MouseEvent.preventDefault();
+	}
+	
+	let MouseWheel = function(WheelEvent)
+	{
+		Pop.Debug("todo; mouse wheel");
+		/*
+		//	todo: make this better. clamp to -1...1 though
+		//let ScrollX = Math.Clamp( -1, 1, WheelEvent.deltaX / 10 );
+		let ScrollY = Math.Clamp( -1, 1, WheelEvent.deltaY / 10 );
+		let uv = this.GetMouseUv(WheelEvent);
+		this.OnScroll( ScrollY, uv );
+		*/
+		WheelEvent.preventDefault();
+	}
+	
+	let ContextMenu = function(MouseEvent)
+	{
+		//	allow use of right mouse down events
+		//MouseEvent.stopImmediatePropagation();
+		MouseEvent.preventDefault();
+		return false;
+	}
+	
+	//	use add listener to allow pre-existing canvas elements to retain any existing callbacks
+	Element.addEventListener('mousemove', MouseMove );
+	Element.addEventListener('wheel', MouseWheel, false );
+	Element.addEventListener('contextmenu', ContextMenu, false );
+	Element.addEventListener('mousedown', MouseDown, false );
+	Element.addEventListener('mousemove', MouseMove, false );
+	//	not currently handling up
+	//this.Element.addEventListener('mouseup', MouseUp, false );
+	//this.Element.addEventListener('mouseleave', OnDisableDraw, false );
+	//this.Element.addEventListener('mouseenter', OnEnableDraw, false );
+	
 
+}
 
 
 Pop.Opengl.Window = function(Name,Rect)
 {
+	//	things to overload
+	//this.OnRender = function(RenderTarget){};
+	this.OnMouseDown = function(x,y,Button){	Pop.Debug(...arguments);	};
+	this.OnMouseMove = function(x,y,Button){	Pop.Debug(...arguments);	};
+	this.OnMouseUp = function(x,y,Button){	Pop.Debug(...arguments);	};
+
 	this.Context = null;
 	this.RenderTarget = null;
+	this.CanvasMouseHandler = null;
+	
+	this.InitCanvasElement = function()
+	{
+		let Element = document.getElementById(Name);
+		
+		//	setup event bindings
+		//	gr: can't bind here as they may change later, so relay (and error if not setup)
+		let OnMouseDown = function()	{	return this.OnMouseDown.apply( this, arguments );	}.bind(this);
+		let OnMouseMove = function()	{	return this.OnMouseMove.apply( this, arguments );	}.bind(this);
+		let OnMouseUp = function()		{	return this.OnMouseUp.apply( this, arguments );	}.bind(this);
+		this.CanvasMouseHandler = new TElementMouseHandler( Element, OnMouseDown, OnMouseMove, OnMouseUp );
+	}
 	
 	this.GetCanvasElement = function()
 	{
@@ -163,6 +326,7 @@ Pop.Opengl.Window = function(Name,Rect)
 	}
 
 	this.InitialiseContext();
+	this.InitCanvasElement();
 
 	this.RenderLoop();
 }
