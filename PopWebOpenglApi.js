@@ -41,6 +41,13 @@ Pop.Opengl.RefactorVertShader = function(Source)
 	{
 		Source = Source.replace(/\nin /gi,'\nattribute ');
 		Source = Source.replace(/\nout /gi,'\nvarying ');
+		
+		//	webgl doesn't have texture2DLod, it just overloads texture2D
+		//	in webgl1 with the extension, we need the extension func
+		//	in webgl2 with #version 300 es, we can use texture2D
+		//Source = Source.replace(/texture2DLod/gi,'texture2DLodEXT');
+		//Source = Source.replace(/texture2DLod/gi,'texture2D');
+
 	}
 	else if ( Pop.GlslVersion >= 300 )
 	{
@@ -288,14 +295,26 @@ Pop.Opengl.Window = function(Name,Rect)
 		const gl = this.Context;
 		//	enable float textures on GLES1
 		//	https://developer.mozilla.org/en-US/docs/Web/API/OES_texture_float
-		try
+		
+		Pop.Debug("Supported Extensions", gl.getSupportedExtensions() );
+		
+		let EnableExtension = function(Extension)
 		{
-			var ext = gl.getExtension('OES_texture_float');
-		}
-		catch(e)
-		{
-			Pop.Debug("Error enabling OES_texture_float",e);
-		}
+			try
+			{
+				var ext = gl.getExtension(Extension);
+				Pop.Debug(Extension,ext);
+			}
+			catch(e)
+			{
+				Pop.Debug("Error enabling ",Extension,e);
+			}
+		};
+		EnableExtension('OES_texture_float');
+		
+		//	texture load needs extension in webgl1
+		//	in webgl2 it's built in, but requires #version 300 es
+		EnableExtension('EXT_shader_texture_lod');
 	}
 	
 	//	we could make this async for some more control...
@@ -332,72 +351,9 @@ Pop.Opengl.Window = function(Name,Rect)
 }
 
 
-//	maybe this should be an API type
-Pop.Opengl.TextureRenderTarget = function(RenderContext,Texture)
+//	base class with generic opengl stuff
+Pop.Opengl.RenderTarget = function(RenderContext)
 {
-	this.FrameBuffer = null;
-	this.RenderContext = RenderContext;
-	this.Texture = null;
-	
-	this.CreateFrameBuffer = function(Texture)
-	{
-		const gl = this.RenderContext.GetGlContext();
-		this.FrameBuffer = gl.createFramebuffer();
-		this.Texture = Texture;
-		
-		this.BindRenderTarget();
-		
-		//  attach this texture to colour output
-		const level = 0;
-		const attachmentPoint = gl.COLOR_ATTACHMENT0;
-		gl.framebufferTexture2D(gl.FRAMEBUFFER, attachmentPoint, gl.TEXTURE_2D, this.Texture.Asset, level);
-	}
-	
-	//  bind for rendering
-	this.BindRenderTarget = function()
-	{
-		const gl = this.RenderContext.GetGlContext();
-		gl.bindFramebuffer( gl.FRAMEBUFFER, this.FrameBuffer );
-		gl.viewport(0, 0, this.GetWidth(), this.GetHeight() );
-	}
-	
-	this.GetWidth = function()
-	{
-		return this.Texture.GetWidth();
-	}
-	
-	this.GetHeight = function()
-	{
-		return this.Texture.GetHeight();
-	}
-	
-	this.CreateFrameBuffer( Texture );
-}
-
-function GetTextureRenderTarget(RenderContext,Texture)
-{
-	if ( !Texture.RenderTarget )
-	{
-		Texture.RenderTarget = new Pop.Opengl.TextureRenderTarget( RenderContext, Texture );
-	}
-	return Texture.RenderTarget;
-}
-
-function WindowRenderTarget(Window)
-{
-	this.GetGlContext = function()
-	{
-		return Window.GetGlContext();
-	}
-	
-	this.GetScreenRect = function()
-	{
-		let Canvas = Window.GetCanvasElement();
-		let ElementRect = Canvas.getBoundingClientRect();
-		let Rect = [ ElementRect.x, ElementRect.y, ElementRect.width, ElementRect.height ];
-		return Rect;
-	}
-	
 	this.ClearColour = function(r,g,b,a=1)
 	{
 		let gl = this.GetGlContext();
@@ -408,7 +364,7 @@ function WindowRenderTarget(Window)
 	this.DrawGeometry = function(Geometry,Shader,SetUniforms)
 	{
 		let gl = this.GetGlContext();
-
+		
 		gl.useProgram( Shader.Program );
 		
 		gl.bindBuffer( gl.ARRAY_BUFFER, Geometry.Buffer );
@@ -424,6 +380,90 @@ function WindowRenderTarget(Window)
 		gl.drawArrays( Geometry.PrimitiveType, 0, Geometry.IndexCount );
 	}
 	
+}
+
+
+//	maybe this should be an API type
+Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
+{
+	Pop.Opengl.RenderTarget.call( this, RenderContext );
+	
+	this.FrameBuffer = null;
+	this.RenderContext = RenderContext;
+	this.Image = null;
+	
+	this.GetGlContext = function()
+	{
+		const gl = this.RenderContext.GetGlContext();
+		return gl;
+	}
+	
+	this.CreateFrameBuffer = function(Image)
+	{
+		const Texture = Image.GetOpenglTexture( RenderContext );
+		const gl = this.GetGlContext();
+		this.FrameBuffer = gl.createFramebuffer();
+		this.Image = Image;
+		
+		this.BindRenderTarget();
+		
+		//  attach this texture to colour output
+		const level = 0;
+		const attachmentPoint = gl.COLOR_ATTACHMENT0;
+		gl.framebufferTexture2D(gl.FRAMEBUFFER, attachmentPoint, gl.TEXTURE_2D, Texture, level);
+	}
+	
+	//  bind for rendering
+	this.BindRenderTarget = function()
+	{
+		const gl = this.GetGlContext();
+		gl.bindFramebuffer( gl.FRAMEBUFFER, this.FrameBuffer );
+		gl.viewport(0, 0, this.GetWidth(), this.GetHeight() );
+	}
+	
+	this.GetWidth = function()
+	{
+		return this.Image.GetWidth();
+	}
+	
+	this.GetHeight = function()
+	{
+		return this.Image.GetHeight();
+	}
+	
+	this.CreateFrameBuffer( Image );
+}
+
+function GetTextureRenderTarget(RenderContext,Texture)
+{
+	if ( !Texture.RenderTarget )
+	{
+		Texture.RenderTarget = new Pop.Opengl.TextureRenderTarget( RenderContext, Texture );
+	}
+	return Texture.RenderTarget;
+}
+
+function WindowRenderTarget(Window)
+{
+	const RenderContext = Window;
+	this.ViewportMinMax = [0,0,1,1];
+
+	Pop.Opengl.RenderTarget.call( this, RenderContext );
+
+	this.GetGlContext = function()
+	{
+		return Window.GetGlContext();
+	}
+	
+	this.GetScreenRect = function()
+	{
+		let Canvas = Window.GetCanvasElement();
+		let ElementRect = Canvas.getBoundingClientRect();
+		let Rect = [ ElementRect.x, ElementRect.y, ElementRect.width, ElementRect.height ];
+		return Rect;
+	}
+	
+
 	this.RenderToRenderTarget = function(TargetTexture,RenderFunction)
 	{
 		//	setup render target
@@ -440,12 +480,36 @@ function WindowRenderTarget(Window)
 	
 	this.BindRenderTarget = function()
 	{
+		const gl = this.GetGlContext();
 		gl.bindFramebuffer( gl.FRAMEBUFFER, null );
-		let ViewportMinx = this.ViewportMinMax.x * this.GetWidth();
-		let ViewportMiny = this.ViewportMinMax.y * this.GetHeight();
+		let ViewportMinx = this.ViewportMinMax[0] * this.GetWidth();
+		let ViewportMiny = this.ViewportMinMax[1] * this.GetHeight();
 		let ViewportWidth = this.GetViewportWidth();
 		let ViewportHeight = this.GetViewportHeight();
+		//	viewport in pixels in webgl
 		gl.viewport( ViewportMinx, ViewportMiny, ViewportWidth, ViewportHeight );
+	}
+	
+	this.GetViewportWidth = function()
+	{
+		return this.GetWidth() * (this.ViewportMinMax[2]-this.ViewportMinMax[0]);
+	}
+	
+	this.GetViewportHeight = function()
+	{
+		return this.GetHeight() * (this.ViewportMinMax[3]-this.ViewportMinMax[1]);
+	}
+	
+	this.GetWidth = function()
+	{
+		const Rect = this.GetScreenRect();
+		return Rect[2];
+	}
+	
+	this.GetHeight = function()
+	{
+		const Rect = this.GetScreenRect();
+		return Rect[3];
 	}
 }
 
@@ -518,7 +582,7 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		if ( !UniformMeta )
 			return;
 		if( Array.isArray(Value) )				this.SetUniformArray( Uniform, Value );
-		//else if ( Value instanceof TTexture )	this.SetUniformTexture( Uniform, Value, this.CurrentTextureIndex++ );
+		else if ( Value instanceof Pop.Image )	this.SetUniformTexture( Uniform, Value, this.CurrentTextureIndex++ );
 		//else if ( Value instanceof float2 )		this.SetUniformFloat2( Uniform, Value );
 		//else if ( Value instanceof float3 )		this.SetUniformFloat3( Uniform, Value );
 		//else if ( Value instanceof float4 )		this.SetUniformFloat4( Uniform, Value );
@@ -564,8 +628,9 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		UniformMeta.SetValues( ValuesExpanded );
 	}
 	
-	this.SetUniformTexture = function(Uniform,Texture,TextureIndex)
+	this.SetUniformTexture = function(Uniform,Image,TextureIndex)
 	{
+		let Texture = Image.GetOpenglTexture( Context );
 		let gl = this.GetGlContext();
 		let UniformPtr = gl.getUniformLocation( this.Program, Uniform );
 		//  https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Using_textures_in_WebGL
@@ -575,11 +640,11 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		gl.activeTexture( GlTextureNames[TextureIndex] );
 		try
 		{
-			gl.bindTexture(gl.TEXTURE_2D, Texture.Asset);
+			gl.bindTexture(gl.TEXTURE_2D, Texture );
 		}
 		catch(e)
 		{
-			console.log("SetUniformTexture: " + e);
+			Pop.Debug("SetUniformTexture: " + e);
 			//  todo: bind "invalid" texture
 		}
 		gl.uniform1i( UniformPtr, TextureIndex );

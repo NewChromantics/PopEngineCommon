@@ -7,9 +7,46 @@ Pop._AssetCache = [];
 Pop.Debug = console.log;
 
 
+
+
+function CreatePromise()
+{
+	let Callbacks = {};
+	let PromiseHandler = function(Resolve,Reject)
+	{
+		Callbacks.Resolve = Resolve;
+		Callbacks.Reject = Reject;
+	}
+	let Prom = new Promise(PromiseHandler);
+	Prom.Resolve = Callbacks.Resolve;
+	Prom.Reject = Callbacks.Reject;
+	return Prom;
+}
+
+
 Pop.GetTimeNowMs = function()
 {
 	return performance.now();
+}
+
+Pop.LoadImageAsync = async function(Filename)
+{
+	let Promise = CreatePromise();
+	
+	const HtmlImage = new Image();
+	HtmlImage.crossOrigin = "anonymous";
+	HtmlImage.onload = function()
+	{
+		Promise.Resolve( HtmlImage );
+	};
+	HtmlImage.onerror = function(Error)
+	{
+		Promise.Reject( Error );
+	}
+	//  trigger load
+	HtmlImage.src = Filename;
+	
+	return Promise;
 }
 
 Pop.LoadFileAsStringAsync = async function(Filename)
@@ -19,7 +56,7 @@ Pop.LoadFileAsStringAsync = async function(Filename)
 	return Contents;
 }
 
-Pop.AsyncCacheAsset = async function(Filename)
+Pop.AsyncCacheAssetAsString = async function(Filename)
 {
 	if ( Pop._AssetCache.hasOwnProperty(Filename) )
 	{
@@ -31,6 +68,18 @@ Pop.AsyncCacheAsset = async function(Filename)
 	Pop._AssetCache[Filename] = Contents;
 }
 
+Pop.AsyncCacheAssetAsImage = async function(Filename)
+{
+	if ( Pop._AssetCache.hasOwnProperty(Filename) )
+	{
+		Pop.Debug("Asset " + Filename + " already cached");
+		return;
+	}
+	
+	const Contents = await Pop.LoadImageAsync(Filename);
+	Pop._AssetCache[Filename] = Contents;
+}
+
 Pop.LoadFileAsString = function(Filename)
 {
 	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
@@ -38,10 +87,17 @@ Pop.LoadFileAsString = function(Filename)
 		throw "Cannot synchronously load " + Filename + ", needs to be precached first with [async] Pop.AsyncCacheAsset()";
 	}
 	
-	//	todo: binary vs string type stuff here (and in AsyncCacheAsset)
-	return Pop._AssetCache[Filename];
+	return Pop.GetCachedAsset(Filename);
 }
 
+Pop.GetCachedAsset = function(Filename)
+{
+	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
+	{
+		throw Filename + " has not been cached with Pop.AsyncCacheAsset()";
+	}
+	return Pop._AssetCache[Filename];
+}
 
 Pop.CompileAndRun = function(Source,Filename)
 {
@@ -75,15 +131,9 @@ Pop.GetExeArguments = function()
 
 Pop.Yield = function(Milliseconds)
 {
-	let Callbacks = {};
-	let PromiseHandler = function(Resolve,Reject)
-	{
-		Callbacks.Resolve = Resolve;
-		Callbacks.Reject = Reject;
-	}
-	let Prom = new Promise(PromiseHandler);
-	setTimeout( Callbacks.Resolve, Milliseconds );
-	return Prom;
+	let Promise = CreatePromise();
+	setTimeout( Promise.Resolve, Milliseconds );
+	return Promise;
 }
 
 
