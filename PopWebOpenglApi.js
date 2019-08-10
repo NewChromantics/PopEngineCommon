@@ -58,8 +58,8 @@ Pop.Opengl.RefactorFragShader = function(Source)
 
 	//	gr: this messes up xcode's auto formatting :/
 	//let Match = /texture2D\(/gi;
-	let Match = 'texture2D(';
-	Source = Source.replace(Match,'texture(');
+	let Match = 'texture(';
+	Source = Source.replace(Match,'texture2D(');
 
 	if ( Pop.GlslVersion == 100 )
 	{
@@ -331,6 +331,58 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.RenderLoop();
 }
 
+
+//	maybe this should be an API type
+Pop.Opengl.TextureRenderTarget = function(RenderContext,Texture)
+{
+	this.FrameBuffer = null;
+	this.RenderContext = RenderContext;
+	this.Texture = null;
+	
+	this.CreateFrameBuffer = function(Texture)
+	{
+		const gl = this.RenderContext.GetGlContext();
+		this.FrameBuffer = gl.createFramebuffer();
+		this.Texture = Texture;
+		
+		this.BindRenderTarget();
+		
+		//  attach this texture to colour output
+		const level = 0;
+		const attachmentPoint = gl.COLOR_ATTACHMENT0;
+		gl.framebufferTexture2D(gl.FRAMEBUFFER, attachmentPoint, gl.TEXTURE_2D, this.Texture.Asset, level);
+	}
+	
+	//  bind for rendering
+	this.BindRenderTarget = function()
+	{
+		const gl = this.RenderContext.GetGlContext();
+		gl.bindFramebuffer( gl.FRAMEBUFFER, this.FrameBuffer );
+		gl.viewport(0, 0, this.GetWidth(), this.GetHeight() );
+	}
+	
+	this.GetWidth = function()
+	{
+		return this.Texture.GetWidth();
+	}
+	
+	this.GetHeight = function()
+	{
+		return this.Texture.GetHeight();
+	}
+	
+	this.CreateFrameBuffer( Texture );
+}
+
+function GetTextureRenderTarget(RenderContext,Texture)
+{
+	if ( !Texture.RenderTarget )
+	{
+		Texture.RenderTarget = new Pop.Opengl.TextureRenderTarget( RenderContext, Texture );
+	}
+	return Texture.RenderTarget;
+}
+
 function WindowRenderTarget(Window)
 {
 	this.GetGlContext = function()
@@ -370,6 +422,30 @@ function WindowRenderTarget(Window)
 		SetUniforms( Shader, Geometry );
 		
 		gl.drawArrays( Geometry.PrimitiveType, 0, Geometry.IndexCount );
+	}
+	
+	this.RenderToRenderTarget = function(TargetTexture,RenderFunction)
+	{
+		//	setup render target
+		const RenderContext = Window;
+		let RenderTarget = GetTextureRenderTarget( RenderContext, TargetTexture );
+		RenderTarget.BindRenderTarget();
+		
+		RenderFunction( RenderTarget );
+		
+		//	todo: restore previously bound, not this.
+		//	restore rendertarget
+		this.BindRenderTarget();
+	}
+	
+	this.BindRenderTarget = function()
+	{
+		gl.bindFramebuffer( gl.FRAMEBUFFER, null );
+		let ViewportMinx = this.ViewportMinMax.x * this.GetWidth();
+		let ViewportMiny = this.ViewportMinMax.y * this.GetHeight();
+		let ViewportWidth = this.GetViewportWidth();
+		let ViewportHeight = this.GetViewportHeight();
+		gl.viewport( ViewportMinx, ViewportMiny, ViewportWidth, ViewportHeight );
 	}
 }
 
