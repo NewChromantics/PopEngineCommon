@@ -125,7 +125,7 @@ Pop.Image = function(Filename)
 		}
 		
 		const RepeatMode = gl.CLAMP_TO_EDGE;
-		const FilterMode = gl.LINEAR;
+		const FilterMode = gl.NEAREST;//LINEAR;
 		
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, RepeatMode);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, RepeatMode);
