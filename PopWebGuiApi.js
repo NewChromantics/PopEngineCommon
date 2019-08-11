@@ -15,7 +15,7 @@ function SetGuiControlStyle(Element,Rect)
 	//Element.style.bottom = Bottom+'px';
 	Element.style.width = Rect[2]+'px';
 	Element.style.height = Rect[3]+'px';
-	Element.style.border = '1px solid #000';
+	//Element.style.border = '1px solid #000';
 }
 
 function SetGuiControl_SubElementStyle(Element,LeftPercent=0,RightPercent=100)
@@ -32,14 +32,51 @@ function SetGuiControl_SubElementStyle(Element,LeftPercent=0,RightPercent=100)
 //	todo: DOM wrapper for gui
 Pop.Gui.Window = function(Name,Rect,Resizable)
 {
+	//	child controls should be added to this
+	this.ElementParent = null;
+
+	//	gr: element may not be assigned yet, maybe rework construction of controls
+	this.AddChildControl = function(Child,Element)
+	{
+		this.ElementParent.appendChild( Element );
+	}
+	
 	this.CreateElement = function(Parent)
 	{
 		let Element = document.createElement('div');
 		SetGuiControlStyle( Element, Rect );
-		Element.innerText = 'Pop.Gui.Window';
+		//Element.innerText = 'Pop.Gui.Window';
 		Element.style.zIndex = 1;
-		Element.style.overflow = 'scroll';
+		//Element.style.overflow = 'scroll';	//	inner div handles scrolling
+		Element.className = 'PopGuiWindow';
 		Parent.appendChild( Element );
+		
+		//	purely for styling
+		let AddChild = function(Parent,ClassName,InnerText='')
+		{
+			let Child = document.createElement('div');
+			Child.className = ClassName;
+			Child.innerText = InnerText;
+			Parent.appendChild( Child );
+			return Child;
+		}
+		const TitleBar = AddChild( Element, 'PopGuiTitleBar');
+		//AddChild( TitleBar, 'PopGuiTitleIcon', 'X');
+		AddChild( TitleBar, 'PopGuiTitleText', Name );
+		//AddChild( TitleBar, 'PopGuiButton', '_');
+		//AddChild( TitleBar, 'PopGuiButton', 'X');
+		
+		//	this may need some style to force position
+		this.ElementParent = AddChild( Element, 'PopGuiIconView');
+		//	need to make this absolute as the new static position-base for child controls
+		this.ElementParent.style.position = 'absolute';
+		this.ElementParent.style.top = '0px';
+		this.ElementParent.style.left = '0px';
+		this.ElementParent.style.right = '0px';
+		this.ElementParent.style.bottom = '0px';
+		//	toggle this with enablescrollbars
+		this.ElementParent.style.overflow = 'scroll';
+		
 		return Element;
 	}
 	
@@ -64,11 +101,11 @@ Pop.Gui.Label = function(Parent, Rect)
 		SetGuiControlStyle( Div, Rect );
 		
 		Div.innerText = 'Pop.Gui.Label';
-		Parent.appendChild( Div );
+		Parent.AddChildControl( Parent, Div );
 		return Div;
 	}
 
-	this.Element = this.CreateElement(Parent.Element);
+	this.Element = this.CreateElement(Parent);
 }
 
 Pop.Gui.Slider = function(Parent,Rect,Notches)
@@ -112,12 +149,12 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		//Div.innerText = 'Pop.Gui.Slider';
 		
 		Div.appendChild( Input );
-		Parent.appendChild( Div );
+		Parent.AddChildControl( this, Div );
 		
 		return Div;
 	}
 	
-	this.Element = this.CreateElement(Parent.Element);
+	this.Element = this.CreateElement(Parent);
 }
 
 
@@ -179,12 +216,12 @@ Pop.Gui.TickBox = function(Parent,Rect)
 
 		Div.appendChild( Input );
 		Div.appendChild( Label );
-		Parent.appendChild( Div );
+		Parent.AddChildControl( this, Div );
 
 		return Div;
 	}
 	
-	this.Element = this.CreateElement(Parent.Element);
+	this.Element = this.CreateElement(Parent);
 	this.RefreshLabel();
 }
 
@@ -241,10 +278,10 @@ Pop.Gui.Colour = function(Parent,Rect)
 		
 		Div.appendChild( Input );
 		Div.appendChild( Label );
-		Parent.appendChild( Div );
+		Parent.AddChildControl( this, Div );
 		
 		return Div;
 	}
 	
-	this.Element = this.CreateElement(Parent.Element);
+	this.Element = this.CreateElement(Parent);
 }
