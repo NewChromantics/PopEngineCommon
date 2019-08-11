@@ -261,33 +261,41 @@ Pop.Opengl.Window = function(Name,Rect)
 		if ( Element )
 			return Element;
 		
+		const ParentElement = document.body;
+		
+		//	go as fullscreen as possible
 		if ( !Rect )
-			Rect = [10,10,640,480];
+		{
+			Rect = [0,0,ParentElement.clientWidth,window.innerHeight];
+		}
 		
 		//	create!
 		Element = document.createElement('canvas');
 		Element.id = Name;
-		Element.width = Rect[2];
-		Element.height = Rect[3];
 		if ( Rect !== undefined )
 		{
+			let Left = Rect[0];
+			let Top = Rect[1];
+			let Width = Rect[2];
+			let Height = Rect[3];
+			
 			Element.style.display = 'block';
 			Element.style.position = 'absolute';
-			Element.style.border = '1px solid #f00';
+			//Element.style.border = '1px solid #f00';
 			
-			let Left = Rect[0];
-			let Right = Rect[0] + Rect[2];
-			let Top = Rect[1];
-			let Bottom = Rect[1] +  Rect[3];
 			Element.style.left = Left+'px';
-			//Element.style.right = Right+'px';
 			Element.style.top = Top+'px';
+			//Element.style.right = Right+'px';
 			//Element.style.bottom = Bottom+'px';
-			Element.style.width = Rect[2]+'px';
-			Element.style.height = Rect[3]+'px';
+			Element.style.width = Width+'px';
+			Element.style.height = Height+'px';
+			//Element.style.width = '100%';
+			//Element.style.height = '500px';
 		}
-		document.body.appendChild( Element );
-		
+		ParentElement.appendChild( Element );
+		Element.width = Rect[2];
+		Element.height = Rect[3];
+
 		//	double check
 		{
 			let MatchElement = document.getElementById(Name);
