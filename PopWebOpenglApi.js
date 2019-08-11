@@ -461,15 +461,6 @@ Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
 		const ViewportWidth = this.GetWidth();
 		const ViewportHeight = this.GetHeight();
 		gl.viewport(0, 0, ViewportWidth, ViewportHeight );
-		
-		//gl.clearColor(0, 1, 0, 1);   // clear to white
-		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-		
-		gl.disable(gl.CULL_FACE);
-		gl.disable(gl.DEPTH_TEST);
-		gl.disable(gl.SCISSOR_TEST);
-		gl.disable(gl.STENCIL_TEST);
 	}
 	
 	this.GetWidth = function()
