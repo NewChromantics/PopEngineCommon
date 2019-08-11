@@ -4,7 +4,7 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	//	todo: check float support
 	//	OES_texture_float extension
 	//	or webgl2
-	Pop.Debug( 'OpenglContext.FLOAT', gl.FLOAT );
+	//Pop.Debug( 'OpenglContext.FLOAT', gl.FLOAT );
 	switch ( PixelFormat )
 	{
 		case 'Greyscale':	return [ gl.LUMINANCE,	gl.UNSIGNED_BYTE];
@@ -91,18 +91,20 @@ Pop.Image = function(Filename)
 		gl.bindTexture(gl.TEXTURE_2D, Texture );
 		const MipLevel = 0;
 		const Border = 0;
-		const InternalFormat = gl.RGBA;
+		let InternalFormat = gl.RGBA;
 		const Width = this.GetWidth();
 		const Height = this.GetHeight();
 
 		if ( this.Pixels instanceof Image )
 		{
+			//Pop.Debug("Image from Image",this.PixelsFormat);
 			const SourceFormat = gl.RGBA;
 			const SourceType = gl.UNSIGNED_BYTE;
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, SourceFormat, SourceType, this.Pixels );
 		}
 		else if ( this.Pixels instanceof Uint8Array )
 		{
+			//Pop.Debug("Image from Uint8Array",this.PixelsFormat);
 			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
 			const SourceFormat = SourceFormatTypes[0];
 			const SourceType = gl.UNSIGNED_BYTE;//SourceFormatTypes[1];
@@ -110,9 +112,11 @@ Pop.Image = function(Filename)
 		}
 		else if ( this.Pixels instanceof Float32Array )
 		{
+			//Pop.Debug("Image from Float32Array",this.PixelsFormat);
 			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
 			const SourceFormat = SourceFormatTypes[0];
 			const SourceType = gl.FLOAT;//SourceFormatTypes[1];
+			InternalFormat = SourceFormat;	//	gr: float3 RGB needs RGB internal
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
 		}
 		else
@@ -143,9 +147,10 @@ Pop.Image = function(Filename)
 	{
 		//	initialise size...
 		Pop.Debug("Init image with size", Filename);
-		const PixelFormat = 'RGBA';
-		const Width = Filename[0];
-		const Height = Filename[1];
+		const Size = arguments[0];
+		const PixelFormat = arguments[1] || 'RGBA';
+		const Width = Size[0];
+		const Height = Size[1];
 		const Pixels = new Uint8Array( Width * Height * 4 );
 		this.WritePixels( Width, Height, Pixels, PixelFormat );
 	}

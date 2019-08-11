@@ -45,9 +45,12 @@ Pop.Opengl.RefactorVertShader = function(Source)
 		//	webgl doesn't have texture2DLod, it just overloads texture2D
 		//	in webgl1 with the extension, we need the extension func
 		//	in webgl2 with #version 300 es, we can use texture2D
+		//	gr: then it wouldn't accept texture2DLodEXT (webgl1)
+		//		... then texture2DLod worked
 		//Source = Source.replace(/texture2DLod/gi,'texture2DLodEXT');
 		//Source = Source.replace(/texture2DLod/gi,'texture2D');
-
+		Source = Source.replace(/textureLod/gi,'texture2DLod');
+		
 	}
 	else if ( Pop.GlslVersion >= 300 )
 	{
@@ -314,7 +317,9 @@ Pop.Opengl.Window = function(Name,Rect)
 		
 		//	texture load needs extension in webgl1
 		//	in webgl2 it's built in, but requires #version 300 es
-		EnableExtension('EXT_shader_texture_lod');
+		//EnableExtension('EXT_shader_texture_lod');
+		//EnableExtension('OES_standard_derivatives');
+		
 	}
 	
 	//	we could make this async for some more control...
@@ -447,12 +452,22 @@ function WindowRenderTarget(Window)
 {
 	const RenderContext = Window;
 	this.ViewportMinMax = [0,0,1,1];
+	this.ActiveTexureIndex = 0;
 
 	Pop.Opengl.RenderTarget.call( this, RenderContext );
 
 	this.GetGlContext = function()
 	{
 		return Window.GetGlContext();
+	}
+	
+	this.AllocTexureIndex = function()
+	{
+		//	gr: make a pool or something
+		//		we fixed this on desktop, so take same model
+		const Index = (this.ActiveTexureIndex % 8);
+		this.ActiveTexureIndex++;
+		return Index;
 	}
 	
 	this.GetScreenRect = function()
@@ -522,7 +537,6 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 	this.VertShader = null;
 	this.FragShader = null;
 	this.Program = null;
-	this.CurrentTextureIndex = 0;
 	this.Context = Context;
 	
 	VertShaderSource = Pop.Opengl.RefactorVertShader(VertShaderSource);
@@ -570,9 +584,6 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 	{
 		let gl = this.GetGlContext();
 		gl.useProgram( this.Program );
-		
-		//	reset texture counter everytime we bind
-		this.CurrentTextureIndex = 0;
 	}
 	
 	//	gr: can't tell the difference between int and float, so err that wont work
@@ -582,7 +593,7 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		if ( !UniformMeta )
 			return;
 		if( Array.isArray(Value) )				this.SetUniformArray( Uniform, Value );
-		else if ( Value instanceof Pop.Image )	this.SetUniformTexture( Uniform, Value, this.CurrentTextureIndex++ );
+		else if ( Value instanceof Pop.Image )	this.SetUniformTexture( Uniform, Value, Context.AllocTexureIndex() );
 		//else if ( Value instanceof float2 )		this.SetUniformFloat2( Uniform, Value );
 		//else if ( Value instanceof float3 )		this.SetUniformFloat3( Uniform, Value );
 		//else if ( Value instanceof float4 )		this.SetUniformFloat4( Uniform, Value );
@@ -790,6 +801,7 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 		Attrib.Floats = VertexData;
 		Attrib.Size = Size;
 		Attrib.Type = Type;
+		Attrib.Location = Location;
 		Attributes.push( Attrib );
 	}
 	PushAttribute( VertexAttributeName, VertexData, 0, gl.FLOAT,VertexSize );
