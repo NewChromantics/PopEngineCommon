@@ -39,8 +39,8 @@ function SetElementPosition(Element,x,y)
 var $HighestZ = 100;
 function SetElementToTop(Element)
 {
-	$HighestZ++;
-	Element.style.zIndex = $HighestZ;
+	//$HighestZ++;
+	//Element.style.zIndex = $HighestZ;
 }
 
 //	returns [float2].snapPos [function].callback [Element].newParent
@@ -158,9 +158,23 @@ function GetElementRect(Element)
 
 function SetGuiControl_Draggable(Element)
 {
+	let AllowInteraction = function(Event)
+	{
+		//	gr: if we prevent too events (or dont preventdefault)
+		//		then quick movements can fall onto window, and we're not currently
+		//		handling when we move without starting with mousedown
+		if ( Event.target != Element )
+			return false;
+		//if ( Event.target.tagName.toUpperCase() == 'INPUT' )
+		//	return false;
+		return true;
+	}
+	
 	let OnMouseDrag = function(e)
 	{
 		e = e || window.event;
+		//if ( !AllowInteraction(e) )
+		//	return;
 		
 		e.preventDefault();
 		
@@ -189,6 +203,8 @@ function SetGuiControl_Draggable(Element)
 	
 	let OnMouseUp = function(e)
 	{
+		//if ( !AllowInteraction(e) )
+		//	return;
 		OnMouseDrag(e);
 		
 		//	drop!
@@ -224,7 +240,9 @@ function SetGuiControl_Draggable(Element)
 	let OnMouseDown = function(e)
 	{
 		e = e || window.event;
-		
+		if ( !AllowInteraction(e) )
+			return;
+
 		//	grab from parent. This returns null if it can't be dragged.
 		//	otherwise returns a revert func
 		let Parent = Element.parentNode;
@@ -316,6 +334,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 	//	gr: element may not be assigned yet, maybe rework construction of controls
 	this.AddChildControl = function(Child,Element)
 	{
+		//Element.style.zIndex = 2;
 		this.ElementParent.appendChild( Element );
 	}
 	
@@ -340,6 +359,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 			return Child;
 		}
 		const TitleBar = AddChild( Element, 'PopGuiTitleBar');
+		TitleBar.style.pointerEvents = 'none';
 		//AddChild( TitleBar, 'PopGuiTitleIcon', 'X');
 		AddChild( TitleBar, 'PopGuiTitleText', Name );
 		//AddChild( TitleBar, 'PopGuiButton', '_');
