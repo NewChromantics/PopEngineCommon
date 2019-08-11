@@ -6,7 +6,7 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	//	or webgl2
 	//Pop.Debug( 'OpenglContext.FLOAT', gl.FLOAT );
 	
-	if ( gl instanceof WebGL2RenderingContext )
+	if ( false && gl instanceof WebGL2RenderingContext )
 	{
 		switch ( PixelFormat )
 		{
@@ -39,8 +39,6 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 
 Pop.Image = function(Filename)
 {
-	Pop.Debug("Pop.Image(",...arguments,")");
-	
 	this.Size = [undefined,undefined];
 	this.OpenglTexture = null;
 	this.OpenglVersion = undefined;
@@ -84,7 +82,7 @@ Pop.Image = function(Filename)
 	this.UpdateTexturePixels = function(RenderContext)
 	{
 		//	up to date
-		if ( this.OpenglTextureVersion == this.GetLatestVersion() )
+		if ( this.OpenglVersion == this.GetLatestVersion() )
 			return;
 		
 		if ( !this.Pixels )
@@ -97,11 +95,15 @@ Pop.Image = function(Filename)
 		{
 			//	create texture
 			this.OpenglTexture = gl.createTexture();
-			this.OpenglTextureVersion = undefined;
+			this.OpenglVersion = undefined;
 		}
 		const Texture = this.OpenglTexture;
 		
-		//	gr: do we need to set texture slot?
+		//	set a new texture slot
+		const TextureIndex = RenderContext.AllocTexureIndex();
+		let GlTextureNames = [ gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7 ];
+		gl.activeTexture( GlTextureNames[TextureIndex] );
+
 		gl.bindTexture(gl.TEXTURE_2D, Texture );
 		const MipLevel = 0;
 		const Border = 0;
@@ -123,6 +125,7 @@ Pop.Image = function(Filename)
 			let SourceFormat = SourceFormatTypes[0];
 			const SourceType = gl.UNSIGNED_BYTE;//SourceFormatTypes[1];
 			
+			//	correction when in webgl2
 			if ( this.PixelsFormat == 'Float4' )	SourceFormat = gl.RGBA;
 			if ( this.PixelsFormat == 'Float3' )	SourceFormat = gl.RGB;
 			if ( this.PixelsFormat == 'Float2' )	SourceFormat = gl.LUMINANCE_ALPHA;
@@ -135,9 +138,19 @@ Pop.Image = function(Filename)
 		{
 			//Pop.Debug("Image from Float32Array",this.PixelsFormat);
 			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
-			const SourceFormat = SourceFormatTypes[0];
+			let SourceFormat = SourceFormatTypes[0];
 			const SourceType = gl.FLOAT;//SourceFormatTypes[1];
 			InternalFormat = SourceFormat;	//	gr: float3 RGB needs RGB internal
+			
+			//	webgl2 correction
+			if ( gl.RGBA32F !== undefined )
+			{
+				if ( this.PixelsFormat == 'Float4' )	InternalFormat = gl.RGBA32F;
+				if ( this.PixelsFormat == 'Float3' )	InternalFormat = gl.RGB;
+				if ( this.PixelsFormat == 'Float2' )	InternalFormat = gl.LUMINANCE_ALPHA;
+				if ( this.PixelsFormat == 'Float1' )	InternalFormat = gl.LUMINANCE;
+			}
+			
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
 		}
 		else
@@ -153,7 +166,7 @@ Pop.Image = function(Filename)
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, FilterMode);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, FilterMode);
 		
-		this.OpenglTextureVersion = this.GetLatestVersion()+1;
+		this.OpenglVersion = this.GetLatestVersion();
 	}
 	
 	
@@ -172,8 +185,14 @@ Pop.Image = function(Filename)
 		const PixelFormat = arguments[1] || 'RGBA';
 		const Width = Size[0];
 		const Height = Size[1];
-		const Pixels = new Uint8Array( Width * Height * 4 );
+		let PixelData = new Array(Width * Height * 4);
+		PixelData.fill(0);
+		const Pixels = PixelFormat=='Float4' ? new Float32Array(PixelData) : new Uint8Array(PixelData);
 		this.WritePixels( Width, Height, Pixels, PixelFormat );
+	}
+	else if ( Filename !== undefined )
+	{
+		throw "Unhandled Pop.Image constructor; " + [...arguments];
 	}
 }
 

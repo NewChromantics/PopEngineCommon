@@ -232,6 +232,16 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.Context = null;
 	this.RenderTarget = null;
 	this.CanvasMouseHandler = null;
+	this.ActiveTexureIndex = 0;
+
+	this.AllocTexureIndex = function()
+	{
+		//	gr: make a pool or something
+		//		we fixed this on desktop, so take same model
+		const Index = (this.ActiveTexureIndex % 8);
+		this.ActiveTexureIndex++;
+		return Index;
+	}
 	
 	this.InitCanvasElement = function()
 	{
@@ -412,20 +422,46 @@ Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
 		this.FrameBuffer = gl.createFramebuffer();
 		this.Image = Image;
 		
-		this.BindRenderTarget();
-		
+		//this.BindRenderTarget();
+		gl.bindFramebuffer( gl.FRAMEBUFFER, this.FrameBuffer );
+
+		//let Status = gl.checkFramebufferStatus( this.FrameBuffer );
+		//Pop.Debug("Framebuffer status",Status);
+
 		//  attach this texture to colour output
 		const level = 0;
 		const attachmentPoint = gl.COLOR_ATTACHMENT0;
 		gl.framebufferTexture2D(gl.FRAMEBUFFER, attachmentPoint, gl.TEXTURE_2D, Texture, level);
+		if ( !gl.isFramebuffer( this.FrameBuffer ) )
+			throw "Is not frame buffer!";
+		//let Status = gl.checkFramebufferStatus( this.FrameBuffer );
+		//Pop.Debug("Framebuffer status",Status);
 	}
 	
 	//  bind for rendering
 	this.BindRenderTarget = function()
 	{
 		const gl = this.GetGlContext();
+		if ( !gl.isFramebuffer( this.FrameBuffer ) )
+			throw "Is not frame buffer!";
 		gl.bindFramebuffer( gl.FRAMEBUFFER, this.FrameBuffer );
-		gl.viewport(0, 0, this.GetWidth(), this.GetHeight() );
+		
+		//	gr: this is givng errors...
+		//let Status = gl.checkFramebufferStatus( this.FrameBuffer );
+		//Pop.Debug("Framebuffer status",Status);
+		
+		const ViewportWidth = this.GetWidth();
+		const ViewportHeight = this.GetHeight();
+		gl.viewport(0, 0, ViewportWidth, ViewportHeight );
+		
+		//gl.clearColor(0, 1, 0, 1);   // clear to white
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+		
+		gl.disable(gl.CULL_FACE);
+		gl.disable(gl.DEPTH_TEST);
+		gl.disable(gl.SCISSOR_TEST);
+		gl.disable(gl.STENCIL_TEST);
 	}
 	
 	this.GetWidth = function()
@@ -454,7 +490,6 @@ function WindowRenderTarget(Window)
 {
 	const RenderContext = Window;
 	this.ViewportMinMax = [0,0,1,1];
-	this.ActiveTexureIndex = 0;
 
 	Pop.Opengl.RenderTarget.call( this, RenderContext );
 
@@ -465,13 +500,9 @@ function WindowRenderTarget(Window)
 	
 	this.AllocTexureIndex = function()
 	{
-		//	gr: make a pool or something
-		//		we fixed this on desktop, so take same model
-		const Index = (this.ActiveTexureIndex % 8);
-		this.ActiveTexureIndex++;
-		return Index;
+		return Window.AllocTexureIndex();
 	}
-	
+
 	this.GetScreenRect = function()
 	{
 		let Canvas = Window.GetCanvasElement();
