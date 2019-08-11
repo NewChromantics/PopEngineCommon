@@ -5,18 +5,32 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	//	OES_texture_float extension
 	//	or webgl2
 	//Pop.Debug( 'OpenglContext.FLOAT', gl.FLOAT );
+	
+	if ( gl instanceof WebGL2RenderingContext )
+	{
+		switch ( PixelFormat )
+		{
+			case 'Float1':		return [ gl.R32F,		gl.FLOAT];
+			case 'Float2':		return [ gl.RG32F,		gl.FLOAT];
+			case 'Float3':		return [ gl.RGB32F,		gl.FLOAT];
+			case 'Float4':		return [ gl.RGBA32F,	gl.FLOAT];
+		}
+	}
+	else
+	{
+		switch ( PixelFormat )
+		{
+			case 'Float1':		return [ gl.LUMINANCE,	gl.FLOAT];
+			case 'Float2':		return [ gl.LUMINANCE_ALPHA,	gl.FLOAT];
+			case 'Float3':		return [ gl.RGB,		gl.FLOAT];
+			case 'Float4':		return [ gl.RGBA,		gl.FLOAT];
+		}
+	}
+	
 	switch ( PixelFormat )
 	{
 		case 'Greyscale':	return [ gl.LUMINANCE,	gl.UNSIGNED_BYTE];
 		case 'RGBA':		return [ gl.RGBA,		gl.UNSIGNED_BYTE];
-		//case 'Float1':		return [ gl.R32F,		gl.FLOAT];
-		//case 'Float2':		return [ gl.RG32F,		gl.FLOAT];
-		//case 'Float3':		return [ gl.RGB32F,		gl.FLOAT];
-		//case 'Float4':		return [ gl.RGBA32F,	gl.FLOAT];		case 'Float1':		return [ gl.LUMINANCE,	gl.FLOAT];
-		case 'Float1':		return [ gl.LUMINANCE,	gl.FLOAT];
-		case 'Float2':		return [ gl.LUMINANCE_ALPHA,	gl.FLOAT];
-		case 'Float3':		return [ gl.RGB,		gl.FLOAT];
-		case 'Float4':		return [ gl.RGBA,		gl.FLOAT];
 	}
 	
 	throw "PixelFormatToOpenglFormat: Unhandled pixel format " + PixelFormat;
@@ -106,8 +120,15 @@ Pop.Image = function(Filename)
 		{
 			//Pop.Debug("Image from Uint8Array",this.PixelsFormat);
 			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
-			const SourceFormat = SourceFormatTypes[0];
+			let SourceFormat = SourceFormatTypes[0];
 			const SourceType = gl.UNSIGNED_BYTE;//SourceFormatTypes[1];
+			
+			if ( this.PixelsFormat == 'Float4' )	SourceFormat = gl.RGBA;
+			if ( this.PixelsFormat == 'Float3' )	SourceFormat = gl.RGB;
+			if ( this.PixelsFormat == 'Float2' )	SourceFormat = gl.LUMINANCE_ALPHA;
+			if ( this.PixelsFormat == 'Float1' )	SourceFormat = gl.LUMINANCE;
+
+			InternalFormat = SourceFormatTypes[0];
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
 		}
 		else if ( this.Pixels instanceof Float32Array )
