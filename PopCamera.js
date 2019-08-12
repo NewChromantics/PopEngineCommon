@@ -206,13 +206,17 @@ Pop.Camera = function()
 	{
 		if ( FirstClick )
 			this.LastPos_PanPos = [x,y,z];
-		
+		//Pop.Debug("OnCameraPan", ...arguments, JSON.stringify(this));
+
 		let Deltax = this.LastPos_PanPos[0] - x;
 		let Deltay = this.LastPos_PanPos[1] - y;
 		let Deltaz = this.LastPos_PanPos[2] - z;
 		this.Position[0] += Deltax * 0.01
 		this.Position[1] -= Deltay * 0.01
 		this.Position[2] += Deltaz * 0.01
+		this.LookAt[0] += Deltax * 0.01
+		this.LookAt[1] -= Deltay * 0.01
+		this.LookAt[2] += Deltaz * 0.01
 		
 		this.LastPos_PanPos = [x,y,z];
 	}
