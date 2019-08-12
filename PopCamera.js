@@ -114,14 +114,12 @@ Pop.Camera = function()
 		//	https://stackoverflow.com/questions/349050/calculating-a-lookat-matrix
 		let Up = [0,1,0];
 		
-		//	gr: these now match
-		//	but is that translation correct...
 		let Rotation = Math.CreateLookAtRotationMatrix( this.Position, Up, this.LookAt );
-		let Trans = Math.Subtract3( this.LookAt, this.Position );
-		let Translation = Math.CreateTranslationMatrix( Trans[0], Trans[1], Trans[2] );
+		let Trans = Math.Subtract3( [0,0,0], this.Position );
+		let Translation = Math.CreateTranslationMatrix( ...Trans );
 		let Matrix = Math.MatrixMultiply4x4( Rotation, Translation );
+		//Pop.Debug("GetWorldToCameraMatrix", Matrix.slice(12,16) );
 		return Matrix;
-		//return GetLookAtMatrix( this.Position, Up, this.LookAt );
 	}
 	
 	this.GetLocalToWorldMatrix = function()
