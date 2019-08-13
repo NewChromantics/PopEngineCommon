@@ -1,22 +1,38 @@
 Pop.Aruco = {};
 
-Pop.Aruco.GetMarkerImage = function(Width,Height,Number)
+Pop.Aruco.GetMarkerImage = function(Width,Height,Number,Border=1)
 {
 	const Matrix = Pop.Aruco.GetMarkerMatrix( Width, Height, Number );
 	const Image = new Pop.Image();
-	const Pixels = new Uint8Array( Width * Height );
+	const Channels = 3;
+	Border = (Border===true) ? 1 : (Border===false) ? 0 : Border;
+	const ImageWidth = Width + Border + Border;
+	const ImageHeight = Height + Border + Border;
+	const Pixels = new Uint8Array( ImageWidth * ImageHeight * Channels );
+
+	let SetPixel = function(x,y,Value)
+	{
+		let imgx = x + Border;
+		let imgy = y + Border;
+		let Index = (imgy * ImageWidth) + imgx;
+		Index *= Channels;
+		for ( let i=0;	i<Channels;	i++ )
+			Pixels[Index+i] = Value ? 255 : 0;
+	}
 	
-	//	todo: add border!
 	for ( let y=0;	y<Height;	y++ )
 	{
 		for ( let x=0;	x<Width;	x++ )
 		{
 			let Index = (y * Width) + x;
 			let Value = Matrix[Index];
-			Pixels[Index] = Value ? 255 : 0;
+			SetPixel( x, y, Value );
 		}
 	}
-	Image.WritePixels( Width, Height, Pixels, 'Greyscale' );
+	
+	const Formats = ['0','Greyscale','2','RGB','RGBA'];
+	const Format = Formats[Channels];
+	Image.WritePixels( ImageWidth, ImageHeight, Pixels, Format );
 	
 	return Image;
 }
