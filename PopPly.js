@@ -30,7 +30,7 @@ Pop.ParsePlyFile = function(Filename,OnVertex,OnMeta)
 		}
 	
 		let xyz = Line.split(' ');
-		if ( xyz.length != 3 )
+		if ( xyz.length < 3 )
 		{
 			Pop.Debug("ignoring line " + Line, xyz.length);
 			return;
