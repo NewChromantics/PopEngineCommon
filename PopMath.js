@@ -1,4 +1,23 @@
-//	use PopJs here!
+//	colour conversion namespace
+Pop.Colour = {};
+
+Pop.Colour.RgbfToHex = function(Rgb)
+{
+	let FloatToHex = function(f)
+	{
+		let Byte = Math.floor(f * 255.0);
+		let a = (Byte & 0xf0) >> 4;
+		let b = (Byte & 0x0f) >> 0;
+		let ah = a.toString(16);
+		let bh = b.toString(16);
+		return ah+bh;
+	}
+
+	//	to u8 first
+	let HexRgb = '#' + FloatToHex(Rgb[0]) + FloatToHex(Rgb[1]) + FloatToHex(Rgb[2]);
+	Pop.Debug(Rgb,HexRgb);
+	return HexRgb;
+}
 
 Math.DegToRad = function(Degrees)
 {
@@ -429,10 +448,7 @@ function GetOverlapArea(Recta,Rectb)
 }
 
 
-
-
-
-function HexToRgb(HexRgb)
+Pop.Colour.HexToRgb = function(HexRgb)
 {
 	let GetNibble = function(){};
 	
@@ -483,9 +499,9 @@ function HexToRgb(HexRgb)
 	return [Red,Green,Blue];
 }
 
-function HexToRgbf(HexRgb)
+Pop.Colour.HexToRgbf = function(HexRgb)
 {
-	let rgb = HexToRgb( HexRgb );
+	let rgb = Pop.Colour.HexToRgb( HexRgb );
 	rgb[0] /= 255;
 	rgb[1] /= 255;
 	rgb[2] /= 255;

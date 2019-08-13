@@ -1,13 +1,13 @@
 
-function CreateParamsWindow(Params,OnAnyChanged)
+function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 {
 	OnAnyChanged = OnAnyChanged || function(){};
 	
-	let WindowRect = [20,20,500,300];
+	WindowRect = WindowRect || [800,20,600,300];
 	let ControlTop = 10;
 
 	const LabelLeft = 10;
-	const LabelWidth = 220;
+	const LabelWidth = WindowRect[2] * 0.3;
 	const LabelHeight = 28;
 	const ControlLeft = LabelLeft + LabelWidth + 10;
 	const ControlWidth = WindowRect[2] - ControlLeft - 40;
@@ -41,6 +41,7 @@ function CreateParamsWindow(Params,OnAnyChanged)
 			
 		let LabelTop = ControlTop;
 		let Label = new Pop.Gui.Label( Window, [LabelLeft,LabelTop,LabelWidth,LabelHeight] );
+		Label.SetValue(Name);
 		
 		let Control;
 		if ( typeof Params[Name] === 'boolean' )
@@ -59,7 +60,7 @@ function CreateParamsWindow(Params,OnAnyChanged)
 			//	init label
 			Control.OnChanged( Params[Name] );
 		}
-		else if ( Min == 'Colour' )
+		else if ( Min == 'Colour' && Pop.Gui.Colour === undefined )
 		{
 			Control = new Pop.Gui.TickBox( Window, [ControlLeft,ControlTop,ControlWidth,ControlHeight] );
 			Control.SetValue(false);
@@ -106,8 +107,36 @@ function CreateParamsWindow(Params,OnAnyChanged)
 			
 			Control.UpdateLabel = function(Value)
 			{
-				let Value8 = GetValue8( Value );
-				Control.SetLabel("RGB " + Value8 );
+				let r = Value[0].toFixed(2);
+				let g = Value[1].toFixed(2);
+				let b = Value[2].toFixed(2);
+				let Valuef = [r,g,b];
+				Control.SetLabel( "[" + Valuef + "]" );
+			}
+			
+			//	init label
+			Control.UpdateLabel( Params[Name] );
+		}
+		else if ( Min == 'Colour' && Pop.Gui.Colour !== undefined )
+		{
+			Control = new Pop.Gui.Colour( Window, [ControlLeft,ControlTop,ControlWidth,ControlHeight] );
+			Control.SetValue( Params[Name] );
+
+			Control.OnChanged = function(Value)
+			{
+				Value = CleanValue(Value);
+				Params[Name] = Value;
+				OnAnyChanged(Params);
+				Control.UpdateLabel(Value);
+			}
+			
+			Control.UpdateLabel = function(Value)
+			{
+				let r = Value[0].toFixed(2);
+				let g = Value[1].toFixed(2);
+				let b = Value[2].toFixed(2);
+				let Valuef = [r,g,b];
+				Control.SetLabel( "[" + Valuef + "]" );
 			}
 			
 			//	init label
