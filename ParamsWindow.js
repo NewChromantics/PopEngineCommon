@@ -1,13 +1,13 @@
 
-function CreateParamsWindow(Params,OnAnyChanged)
+function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 {
 	OnAnyChanged = OnAnyChanged || function(){};
 	
-	let WindowRect = [800,20,600,300];
+	WindowRect = WindowRect || [800,20,600,300];
 	let ControlTop = 10;
 
 	const LabelLeft = 10;
-	const LabelWidth = 220;
+	const LabelWidth = WindowRect[2] * 0.3;
 	const LabelHeight = 28;
 	const ControlLeft = LabelLeft + LabelWidth + 10;
 	const ControlWidth = WindowRect[2] - ControlLeft - 40;

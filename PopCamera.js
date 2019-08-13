@@ -9,8 +9,11 @@ Pop.Camera = function()
 	this.NearDistance = 0.01;
 	this.FarDistance = 100;
 	
+	//	world to pixel
 	this.GetOpencvProjectionMatrix = function(ViewRect)
 	{
+		//	this is the projection matrix on a rectified/undistorted image
+		//	3D to 2D... (seems like its backwards..)
 		/*
 		 Matrix[0] =
 		 |fx  0 cx|
@@ -19,17 +22,20 @@ Pop.Camera = function()
 		*/
 		
 		//	from calibration
-		//let w = 363.30 * 2;
-		//let h = 364.19 * 2;
-		//let cx = 400;
-		//let cy = 400;
+		//	on 800x800 image
+		let w = 363.30 * 2;
+		let h = 364.19 * 2;
+		let cx = 400;
+		let cy = 400;
 		
+		/*
 		//	gr: this works far better if square
 		let w = ViewRect[2];
 		//let h = ViewRect[3];
 		let h = w;
 		let cx = w/2;
 		let cy = h/2;
+		*/
 		
 		let Matrix =
 		[
@@ -114,14 +120,12 @@ Pop.Camera = function()
 		//	https://stackoverflow.com/questions/349050/calculating-a-lookat-matrix
 		let Up = [0,1,0];
 		
-		//	gr: these now match
-		//	but is that translation correct...
 		let Rotation = Math.CreateLookAtRotationMatrix( this.Position, Up, this.LookAt );
-		let Trans = Math.Subtract3( this.LookAt, this.Position );
-		let Translation = Math.CreateTranslationMatrix( Trans[0], Trans[1], Trans[2] );
+		let Trans = Math.Subtract3( [0,0,0], this.Position );
+		let Translation = Math.CreateTranslationMatrix( ...Trans );
 		let Matrix = Math.MatrixMultiply4x4( Rotation, Translation );
+		//Pop.Debug("GetWorldToCameraMatrix", Matrix.slice(12,16) );
 		return Matrix;
-		//return GetLookAtMatrix( this.Position, Up, this.LookAt );
 	}
 	
 	this.GetLocalToWorldMatrix = function()
@@ -208,13 +212,17 @@ Pop.Camera = function()
 	{
 		if ( FirstClick )
 			this.LastPos_PanPos = [x,y,z];
-		
+		//Pop.Debug("OnCameraPan", ...arguments, JSON.stringify(this));
+
 		let Deltax = this.LastPos_PanPos[0] - x;
 		let Deltay = this.LastPos_PanPos[1] - y;
 		let Deltaz = this.LastPos_PanPos[2] - z;
 		this.Position[0] += Deltax * 0.01
 		this.Position[1] -= Deltay * 0.01
 		this.Position[2] += Deltaz * 0.01
+		this.LookAt[0] += Deltax * 0.01
+		this.LookAt[1] -= Deltay * 0.01
+		this.LookAt[2] += Deltaz * 0.01
 		
 		this.LastPos_PanPos = [x,y,z];
 	}
