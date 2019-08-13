@@ -9,8 +9,11 @@ Pop.Camera = function()
 	this.NearDistance = 0.01;
 	this.FarDistance = 100;
 	
+	//	world to pixel
 	this.GetOpencvProjectionMatrix = function(ViewRect)
 	{
+		//	this is the projection matrix on a rectified/undistorted image
+		//	3D to 2D... (seems like its backwards..)
 		/*
 		 Matrix[0] =
 		 |fx  0 cx|
@@ -19,17 +22,20 @@ Pop.Camera = function()
 		*/
 		
 		//	from calibration
-		//let w = 363.30 * 2;
-		//let h = 364.19 * 2;
-		//let cx = 400;
-		//let cy = 400;
+		//	on 800x800 image
+		let w = 363.30 * 2;
+		let h = 364.19 * 2;
+		let cx = 400;
+		let cy = 400;
 		
+		/*
 		//	gr: this works far better if square
 		let w = ViewRect[2];
 		//let h = ViewRect[3];
 		let h = w;
 		let cx = w/2;
 		let cy = h/2;
+		*/
 		
 		let Matrix =
 		[
