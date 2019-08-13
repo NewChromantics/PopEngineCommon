@@ -662,7 +662,7 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		
 		//	check array size (allow less, but throw on overflow)
 		//	error if array is empty
-		while ( ValuesExpanded.length < UniformMeta.size )
+		while ( ValuesExpanded.length < UniformMeta.ElementSize * UniformMeta.ElementType )
 			ValuesExpanded.push(0);
 		/*
 		 if ( ValuesExpanded.length > UniformMeta.size )
@@ -761,6 +761,8 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		for ( let i=0;	i<UniformCount;	i++ )
 		{
 			let UniformMeta = gl.getActiveUniform( this.Program, i );
+			UniformMeta.ElementCount = UniformMeta.size;
+			UniformMeta.ElementSize = undefined;
 			//	match name even if it's an array
 			//	todo: struct support
 			let UniformName = UniformMeta.name.split('[')[0];
@@ -774,27 +776,35 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 				case gl.INT:
 				case gl.UNSIGNED_INT:
 				case gl.BOOL:
+					UniformMeta.ElementSize = 1;
 					UniformMeta.SetValues = function(v)	{	gl.uniform1iv( UniformMeta.Location, v );	};
 					break;
 				case gl.FLOAT:
+					UniformMeta.ElementSize = 1;
 					UniformMeta.SetValues = function(v)	{	gl.uniform1fv( UniformMeta.Location, v );	};
 					break;
 				case gl.FLOAT_VEC2:
+					UniformMeta.ElementSize = 2;
 					UniformMeta.SetValues = function(v)	{	gl.uniform2fv( UniformMeta.Location, v );	};
 					break;
 				case gl.FLOAT_VEC3:
+					UniformMeta.ElementSize = 3;
 					UniformMeta.SetValues = function(v)	{	gl.uniform3fv( UniformMeta.Location, v );	};
 					break;
 				case gl.FLOAT_VEC4:
+					UniformMeta.ElementSize = 4;
 					UniformMeta.SetValues = function(v)	{	gl.uniform4fv( UniformMeta.Location, v );	};
 					break;
 				case gl.FLOAT_MAT2:
+					UniformMeta.ElementSize = 2*2;
 					UniformMeta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix2fv( UniformMeta.Location, Transpose, v );	};
 					break;
 				case gl.FLOAT_MAT3:
+					UniformMeta.ElementSize = 3*3;
 					UniformMeta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix3fv( UniformMeta.Location, Transpose, v );	};
 					break;
 				case gl.FLOAT_MAT4:
+					UniformMeta.ElementSize = 4*4;
 					UniformMeta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix4fv( UniformMeta.Location, Transpose, v );	};
 					break;
 
