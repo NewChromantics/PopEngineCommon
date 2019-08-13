@@ -398,7 +398,7 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 			gl.disableVertexAttribArray(i);
 		//	gr: we get glDrawArrays: attempt to access out of range vertices in attribute 0, if we dont update every frame (this seems wrong)
 		//		even if we call gl.enableVertexAttribArray
-		Geometry.BindVertexPointers();
+		Geometry.BindVertexPointers( Shader );
 		
 		SetUniforms( Shader, Geometry );
 		
@@ -845,12 +845,23 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 	this.PrimitiveType = gl.TRIANGLES;
 	this.IndexCount = TriangleIndexes.length;
 	
-	this.BindVertexPointers = function()
+	this.BindVertexPointers = function(Shader)
 	{
 		//	setup offset in buffer
 		let InitAttribute = function(Attrib)
 		{
-			//gl.getAttribLocation( Shader.Program, Attrib.Uniform );
+			let Location = Attrib.Location;
+			
+			if ( Shader )
+			{
+				let ShaderLocation = gl.getAttribLocation( Shader.Program, Attrib.Name );
+				if ( ShaderLocation != Location )
+				{
+					Pop.Debug("Warning, shader assigned location (" + ShaderLocation +") different from predefined location ("+ Location + ")");
+					Location = ShaderLocation;
+				}
+			}
+			
 			let Normalised = false;
 			let StrideBytes = 0;
 			let OffsetBytes = 0;
