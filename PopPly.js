@@ -36,17 +36,15 @@ Pop.ParsePlyFile = function(Filename,OnVertex,OnMeta)
 			return;
 		}
 	
-		let x = parseFloat(xyz[0]);
-		let y = parseFloat(xyz[1]);
-		let z = parseFloat(xyz[2]);
+		let Floats = xyz.map( parseFloat );
 		
-		if ( x === NaN || y === NaN || z === NaN )
+		if ( Floats.some( isNaN ) )
 		{
-			Pop.Debug("Nan parsed; ignoring line " + Line, x,y,z);
+			Pop.Debug("Nan parsed; ignoring line " + Line, ...xyz, ...Floats );
 			return;
 		}
 	
-		OnVertex( x,y,z);
+		OnVertex( ...Floats );
 	}
 	PlyLines.forEach(ProcessLine);
 }
