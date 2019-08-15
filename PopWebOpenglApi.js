@@ -423,6 +423,14 @@ Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
 		return gl;
 	}
 	
+	this.GetRenderTargetRect = function()
+	{
+		let Rect = [0,0,0,0];
+		Rect[2] = this.Image.GetWidth();
+		Rect[3] = this.Image.GetHeight();
+		return Rect;
+	}
+	
 	this.CreateFrameBuffer = function(Image)
 	{
 		const Texture = Image.GetOpenglTexture( RenderContext );
@@ -457,20 +465,8 @@ Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
 		//	gr: this is givng errors...
 		//let Status = gl.checkFramebufferStatus( this.FrameBuffer );
 		//Pop.Debug("Framebuffer status",Status);
-		
-		const ViewportWidth = this.GetWidth();
-		const ViewportHeight = this.GetHeight();
-		gl.viewport(0, 0, ViewportWidth, ViewportHeight );
-	}
-	
-	this.GetWidth = function()
-	{
-		return this.Image.GetWidth();
-	}
-	
-	this.GetHeight = function()
-	{
-		return this.Image.GetHeight();
+		const Viewport = this.GetRenderTargetRect();
+		gl.viewport( ...Viewport );
 	}
 	
 	this.CreateFrameBuffer( Image );
@@ -509,7 +505,14 @@ function WindowRenderTarget(Window)
 		let Rect = [ ElementRect.x, ElementRect.y, ElementRect.width, ElementRect.height ];
 		return Rect;
 	}
-	
+
+	this.GetRenderTargetRect = function()
+	{
+		let Rect = this.GetScreenRect();
+		Rect[0] = 0;
+		Rect[1] = 0;
+		return Rect;
+	}
 
 	this.RenderToRenderTarget = function(TargetTexture,RenderFunction)
 	{
@@ -529,8 +532,9 @@ function WindowRenderTarget(Window)
 	{
 		const gl = this.GetGlContext();
 		gl.bindFramebuffer( gl.FRAMEBUFFER, null );
-		let ViewportMinx = this.ViewportMinMax[0] * this.GetWidth();
-		let ViewportMiny = this.ViewportMinMax[1] * this.GetHeight();
+		const RenderRect = this.GetRenderTargetRect();
+		let ViewportMinx = this.ViewportMinMax[0] * RenderRect[2];
+		let ViewportMiny = this.ViewportMinMax[1] * RenderRect[3];
 		let ViewportWidth = this.GetViewportWidth();
 		let ViewportHeight = this.GetViewportHeight();
 		//	viewport in pixels in webgl
@@ -539,25 +543,16 @@ function WindowRenderTarget(Window)
 	
 	this.GetViewportWidth = function()
 	{
-		return this.GetWidth() * (this.ViewportMinMax[2]-this.ViewportMinMax[0]);
+		const RenderRect = this.GetRenderTargetRect();
+		return RenderRect[2] * (this.ViewportMinMax[2]-this.ViewportMinMax[0]);
 	}
 	
 	this.GetViewportHeight = function()
 	{
-		return this.GetHeight() * (this.ViewportMinMax[3]-this.ViewportMinMax[1]);
+		const RenderRect = this.GetRenderTargetRect();
+		return RenderRect[3] * (this.ViewportMinMax[3]-this.ViewportMinMax[1]);
 	}
 	
-	this.GetWidth = function()
-	{
-		const Rect = this.GetScreenRect();
-		return Rect[2];
-	}
-	
-	this.GetHeight = function()
-	{
-		const Rect = this.GetScreenRect();
-		return Rect[3];
-	}
 }
 
 
