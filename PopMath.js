@@ -15,7 +15,7 @@ Pop.Colour.RgbfToHex = function(Rgb)
 
 	//	to u8 first
 	let HexRgb = '#' + FloatToHex(Rgb[0]) + FloatToHex(Rgb[1]) + FloatToHex(Rgb[2]);
-	Pop.Debug(Rgb,HexRgb);
+	//Pop.Debug(Rgb,HexRgb);
 	return HexRgb;
 }
 

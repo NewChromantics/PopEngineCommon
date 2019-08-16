@@ -29,7 +29,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 		
 		let Control = this.Controls[Name];
 		let Value = Params[Name];
-		Pop.Debug("Updating control", JSON.stringify(Control), Value );
+		//Pop.Debug("Updating control", JSON.stringify(Control), Value );
 		Control.SetValue( Value );
 		Control.OnChanged( Value );
 	}
