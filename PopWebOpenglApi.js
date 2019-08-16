@@ -351,6 +351,7 @@ Pop.Opengl.Window = function(Name,Rect)
 				//		as we use the object. this will get messy when we have textre render targets in webgl
 				if ( !this.RenderTarget )
 					this.RenderTarget = new WindowRenderTarget(this);
+				this.RenderTarget.BindRenderTarget();
 				this.OnRender( this.RenderTarget );
 			}
 			//catch(e)
@@ -382,6 +383,13 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 		let gl = this.GetGlContext();
 		gl.clearColor( r, g, b, a );
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	}
+	
+	this.ResetState = function()
+	{
+		let gl = this.GetGlContext();
+		gl.disable(gl.CULL_FACE);
+		gl.enable(gl.DEPTH_TEST);
 	}
 	
 	this.DrawGeometry = function(Geometry,Shader,SetUniforms)
@@ -467,6 +475,8 @@ Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
 		//Pop.Debug("Framebuffer status",Status);
 		const Viewport = this.GetRenderTargetRect();
 		gl.viewport( ...Viewport );
+		
+		this.ResetState();
 	}
 	
 	this.CreateFrameBuffer( Image );
@@ -539,6 +549,8 @@ function WindowRenderTarget(Window)
 		let ViewportHeight = this.GetViewportHeight();
 		//	viewport in pixels in webgl
 		gl.viewport( ViewportMinx, ViewportMiny, ViewportWidth, ViewportHeight );
+		
+		this.ResetState();
 	}
 	
 	this.GetViewportWidth = function()
