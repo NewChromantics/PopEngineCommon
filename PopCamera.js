@@ -118,7 +118,7 @@ Pop.Camera = function()
 	this.GetWorldToCameraMatrix = function()
 	{
 		//	https://stackoverflow.com/questions/349050/calculating-a-lookat-matrix
-		let Up = [0,1,0];
+		const Up = this.GetUp();
 		
 		let Rotation = Math.CreateLookAtRotationMatrix( this.Position, Up, this.LookAt );
 		let Trans = Math.Subtract3( [0,0,0], this.Position );
@@ -139,6 +139,41 @@ Pop.Camera = function()
 		
 		
 		return Matrix;
+	}
+	
+	this.GetUp = function()
+	{
+		//let y = Math.Cross3( z,x );
+		//y = Math.Normalise3( y );
+		return [0,1,0];
+	}
+	
+	this.GetForward = function()
+	{
+		//	gr: this is backwards, but matches the camera matrix, erk
+		let z = Math.Subtract3( this.Position, this.LookAt );
+		z = Math.Normalise3( z );
+		return z;
+	}
+	
+	this.GetRight = function()
+	{
+		const up = this.GetUp();
+		const z = this.GetForward();
+		let x = Math.Cross3( up, z );
+		x = Math.Normalise3( x );
+		return x;
+	}
+	
+	
+	this.MoveCameraAndLookAt = function(Delta)
+	{
+		this.Position[0] += Delta[0];
+		this.Position[1] += Delta[1];
+		this.Position[2] += Delta[2];
+		this.LookAt[0] += Delta[0];
+		this.LookAt[1] += Delta[1];
+		this.LookAt[2] += Delta[2];
 	}
 	
 	this.GetPitchYawRollDistance = function()
@@ -217,31 +252,41 @@ Pop.Camera = function()
 		let Deltax = this.LastPos_PanPos[0] - x;
 		let Deltay = this.LastPos_PanPos[1] - y;
 		let Deltaz = this.LastPos_PanPos[2] - z;
-		this.Position[0] += Deltax * 0.01
-		this.Position[1] -= Deltay * 0.01
-		this.Position[2] += Deltaz * 0.01
-		this.LookAt[0] += Deltax * 0.01
-		this.LookAt[1] -= Deltay * 0.01
-		this.LookAt[2] += Deltaz * 0.01
+		Deltax = Deltax * 0.01;
+		Deltay = Deltay * -0.01;
+		Deltaz = Deltaz * 0.01;
+		let Delta = [ Deltax, Deltay, Deltaz ];
+		this.MoveCameraAndLookAt( Delta );
 		
 		this.LastPos_PanPos = [x,y,z];
 	}
 	
-	this.OnCameraZoom = function(x,y,FirstClick)
+	this.OnCameraPanLocal = function(x,y,z,FirstClick)
 	{
-		Pop.Debug("OnCameraZoom deprecated, pass z to CameraPan");
-		
 		if ( FirstClick )
-			this.LastPosZoomPos = [x,y];
-		
-		let Deltax = this.LastPosZoomPos[0] - x;
-		let Deltay = this.LastPosZoomPos[1] - y;
-		//this.Position[0] -= Deltax * 0.01
-		this.Position[2] -= Deltay * 0.01
-		
-		this.LastPosZoomPos = [x,y];
-	}
+			this.LastPos_PanLocalPos = [x,y,z];
 	
+		let Deltax = this.LastPos_PanLocalPos[0] - x;
+		let Deltay = this.LastPos_PanLocalPos[1] - y;
+		let Deltaz = this.LastPos_PanLocalPos[2] - z;
+		Deltax *= 0.01;
+		Deltay *= -0.01;
+		Deltaz *= 0.01;
+
+		let Right3 = this.GetRight();
+		Right3 = Math.Multiply3( Right3, [Deltax,Deltax,Deltax] );
+		this.MoveCameraAndLookAt( Right3 );
+
+		let Up3 = this.GetUp();
+		Up3 = Math.Multiply3( Up3, [Deltay,Deltay,Deltay] );
+		this.MoveCameraAndLookAt( Up3 );
+
+		let Forward3 = this.GetForward();
+		Forward3 = Math.Multiply3( Forward3, [Deltaz,Deltaz,Deltaz] );
+		this.MoveCameraAndLookAt( Forward3 );
+
+		this.LastPos_PanLocalPos = [x,y,z];
+	}
 	
 	Pop.Debug("initial pitch/yaw/roll/distance",this.GetPitchYawRollDistance());
 }
