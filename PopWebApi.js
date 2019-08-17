@@ -90,6 +90,18 @@ Pop.LoadFileAsString = function(Filename)
 	return Pop.GetCachedAsset(Filename);
 }
 
+Pop.WriteStringToFile = function(Filename,Contents)
+{
+	throw "WriteStringToFile not supported on this platform";
+}
+
+Pop.FileExists = function(Filename)
+{
+	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
+		return false;
+	return true;
+}
+
 Pop.GetCachedAsset = function(Filename)
 {
 	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
