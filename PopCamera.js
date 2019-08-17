@@ -195,8 +195,8 @@ Pop.Camera = function()
 	{
 		let Pitchr = Math.radians(Pitch);
 		let Yawr = Math.radians(Yaw);
-		Pop.Debug("SetOrbit()", ...arguments );
-		Pop.Debug("Pitch = "+Pitch);
+		//Pop.Debug("SetOrbit()", ...arguments );
+		//Pop.Debug("Pitch = "+Pitch);
 		
 		let Deltax = Math.sin(Yawr) * Math.cos(Pitchr);
 		let Deltay = -Math.sin(Pitchr);
@@ -205,7 +205,7 @@ Pop.Camera = function()
 		Deltay *= Distance;
 		Deltaz *= Distance;
 		
-		Pop.Debug( "SetOrbit deltas", Deltax, Deltay, Deltaz );
+		//Pop.Debug( "SetOrbit deltas", Deltax, Deltay, Deltaz );
 		this.Position[0] = this.LookAt[0] + Deltax;
 		this.Position[1] = this.LookAt[1] + Deltay;
 		this.Position[2] = this.LookAt[2] + Deltaz;
