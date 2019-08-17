@@ -659,7 +659,7 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		let EnumValue = function(v)
 		{
 			if ( Array.isArray(v) )
-				ValuesEnum.push(...v);
+				ValuesExpanded.push(...v);
 			else if ( typeof v == "object" )
 				v.Enum( function(v)	{	ValuesExpanded.push(v);	} );
 			else
