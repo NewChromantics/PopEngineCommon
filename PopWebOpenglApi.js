@@ -87,7 +87,7 @@ Pop.Opengl.RefactorFragShader = function(Source)
 
 //	wrapper for a generic element which converts input (touch, mouse etc) into
 //	our mouse functions
-function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp)
+function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseScroll)
 {
 	//	annoying distinctions
 	let GetButtonFromMouseEventButton = function(MouseButton,AlternativeButton)
@@ -131,10 +131,10 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp)
 		//	index = 0 left, 1 middle, 2 right (DO NOT MATCH the bits!)
 		//	gr: ignore back and forward as they're not triggered from mouse down, just use the alt mode
 		//let ButtonMasks = [ 1<<0, 1<<2, 1<<1, 1<<3, 1<<4 ];
-		let ButtonMasks = [ 1<<0, 1<<2, 1<<1 ];
-		let ButtonMask = MouseEvent.buttons;
-		let AltButton = (MouseEvent.ctrlKey==true);
-		let Buttons = [];
+		const ButtonMasks = [ 1<<0, 1<<2, 1<<1 ];
+		const ButtonMask = MouseEvent.buttons;
+		const AltButton = (MouseEvent.ctrlKey==true);
+		const Buttons = [];
 		
 		for ( let i=0;	i<ButtonMasks.length;	i++ )
 		{
@@ -152,16 +152,16 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp)
 	//	gr: should api revert to uv?
 	let GetMousePos = function(MouseEvent)
 	{
-		let Rect = Element.getBoundingClientRect();
-		let x = MouseEvent.clientX - Rect.left;
-		let y = MouseEvent.clientY - Rect.top;
+		const Rect = Element.getBoundingClientRect();
+		const x = MouseEvent.clientX - Rect.left;
+		const y = MouseEvent.clientY - Rect.top;
 		return [x,y];
 	}
 	
 	let MouseMove = function(MouseEvent)
 	{
-		let Pos = GetMousePos(MouseEvent);
-		let Buttons = GetButtonsFromMouseEventButtons( MouseEvent );
+		const Pos = GetMousePos(MouseEvent);
+		const Buttons = GetButtonsFromMouseEventButtons( MouseEvent );
 		if ( Buttons.length == 0 )
 		{
 			MouseEvent.preventDefault();
@@ -179,23 +179,23 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp)
 	
 	let MouseDown = function(MouseEvent)
 	{
-		let Pos = GetMousePos(MouseEvent);
-		let Button = GetButtonFromMouseEventButton(MouseEvent);
+		const Pos = GetMousePos(MouseEvent);
+		const Button = GetButtonFromMouseEventButton(MouseEvent);
 		OnMouseDown( Pos[0], Pos[1], Button );
 		MouseEvent.preventDefault();
 	}
 	
-	let MouseWheel = function(WheelEvent)
+	let MouseWheel = function(MouseEvent)
 	{
-		Pop.Debug("todo; mouse wheel");
-		/*
-		//	todo: make this better. clamp to -1...1 though
-		//let ScrollX = Math.Clamp( -1, 1, WheelEvent.deltaX / 10 );
-		let ScrollY = Math.Clamp( -1, 1, WheelEvent.deltaY / 10 );
-		let uv = this.GetMouseUv(WheelEvent);
-		this.OnScroll( ScrollY, uv );
-		*/
-		WheelEvent.preventDefault();
+		const Pos = GetMousePos(MouseEvent);
+		const Button = GetButtonFromMouseEventButton(MouseEvent);
+		
+		//	gr: maybe change scale based on
+		//WheelEvent.deltaMode = DOM_DELTA_PIXEL, DOM_DELTA_LINE, DOM_DELTA_PAGE
+		const DeltaScale = 0.01;
+		const WheelDelta = [ MouseEvent.deltaX * DeltaScale, MouseEvent.deltaY * DeltaScale, MouseEvent.deltaZ * DeltaScale ];
+		OnMouseScroll( Pos[0], Pos[1], Button, WheelDelta );
+		MouseEvent.preventDefault();
 	}
 	
 	let ContextMenu = function(MouseEvent)
@@ -225,9 +225,10 @@ Pop.Opengl.Window = function(Name,Rect)
 {
 	//	things to overload
 	//this.OnRender = function(RenderTarget){};
-	this.OnMouseDown = function(x,y,Button){	Pop.Debug(...arguments);	};
-	this.OnMouseMove = function(x,y,Button){	Pop.Debug(...arguments);	};
-	this.OnMouseUp = function(x,y,Button){	Pop.Debug(...arguments);	};
+	this.OnMouseDown = function(x,y,Button)					{	Pop.Debug('OnMouseDown',...arguments);	};
+	this.OnMouseMove = function(x,y,Button)					{	Pop.Debug('OnMouseMove',...arguments);	};
+	this.OnMouseUp = function(x,y,Button)					{	Pop.Debug('OnMouseUp',...arguments);	};
+	this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	Pop.Debug('OnMouseScroll',...arguments);	};
 
 	this.Context = null;
 	this.RenderTarget = null;
@@ -252,7 +253,8 @@ Pop.Opengl.Window = function(Name,Rect)
 		let OnMouseDown = function()	{	return this.OnMouseDown.apply( this, arguments );	}.bind(this);
 		let OnMouseMove = function()	{	return this.OnMouseMove.apply( this, arguments );	}.bind(this);
 		let OnMouseUp = function()		{	return this.OnMouseUp.apply( this, arguments );	}.bind(this);
-		this.CanvasMouseHandler = new TElementMouseHandler( Element, OnMouseDown, OnMouseMove, OnMouseUp );
+		let OnMouseScroll = function()	{	return this.OnMouseScroll.apply( this, arguments );	}.bind(this);
+		this.CanvasMouseHandler = new TElementMouseHandler( Element, OnMouseDown, OnMouseMove, OnMouseUp, OnMouseScroll );
 	}
 	
 	this.GetCanvasElement = function()
