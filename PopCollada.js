@@ -48,7 +48,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	const MainScene = FindScene(MainSceneUrl);
 	const MainSceneNodes = MainScene.node;
 	
-	let ParseVector = function(Property,ParseFloat=undefined)
+	const ParseVector = function(Property,ParseFloat=undefined)
 	{
 		ParseFloat = ParseFloat || parseFloat;
 		
@@ -69,6 +69,17 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		return Floats;
 	}
 	
+	const ParseVectorArray = function(Property,VectorSize,ParseFloat)
+	{
+		let Floats = ParseVector( Property, ParseFloat );
+		let Vectors = [];
+		for ( let i=0;	i<Floats.length;	i+=VectorSize )
+		{
+			Vectors.push( Floats.slice( i, i+VectorSize ) );
+		}
+		return Vectors;
+	}
+		
 	
 	
 	let NodeToActor = function(Node)
@@ -92,6 +103,8 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		}
 		else if ( GeoAsset.mesh.hasOwnProperty('linestrips') )
 		{
+			const Positions = ParseVectorArray( GeoAsset.mesh.source.float_array, 3, parseScaledFloat );
+			Actor.PathPositions = Positions;
 			OnSpline( Actor );
 		}
 		else
