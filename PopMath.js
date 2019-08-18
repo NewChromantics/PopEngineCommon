@@ -731,3 +731,25 @@ Math.CreateAxisRotationMatrix = function(Axis,Degrees)
 	out[15] = 1;
 	return out;
 }
+
+Math.Min3 = function(a,b)
+{
+	let Min =
+	[
+	 Math.min( a[0], b[0] ),
+	 Math.min( a[1], b[1] ),
+	 Math.min( a[2], b[2] ),
+	];
+	return Min;
+}
+
+Math.Max3 = function(a,b)
+{
+	let Max =
+	[
+	 Math.max( a[0], b[0] ),
+	 Math.max( a[1], b[1] ),
+	 Math.max( a[2], b[2] ),
+	 ];
+	return Max;
+}
