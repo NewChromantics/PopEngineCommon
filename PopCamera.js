@@ -133,10 +133,9 @@ Pop.Camera = function()
 		let WorldToCameraMatrix = this.GetWorldToCameraMatrix();
 		
 		//	gr; this SHOULD be inverse...
-		let Matrix = Math.MatrixInverse4x4( LocalToWorld );
+		let Matrix = Math.MatrixInverse4x4( WorldToCameraMatrix );
 		//let Matrix = LocalToWorld;
-		Pop.Debug("Matrix",Matrix);
-		
+		//Pop.Debug("Matrix",Matrix);
 		
 		return Matrix;
 	}
