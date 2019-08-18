@@ -29,16 +29,14 @@ Pop.GetTimeNowMs = function()
 	return performance.now();
 }
 
-Pop.LoadImageAsync = async function(Filename,OnLoaded)
+Pop.LoadImageAsync = async function(Filename)
 {
-	OnLoaded = OnLoaded || function(){};
 	let Promise = CreatePromise();
 	
 	const HtmlImage = new Image();
 	HtmlImage.crossOrigin = "anonymous";
 	HtmlImage.onload = function()
 	{
-		OnLoaded( HtmlImage );
 		Promise.Resolve( HtmlImage );
 	};
 	HtmlImage.onerror = function(Error)
@@ -51,14 +49,12 @@ Pop.LoadImageAsync = async function(Filename,OnLoaded)
 	return Promise;
 }
 
-Pop.LoadFileAsStringAsync = async function(Filename,OnLoaded)
+Pop.LoadFileAsStringAsync = async function(Filename)
 {
-	OnLoaded = OnLoaded || function(){};
 	const Fetched = await fetch(Filename);
 	Pop.Debug("Fetch created:", Filename, Fetched);
 	const Contents = await Fetched.text();
 	Pop.Debug("Fetch finished:", Filename, Fetched);
-	OnLoaded(Contents);
 	return Contents;
 }
 
@@ -70,12 +66,8 @@ Pop.AsyncCacheAssetAsString = async function(Filename)
 		return;
 	}
 	
-	let OnLoaded = function(Contents)
-	{
-		Pop._AssetCache[Filename] = Contents;
-	}
-	const Contents = await Pop.LoadFileAsStringAsync( Filename, OnLoaded );
-	//Pop._AssetCache[Filename] = Contents;
+	const Contents = await Pop.LoadFileAsStringAsync( Filename );
+	Pop._AssetCache[Filename] = Contents;
 }
 
 Pop.AsyncCacheAssetAsImage = async function(Filename)
@@ -86,12 +78,8 @@ Pop.AsyncCacheAssetAsImage = async function(Filename)
 		return;
 	}
 	
-	let OnLoaded = function(Contents)
-	{
-		Pop._AssetCache[Filename] = Contents;
-	}
-	const Contents = await Pop.LoadImageAsync( Filename, OnLoaded );
-	//Pop._AssetCache[Filename] = Contents;
+	const Contents = await Pop.LoadImageAsync( Filename );
+	Pop._AssetCache[Filename] = Contents;
 }
 
 Pop.LoadFileAsString = function(Filename)
