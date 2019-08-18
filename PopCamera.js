@@ -54,7 +54,6 @@ Pop.Camera = function()
 		let FocalLengthVertical = 1.0 / Math.tan( Math.radians(this.FovVertical) / 2);
 		let FocalLengthHorizontal = FocalLengthVertical / Aspect;
 		
-		let nf = 1 / (this.NearDistance - this.FarDistance);
 		let LensCenterX = 0;
 		let LensCenterY = 0;
 
@@ -68,15 +67,19 @@ Pop.Camera = function()
 		Matrix[5] = FocalLengthVertical;
 		Matrix[6] = LensCenterY;
 		Matrix[7] = 0;
-		
+	
+		let Far = this.FarDistance;
+		let Near = this.NearDistance;
+
+		//	near...far in opengl needs to resovle to -1...1
 		Matrix[8] = 0;
 		Matrix[9] = 0;
-		Matrix[10] = (this.FarDistance + this.NearDistance) * nf;
+		Matrix[10] = (Far+Near) / (Near-Far);
 		Matrix[11] = -1;
 		
 		Matrix[12] = 0;
 		Matrix[13] = 0;
-		Matrix[14] = 2 * this.FarDistance * this.NearDistance * nf;
+		Matrix[14] = (2*Far*Near) / (Near-Far);
 		Matrix[15] = 0;
 		
 		return Matrix;
