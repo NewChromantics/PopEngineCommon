@@ -287,6 +287,6 @@ Pop.Camera = function()
 		this.LastPos_PanLocalPos = [x,y,z];
 	}
 	
-	Pop.Debug("initial pitch/yaw/roll/distance",this.GetPitchYawRollDistance());
+	//Pop.Debug("initial pitch/yaw/roll/distance",this.GetPitchYawRollDistance());
 }
 
