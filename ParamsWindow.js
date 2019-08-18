@@ -54,7 +54,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 				Value = CleanValue(Value);
 				Params[Name] = Value;
 				Label.SetValue( Name + ": " + Value );
-				OnAnyChanged(Params);
+				OnAnyChanged( Params, Name );
 			}
 			
 			//	init label
@@ -95,7 +95,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 					Value = CleanValue(Value);
 					Params[Name] = Value;
 					Control.UpdateLabel( Value );
-					OnAnyChanged(Params);
+					OnAnyChanged( Params, Name, );
 				}
 				
 				ColourPicker.OnClosed = function()
@@ -126,7 +126,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 			{
 				Value = CleanValue(Value);
 				Params[Name] = Value;
-				OnAnyChanged(Params);
+				OnAnyChanged( Params, Name, );
 				Control.UpdateLabel(Value);
 			}
 			
@@ -160,7 +160,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 				Params[Name] = Value;
 				Label.SetValue( Name + ": " + Value );
 				
-				OnAnyChanged(Params);
+				OnAnyChanged( Params, Name );
 			}
 			
 			//	init label
