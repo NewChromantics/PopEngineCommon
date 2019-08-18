@@ -762,9 +762,15 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		return Meta.type;
 	}
 	
-	//	todo: cache this!
-	this.GetUniformMeta = function(MatchUniformName)
+	this.UniformMetaCache = null;
+	
+	this.GetUniformMetas = function()
 	{
+		if ( this.UniformMetaCache )
+			return this.UniformMetaCache;
+	
+		//	iterate and cache!
+		this.UniformMetaCache = {};
 		let gl = this.GetGlContext();
 		let UniformCount = gl.getProgramParameter( this.Program, gl.ACTIVE_UNIFORMS );
 		for ( let i=0;	i<UniformCount;	i++ )
@@ -776,8 +782,6 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 			//	todo: struct support
 			let UniformName = UniformMeta.name.split('[')[0];
 			//	note: uniform consists of structs, Array[Length] etc
-			if ( UniformName != MatchUniformName )
-				continue;
 			
 			UniformMeta.Location = gl.getUniformLocation( this.Program, UniformMeta.name );
 			switch( UniformMeta.type )
@@ -821,12 +825,22 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 					UniformMeta.SetValues = function(v)	{	throw "Unhandled type " + UniformMeta.type + " on " + MatchUniformName;	};
 					break;
 			}
-			return UniformMeta;
+			
+			this.UniformMetaCache[UniformName] = UniformMeta;
 		}
-		//throw "No uniform named " + MatchUniformName;
-		//Pop.Debug("No uniform named " + MatchUniformName);
+		return this.UniformMetaCache;
 	}
-	
+
+	this.GetUniformMeta = function(MatchUniformName)
+	{
+		const Metas = this.GetUniformMetas();
+		if ( !Metas.hasOwnProperty(MatchUniformName) )
+		{
+			//throw "No uniform named " + MatchUniformName;
+			//Pop.Debug("No uniform named " + MatchUniformName);
+		}
+		return Metas[MatchUniformName];
+	}
 	
 	
 	let gl = this.GetGlContext();
