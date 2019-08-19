@@ -194,7 +194,7 @@ Pop.Camera = function(CopyCamera)
 	{
 		const OpenglFocal = this.GetOpenglFocalLengths( ViewRect );
 		
-		const Matrix = [];
+		let Matrix = [];
 		Matrix[0] = OpenglFocal.fx;
 		Matrix[1] = OpenglFocal.s;
 		Matrix[2] = OpenglFocal.cx;
@@ -209,10 +209,14 @@ Pop.Camera = function(CopyCamera)
 		const Near = this.NearDistance;
 		
 		//	near...far in opengl needs to resovle to -1...1
+		//	gr: glDepthRange suggests programmable opengl pipeline is 0...1
+		//		not sure about this, but matrix has changed below so 1 is forward on z
+		//		which means we can now match the opencv pose (roll is wrong though!)
+		//	http://ogldev.atspace.co.uk/www/tutorial12/tutorial12.html
 		Matrix[8] = 0;
 		Matrix[9] = 0;
-		Matrix[10] = (Far+Near) / (Near-Far);
-		Matrix[11] = -1;
+		Matrix[10] = (-Near-Far) / (Near-Far);
+		Matrix[11] = 1;
 		
 		Matrix[12] = 0;
 		Matrix[13] = 0;
@@ -404,7 +408,7 @@ Pop.Camera = function(CopyCamera)
 		let Deltaz = this.Last_OrbitPos[2] - z;
 	
 		Deltax *= 0.1;
-		Deltay *= 0.1;
+		Deltay *= -0.1;
 		Deltaz *= 0.1;
 	
 		let NewPitch = this.Start_OrbitPyrd[0] + Deltax;
