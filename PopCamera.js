@@ -143,6 +143,19 @@ Pop.Camera = function()
 		return Matrix;
 	}
 	
+	//	this gets a transform, which when applied to a cube of -1..1,-1..1,-1..1
+	//	will skew the cube into a representation of the view frustum in world space
+	this.GetLocalToWorldFrustumTransformMatrix = function(ViewRect=[-1,-1,1,1])
+	{
+		//	todo: correct viewrect with aspect ratio of viewport
+		//		maybe change input to Viewport to match GetProjection matrix?
+		let Matrix = this.GetProjectionMatrix( ViewRect );
+		Matrix = Math.MatrixInverse4x4( Matrix );
+		//	put into world space
+		Matrix = Math.MatrixMultiply4x4( this.GetLocalToWorldMatrix(), Matrix );
+		return Matrix;
+	}
+	
 	this.GetUp = function()
 	{
 		//let y = Math.Cross3( z,x );
