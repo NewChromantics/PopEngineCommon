@@ -690,7 +690,8 @@ Math.CreateIdentityMatrix = function()
 
 Math.GetMatrixTranslation = function(Matrix)
 {
-	let xyz = Matrix.slice(10,10+3);
+	//	do we need to /w here?
+	let xyz = Matrix.slice(12,12+3);
 	return xyz;
 }
 
