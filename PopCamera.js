@@ -1,14 +1,25 @@
 
-Pop.Camera = function()
+Pop.Camera = function(CopyCamera)
 {
 	this.FovVertical = 45;
 	
 	this.Position = [ 0,2,20 ];
 	this.LookAt = [ 0,0,0 ];
+	this.Rotation4x4 = undefined;
 	
 	this.NearDistance = 0.01;
 	this.FarDistance = 100;
-	
+
+	if ( CopyCamera instanceof Pop.Camera )
+	{
+		this.FovVertical = CopyCamera.FovVertical;
+		this.Position = CopyCamera.Position.slice();
+		this.LookAt = CopyCamera.LookAt.slice();
+		this.NearDistance = CopyCamera.NearDistance;
+		this.FarDistance = CopyCamera.FarDistance;
+		this.Rotation4x4 = CopyCamera.Rotation4x4;
+	}
+
 	//	world to pixel
 	this.GetOpencvProjectionMatrix = function(ViewRect)
 	{
@@ -44,6 +55,25 @@ Pop.Camera = function()
 		  	0, 	0, 	1
 		];
 		return Matrix;
+	}
+	
+	this.SetLocalRotationMatrix = function(Rotation4x4)
+	{
+		if ( Rotation4x4.length != 4*4 )
+			throw "SetLocalRotationMatrix() matrix is not 4x4: " + JSON.stringify(Rotation4x4);
+		
+		this.Rotation4x4 = Rotation4x4.slice();
+	}
+	
+	this.GetLocalRotationMatrix = function()
+	{
+		if ( this.Rotation4x4 )
+			return this.Rotation4x4;
+		
+		//	allow user to override here with a rotation matrix
+		const Up = this.GetUp();
+		const Mtx = Math.CreateLookAtRotationMatrix( this.Position, Up, this.LookAt );
+		return Mtx;
 	}
 	
 	this.GetProjectionMatrix = function(ViewRect)
@@ -123,7 +153,7 @@ Pop.Camera = function()
 		//	https://stackoverflow.com/questions/349050/calculating-a-lookat-matrix
 		const Up = this.GetUp();
 		
-		let Rotation = Math.CreateLookAtRotationMatrix( this.Position, Up, this.LookAt );
+		let Rotation = this.GetLocalRotationMatrix();
 		let Trans = Math.Subtract3( [0,0,0], this.Position );
 		let Translation = Math.CreateTranslationMatrix( ...Trans );
 		let Matrix = Math.MatrixMultiply4x4( Rotation, Translation );
