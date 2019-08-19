@@ -633,8 +633,7 @@ Math.MatrixMultiply4x4 = function(a,b)
 
 Math.CreateLookAtRotationMatrix = function(eye,up,center)
 {
-	//	gr: I think this z is backwards! but it undoes all the orbit code.
-	let z = Math.Subtract3( eye, center );
+	let z = Math.Subtract3( center, eye );
 	z = Math.Normalise3( z );
 	
 	let x = Math.Cross3( up, z );
