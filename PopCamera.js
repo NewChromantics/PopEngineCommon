@@ -323,7 +323,7 @@ Pop.Camera = function(CopyCamera)
 	this.GetForward = function()
 	{
 		//	gr: this is backwards, but matches the camera matrix, erk
-		let z = Math.Subtract3( this.Position, this.LookAt );
+		let z = Math.Subtract3( this.LookAt, this.Position );
 		z = Math.Normalise3( z );
 		return z;
 	}
