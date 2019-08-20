@@ -36,11 +36,11 @@ function SetElementPosition(Element,x,y)
 	Element.style.left = ( x) + "px";
 }
 
-var $HighestZ = 100;
+var $HighestZ = 99;
 function SetElementToTop(Element)
 {
-	//$HighestZ++;
-	//Element.style.zIndex = $HighestZ;
+	$HighestZ++;
+	Element.style.zIndex = $HighestZ;
 }
 
 //	returns [float2].snapPos [function].callback [Element].newParent
@@ -343,7 +343,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		let Element = document.createElement('div');
 		SetGuiControlStyle( Element, Rect );
 		//Element.innerText = 'Pop.Gui.Window';
-		Element.style.zIndex = 1;
+		Element.style.zIndex = $HighestZ;
 		//Element.style.overflow = 'scroll';	//	inner div handles scrolling
 		Element.className = 'PopGuiWindow';
 		Parent.appendChild( Element );
