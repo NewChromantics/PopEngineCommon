@@ -387,6 +387,18 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 	this.Element = this.CreateElement(document.body);
 }
 
+function GetExistingElement(Name)
+{
+	if ( typeof Name != 'string' )
+		return null;
+	
+	let Element = document.getElementById(Name);
+	if ( Element )
+		return Element;
+	
+	return null;
+}
+
 Pop.Gui.Label = function(Parent, Rect)
 {
 	this.SetValue = function(Value)
@@ -396,7 +408,11 @@ Pop.Gui.Label = function(Parent, Rect)
 
 	this.CreateElement = function(Parent)
 	{
-		let Div = document.createElement('div');
+		let Div = GetExistingElement(Parent);
+		if ( Div )
+			return Div;
+		
+		Div = document.createElement('div');
 		SetGuiControlStyle( Div, Rect );
 		
 		Div.innerText = 'Pop.Gui.Label';
@@ -431,6 +447,13 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 	
 	this.CreateElement = function(Parent)
 	{
+		let Div = GetExistingElement(Parent);
+		if ( Div )
+		{
+			this.InputElement = Div;
+			return Div;
+		}
+		
 		let Input = document.createElement('input');
 		this.InputElement = Input;
 		
@@ -443,7 +466,7 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		Input.oninput = this.OnElementChanged.bind(this);
 		
 		
-		let Div = document.createElement('div');
+		Div = document.createElement('div');
 		SetGuiControlStyle( Div, Rect );
 		//Div.innerText = 'Pop.Gui.Slider';
 		
