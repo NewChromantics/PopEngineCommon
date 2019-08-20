@@ -6,8 +6,21 @@ Pop._AssetCache = [];
 //	simple aliases
 Pop.Debug = console.log;
 
+Pop.GetExeDirectory = function()
+{
+	//	exe could be path location.pathname
+	const Path = window.location.pathname;
+	//	including /
+	const Directory = Path.substr( 0, Path.lastIndexOf("/") + 1 );
+	return Directory;
+}
 
-
+Pop.GetExeArguments = function()
+{
+	//	gr: probably shouldn't lowercase now it's proper
+	const UrlParams = window.location.search.replace('?',' ').trim().split('&');
+	return UrlParams;
+}
 
 function CreatePromise()
 {
@@ -138,10 +151,6 @@ Pop.CompileAndRun = function(Source,Filename)
 	//	note: normal API returns evaluation result here, not that we usually use it...
 }
 
-Pop.GetExeArguments = function()
-{
-	return [];
-}
 
 Pop.Yield = function(Milliseconds)
 {
