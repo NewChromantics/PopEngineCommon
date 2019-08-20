@@ -30,8 +30,8 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 		let Control = this.Controls[Name];
 		let Value = Params[Name];
 		//Pop.Debug("Updating control", JSON.stringify(Control), Value );
-		Control.SetValue( Value );
-		Control.OnChanged( Value );
+		Control.SetControlValue( Value );
+		Control.OnValueChanged( Value );
 	}
 	
 	let AddSlider = function(Name,Min,Max,CleanValue)
@@ -47,6 +47,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 		if ( typeof Params[Name] === 'boolean' )
 		{
 			Control = new Pop.Gui.TickBox( Window, [ControlLeft,ControlTop,ControlWidth,ControlHeight] );
+			Control.SetControlValue = Control.SetValue;
 			Control.SetValue( Params[Name] );
 			
 			Control.OnChanged = function(Value)
@@ -56,15 +57,17 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 				Label.SetValue( Name + ": " + Value );
 				OnAnyChanged( Params, Name );
 			}
+			Control.OnValueChanged = Control.OnChanged;
 			
 			//	init label
-			Control.OnChanged( Params[Name] );
+			Control.OnValueChanged( Params[Name] );
 		}
 		else if ( Min == 'Colour' && Pop.Gui.Colour === undefined )
 		{
 			Control = new Pop.Gui.TickBox( Window, [ControlLeft,ControlTop,ControlWidth,ControlHeight] );
+			Control.SetControlValue = Control.SetValue;
 			Control.SetValue(false);
-			
+
 			let GetValue8 = function(Rgbf)
 			{
 				let Rgb8 = [ Rgbf[0]*255, Rgbf[1]*255, Rgbf[2]*255 ];
@@ -104,6 +107,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 					Control.SetValue(false);	//	untick
 				}
 			}
+			Control.OnValueChanged = Control.OnChanged;
 			
 			Control.UpdateLabel = function(Value)
 			{
@@ -120,6 +124,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 		else if ( Min == 'Colour' && Pop.Gui.Colour !== undefined )
 		{
 			Control = new Pop.Gui.Colour( Window, [ControlLeft,ControlTop,ControlWidth,ControlHeight] );
+			Control.SetControlValue = Control.SetValue;
 			Control.SetValue( Params[Name] );
 
 			Control.OnChanged = function(Value)
@@ -129,6 +134,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 				OnAnyChanged( Params, Name, );
 				Control.UpdateLabel(Value);
 			}
+			Control.OnValueChanged = Control.OnChanged;
 			
 			Control.UpdateLabel = function(Value)
 			{
@@ -144,13 +150,10 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 		}
 		else
 		{
-			const TickScalar = (CleanValue===Math.floor) ? Max : 1000;
-			const Notches = (CleanValue===Math.floor) ? Max : false;
+			const TickScalar = (CleanValue===Math.floor) ? (Max-Min) : 1000;
+			const Notches = (CleanValue===Math.floor) ? (Max-Min) : false;
 			let Slider = new Pop.Gui.Slider( Window, [ControlLeft,ControlTop,ControlWidth,ControlHeight], Notches );
 			Slider.SetMinMax( 0, TickScalar );
-			let Valuef = Math.range( Min, Max, Params[Name] );
-			let Valuek = Valuef * TickScalar;
-			Slider.SetValue( Valuek );
 			
 			Slider.OnChanged = function(Valuek)
 			{
@@ -162,9 +165,23 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 				
 				OnAnyChanged( Params, Name );
 			}
+			Slider.OnValueChanged = function(RealValue)
+			{
+				const Valuef = Math.range( Min, Max, RealValue );
+				const Valuek = Valuef * TickScalar;
+				Slider.OnChanged( Valuek );
+			}
 			
-			//	init label
-			Slider.OnChanged( Valuek );
+			Slider.SetControlValue = function(RealValue)
+			{
+				const Valuef = Math.range( Min, Max, RealValue );
+				const Valuek = Valuef * TickScalar;
+				Slider.SetValue( Valuek );
+				Slider.OnChanged( Valuek );
+			}
+			
+			Slider.SetControlValue( Params[Name] );
+			
 			Control = Slider;
 		}
 		
