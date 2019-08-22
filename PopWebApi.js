@@ -1,5 +1,8 @@
 //	namespace
-let Pop = {};
+const Pop = {};
+
+//	global object is the window!
+Pop.Global = window;
 
 Pop._AssetCache = [];
 
