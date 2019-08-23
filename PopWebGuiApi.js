@@ -423,6 +423,59 @@ Pop.Gui.Label = function(Parent, Rect)
 	this.Element = this.CreateElement(Parent);
 }
 
+
+
+Pop.Gui.Button = function(Parent, Rect)
+{
+	this.OnClicked = function()
+	{
+		Pop.Debug("Pop.Gui.Button.OnClicked");
+	}
+	
+	this.SetLabel = function(Value)
+	{
+		this.Element.innerText = Value;
+	}
+	
+	this.OnElementClicked = function(Event)
+	{
+		this.OnClicked();
+	}
+	
+	this.CreateElement = function(Parent)
+	{
+		let SetupEvents = function(Element)
+		{
+			//	make sure its clickable!
+			Element.style.pointerEvents = 'auto';
+			Element.style.cursor = 'pointer';
+			
+			//	gr; this overrides old instance
+			Element.oninput = this.OnElementClicked.bind(this);
+			Element.onclick = this.OnElementClicked.bind(this);
+		}.bind(this);
+		
+		let Div = GetExistingElement(Parent);
+		if ( Div )
+		{
+			SetupEvents(Div);
+			return Div;
+		}
+		
+		Div = document.createElement('input');
+		SetGuiControlStyle( Div, Rect );
+		Div.type = 'button';
+		SetupEvents(Div);
+		
+		Div.innerText = 'Pop.Gui.Button innertext';
+		Div.Value = 'Pop.Gui.Button value';
+		Parent.AddChildControl( Parent, Div );
+		return Div;
+	}
+	
+	this.Element = this.CreateElement(Parent);
+}
+
 Pop.Gui.Slider = function(Parent,Rect,Notches)
 {
 	this.InputElement = null;
