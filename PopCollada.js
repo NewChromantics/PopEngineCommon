@@ -10,6 +10,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	const CameraLibrary = ColladaTree.COLLADA.library_cameras;
 	const SceneLibrary = [ColladaTree.COLLADA.library_visual_scenes.visual_scene];
 	const AnimationLibrary = ColladaTree.COLLADA.library_animations ? ColladaTree.COLLADA.library_animations.animation.animation : [];
+	//Pop.Debug('AnimationLibrary',AnimationLibrary);
 
 	
 	const UnitScalarString = ColladaTree.COLLADA.asset.unit['-meter'];
@@ -110,25 +111,6 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	{
 		return Actors[Id];
 	}
-	/*
-		const GeoAsset = FindGeometry( Actor.Geometry );
-		if ( !GeoAsset )
-		{
-			//	null actor
-			Pop.Debug("Null geo actor",JSON.stringify(Actor));
-		}
-		else if ( GeoAsset.mesh.hasOwnProperty('linestrips') )
-		{
-			const Positions = ParseVectorArray( GeoAsset.mesh.source.float_array, 3, parseScaledFloat );
-			Actor.PathPositions = Positions;
-			OnSpline( Actor );
-		}
-		else
-		{
-			OnActor( Actor );
-		}
-	}
-	*/
 	MainSceneNodes.forEach( NodeToActor );
 	
 	
@@ -150,7 +132,6 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		return Vectors;
 	}
 	
-	Pop.Debug('AnimationLibrary',AnimationLibrary);
 	const AnimationFrames = [];
 	
 	const ProcessAnimationNode = function(AnimNode)
@@ -264,7 +245,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 			//Pop.Debug(PropertyName,Property);
 		}
 		Object.keys(Actor.Anim).forEach( ProcessAnimProperty );
-		Pop.Debug("Process anim on actor",Actor.PathPositions);
+		//Pop.Debug("Process anim on actor",Actor.PathPositions);
 	}
 	
 	const OutputActor = function(ActorId)
@@ -275,7 +256,6 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		
 		if ( Actor.PathPositions )
 		{
-			Pop.Debug("Actor with positions",Actor);
 			OnSpline( Actor );
 		}
 		else
