@@ -36,6 +36,19 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	throw "PixelFormatToOpenglFormat: Unhandled pixel format " + PixelFormat;
 }
 
+function IsFloatFormat(Format)
+{
+	switch(Format)
+	{
+		case 'Float1':
+		case 'Float2':
+		case 'Float3':
+		case 'Float4':
+			return true;
+		default:
+			return false;
+	}
+}
 
 Pop.Image = function(Filename)
 {
@@ -187,7 +200,7 @@ Pop.Image = function(Filename)
 		const Height = Size[1];
 		let PixelData = new Array(Width * Height * 4);
 		PixelData.fill(0);
-		const Pixels = PixelFormat=='Float4' ? new Float32Array(PixelData) : new Uint8Array(PixelData);
+		const Pixels = IsFloatFormat(PixelFormat) ? new Float32Array(PixelData) : new Uint8Array(PixelData);
 		this.WritePixels( Width, Height, Pixels, PixelFormat );
 	}
 	else if ( Filename !== undefined )
