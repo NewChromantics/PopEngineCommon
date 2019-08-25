@@ -60,7 +60,7 @@ Pop.Image = function(Filename)
 	this.PixelsVersion = undefined;
 	this.LinearFilter = false;
 	
-	this.SetLinear = function(Linear)
+	this.SetLinearFilter = function(Linear)
 	{
 		this.LinearFilter = Linear;
 	}
