@@ -329,20 +329,22 @@ Pop.Opengl.Window = function(Name,Rect)
 		
 		Pop.Debug("Supported Extensions", gl.getSupportedExtensions() );
 		
-		let EnableExtension = function(Extension)
+		let EnableExtension = function(ExtensionName)
 		{
 			try
 			{
-				var ext = gl.getExtension(Extension);
-				Pop.Debug(Extension,ext);
+				const Extension = gl.getExtension(ExtensionName);
+				gl[ExtensionName] = Extension;
+				Pop.Debug("Loaded extension",ExtensionName,Extension);
 			}
 			catch(e)
 			{
-				Pop.Debug("Error enabling ",Extension,e);
+				Pop.Debug("Error enabling ",ExtensionName,e);
 			}
 		};
 		EnableExtension('OES_texture_float');
-		
+		EnableExtension('EXT_blend_minmax');
+
 		//	texture load needs extension in webgl1
 		//	in webgl2 it's built in, but requires #version 300 es
 		//EnableExtension('EXT_shader_texture_lod');
@@ -397,9 +399,27 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 	
 	this.ResetState = function()
 	{
-		let gl = this.GetGlContext();
+		const gl = this.GetGlContext();
 		gl.disable(gl.CULL_FACE);
+		gl.disable(gl.BLEND);
 		gl.enable(gl.DEPTH_TEST);
+		//	to make blending work well, don't reject things on same plane
+		gl.depthFunc(gl.LEQUAL);
+	}
+	
+	this.SetBlendModeMax = function()
+	{
+		const gl = this.GetGlContext();
+		if ( gl.EXT_blend_minmax === undefined )
+			throw "EXT_blend_minmax hasn't been setup on this context";
+		
+		//	set mode
+		//	enable blend
+		gl.enable( gl.BLEND );
+		gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
+		//gl.blendEquation( gl.FUNC_ADD );
+		gl.blendEquation( gl.EXT_blend_minmax.MAX_EXT );
+		//GL_FUNC_ADD
 	}
 	
 	this.DrawGeometry = function(Geometry,Shader,SetUniforms)
@@ -434,6 +454,7 @@ Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
 	this.FrameBuffer = null;
 	this.RenderContext = RenderContext;
 	this.Image = null;
+
 	
 	this.GetGlContext = function()
 	{
@@ -487,6 +508,11 @@ Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
 		gl.viewport( ...Viewport );
 		
 		this.ResetState();
+	}
+	
+	this.AllocTexureIndex = function()
+	{
+		return this.RenderContext.AllocTexureIndex();
 	}
 	
 	this.CreateFrameBuffer( Image );
