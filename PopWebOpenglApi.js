@@ -676,7 +676,7 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		
 		//	check array size (allow less, but throw on overflow)
 		//	error if array is empty
-		while ( ValuesExpanded.length < UniformMeta.ElementSize * UniformMeta.ElementType )
+		while ( ValuesExpanded.length < UniformMeta.ElementSize * UniformMeta.ElementCount )
 			ValuesExpanded.push(0);
 		/*
 		 if ( ValuesExpanded.length > UniformMeta.size )
