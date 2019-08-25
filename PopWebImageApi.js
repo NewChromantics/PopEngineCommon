@@ -58,6 +58,12 @@ Pop.Image = function(Filename)
 	this.Pixels = null;
 	this.PixelsFormat = null;
 	this.PixelsVersion = undefined;
+	this.LinearFilter = false;
+	
+	this.SetLinear = function(Linear)
+	{
+		this.LinearFilter = Linear;
+	}
 	
 	this.GetWidth = function()
 	{
@@ -172,7 +178,7 @@ Pop.Image = function(Filename)
 		}
 		
 		const RepeatMode = gl.CLAMP_TO_EDGE;
-		const FilterMode = gl.NEAREST;//LINEAR;
+		const FilterMode = this.LinearFilter ? gl.LINEAR : gl.NEAREST;
 		
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, RepeatMode);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, RepeatMode);
