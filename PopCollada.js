@@ -9,7 +9,9 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	const GeoLibrary = ColladaTree.COLLADA.library_geometries.geometry;
 	const CameraLibrary = ColladaTree.COLLADA.library_cameras;
 	const SceneLibrary = [ColladaTree.COLLADA.library_visual_scenes.visual_scene];
+	const AnimationLibrary = ColladaTree.COLLADA.library_animations.animation.animation;
 
+	
 	const UnitScalarString = ColladaTree.COLLADA.asset.unit['-meter'];
 	const UnitScalar = parseFloat( UnitScalarString );
 	if ( isNaN( UnitScalar ) )
@@ -71,7 +73,13 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	
 	const ParseVectorArray = function(Property,VectorSize,ParseFloat)
 	{
+		VectorSize = VectorSize || 1;
 		let Floats = ParseVector( Property, ParseFloat );
+		
+		//	dont array single values
+		if ( VectorSize == 1 )
+			return Floats;
+		
 		let Vectors = [];
 		for ( let i=0;	i<Floats.length;	i+=VectorSize )
 		{
@@ -81,11 +89,12 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	}
 		
 	
+	const Actors = {};
 	
 	let NodeToActor = function(Node)
 	{
 		const Actor = {};
-		//const Id = Node['-id'];
+		const Id = Node['-id'];
 		Actor.Name = Node['-name'];
 		Actor.Position = ParseVector( Node['translate'], parseScaledFloat );
 		Actor.Scale = ParseVector( Node['scale'] );
@@ -95,6 +104,13 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		//	todo: turn into a CreateAsset functor for the asset system
 		Actor.Geometry = Node.instance_geometry ? Node.instance_geometry['-url'] : null;
 		
+		Actors[Id] = Actor;
+	};
+	function GetActor(Id)
+	{
+		return Actors[Id];
+	}
+	/*
 		const GeoAsset = FindGeometry( Actor.Geometry );
 		if ( !GeoAsset )
 		{
@@ -112,6 +128,174 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 			OnActor( Actor );
 		}
 	}
+	*/
 	MainSceneNodes.forEach( NodeToActor );
 	
+	
+	const ParseStringArray = function(Node,VectorSize)
+	{
+		VectorSize = VectorSize || 1;
+		Node = Node['#text'];
+		let Strings = Node.split(' ');
+		
+		//	dont array single values
+		if ( VectorSize == 1 )
+			return Strings;
+		
+		let Vectors = [];
+		for ( let i=0;	i<Strings.length;	i+=VectorSize )
+		{
+			Vectors.push( Strings.slice( i, i+VectorSize ) );
+		}
+		return Vectors;
+	}
+	
+	Pop.Debug('AnimationLibrary',AnimationLibrary);
+	const AnimationFrames = [];
+	
+	const ProcessAnimationNode = function(AnimNode)
+	{
+		const TargetParts = AnimNode.channel['-target'].split('/');
+		const AnimProperty = TargetParts[1];
+		const AnimActorId = TargetParts[0];
+		
+		//	make semantic map
+		const Semantics = {};
+		const ParseSemantic = function(Input)
+		{
+			const Semantic = Input['-semantic'];
+			const Id = Input['-source'];
+			Semantics[Id] = Semantic;
+		}
+		AnimNode.sampler.input.forEach( ParseSemantic );
+		
+		
+		
+		if ( !Array.isArray(AnimNode.source) )
+			AnimNode.source = [AnimNode.source];
+		
+		const AnimSource = {};
+		const ParseSource = function(Source)
+		{
+			let Values = [];
+			let AccessorParams = Source.technique_common.accessor.param;
+			if ( !Array.isArray(AccessorParams) )
+				AccessorParams = [AccessorParams];
+			
+			const Id = Source['-id'];
+			const VectorSize = AccessorParams.length;
+			
+			if ( Source.float_array )
+				Values = ParseVectorArray( Source.float_array, VectorSize );
+			else if ( Source.Name_array )
+				Values = ParseStringArray( Source.Name_array, VectorSize );
+
+			//	gr: don't need to split these
+			/*
+			//
+			let AnimSource = [];
+			let ExtractAnimSource = function(Param,Index)
+			{
+				const SourceName = AnimNodeName + '/' + Param['-name'];
+				const SourceValues = [];
+				for ( let i=0;	i<Values.length;	i++ )
+					SourceValues.push( Values[i][Index] );
+				if ( Anim.hasOwnProperty(SourceName) )
+					Pop.Debug("Anim already has property",SourceName);
+				Anim[SourceName] = SourceValues;
+			}
+			AccessorParams.forEach( ExtractAnimSource );
+			*/
+			
+			//	build name with accessors
+			let Name = Semantics['#'+Id];
+			let AccessorNames = [];
+			let AppendName = function(Param)
+			{
+				AccessorNames.push( Param['-name'] );
+			}
+			AccessorParams.forEach( AppendName );
+			AnimSource[Name] = {};
+			AnimSource[Name].Values = Values;
+			AnimSource[Name].AccessorNames = AccessorNames;
+		}
+		AnimNode.source.forEach( ParseSource );
+		
+		const Actor = GetActor(AnimActorId);
+		Actor.Anim = Actor.Anim || {};
+		Actor.Anim[AnimProperty] = AnimSource;
+		//Pop.Debug("Updated actor",Actor.Anim);
+	}
+	AnimationLibrary.forEach( ProcessAnimationNode );
+
+	
+	function ProcessActorPath(Actor)
+	{
+		if ( !Actor.Anim )
+			return;
+		
+		function GetPositionComponent(PropertyName)
+		{
+			switch(PropertyName)
+			{
+				case 'translate.X':	return 0;
+				case 'translate.Y':	return 1;
+				case 'translate.Z':	return 2;
+				default:			return null;
+			}
+		}
+		
+		Actor.PathPositions = {};
+		function ProcessAnimProperty(PropertyName)
+		{
+			const Property = Actor.Anim[PropertyName];
+			const PosIndex = GetPositionComponent(PropertyName);
+			if ( PosIndex === null )
+				return;
+			function PushKeyframe(Time,Index)
+			{
+				//	position, so scale
+				const Value = Property.OUTPUT.Values[Index] * UnitScalar;
+				if ( !Actor.PathPositions.hasOwnProperty(Time) )
+					Actor.PathPositions[Time] = [null,null,null];
+				Actor.PathPositions[Time][PosIndex] = Value;
+			}
+			Property.INPUT.Values.forEach( PushKeyframe );
+			//Pop.Debug(PropertyName,Property);
+		}
+		Object.keys(Actor.Anim).forEach( ProcessAnimProperty );
+		Pop.Debug("Process anim on actor",Actor.PathPositions);
+	}
+	
+	const OutputActor = function(ActorId)
+	{
+		const Actor = Actors[ActorId];
+		
+		ProcessActorPath(Actor);
+		
+		const GeoAsset = FindGeometry( Actor.Geometry );
+		if ( !GeoAsset )
+		{
+			//	null actor
+			Pop.Debug("Null geo actor",JSON.stringify(Actor));
+		}
+		/*
+		else if ( GeoAsset.mesh.hasOwnProperty('linestrips') )
+		{
+			const Positions = ParseVectorArray( GeoAsset.mesh.source.float_array, 3, parseScaledFloat );
+			Actor.PathPositions = Positions;
+			OnSpline( Actor );
+		}
+		 */
+		else if ( Actor.PathPositions )
+		{
+			Pop.Debug("Actor with positions",Actor);
+			OnSpline( Actor );
+		}
+		else
+		{
+			OnActor( Actor );
+		}
+	}
+	Object.keys(Actors).forEach( OutputActor );
 }
