@@ -68,9 +68,9 @@ Pop.LoadImageAsync = async function(Filename)
 Pop.LoadFileAsStringAsync = async function(Filename)
 {
 	const Fetched = await fetch(Filename);
-	Pop.Debug("Fetch created:", Filename, Fetched);
+	//Pop.Debug("Fetch created:", Filename, Fetched);
 	const Contents = await Fetched.text();
-	Pop.Debug("Fetch finished:", Filename, Fetched);
+	//Pop.Debug("Fetch finished:", Filename, Fetched);
 	return Contents;
 }
 
