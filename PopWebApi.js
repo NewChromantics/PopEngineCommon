@@ -1,9 +1,6 @@
 //	namespace
 const Pop = {};
 
-//	global object is the window!
-Pop.Global = window;
-
 Pop._AssetCache = [];
 
 //	simple aliases
