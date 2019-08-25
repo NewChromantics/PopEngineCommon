@@ -257,6 +257,14 @@ Pop.Opengl.Window = function(Name,Rect)
 		this.CanvasMouseHandler = new TElementMouseHandler( Element, OnMouseDown, OnMouseMove, OnMouseUp, OnMouseScroll );
 	}
 	
+	this.GetScreenRect = function()
+	{
+		let Canvas = this.GetCanvasElement();
+		let ElementRect = Canvas.getBoundingClientRect();
+		let Rect = [ ElementRect.x, ElementRect.y, ElementRect.width, ElementRect.height ];
+		return Rect;
+	}
+	
 	this.GetCanvasElement = function()
 	{
 		let Element = document.getElementById(Name);
@@ -512,10 +520,7 @@ function WindowRenderTarget(Window)
 
 	this.GetScreenRect = function()
 	{
-		let Canvas = Window.GetCanvasElement();
-		let ElementRect = Canvas.getBoundingClientRect();
-		let Rect = [ ElementRect.x, ElementRect.y, ElementRect.width, ElementRect.height ];
-		return Rect;
+		return Window.GetScreenRect();
 	}
 
 	this.GetRenderTargetRect = function()
