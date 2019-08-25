@@ -9,7 +9,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	const GeoLibrary = ColladaTree.COLLADA.library_geometries.geometry;
 	const CameraLibrary = ColladaTree.COLLADA.library_cameras;
 	const SceneLibrary = [ColladaTree.COLLADA.library_visual_scenes.visual_scene];
-	const AnimationLibrary = ColladaTree.COLLADA.library_animations.animation.animation;
+	const AnimationLibrary = ColladaTree.COLLADA.library_animations ? ColladaTree.COLLADA.library_animations.animation.animation : [];
 
 	
 	const UnitScalarString = ColladaTree.COLLADA.asset.unit['-meter'];
@@ -273,21 +273,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		
 		ProcessActorPath(Actor);
 		
-		const GeoAsset = FindGeometry( Actor.Geometry );
-		if ( !GeoAsset )
-		{
-			//	null actor
-			Pop.Debug("Null geo actor",JSON.stringify(Actor));
-		}
-		/*
-		else if ( GeoAsset.mesh.hasOwnProperty('linestrips') )
-		{
-			const Positions = ParseVectorArray( GeoAsset.mesh.source.float_array, 3, parseScaledFloat );
-			Actor.PathPositions = Positions;
-			OnSpline( Actor );
-		}
-		 */
-		else if ( Actor.PathPositions )
+		if ( Actor.PathPositions )
 		{
 			Pop.Debug("Actor with positions",Actor);
 			OnSpline( Actor );
