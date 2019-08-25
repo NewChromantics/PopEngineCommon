@@ -182,6 +182,15 @@ Pop.Image = function(Filename)
 		this.OpenglVersion = this.GetLatestVersion();
 	}
 	
+	this.Copy = function(Source)
+	{
+		//	need to add read-from-opengl to do this
+		if ( Source.PixelsVersion != Source.GetLatestVersion() )
+			throw "Cannot copy from image where pixels aren't the latest version";
+
+		this.WritePixels( Source.GetWidth(), Source.GetHeight(), Source.Pixels, Source.PixelsFormat );
+	}
+	
 	
 	//	load file
 	if ( typeof Filename == 'string' )
