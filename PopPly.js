@@ -1,9 +1,6 @@
 
-Pop.ParsePlyFile = function(Filename,OnVertex,OnMeta)
+Pop.Ply.Parse = function(PlyContents,OnVertex,OnMeta)
 {
-	const PlyContents = Pop.LoadFileAsString(Filename);
-	Pop.Debug("Parsing " + Filename + "...");
-	Pop.Debug(PlyContents.length);
 	const PlyLines = PlyContents.split('\n');
 	if ( PlyLines[0].trim() != 'ply' )
 		throw "Filename first line is not ply, is " + PlyLines[0];

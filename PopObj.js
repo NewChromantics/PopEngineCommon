@@ -1,5 +1,5 @@
 
-Pop.ParseObjFile = function(Filename,OnVertex)
+Pop.Obj.Parse = function(Contents,OnVertex)
 {
 	let Obj = {};
 	Obj.Prefix_Comment = '#';
@@ -10,8 +10,6 @@ Pop.ParseObjFile = function(Filename,OnVertex)
 	Obj.Prefix_Object = 'o ';
 	Obj.Prefix_Face = 'f ';
 
-	const Contents = Pop.LoadFileAsString(Filename);
-	Pop.Debug("Parsing " + Filename + "...");
 	Pop.Debug("Contents.length",Contents.length);
 	const Lines = Contents.split('\n');
 
