@@ -72,6 +72,11 @@ Math.LerpArray = function(Min,Max,Time)
 	return Values;
 }
 
+Math.Lerp2 = Math.LerpArray;
+Math.Lerp3 = Math.LerpArray;
+Math.Lerp4 = Math.LerpArray;
+
+
 
 Math.Dot2 = function(a,b)
 {
