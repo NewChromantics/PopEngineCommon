@@ -1,3 +1,4 @@
+Pop.Obj = {};
 
 Pop.Obj.Parse = function(Contents,OnVertex)
 {

@@ -1,3 +1,4 @@
+Pop.Ply = {};
 
 Pop.Ply.Parse = function(PlyContents,OnVertex,OnMeta)
 {
