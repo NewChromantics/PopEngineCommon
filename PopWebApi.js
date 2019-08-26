@@ -68,6 +68,8 @@ Pop.LoadFileAsStringAsync = async function(Filename)
 	//Pop.Debug("Fetch created:", Filename, Fetched);
 	const Contents = await Fetched.text();
 	//Pop.Debug("Fetch finished:", Filename, Fetched);
+	if ( !Fetched.ok )
+		throw "Failed to fetch " + Filename + "; " + Fetched.statusText;
 	return Contents;
 }
 
@@ -79,8 +81,16 @@ Pop.AsyncCacheAssetAsString = async function(Filename)
 		return;
 	}
 	
-	const Contents = await Pop.LoadFileAsStringAsync( Filename );
-	Pop._AssetCache[Filename] = Contents;
+	try
+	{
+		const Contents = await Pop.LoadFileAsStringAsync( Filename );
+		Pop._AssetCache[Filename] = Contents;
+	}
+	catch(e)
+	{
+		Pop.Debug("Error loading file",Filename,e);
+		Pop._AssetCache[Filename] = false;
+	}
 }
 
 Pop.AsyncCacheAssetAsImage = async function(Filename)
@@ -114,6 +124,12 @@ Pop.FileExists = function(Filename)
 {
 	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
 		return false;
+	
+	//	null is a file that failed to load
+	const Asset = Pop._AssetCache[Filename];
+	if ( Asset === null )
+		return false;
+	
 	return true;
 }
 
@@ -123,6 +139,12 @@ Pop.GetCachedAsset = function(Filename)
 	{
 		throw Filename + " has not been cached with Pop.AsyncCacheAsset()";
 	}
+	
+	//	null is a file that failed to load
+	const Asset = Pop._AssetCache[Filename];
+	if ( Asset === null )
+		throw Filename + " failed to load";
+		
 	return Pop._AssetCache[Filename];
 }
 
