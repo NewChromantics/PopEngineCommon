@@ -36,7 +36,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		return FirstMatch;
 	}
 	
-	let FindGeometry = function(Url)
+	let FindGeometryNode = function(Url)
 	{
 		let MatchUrl = function(Asset)
 		{
@@ -45,6 +45,28 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		}
 		const FirstMatch = GeoLibrary.find(MatchUrl);
 		return FirstMatch;
+	}
+	
+	const ParsedGeometry = {};
+	
+	function ParseGeometry(GeoNode)
+	{
+		const Id = GeoNode['-id'];
+		const Geo = {};
+		Geo.BoundingBox = {};
+		Geo.BoundingBox.Min = [-1,-1,-1];
+		Geo.BoundingBox.Max = [1,1,1];
+		return Geo;
+	}
+	
+	function GetGeometry(Id)
+	{
+		if ( ParsedGeometry[Id] )
+			return ParsedGeometry[Id];
+		const GeoNode = FindGeometryNode( Id );
+		const Geo = ParseGeometry( GeoNode );
+		ParsedGeometry[Id] = Geo;
+		return Geo;
 	}
 	
 	const MainSceneUrl = ColladaTree.COLLADA.scene.instance_visual_scene["-url"];
@@ -103,7 +125,15 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		Actor.Rotation = ParseVector( Node['rotate'] );
 		
 		//	todo: turn into a CreateAsset functor for the asset system
+		//	.Geometry is an asset name
 		Actor.Geometry = Node.instance_geometry ? Node.instance_geometry['-url'] : null;
+		
+		//	extract some meta from the geo
+		if ( Actor.Geometry )
+		{
+			const Geo = GetGeometry( Actor.Geometry );
+			Actor.BoundingBox = Geo.BoundingBox;
+		}		
 		
 		Actors[Id] = Actor;
 	};
