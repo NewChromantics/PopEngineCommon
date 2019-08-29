@@ -127,7 +127,7 @@ Pop.FileExists = function(Filename)
 	
 	//	null is a file that failed to load
 	const Asset = Pop._AssetCache[Filename];
-	if ( Asset === null )
+	if ( Asset === false )
 		return false;
 	
 	return true;
@@ -142,7 +142,7 @@ Pop.GetCachedAsset = function(Filename)
 	
 	//	null is a file that failed to load
 	const Asset = Pop._AssetCache[Filename];
-	if ( Asset === null )
+	if ( Asset === false )
 		throw Filename + " failed to load";
 		
 	return Pop._AssetCache[Filename];
