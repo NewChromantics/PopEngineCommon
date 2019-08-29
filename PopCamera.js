@@ -141,12 +141,15 @@ Pop.Camera = function(CopyCamera)
 		const ImageHeight = 800;
 		const OpenglFocal = this.PixelToOpenglFocalLengths( Focal, [ImageWidth, ImageHeight] );
 		*/
+		
 		const Aspect = ViewRect[2] / ViewRect[3];
 		const FovVertical = this.FovVertical;
-		const FovHorizontal = FovVertical / Aspect;
+		//const FovHorizontal = FovVertical * Aspect;
+		
 		const OpenglFocal = {};
-		OpenglFocal.fx = 1.0 / Math.tan( Math.radians(FovVertical) / 2);
-		OpenglFocal.fy = 1.0 / Math.tan( Math.radians(FovHorizontal) / 2);
+		OpenglFocal.fy = 1.0 / Math.tan( Math.radians(FovVertical) / 2);
+		//OpenglFocal.fx = 1.0 / Math.tan( Math.radians(FovHorizontal) / 2);
+		OpenglFocal.fx = OpenglFocal.fy / Aspect;
 		OpenglFocal.cx = 0;
 		OpenglFocal.cy = 0;
 		OpenglFocal.s = 0;
