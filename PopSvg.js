@@ -5,8 +5,6 @@ Pop.Svg.Parse = function(Contents,OnVertex)
 {
 	const Svg = JSON.parse(Contents);
 	
-	//	gr: I think there's always one group?
-	const Group = Svg.svg.g;
 	const Meta = Svg.svg;
 	const Bounds = StringToFloats( Meta['-viewBox'] );
 	
@@ -79,7 +77,6 @@ Pop.Svg.Parse = function(Contents,OnVertex)
 		//	radius is alpha
 		PushVertex( x, y, z, r );
 	}
-	Group.circle.forEach( ParseCircle );
 	
 	function ParseEllipse(Node)
 	{
@@ -95,13 +92,25 @@ Pop.Svg.Parse = function(Contents,OnVertex)
 		
 		Pop.Debug("Todo: parse non uniform ellipse");
 	}
-	Group.ellipse.forEach( ParseEllipse );
-	
 	
 	function ParsePath(Node)
 	{
 		Pop.Debug("Todo: parse svg path");
 	}
-	Group.path.forEach( ParsePath );
 	
+	function ParseGroup(Node)
+	{
+		if ( Node.circle )
+			Node.circle.forEach( ParseCircle );
+		if ( Node.ellipse )
+			Node.ellipse.forEach( ParseEllipse );
+		if ( Node.path )
+			Node.path.forEach( ParsePath );
+		if ( Node.g )
+			Node.g.forEach( ParseGroup );
+		
+		//	todo: other children!
+	}
+	
+	ParseGroup( Svg.svg );
 }
