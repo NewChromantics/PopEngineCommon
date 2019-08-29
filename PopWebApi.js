@@ -1,13 +1,26 @@
 //	namespace
-let Pop = {};
+const Pop = {};
 
 Pop._AssetCache = [];
 
 //	simple aliases
 Pop.Debug = console.log;
 
+Pop.GetExeDirectory = function()
+{
+	//	exe could be path location.pathname
+	const Path = window.location.pathname;
+	//	including /
+	const Directory = Path.substr( 0, Path.lastIndexOf("/") + 1 );
+	return Directory;
+}
 
-
+Pop.GetExeArguments = function()
+{
+	//	gr: probably shouldn't lowercase now it's proper
+	const UrlParams = window.location.search.replace('?',' ').trim().split('&');
+	return UrlParams;
+}
 
 function CreatePromise()
 {
@@ -52,9 +65,11 @@ Pop.LoadImageAsync = async function(Filename)
 Pop.LoadFileAsStringAsync = async function(Filename)
 {
 	const Fetched = await fetch(Filename);
-	Pop.Debug("Fetch created:", Filename, Fetched);
+	//Pop.Debug("Fetch created:", Filename, Fetched);
 	const Contents = await Fetched.text();
-	Pop.Debug("Fetch finished:", Filename, Fetched);
+	//Pop.Debug("Fetch finished:", Filename, Fetched);
+	if ( !Fetched.ok )
+		throw "Failed to fetch " + Filename + "; " + Fetched.statusText;
 	return Contents;
 }
 
@@ -66,8 +81,16 @@ Pop.AsyncCacheAssetAsString = async function(Filename)
 		return;
 	}
 	
-	const Contents = await Pop.LoadFileAsStringAsync( Filename );
-	Pop._AssetCache[Filename] = Contents;
+	try
+	{
+		const Contents = await Pop.LoadFileAsStringAsync( Filename );
+		Pop._AssetCache[Filename] = Contents;
+	}
+	catch(e)
+	{
+		Pop.Debug("Error loading file",Filename,e);
+		Pop._AssetCache[Filename] = false;
+	}
 }
 
 Pop.AsyncCacheAssetAsImage = async function(Filename)
@@ -101,6 +124,12 @@ Pop.FileExists = function(Filename)
 {
 	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
 		return false;
+	
+	//	null is a file that failed to load
+	const Asset = Pop._AssetCache[Filename];
+	if ( Asset === null )
+		return false;
+	
 	return true;
 }
 
@@ -110,6 +139,12 @@ Pop.GetCachedAsset = function(Filename)
 	{
 		throw Filename + " has not been cached with Pop.AsyncCacheAsset()";
 	}
+	
+	//	null is a file that failed to load
+	const Asset = Pop._AssetCache[Filename];
+	if ( Asset === null )
+		throw Filename + " failed to load";
+		
 	return Pop._AssetCache[Filename];
 }
 
@@ -138,10 +173,6 @@ Pop.CompileAndRun = function(Source,Filename)
 	//	note: normal API returns evaluation result here, not that we usually use it...
 }
 
-Pop.GetExeArguments = function()
-{
-	return [];
-}
 
 Pop.Yield = function(Milliseconds)
 {

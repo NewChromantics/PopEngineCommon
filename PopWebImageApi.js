@@ -36,6 +36,19 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	throw "PixelFormatToOpenglFormat: Unhandled pixel format " + PixelFormat;
 }
 
+function IsFloatFormat(Format)
+{
+	switch(Format)
+	{
+		case 'Float1':
+		case 'Float2':
+		case 'Float3':
+		case 'Float4':
+			return true;
+		default:
+			return false;
+	}
+}
 
 Pop.Image = function(Filename)
 {
@@ -45,6 +58,12 @@ Pop.Image = function(Filename)
 	this.Pixels = null;
 	this.PixelsFormat = null;
 	this.PixelsVersion = undefined;
+	this.LinearFilter = false;
+	
+	this.SetLinearFilter = function(Linear)
+	{
+		this.LinearFilter = Linear;
+	}
 	
 	this.GetWidth = function()
 	{
@@ -159,7 +178,7 @@ Pop.Image = function(Filename)
 		}
 		
 		const RepeatMode = gl.CLAMP_TO_EDGE;
-		const FilterMode = gl.NEAREST;//LINEAR;
+		const FilterMode = this.LinearFilter ? gl.LINEAR : gl.NEAREST;
 		
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, RepeatMode);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, RepeatMode);
@@ -167,6 +186,15 @@ Pop.Image = function(Filename)
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, FilterMode);
 		
 		this.OpenglVersion = this.GetLatestVersion();
+	}
+	
+	this.Copy = function(Source)
+	{
+		//	need to add read-from-opengl to do this
+		if ( Source.PixelsVersion != Source.GetLatestVersion() )
+			throw "Cannot copy from image where pixels aren't the latest version";
+
+		this.WritePixels( Source.GetWidth(), Source.GetHeight(), Source.Pixels, Source.PixelsFormat );
 	}
 	
 	
@@ -187,7 +215,7 @@ Pop.Image = function(Filename)
 		const Height = Size[1];
 		let PixelData = new Array(Width * Height * 4);
 		PixelData.fill(0);
-		const Pixels = PixelFormat=='Float4' ? new Float32Array(PixelData) : new Uint8Array(PixelData);
+		const Pixels = IsFloatFormat(PixelFormat) ? new Float32Array(PixelData) : new Uint8Array(PixelData);
 		this.WritePixels( Width, Height, Pixels, PixelFormat );
 	}
 	else if ( Filename !== undefined )

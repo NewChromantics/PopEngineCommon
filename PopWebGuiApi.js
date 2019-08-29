@@ -36,11 +36,11 @@ function SetElementPosition(Element,x,y)
 	Element.style.left = ( x) + "px";
 }
 
-var $HighestZ = 100;
+var $HighestZ = 99;
 function SetElementToTop(Element)
 {
-	//$HighestZ++;
-	//Element.style.zIndex = $HighestZ;
+	$HighestZ++;
+	Element.style.zIndex = $HighestZ;
 }
 
 //	returns [float2].snapPos [function].callback [Element].newParent
@@ -343,7 +343,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		let Element = document.createElement('div');
 		SetGuiControlStyle( Element, Rect );
 		//Element.innerText = 'Pop.Gui.Window';
-		Element.style.zIndex = 1;
+		Element.style.zIndex = $HighestZ;
 		//Element.style.overflow = 'scroll';	//	inner div handles scrolling
 		Element.className = 'PopGuiWindow';
 		Parent.appendChild( Element );
@@ -387,6 +387,18 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 	this.Element = this.CreateElement(document.body);
 }
 
+function GetExistingElement(Name)
+{
+	if ( typeof Name != 'string' )
+		return null;
+	
+	let Element = document.getElementById(Name);
+	if ( Element )
+		return Element;
+	
+	return null;
+}
+
 Pop.Gui.Label = function(Parent, Rect)
 {
 	this.SetValue = function(Value)
@@ -396,7 +408,11 @@ Pop.Gui.Label = function(Parent, Rect)
 
 	this.CreateElement = function(Parent)
 	{
-		let Div = document.createElement('div');
+		let Div = GetExistingElement(Parent);
+		if ( Div )
+			return Div;
+		
+		Div = document.createElement('div');
 		SetGuiControlStyle( Div, Rect );
 		
 		Div.innerText = 'Pop.Gui.Label';
@@ -404,6 +420,59 @@ Pop.Gui.Label = function(Parent, Rect)
 		return Div;
 	}
 
+	this.Element = this.CreateElement(Parent);
+}
+
+
+
+Pop.Gui.Button = function(Parent, Rect)
+{
+	this.OnClicked = function()
+	{
+		Pop.Debug("Pop.Gui.Button.OnClicked");
+	}
+	
+	this.SetLabel = function(Value)
+	{
+		this.Element.innerText = Value;
+	}
+	
+	this.OnElementClicked = function(Event)
+	{
+		this.OnClicked();
+	}
+	
+	this.CreateElement = function(Parent)
+	{
+		let SetupEvents = function(Element)
+		{
+			//	make sure its clickable!
+			Element.style.pointerEvents = 'auto';
+			Element.style.cursor = 'pointer';
+			
+			//	gr; this overrides old instance
+			Element.oninput = this.OnElementClicked.bind(this);
+			Element.onclick = this.OnElementClicked.bind(this);
+		}.bind(this);
+		
+		let Div = GetExistingElement(Parent);
+		if ( Div )
+		{
+			SetupEvents(Div);
+			return Div;
+		}
+		
+		Div = document.createElement('input');
+		SetGuiControlStyle( Div, Rect );
+		Div.type = 'button';
+		SetupEvents(Div);
+		
+		Div.innerText = 'Pop.Gui.Button innertext';
+		Div.Value = 'Pop.Gui.Button value';
+		Parent.AddChildControl( Parent, Div );
+		return Div;
+	}
+	
 	this.Element = this.CreateElement(Parent);
 }
 
@@ -431,6 +500,13 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 	
 	this.CreateElement = function(Parent)
 	{
+		let Div = GetExistingElement(Parent);
+		if ( Div )
+		{
+			this.InputElement = Div;
+			return Div;
+		}
+		
 		let Input = document.createElement('input');
 		this.InputElement = Input;
 		
@@ -443,7 +519,7 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		Input.oninput = this.OnElementChanged.bind(this);
 		
 		
-		let Div = document.createElement('div');
+		Div = document.createElement('div');
 		SetGuiControlStyle( Div, Rect );
 		//Div.innerText = 'Pop.Gui.Slider';
 		

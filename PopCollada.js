@@ -9,7 +9,10 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	const GeoLibrary = ColladaTree.COLLADA.library_geometries.geometry;
 	const CameraLibrary = ColladaTree.COLLADA.library_cameras;
 	const SceneLibrary = [ColladaTree.COLLADA.library_visual_scenes.visual_scene];
+	const AnimationLibrary = ColladaTree.COLLADA.library_animations ? ColladaTree.COLLADA.library_animations.animation.animation : [];
+	//Pop.Debug('AnimationLibrary',AnimationLibrary);
 
+	
 	const UnitScalarString = ColladaTree.COLLADA.asset.unit['-meter'];
 	const UnitScalar = parseFloat( UnitScalarString );
 	if ( isNaN( UnitScalar ) )
@@ -33,7 +36,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		return FirstMatch;
 	}
 	
-	let FindGeometry = function(Url)
+	let FindGeometryNode = function(Url)
 	{
 		let MatchUrl = function(Asset)
 		{
@@ -42,6 +45,28 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		}
 		const FirstMatch = GeoLibrary.find(MatchUrl);
 		return FirstMatch;
+	}
+	
+	const ParsedGeometry = {};
+	
+	function ParseGeometry(GeoNode)
+	{
+		const Id = GeoNode['-id'];
+		const Geo = {};
+		Geo.BoundingBox = {};
+		Geo.BoundingBox.Min = [-1,-1,-1];
+		Geo.BoundingBox.Max = [1,1,1];
+		return Geo;
+	}
+	
+	function GetGeometry(Id)
+	{
+		if ( ParsedGeometry[Id] )
+			return ParsedGeometry[Id];
+		const GeoNode = FindGeometryNode( Id );
+		const Geo = ParseGeometry( GeoNode );
+		ParsedGeometry[Id] = Geo;
+		return Geo;
 	}
 	
 	const MainSceneUrl = ColladaTree.COLLADA.scene.instance_visual_scene["-url"];
@@ -71,7 +96,13 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	
 	const ParseVectorArray = function(Property,VectorSize,ParseFloat)
 	{
+		VectorSize = VectorSize || 1;
 		let Floats = ParseVector( Property, ParseFloat );
+		
+		//	dont array single values
+		if ( VectorSize == 1 )
+			return Floats;
+		
 		let Vectors = [];
 		for ( let i=0;	i<Floats.length;	i+=VectorSize )
 		{
@@ -81,11 +112,12 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	}
 		
 	
+	const Actors = {};
 	
 	let NodeToActor = function(Node)
 	{
 		const Actor = {};
-		//const Id = Node['-id'];
+		const Id = Node['-id'];
 		Actor.Name = Node['-name'];
 		Actor.Position = ParseVector( Node['translate'], parseScaledFloat );
 		Actor.Scale = ParseVector( Node['scale'] );
@@ -93,18 +125,167 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		Actor.Rotation = ParseVector( Node['rotate'] );
 		
 		//	todo: turn into a CreateAsset functor for the asset system
+		//	.Geometry is an asset name
 		Actor.Geometry = Node.instance_geometry ? Node.instance_geometry['-url'] : null;
 		
-		const GeoAsset = FindGeometry( Actor.Geometry );
-		if ( !GeoAsset )
+		//	extract some meta from the geo
+		if ( Actor.Geometry )
 		{
-			//	null actor
-			Pop.Debug("Null geo actor",JSON.stringify(Actor));
+			const Geo = GetGeometry( Actor.Geometry );
+			Actor.BoundingBox = Geo.BoundingBox;
+		}		
+		
+		Actors[Id] = Actor;
+	};
+	function GetActor(Id)
+	{
+		return Actors[Id];
+	}
+	MainSceneNodes.forEach( NodeToActor );
+	
+	
+	const ParseStringArray = function(Node,VectorSize)
+	{
+		VectorSize = VectorSize || 1;
+		Node = Node['#text'];
+		let Strings = Node.split(' ');
+		
+		//	dont array single values
+		if ( VectorSize == 1 )
+			return Strings;
+		
+		let Vectors = [];
+		for ( let i=0;	i<Strings.length;	i+=VectorSize )
+		{
+			Vectors.push( Strings.slice( i, i+VectorSize ) );
 		}
-		else if ( GeoAsset.mesh.hasOwnProperty('linestrips') )
+		return Vectors;
+	}
+	
+	const AnimationFrames = [];
+	
+	const ProcessAnimationNode = function(AnimNode)
+	{
+		const TargetParts = AnimNode.channel['-target'].split('/');
+		const AnimProperty = TargetParts[1];
+		const AnimActorId = TargetParts[0];
+		
+		//	make semantic map
+		const Semantics = {};
+		const ParseSemantic = function(Input)
 		{
-			const Positions = ParseVectorArray( GeoAsset.mesh.source.float_array, 3, parseScaledFloat );
-			Actor.PathPositions = Positions;
+			const Semantic = Input['-semantic'];
+			const Id = Input['-source'];
+			Semantics[Id] = Semantic;
+		}
+		AnimNode.sampler.input.forEach( ParseSemantic );
+		
+		
+		
+		if ( !Array.isArray(AnimNode.source) )
+			AnimNode.source = [AnimNode.source];
+		
+		const AnimSource = {};
+		const ParseSource = function(Source)
+		{
+			let Values = [];
+			let AccessorParams = Source.technique_common.accessor.param;
+			if ( !Array.isArray(AccessorParams) )
+				AccessorParams = [AccessorParams];
+			
+			const Id = Source['-id'];
+			const VectorSize = AccessorParams.length;
+			
+			if ( Source.float_array )
+				Values = ParseVectorArray( Source.float_array, VectorSize );
+			else if ( Source.Name_array )
+				Values = ParseStringArray( Source.Name_array, VectorSize );
+
+			//	gr: don't need to split these
+			/*
+			//
+			let AnimSource = [];
+			let ExtractAnimSource = function(Param,Index)
+			{
+				const SourceName = AnimNodeName + '/' + Param['-name'];
+				const SourceValues = [];
+				for ( let i=0;	i<Values.length;	i++ )
+					SourceValues.push( Values[i][Index] );
+				if ( Anim.hasOwnProperty(SourceName) )
+					Pop.Debug("Anim already has property",SourceName);
+				Anim[SourceName] = SourceValues;
+			}
+			AccessorParams.forEach( ExtractAnimSource );
+			*/
+			
+			//	build name with accessors
+			let Name = Semantics['#'+Id];
+			let AccessorNames = [];
+			let AppendName = function(Param)
+			{
+				AccessorNames.push( Param['-name'] );
+			}
+			AccessorParams.forEach( AppendName );
+			AnimSource[Name] = {};
+			AnimSource[Name].Values = Values;
+			AnimSource[Name].AccessorNames = AccessorNames;
+		}
+		AnimNode.source.forEach( ParseSource );
+		
+		const Actor = GetActor(AnimActorId);
+		Actor.Anim = Actor.Anim || {};
+		Actor.Anim[AnimProperty] = AnimSource;
+		//Pop.Debug("Updated actor",Actor.Anim);
+	}
+	AnimationLibrary.forEach( ProcessAnimationNode );
+
+	
+	function ProcessActorPath(Actor)
+	{
+		if ( !Actor.Anim )
+			return;
+		
+		function GetPositionComponent(PropertyName)
+		{
+			switch(PropertyName)
+			{
+				case 'translate.X':	return 0;
+				case 'translate.Y':	return 1;
+				case 'translate.Z':	return 2;
+				default:			return null;
+			}
+		}
+		
+		Actor.PathPositions = {};
+		function ProcessAnimProperty(PropertyName)
+		{
+			const Property = Actor.Anim[PropertyName];
+			const PosIndex = GetPositionComponent(PropertyName);
+			if ( PosIndex === null )
+				return;
+			function PushKeyframe(Time,Index)
+			{
+				//	position, so scale
+				const Value = Property.OUTPUT.Values[Index] * UnitScalar;
+				if ( !Actor.PathPositions.hasOwnProperty(Time) )
+					Actor.PathPositions[Time] = [null,null,null];
+				Actor.PathPositions[Time][PosIndex] = Value;
+			}
+			Property.INPUT.Values.forEach( PushKeyframe );
+			//Pop.Debug(PropertyName,Property);
+		}
+		Object.keys(Actor.Anim).forEach( ProcessAnimProperty );
+		//Pop.Debug("Process anim on actor",Actor.PathPositions);
+	}
+	
+	const OutputActor = function(ActorId)
+	{
+		const Actor = Actors[ActorId];
+		
+		ProcessActorPath(Actor);
+		
+		if ( Actor.PathPositions )
+		{
 			OnSpline( Actor );
 		}
 		else
@@ -112,6 +293,5 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 			OnActor( Actor );
 		}
 	}
-	MainSceneNodes.forEach( NodeToActor );
-	
+	Object.keys(Actors).forEach( OutputActor );
 }
