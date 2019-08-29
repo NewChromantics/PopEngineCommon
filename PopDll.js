@@ -35,7 +35,7 @@ Pop.Dll.ParseFunction = function(Declaration)
 		let Type = TypeAndName.Type;
 		Type = Type.replace('const','');
 		Type = Type.trim();
-		Pop.Debug('['+Type+']');
+		//Pop.Debug('['+Type+']');
 		ArgumentTypes.push( Type );
 		
 		let Name = TypeAndName.Name.trim();
