@@ -25,54 +25,6 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		return Float;
 	}
 	
-	let FindScene = function(Url)
-	{
-		let MatchUrl = function(Asset)
-		{
-			const AssetUrl = '#' + Asset['-id'];
-			return AssetUrl == Url;
-		}
-		const FirstMatch = SceneLibrary.find(MatchUrl);
-		return FirstMatch;
-	}
-	
-	let FindGeometryNode = function(Url)
-	{
-		let MatchUrl = function(Asset)
-		{
-			const AssetUrl = '#' + Asset['-id'];
-			return AssetUrl == Url;
-		}
-		const FirstMatch = GeoLibrary.find(MatchUrl);
-		return FirstMatch;
-	}
-	
-	const ParsedGeometry = {};
-	
-	function ParseGeometry(GeoNode)
-	{
-		const Id = GeoNode['-id'];
-		const Geo = {};
-		Geo.BoundingBox = {};
-		Geo.BoundingBox.Min = [-1,-1,-1];
-		Geo.BoundingBox.Max = [1,1,1];
-		return Geo;
-	}
-	
-	function GetGeometry(Id)
-	{
-		if ( ParsedGeometry[Id] )
-			return ParsedGeometry[Id];
-		const GeoNode = FindGeometryNode( Id );
-		const Geo = ParseGeometry( GeoNode );
-		ParsedGeometry[Id] = Geo;
-		return Geo;
-	}
-	
-	const MainSceneUrl = ColladaTree.COLLADA.scene.instance_visual_scene["-url"];
-	const MainScene = FindScene(MainSceneUrl);
-	const MainSceneNodes = MainScene.node;
-	
 	const ParseVector = function(Property,ParseFloat=undefined)
 	{
 		ParseFloat = ParseFloat || parseFloat;
@@ -110,7 +62,84 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		}
 		return Vectors;
 	}
+	
+	
+	let FindScene = function(Url)
+	{
+		let MatchUrl = function(Asset)
+		{
+			const AssetUrl = '#' + Asset['-id'];
+			return AssetUrl == Url;
+		}
+		const FirstMatch = SceneLibrary.find(MatchUrl);
+		return FirstMatch;
+	}
+	
+	let FindGeometryNode = function(Url)
+	{
+		let MatchUrl = function(Asset)
+		{
+			const AssetUrl = '#' + Asset['-id'];
+			return AssetUrl == Url;
+		}
+		const FirstMatch = GeoLibrary.find(MatchUrl);
+		return FirstMatch;
+	}
+	
+	const ParsedGeometry = {};
+	
+	function ParseGeometry(GeoNode)
+	{
+		const Id = GeoNode['-id'];
 		
+		function GetSourceFloats(Id)
+		{
+			function MatchSourceNode(SourceNode)
+			{
+				const SourceNodeId = '#' + SourceNode['-id'];
+				return SourceNodeId == Id;
+			}
+			if ( !Array.isArray(GeoNode.mesh.source) )
+				GeoNode.mesh.source = [GeoNode.mesh.source];
+			const SourceNode = GeoNode.mesh.source.find( MatchSourceNode );
+			const SourceFloats = ParseVectorArray( SourceNode.float_array, 3, parseScaledFloat );
+			return SourceFloats;
+		}
+		
+		//	extract mesh stuff
+		const PositonSourceId = GeoNode.mesh.vertices.input['-source'];
+		const PositonFloat3s = GetSourceFloats( PositonSourceId );
+		
+		const Geo = {};
+		Geo.BoundingBox = {};
+		Geo.BoundingBox.Min = PositonFloat3s[0].slice();
+		Geo.BoundingBox.Max = PositonFloat3s[0].slice();
+		function UpdateMinMax(Position)
+		{
+			for ( let i=0;	i<3;	i++ )
+			{
+				Geo.BoundingBox.Min[i] = Math.min( Geo.BoundingBox.Min[i], Position[i] );
+				Geo.BoundingBox.Max[i] = Math.max( Geo.BoundingBox.Max[i], Position[i] );
+			}
+		}
+		PositonFloat3s.forEach( UpdateMinMax );
+		Pop.Debug('Geo.BoundingBox',Geo.BoundingBox);
+		return Geo;
+	}
+	
+	function GetGeometry(Id)
+	{
+		if ( ParsedGeometry[Id] )
+			return ParsedGeometry[Id];
+		const GeoNode = FindGeometryNode( Id );
+		const Geo = ParseGeometry( GeoNode );
+		ParsedGeometry[Id] = Geo;
+		return Geo;
+	}
+	
+	const MainSceneUrl = ColladaTree.COLLADA.scene.instance_visual_scene["-url"];
+	const MainScene = FindScene(MainSceneUrl);
+	const MainSceneNodes = MainScene.node;
 	
 	const Actors = {};
 	
@@ -132,6 +161,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		if ( Actor.Geometry )
 		{
 			const Geo = GetGeometry( Actor.Geometry );
+			Pop.Debug("Copying geo bounding box", Geo.BoundingBox );
 			Actor.BoundingBox = Geo.BoundingBox;
 		}		
 		
