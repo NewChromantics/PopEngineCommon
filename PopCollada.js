@@ -25,6 +25,13 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		return Float;
 	}
 	
+	let parseMeshFloat = function(FloatString)
+	{
+		let Float = parseFloat( FloatString );
+		Float /= 10;
+		return Float;
+	}
+	
 	const ParseVector = function(Property,ParseFloat=undefined)
 	{
 		ParseFloat = ParseFloat || parseFloat;
@@ -102,7 +109,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 			if ( !Array.isArray(GeoNode.mesh.source) )
 				GeoNode.mesh.source = [GeoNode.mesh.source];
 			const SourceNode = GeoNode.mesh.source.find( MatchSourceNode );
-			const SourceFloats = ParseVectorArray( SourceNode.float_array, 3, parseScaledFloat );
+			const SourceFloats = ParseVectorArray( SourceNode.float_array, 3, parseMeshFloat );
 			return SourceFloats;
 		}
 		
