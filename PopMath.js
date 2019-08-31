@@ -692,6 +692,17 @@ Math.CreateIdentityMatrix = function()
 	return Math.CreateTranslationMatrix( 0,0,0 );
 }
 
+Math.GetMatrixScale = function(Matrix)
+{
+	let Rowx = Matrix.slice(0,4);
+	let Rowy = Matrix.slice(4,8);
+	let Rowz = Matrix.slice(8,12);
+	let Scalex = Math.Length3( Rowx );
+	let Scaley = Math.Length3( Rowy );
+	let Scalez = Math.Length3( Rowz );
+	return [Scalex,Scaley,Scalez];
+}
+
 Math.GetMatrixTranslation = function(Matrix,DivW=false)
 {
 	//	do we need to /w here?
