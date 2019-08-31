@@ -3,6 +3,9 @@ Pop.Opengl = {};
 //	webgl only supports glsl 100!
 Pop.GlslVersion = 100;
 
+//	gl.isFrameBuffer is expensive! probably flushing
+const TestFrameBuffer = false;
+
 
 //	need to sort this!, should be in gui
 //	currently named to match c++
@@ -487,8 +490,9 @@ Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
 		const level = 0;
 		const attachmentPoint = gl.COLOR_ATTACHMENT0;
 		gl.framebufferTexture2D(gl.FRAMEBUFFER, attachmentPoint, gl.TEXTURE_2D, Texture, level);
-		if ( !gl.isFramebuffer( this.FrameBuffer ) )
-			throw "Is not frame buffer!";
+		if ( TestFrameBuffer )
+			if ( !gl.isFramebuffer( this.FrameBuffer ) )
+				throw "Is not frame buffer!";
 		//let Status = gl.checkFramebufferStatus( this.FrameBuffer );
 		//Pop.Debug("Framebuffer status",Status);
 	}
@@ -497,8 +501,9 @@ Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
 	this.BindRenderTarget = function()
 	{
 		const gl = this.GetGlContext();
-		if ( !gl.isFramebuffer( this.FrameBuffer ) )
-			throw "Is not frame buffer!";
+		if ( TestFrameBuffer )
+			if ( !gl.isFramebuffer( this.FrameBuffer ) )
+				throw "Is not frame buffer!";
 		gl.bindFramebuffer( gl.FRAMEBUFFER, this.FrameBuffer );
 		
 		//	gr: this is givng errors...
