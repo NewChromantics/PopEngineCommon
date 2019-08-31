@@ -692,10 +692,17 @@ Math.CreateIdentityMatrix = function()
 	return Math.CreateTranslationMatrix( 0,0,0 );
 }
 
-Math.GetMatrixTranslation = function(Matrix)
+Math.GetMatrixTranslation = function(Matrix,DivW=false)
 {
 	//	do we need to /w here?
 	let xyz = Matrix.slice(12,12+3);
+	if ( DivW )
+	{
+		let w = Matrix[15];
+		xyz[0] /= w;
+		xyz[1] /= w;
+		xyz[2] /= w;
+	}
 	return xyz;
 }
 
