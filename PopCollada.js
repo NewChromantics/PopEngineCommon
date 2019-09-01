@@ -130,7 +130,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 			}
 		}
 		PositonFloat3s.forEach( UpdateMinMax );
-		Pop.Debug('Geo.BoundingBox',Geo.BoundingBox);
+		//Pop.Debug('Geo.BoundingBox',Geo.BoundingBox);
 		return Geo;
 	}
 	
@@ -168,7 +168,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		if ( Actor.Geometry )
 		{
 			const Geo = GetGeometry( Actor.Geometry );
-			Pop.Debug("Copying geo bounding box", Geo.BoundingBox );
+			//Pop.Debug("Copying geo bounding box", Geo.BoundingBox );
 			Actor.BoundingBox = Geo.BoundingBox;
 		}		
 		
