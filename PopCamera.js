@@ -307,6 +307,14 @@ Pop.Camera = function(CopyCamera)
 		return Matrix;
 	}
 	
+	this.GetWorldToFrustumTransform = function(ViewRect=[-1,-1,1,1])
+	{
+		const CameraToFrustum = this.GetProjectionMatrix( ViewRect );
+		const WorldToCamera = this.GetWorldToCameraMatrix();
+		const WorldToFrustum = Math.MatrixMultiply4x4( CameraToFrustum, WorldToCamera );
+		return WorldToFrustum;
+	}
+	
 	//	this gets a transform, which when applied to a cube of -1..1,-1..1,-1..1
 	//	will skew the cube into a representation of the view frustum in world space
 	this.GetLocalToWorldFrustumTransformMatrix = function(ViewRect=[-1,-1,1,1])
