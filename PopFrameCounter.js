@@ -1,5 +1,5 @@
 
-Pop.FrameCounter = function(CounterName,LapTimeMs=1000)
+Pop.FrameCounter = function(CounterName="",LapTimeMs=1000)
 {
 	this.LastLapTime = null;
 	this.Count = 0;
