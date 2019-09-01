@@ -776,3 +776,31 @@ Math.Max3 = function(a,b)
 	 ];
 	return Max;
 }
+
+
+Math.GetNextPowerOf2 = function(Number)
+{
+	//	round any floats
+	Number = Math.ceil( Number );
+	
+	if ( Number <= 0 )
+		return false;
+	
+	//	get bits under us
+	const LowerBits = Number & (Number-1);
+	if ( LowerBits == 0 )
+		return Number;
+	
+	//Pop.Debug("number",Number,LowerBits);
+	//	OR all the ^2 bits below us
+	Number--;
+	Number |= Number >> 1;
+	Number |= Number >> 2;
+	Number |= Number >> 4;
+	Number |= Number >> 8;
+	Number |= Number >> 16;
+	//	now it's all bits below, roll over to the power^2 bit
+	Number++;
+	
+	return Number;
+}
