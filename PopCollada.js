@@ -28,7 +28,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	let parseMeshFloat = function(FloatString)
 	{
 		let Float = parseFloat( FloatString );
-		Float /= 10;
+		Float *= UnitScalar;
 		return Float;
 	}
 	
