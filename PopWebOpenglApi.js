@@ -5,7 +5,8 @@ Pop.GlslVersion = 100;
 
 //	gl.isFrameBuffer is expensive! probably flushing
 const TestFrameBuffer = false;
-
+const TestAttribLocation = false;
+const DisableOldVertexAttribArrays = false;
 
 //	need to sort this!, should be in gui
 //	currently named to match c++
@@ -436,7 +437,7 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 			const GeoTriangleCount = Geometry.IndexCount/3;
 			if ( TriangleCount > GeoTriangleCount )
 			{
-				Pop.Debug("Warning, trying to render " + TriangleCount + " triangles, but geo only has " + GeoTriangleCount + ". Clamping as webgl sometimes will render nothing and give no warning");
+				//Pop.Debug("Warning, trying to render " + TriangleCount + " triangles, but geo only has " + GeoTriangleCount + ". Clamping as webgl sometimes will render nothing and give no warning");
 				TriangleCount = GeoTriangleCount;
 			}
 		}
@@ -455,8 +456,9 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 		gl.bindBuffer( gl.ARRAY_BUFFER, Geometry.Buffer );
 		
 		//	we'll need this if we start having multiple attributes
-		for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
-			gl.disableVertexAttribArray(i);
+		if ( DisableOldVertexAttribArrays )
+			for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
+				gl.disableVertexAttribArray(i);
 		//	gr: we get glDrawArrays: attempt to access out of range vertices in attribute 0, if we dont update every frame (this seems wrong)
 		//		even if we call gl.enableVertexAttribArray
 		Geometry.BindVertexPointers( Shader );
@@ -937,7 +939,7 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 		{
 			let Location = Attrib.Location;
 			
-			if ( Shader )
+			if ( Shader && TestAttribLocation )
 			{
 				let ShaderLocation = gl.getAttribLocation( Shader.Program, Attrib.Name );
 				if ( ShaderLocation != Location )
