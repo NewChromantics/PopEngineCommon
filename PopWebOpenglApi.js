@@ -425,8 +425,28 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 		//GL_FUNC_ADD
 	}
 	
-	this.DrawGeometry = function(Geometry,Shader,SetUniforms)
+	this.DrawGeometry = function(Geometry,Shader,SetUniforms,TriangleCount)
 	{
+		if ( TriangleCount === undefined )
+		{
+			TriangleCount = Geometry.IndexCount/3;
+		}
+		else
+		{
+			const GeoTriangleCount = Geometry.IndexCount/3;
+			if ( TriangleCount > GeoTriangleCount )
+			{
+				Pop.Debug("Warning, trying to render " + TriangleCount + " triangles, but geo only has " + GeoTriangleCount + ". Clamping as webgl sometimes will render nothing and give no warning");
+				TriangleCount = GeoTriangleCount;
+			}
+		}
+		
+		if ( TriangleCount <= 0 )
+		{
+			Pop.Debug("Triangle count",TriangleCount);
+			return;
+		}
+		
 		const gl = this.GetGlContext();
 		
 		gl.useProgram( Shader.Program );
@@ -443,7 +463,7 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 		
 		SetUniforms( Shader, Geometry );
 		
-		gl.drawArrays( Geometry.PrimitiveType, 0, Geometry.IndexCount );
+		gl.drawArrays( Geometry.PrimitiveType, 0, TriangleCount * 3 );
 	}
 	
 }
@@ -903,6 +923,12 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 	this.Buffer = gl.createBuffer();
 	this.PrimitiveType = gl.TRIANGLES;
 	this.IndexCount = TriangleIndexes.length;
+	
+	if ( this.IndexCount % 3 != 0 )
+	{
+		throw "Triangle index count not divisible by 3";
+	}
+	
 	
 	this.BindVertexPointers = function(Shader)
 	{
