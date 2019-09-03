@@ -31,6 +31,7 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	{
 		case 'Greyscale':	return [ gl.LUMINANCE,	gl.UNSIGNED_BYTE];
 		case 'RGBA':		return [ gl.RGBA,		gl.UNSIGNED_BYTE];
+		case 'RGB':			return [ gl.RGB,		gl.UNSIGNED_BYTE];
 	}
 	
 	throw "PixelFormatToOpenglFormat: Unhandled pixel format " + PixelFormat;
