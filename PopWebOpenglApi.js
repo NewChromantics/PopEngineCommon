@@ -1,5 +1,9 @@
 Pop.Opengl = {};
 
+//	counters for debugging
+Pop.Opengl.TrianglesDrawn = 0;
+Pop.Opengl.BatchesDrawn = 0;
+
 //	webgl only supports glsl 100!
 Pop.GlslVersion = 100;
 
@@ -442,6 +446,7 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 			}
 		}
 		
+		//	0 gives a webgl error/warning so skip it
 		if ( TriangleCount <= 0 )
 		{
 			Pop.Debug("Triangle count",TriangleCount);
@@ -450,21 +455,33 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 		
 		const gl = this.GetGlContext();
 		
-		gl.useProgram( Shader.Program );
+		//	this doesn't make any difference
+		//if ( gl.CurrentBoundShader != Shader )
+		{
+			gl.useProgram( Shader.Program );
+			gl.CurrentBoundShader = Shader;
+		}
 		
-		//	setup geometry for rendering
-		gl.bindBuffer( gl.ARRAY_BUFFER, Geometry.Buffer );
-		
-		//	we'll need this if we start having multiple attributes
-		if ( DisableOldVertexAttribArrays )
-			for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
-				gl.disableVertexAttribArray(i);
-		//	gr: we get glDrawArrays: attempt to access out of range vertices in attribute 0, if we dont update every frame (this seems wrong)
-		//		even if we call gl.enableVertexAttribArray
-		Geometry.BindVertexPointers( Shader );
-		
+		//	this doesn't make any difference
+		//if ( gl.CurrentBoundGeometry != Geometry )
+		{
+			//	setup geometry for rendering
+			gl.bindBuffer( gl.ARRAY_BUFFER, Geometry.Buffer );
+			
+			//	we'll need this if we start having multiple attributes
+			if ( DisableOldVertexAttribArrays )
+				for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
+					gl.disableVertexAttribArray(i);
+			//	gr: we get glDrawArrays: attempt to access out of range vertices in attribute 0, if we dont update every frame (this seems wrong)
+			//		even if we call gl.enableVertexAttribArray
+			Geometry.BindVertexPointers( Shader );
+			
+			gl.CurrentBoundGeometry = Geometry;
+		}
 		SetUniforms( Shader, Geometry );
 		
+		Pop.Opengl.TrianglesDrawn += TriangleCount;
+		Pop.Opengl.BatchesDrawn += 1;
 		gl.drawArrays( Geometry.PrimitiveType, 0, TriangleCount * 3 );
 	}
 	
