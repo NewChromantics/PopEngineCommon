@@ -749,7 +749,7 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 			return;
 		}
 		
-		Pop.Debug("SetUniformArray("+UniformName+") slow path");
+		//Pop.Debug("SetUniformArray("+UniformName+") slow path");
 		
 		//	note: uniform iv may need to be Int32Array;
 		//	https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/uniform
