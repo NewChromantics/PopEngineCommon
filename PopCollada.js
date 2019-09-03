@@ -5,11 +5,18 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	if ( Contents.startsWith('<?xml') )
 		throw "Convert collada file from xml to json first http://www.utilities-online.info/xmltojson";
 	
+	function AsArray(Item)
+	{
+		if ( Array.isArray(Item) )
+			return Item;
+		return [Item];
+	}
+	
 	const ColladaTree = JSON.parse( Contents );
-	const GeoLibrary = ColladaTree.COLLADA.library_geometries.geometry;
-	const CameraLibrary = ColladaTree.COLLADA.library_cameras;
-	const SceneLibrary = [ColladaTree.COLLADA.library_visual_scenes.visual_scene];
-	const AnimationLibrary = ColladaTree.COLLADA.library_animations ? ColladaTree.COLLADA.library_animations.animation.animation : [];
+	const GeoLibrary = AsArray( ColladaTree.COLLADA.library_geometries.geometry );
+	const CameraLibrary = AsArray( ColladaTree.COLLADA.library_cameras );
+	const SceneLibrary = AsArray( ColladaTree.COLLADA.library_visual_scenes.visual_scene );
+	const AnimationLibrary = ColladaTree.COLLADA.library_animations ? AsArray(ColladaTree.COLLADA.library_animations.animation.animation) : [];
 	//Pop.Debug('AnimationLibrary',AnimationLibrary);
 
 	
@@ -146,7 +153,7 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 	
 	const MainSceneUrl = ColladaTree.COLLADA.scene.instance_visual_scene["-url"];
 	const MainScene = FindScene(MainSceneUrl);
-	const MainSceneNodes = MainScene.node;
+	const MainSceneNodes = AsArray( MainScene.node );
 	
 	const Actors = {};
 	
@@ -314,6 +321,9 @@ Pop.Collada.Parse = function(Contents,OnActor,OnSpline)
 		Object.keys(Actor.Anim).forEach( ProcessAnimProperty );
 		//Pop.Debug("Process anim on actor",Actor.PathPositions);
 	}
+	
+	if ( Actors.length == 0 )
+		throw "Collada file found no actors";
 	
 	const OutputActor = function(ActorId)
 	{
