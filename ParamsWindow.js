@@ -8,7 +8,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 
 	const LabelLeft = 10;
 	const LabelWidth = WindowRect[2] * 0.3;
-	const LabelHeight = 28;
+	const LabelHeight = 18;
 	const ControlLeft = LabelLeft + LabelWidth + 10;
 	const ControlWidth = WindowRect[2] - ControlLeft - 40;
 	const ControlHeight = LabelHeight;
