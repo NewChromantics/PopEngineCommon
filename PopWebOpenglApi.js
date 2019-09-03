@@ -3,6 +3,9 @@ Pop.Opengl = {};
 //	counters for debugging
 Pop.Opengl.TrianglesDrawn = 0;
 Pop.Opengl.BatchesDrawn = 0;
+Pop.Opengl.GeometryBindSkip = 0;
+Pop.Opengl.ShaderBindSkip = 0;
+
 
 //	webgl only supports glsl 100!
 Pop.GlslVersion = 100;
@@ -456,14 +459,18 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 		const gl = this.GetGlContext();
 		
 		//	this doesn't make any difference
-		//if ( gl.CurrentBoundShader != Shader )
+		if ( gl.CurrentBoundShaderHash != GetUniqueHash(Shader) )
 		{
 			gl.useProgram( Shader.Program );
-			gl.CurrentBoundShader = Shader;
+			gl.CurrentBoundShaderHash = GetUniqueHash(Shader);
+		}
+		else
+		{
+			Pop.Opengl.ShaderBindSkip++;
 		}
 		
 		//	this doesn't make any difference
-		//if ( gl.CurrentBoundGeometry != Geometry )
+		if ( gl.CurrentBoundGeometryHash != GetUniqueHash(Geometry) )
 		{
 			//	setup geometry for rendering
 			gl.bindBuffer( gl.ARRAY_BUFFER, Geometry.Buffer );
@@ -476,7 +483,11 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 			//		even if we call gl.enableVertexAttribArray
 			Geometry.BindVertexPointers( Shader );
 			
-			gl.CurrentBoundGeometry = Geometry;
+			gl.CurrentBoundGeometryHash = GetUniqueHash(Geometry);
+		}
+		else
+		{
+			Pop.Opengl.GeometryBindSkip++;
 		}
 		SetUniforms( Shader, Geometry );
 		
@@ -727,7 +738,18 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 	this.SetUniformArray = function(UniformName,Values)
 	{
 		//	determine type of array, and length, and is array
-		let UniformMeta = this.GetUniformMeta(UniformName);
+		const UniformMeta = this.GetUniformMeta(UniformName);
+		
+		const ExpectedValueCount = UniformMeta.ElementSize * UniformMeta.ElementCount;
+		
+		//	all aligned
+		if ( Array.isArray(Values) && Values.length == ExpectedValueCount )
+		{
+			UniformMeta.SetValues( Values );
+			return;
+		}
+		
+		Pop.Debug("SetUniformArray("+UniformName+") slow path");
 		
 		//	note: uniform iv may need to be Int32Array;
 		//	https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/uniform
@@ -746,7 +768,7 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		
 		//	check array size (allow less, but throw on overflow)
 		//	error if array is empty
-		while ( ValuesExpanded.length < UniformMeta.ElementSize * UniformMeta.ElementCount )
+		while ( ValuesExpanded.length < ExpectedValueCount )
 			ValuesExpanded.push(0);
 		/*
 		 if ( ValuesExpanded.length > UniformMeta.size )
