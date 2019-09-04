@@ -401,9 +401,20 @@ function GetExistingElement(Name)
 
 Pop.Gui.Label = function(Parent, Rect)
 {
+	this.ValueCache = null;
+	
 	this.SetValue = function(Value)
 	{
-		this.Element.innerHTML = Value;
+		//	avoid DOM changes as much as possible
+		if ( this.ValueCache == Value )
+			return;
+		
+		//	inner html is slow!
+		if ( typeof Value == 'string' && Value.includes('<') )
+			this.Element.innerHTML = Value;
+		else
+			this.Element.innerText = Value;
+		this.ValueCache = Value;
 	}
 
 	this.CreateElement = function(Parent)
