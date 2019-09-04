@@ -403,7 +403,7 @@ Pop.Gui.Label = function(Parent, Rect)
 {
 	this.SetValue = function(Value)
 	{
-		this.Element.innerText = Value;
+		this.Element.innerHTML = Value;
 	}
 
 	this.CreateElement = function(Parent)
