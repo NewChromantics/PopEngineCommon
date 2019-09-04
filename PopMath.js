@@ -675,6 +675,17 @@ Math.CreateScaleMatrix = function(x,y,z)
 	return [ x,0,0,0,	0,y,0,0,	0,0,z,0,	0,0,0,1	];
 }
 
+Math.CreateTranslationScaleMatrix = function(Position,Scale)
+{
+	let sx = Scale[0];
+	let sy = Scale[1];
+	let sz = Scale[2];
+	let tx = Position[0];
+	let ty = Position[1];
+	let tz = Position[2];
+	return [ sx,0,0,0,	0,sy,0,0,	0,0,sz,0,	tx,ty,tz,1 ];
+}
+
 Math.Matrix3x3ToMatrix4x4 = function(Matrix3,Row4=[0,0,0,1])
 {
 	let Matrix4 =
