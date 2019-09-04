@@ -245,7 +245,14 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.RenderTarget = null;
 	this.CanvasMouseHandler = null;
 	this.ActiveTexureIndex = 0;
+	this.ScreenRectCache = null;
 
+	this.OnResize = function()
+	{
+		//	do more things
+		this.ScreenRectCache = null;
+	}
+	
 	this.AllocTexureIndex = function()
 	{
 		//	gr: make a pool or something
@@ -270,10 +277,13 @@ Pop.Opengl.Window = function(Name,Rect)
 	
 	this.GetScreenRect = function()
 	{
-		let Canvas = this.GetCanvasElement();
-		let ElementRect = Canvas.getBoundingClientRect();
-		let Rect = [ ElementRect.x, ElementRect.y, ElementRect.width, ElementRect.height ];
-		return Rect;
+		if ( !this.ScreenRectCache )
+		{
+			let Canvas = this.GetCanvasElement();
+			let ElementRect = Canvas.getBoundingClientRect();
+			this.ScreenRectCache = [ ElementRect.x, ElementRect.y, ElementRect.width, ElementRect.height ];
+		}
+		return this.ScreenRectCache;
 	}
 	
 	this.GetCanvasElement = function()
