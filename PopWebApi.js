@@ -90,6 +90,7 @@ Pop.AsyncCacheAssetAsString = async function(Filename)
 	{
 		Pop.Debug("Error loading file",Filename,e);
 		Pop._AssetCache[Filename] = false;
+		throw "Error loading file " + Filename + ": " + e;
 	}
 }
 
