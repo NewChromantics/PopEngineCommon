@@ -6,6 +6,11 @@ Pop._AssetCache = [];
 //	simple aliases
 Pop.Debug = console.log;
 
+Pop.GetPlatform = function()
+{
+	return 'Web';
+}
+
 Pop.GetExeDirectory = function()
 {
 	//	exe could be path location.pathname
