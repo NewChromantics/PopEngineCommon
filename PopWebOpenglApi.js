@@ -973,8 +973,15 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 	
 	this.Buffer = gl.createBuffer();
 	this.PrimitiveType = gl.TRIANGLES;
-	this.IndexCount = TriangleIndexes.length;
-	
+	if ( TriangleIndexes )
+	{
+		this.IndexCount = TriangleIndexes.length;
+	}
+	else
+	{
+		this.IndexCount = (VertexData.length / VertexSize);
+	}
+
 	if ( this.IndexCount % 3 != 0 )
 	{
 		throw "Triangle index count not divisible by 3";
