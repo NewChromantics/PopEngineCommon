@@ -47,7 +47,7 @@ Pop.GetTimeNowMs = function()
 	return performance.now();
 }
 
-Pop.LoadImageAsync = async function(Filename)
+Pop.LoadFileAsImageAsync = async function(Filename)
 {
 	let Promise = CreatePromise();
 	
@@ -78,6 +78,7 @@ Pop.LoadFileAsStringAsync = async function(Filename)
 	return Contents;
 }
 
+
 Pop.AsyncCacheAssetAsString = async function(Filename)
 {
 	if ( Pop._AssetCache.hasOwnProperty(Filename) )
@@ -107,11 +108,21 @@ Pop.AsyncCacheAssetAsImage = async function(Filename)
 		return;
 	}
 	
-	const Contents = await Pop.LoadImageAsync( Filename );
+	const Contents = await Pop.LoadFileAsImageAsync( Filename );
 	Pop._AssetCache[Filename] = Contents;
 }
 
 Pop.LoadFileAsString = function(Filename)
+{
+	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
+	{
+		throw "Cannot synchronously load " + Filename + ", needs to be precached first with [async] Pop.AsyncCacheAsset()";
+	}
+	
+	return Pop.GetCachedAsset(Filename);
+}
+
+Pop.LoadFileAsImage = function(Filename)
 {
 	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
 	{
