@@ -76,6 +76,16 @@ Pop.Image = function(Filename)
 		return this.Size[1];
 	}
 
+	this.GetFormat = function()
+	{
+		return this.PixelsFormat;
+	}
+	
+	this.GetPixelBuffer = function()
+	{
+		return this.Pixels;
+	}
+	
 	this.GetLatestVersion = function()
 	{
 		let Version = 0;
