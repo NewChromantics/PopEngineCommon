@@ -190,7 +190,8 @@ Pop.Image = function(Filename)
 			throw "Unhandled Pixel buffer format " + (typeof this.Pixels) + "/" + this.Pixels.prototype.constructor;
 		}
 		
-		const RepeatMode = gl.CLAMP_TO_EDGE;
+		//const RepeatMode = gl.CLAMP_TO_EDGE;
+		const RepeatMode = gl.MIRRORED_REPEAT;
 		const FilterMode = this.LinearFilter ? gl.LINEAR : gl.NEAREST;
 		
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, RepeatMode);
