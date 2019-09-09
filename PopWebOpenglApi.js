@@ -15,6 +15,10 @@ const TestFrameBuffer = false;
 const TestAttribLocation = false;
 const DisableOldVertexAttribArrays = false;
 
+//	if we fail to get a context (eg. lost context) wait this long before restarting the render loop (where it tries again)
+//	this stops thrashing cpu/system whilst waiting
+const RetryGetContextMs = 1000;
+
 //	need to sort this!, should be in gui
 //	currently named to match c++
 Pop.SoyMouseButton = Pop.SoyMouseButton || {};
@@ -442,7 +446,7 @@ Pop.Opengl.Window = function(Name,Rect)
 			{
 				//	Renderloop error, failed to get context... waiting to try again
 				console.error("OnRender error: ",e);
-				setTimeout( Render.bind(this), 2000 );
+				setTimeout( Render.bind(this), RetryGetContextMs );
 				return;
 			}
 			
