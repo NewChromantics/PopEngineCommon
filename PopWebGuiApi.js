@@ -508,16 +508,22 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 	this.OnElementChanged = function(Event)
 	{
 		//	call our callback
-		let Value = this.InputElement.value;
+		let Value = this.InputElement.valueAsNumber;
 		this.OnChanged( Value );
 	}
 	
 	this.CreateElement = function(Parent)
 	{
+		const ListenToInput = function(InputElement)
+		{
+			InputElement.addEventListener('input', this.OnElementChanged.bind(this) );
+		}.bind(this);
+		
 		let Div = GetExistingElement(Parent);
 		if ( Div )
 		{
 			this.InputElement = Div;
+			ListenToInput(Div);
 			return Div;
 		}
 		
@@ -530,8 +536,8 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		Input.value = 0;
 		Input.type = 'range';
 		SetGuiControl_SubElementStyle( Input );
-		Input.oninput = this.OnElementChanged.bind(this);
-		
+		//Input.oninput = this.OnElementChanged.bind(this);
+		ListenToInput(Input);
 		
 		Div = document.createElement('div');
 		SetGuiControlStyle( Div, Rect );
