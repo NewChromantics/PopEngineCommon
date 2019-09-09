@@ -500,6 +500,9 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 	this.SetValue = function(Value)
 	{
 		this.InputElement.value = Value;
+		
+		//	trigger js events attached to input
+		this.InputElement.dispatchEvent(new Event('change'));
 	}
 	
 	this.OnElementChanged = function(Event)
