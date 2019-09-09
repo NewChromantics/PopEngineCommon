@@ -237,15 +237,17 @@ Pop.Opengl.Window = function(Name,Rect)
 	//	things to overload
 	//this.OnRender = function(RenderTarget){};
 	this.OnMouseDown = function(x,y,Button)					{	Pop.Debug('OnMouseDown',...arguments);	};
-	this.OnMouseMove = function(x,y,Button)					{	Pop.Debug('OnMouseMove',...arguments);	};
+	this.OnMouseMove = function(x,y,Button)					{	/*Pop.Debug("OnMouseMove",...arguments);*/	};
 	this.OnMouseUp = function(x,y,Button)					{	Pop.Debug('OnMouseUp',...arguments);	};
 	this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	Pop.Debug('OnMouseScroll',...arguments);	};
 
 	this.Context = null;
+	this.ContextVersion = 0;	//	used to tell if resources are out of date
 	this.RenderTarget = null;
 	this.CanvasMouseHandler = null;
 	this.ActiveTexureIndex = 0;
 	this.ScreenRectCache = null;
+
 
 	this.OnResize = function()
 	{
@@ -336,14 +338,53 @@ Pop.Opengl.Window = function(Name,Rect)
 		
 		return Element;
 	}
+	
+	this.OnLostContext = function(Error)
+	{
+		Pop.Debug("Lost webgl context",Error);
+		this.Context = null;
+	}
+
+	this.TestLoseContext = function()
+	{
+		Pop.Debug("TestLoseContext");
+		const Context = this.GetGlContext();
+		const Extension = Context.getExtension('WEBGL_lose_context');
+		if ( !Extension )
+			throw "WEBGL_lose_context not supported";
+		
+		Extension.loseContext();
+		
+		//	restore after 3 secs
+		function RestoreContext()
+		{
+			Extension.restoreContext();
+		}
+		setTimeout( RestoreContext, 3*1000 );
+	}
+	
 
 	this.InitialiseContext = function()
 	{
+		const ContextMode = "webgl";
 		const Canvas = this.GetCanvasElement();
-		this.Context = Canvas.getContext("webgl");
+		this.Context = Canvas.getContext(ContextMode);
+		this.ContextVersion++;
 		if ( !this.Context )
-			throw "Failed to initialise webgl";
-
+			throw "Failed to initialise " + ContextMode;
+		
+		if ( this.Context.isContextLost() )
+			throw "Created " + ContextMode + " context but is lost";
+		
+		//	handle losing context
+		function OnLostWebglContext(Event)
+		{
+			Pop.Debug("OnLostWebglContext",Event);
+			Event.preventDefault();
+			this.OnLostContext("Canvas event");
+		}
+		Canvas.addEventListener('webglcontextlost', OnLostWebglContext.bind(this), false);
+		
 		const gl = this.Context;
 		//	enable float textures on GLES1
 		//	https://developer.mozilla.org/en-US/docs/Web/API/OES_texture_float
@@ -378,7 +419,8 @@ Pop.Opengl.Window = function(Name,Rect)
 	{
 		let Render = function(Timestamp)
 		{
-			//try
+			//	if we lose context, we want to keep trying the loop
+			try
 			{
 				//	gr: here we need to differentiate between render target and render context really
 				//		as we use the object. this will get messy when we have textre render targets in webgl
@@ -387,9 +429,13 @@ Pop.Opengl.Window = function(Name,Rect)
 				this.RenderTarget.BindRenderTarget();
 				this.OnRender( this.RenderTarget );
 			}
-			//catch(e)
+			catch(e)
 			{
-			//	console.error("OnRender error: ",e);
+				console.error("OnRender error: ",e);
+				//	re-request to retry after lost context
+				window.requestAnimationFrame( Render.bind(this) );
+				//	re-throw
+				throw e;
 			}
 			window.requestAnimationFrame( Render.bind(this) );
 		}
@@ -398,6 +444,20 @@ Pop.Opengl.Window = function(Name,Rect)
 
 	this.GetGlContext = function()
 	{
+		//	catch if we have a context but its lost
+		if ( this.Context )
+		{
+			if ( this.Context.isContextLost() )
+			{
+				this.OnLostContext("Found context.isContextLost()");
+			}
+		}
+		
+		//	reinit
+		if ( !this.Context )
+		{
+			this.InitialiseContext();
+		}
 		return this.Context;
 	}
 
