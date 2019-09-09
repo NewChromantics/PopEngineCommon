@@ -343,6 +343,9 @@ Pop.Opengl.Window = function(Name,Rect)
 	{
 		Pop.Debug("Lost webgl context",Error);
 		this.Context = null;
+		this.CurrentBoundGeometryHash = null;
+		this.CurrentBoundShaderHash = null;
+		this.ActiveTexureIndex = 0;	//	dont need to reset this?
 	}
 
 	this.TestLoseContext = function()
@@ -364,17 +367,22 @@ Pop.Opengl.Window = function(Name,Rect)
 	}
 	
 
-	this.InitialiseContext = function()
+	this.CreateContext = function()
 	{
 		const ContextMode = "webgl";
 		const Canvas = this.GetCanvasElement();
-		this.Context = Canvas.getContext(ContextMode);
-		this.ContextVersion++;
-		if ( !this.Context )
+		const Context = Canvas.getContext(ContextMode);
+		
+		if ( !Context )
 			throw "Failed to initialise " + ContextMode;
 		
-		if ( this.Context.isContextLost() )
+		if ( Context.isContextLost() )
+		{
+			//	gr: this is a little hacky
 			throw "Created " + ContextMode + " context but is lost";
+		}
+		
+		Pop.Debug("Created new context");
 		
 		//	handle losing context
 		function OnLostWebglContext(Event)
@@ -385,7 +393,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		}
 		Canvas.addEventListener('webglcontextlost', OnLostWebglContext.bind(this), false);
 		
-		const gl = this.Context;
+		const gl = Context;
 		//	enable float textures on GLES1
 		//	https://developer.mozilla.org/en-US/docs/Web/API/OES_texture_float
 		
@@ -406,12 +414,18 @@ Pop.Opengl.Window = function(Name,Rect)
 		};
 		EnableExtension('OES_texture_float');
 		EnableExtension('EXT_blend_minmax');
-
+		
 		//	texture load needs extension in webgl1
 		//	in webgl2 it's built in, but requires #version 300 es
 		//EnableExtension('EXT_shader_texture_lod');
 		//EnableExtension('OES_standard_derivatives');
-		
+		return Context;
+	}
+	
+	this.InitialiseContext = function()
+	{
+		this.Context = this.CreateContext();
+		this.ContextVersion++;
 	}
 	
 	//	we could make this async for some more control...
@@ -419,25 +433,26 @@ Pop.Opengl.Window = function(Name,Rect)
 	{
 		let Render = function(Timestamp)
 		{
-			//	if we lose context, we want to keep trying the loop
+			//	try and get the context, if this fails, it may be temporary
 			try
 			{
-				//	gr: here we need to differentiate between render target and render context really
-				//		as we use the object. this will get messy when we have textre render targets in webgl
-				if ( !this.RenderTarget )
-					this.RenderTarget = new WindowRenderTarget(this);
-				this.RenderTarget.BindRenderTarget();
-				this.OnRender( this.RenderTarget );
+				this.GetGlContext();
 			}
 			catch(e)
 			{
+				//	Renderloop error, failed to get context... waiting to try again
 				console.error("OnRender error: ",e);
-				//	re-request to retry after lost context
-				window.requestAnimationFrame( Render.bind(this) );
-				//	re-throw
-				//throw e;
+				setTimeout( Render.bind(this), 2000 );
+				return;
 			}
-		
+			
+			//	now render and let it throw (user error presumably)
+			const RenderContext = this;
+			if ( !this.RenderTarget )
+				this.RenderTarget = new WindowRenderTarget(this);
+			this.RenderTarget.BindRenderTarget( RenderContext );
+			this.OnRender( this.RenderTarget );
+			
 			window.requestAnimationFrame( Render.bind(this) );
 		}
 		window.requestAnimationFrame( Render.bind(this) );
@@ -470,8 +485,20 @@ Pop.Opengl.Window = function(Name,Rect)
 
 
 //	base class with generic opengl stuff
-Pop.Opengl.RenderTarget = function(RenderContext)
+Pop.Opengl.RenderTarget = function()
 {
+	this.GetRenderContext = function()
+	{
+		throw "Override this on your render target";
+	}
+	
+	this.GetGlContext = function()
+	{
+		const RenderContext = this.GetRenderContext();
+		const Context = RenderContext.GetGlContext();
+		return Context;
+	}
+	
 	this.ClearColour = function(r,g,b,a=1)
 	{
 		let gl = this.GetGlContext();
@@ -506,6 +533,8 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 	
 	this.DrawGeometry = function(Geometry,Shader,SetUniforms,TriangleCount)
 	{
+		const RenderContext = this.GetRenderContext();
+		
 		if ( TriangleCount === undefined )
 		{
 			TriangleCount = Geometry.IndexCount/3;
@@ -532,7 +561,8 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 		//	this doesn't make any difference
 		if ( gl.CurrentBoundShaderHash != GetUniqueHash(Shader) )
 		{
-			gl.useProgram( Shader.Program );
+			const Program = Shader.GetProgram(RenderContext);
+			gl.useProgram( Program );
 			gl.CurrentBoundShaderHash = GetUniqueHash(Shader);
 		}
 		else
@@ -571,19 +601,18 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 
 
 //	maybe this should be an API type
-Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
+Pop.Opengl.TextureRenderTarget = function(Image)
 {
-	Pop.Opengl.RenderTarget.call( this, RenderContext );
+	Pop.Opengl.RenderTarget.call( this );
 	
 	this.FrameBuffer = null;
-	this.RenderContext = RenderContext;
-	this.Image = null;
+	this.FrameBufferContextVersion = null;
+	this.FrameBufferRenderContext = null;
+	this.Image = Image;
 
-	
-	this.GetGlContext = function()
+	this.GetRenderContext = function()
 	{
-		const gl = this.RenderContext.GetGlContext();
-		return gl;
+		return this.FrameBufferRenderContext;
 	}
 	
 	this.GetRenderTargetRect = function()
@@ -594,11 +623,13 @@ Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
 		return Rect;
 	}
 	
-	this.CreateFrameBuffer = function(Image)
+	this.CreateFrameBuffer = function(RenderContext,Image)
 	{
 		const Texture = Image.GetOpenglTexture( RenderContext );
-		const gl = this.GetGlContext();
+		const gl = RenderContext.GetGlContext();
 		this.FrameBuffer = gl.createFramebuffer();
+		this.FrameBufferContextVersion = RenderContext.ContextVersion;
+		this.FrameBufferRenderContext = RenderContext;
 		this.Image = Image;
 		
 		//this.BindRenderTarget();
@@ -618,13 +649,35 @@ Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
 		//Pop.Debug("Framebuffer status",Status);
 	}
 	
-	//  bind for rendering
-	this.BindRenderTarget = function()
+	this.GetFrameBuffer = function()
 	{
-		const gl = this.GetGlContext();
+		
+	}
+	
+	//  bind for rendering
+	this.BindRenderTarget = function(RenderContext)
+	{
+		const gl = RenderContext.GetGlContext();
+		
+		if ( this.FrameBufferContextVersion !== RenderContext.ContextVersion )
+		{
+			this.FrameBuffer = null;
+			this.FrameBufferContextVersion = null;
+			this.FrameBufferRenderContext = null;
+		}
+
+		if ( !this.FrameBuffer )
+		{
+			this.CreateFrameBuffer( RenderContext, Image );
+		}
+		
 		if ( TestFrameBuffer )
 			if ( !gl.isFramebuffer( this.FrameBuffer ) )
 				throw "Is not frame buffer!";
+
+		const FrameBuffer = this.GetFrameBuffer();
+		
+		//	todo: make this common code
 		gl.bindFramebuffer( gl.FRAMEBUFFER, this.FrameBuffer );
 		
 		//	gr: this is givng errors...
@@ -641,14 +694,15 @@ Pop.Opengl.TextureRenderTarget = function(RenderContext,Image)
 		return this.RenderContext.AllocTexureIndex();
 	}
 	
-	this.CreateFrameBuffer( Image );
 }
 
-function GetTextureRenderTarget(RenderContext,Texture)
+//	gr: horrible cyclic reference, this is currently here until we get some kinda cache I think
+//	because when the image is disposed, it doesn't know to get rid of the render target
+function GetTextureRenderTarget(Texture)
 {
 	if ( !Texture.RenderTarget )
 	{
-		Texture.RenderTarget = new Pop.Opengl.TextureRenderTarget( RenderContext, Texture );
+		Texture.RenderTarget = new Pop.Opengl.TextureRenderTarget( Texture );
 	}
 	return Texture.RenderTarget;
 }
@@ -658,11 +712,16 @@ function WindowRenderTarget(Window)
 	const RenderContext = Window;
 	this.ViewportMinMax = [0,0,1,1];
 
-	Pop.Opengl.RenderTarget.call( this, RenderContext );
+	Pop.Opengl.RenderTarget.call( this );
 
-	this.GetGlContext = function()
+	this.GetFrameBuffer = function()
 	{
-		return Window.GetGlContext();
+		return null;
+	}
+	
+	this.GetRenderContext = function()
+	{
+		return RenderContext;
 	}
 	
 	this.AllocTexureIndex = function()
@@ -686,28 +745,33 @@ function WindowRenderTarget(Window)
 	this.RenderToRenderTarget = function(TargetTexture,RenderFunction)
 	{
 		//	setup render target
-		const RenderContext = Window;
-		let RenderTarget = GetTextureRenderTarget( RenderContext, TargetTexture );
-		RenderTarget.BindRenderTarget();
+		let RenderTarget = GetTextureRenderTarget( TargetTexture );
+		RenderTarget.BindRenderTarget( RenderContext );
 		
 		RenderFunction( RenderTarget );
 		
 		//	todo: restore previously bound, not this.
 		//	restore rendertarget
-		this.BindRenderTarget();
+		this.BindRenderTarget( RenderContext );
 	}
 	
-	this.BindRenderTarget = function()
+	this.BindRenderTarget = function(RenderContext)
 	{
-		const gl = this.GetGlContext();
-		gl.bindFramebuffer( gl.FRAMEBUFFER, null );
+		const gl = RenderContext.GetGlContext();
+		const FrameBuffer = this.GetFrameBuffer();
+
+		//	todo: make this common code
+		gl.bindFramebuffer( gl.FRAMEBUFFER, FrameBuffer );
 		const RenderRect = this.GetRenderTargetRect();
 		let ViewportMinx = this.ViewportMinMax[0] * RenderRect[2];
 		let ViewportMiny = this.ViewportMinMax[1] * RenderRect[3];
 		let ViewportWidth = this.GetViewportWidth();
 		let ViewportHeight = this.GetViewportHeight();
+
+		//const Viewport = this.GetRenderTargetRect();
 		//	viewport in pixels in webgl
-		gl.viewport( ViewportMinx, ViewportMiny, ViewportWidth, ViewportHeight );
+		const Viewport = [ViewportMinx, ViewportMiny, ViewportWidth, ViewportHeight];
+		gl.viewport( ...Viewport );
 		
 		this.ResetState();
 	}
@@ -728,31 +792,45 @@ function WindowRenderTarget(Window)
 
 
 
-Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
+Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSource)
 {
 	let Name = "A shader";
 	this.Name = Name;
-	this.VertShader = null;
-	this.FragShader = null;
 	this.Program = null;
-	this.Context = Context;
+	this.ProgramContextVersion = null;
+	this.Context = null;			//	 need to remove this, currently still here for SetUniformConvinience
+	this.UniformMetaCache = null;	//	may need to invalidate this on new context
 	
-	VertShaderSource = Pop.Opengl.RefactorVertShader(VertShaderSource);
-	FragShaderSource = Pop.Opengl.RefactorFragShader(FragShaderSource);
+
+	this.VertShaderSource = Pop.Opengl.RefactorVertShader(VertShaderSource);
+	this.FragShaderSource = Pop.Opengl.RefactorFragShader(FragShaderSource);
 
 	this.GetGlContext = function()
 	{
 		return this.Context.GetGlContext();
 	}
 	
-	this.CompileShader = function(Type,Source)
+	this.GetProgram = function(RenderContext)
 	{
-		let gl = this.GetGlContext();
-		let Shader = gl.createShader(Type);
+		//	if out of date, recompile
+		if ( this.ProgramContextVersion !== RenderContext.ContextVersion )
+		{
+			this.Program = this.CompileProgram( RenderContext );
+			this.ProgramContextVersion = RenderContext.ContextVersion;
+			this.UniformMetaCache = null;
+			this.Context = RenderContext;
+		}
+		return this.Program;
+	}
+	
+	this.CompileShader = function(RenderContext,Type,Source)
+	{
+		const gl = RenderContext.GetGlContext();
+		const Shader = gl.createShader(Type);
 		gl.shaderSource( Shader, Source );
 		gl.compileShader( Shader );
 		
-		let CompileStatus = gl.getShaderParameter( Shader, gl.COMPILE_STATUS);
+		const CompileStatus = gl.getShaderParameter( Shader, gl.COMPILE_STATUS);
 		if ( !CompileStatus )
 		{
 			let Error = gl.getShaderInfoLog(Shader);
@@ -761,12 +839,16 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		return Shader;
 	}
 	
-	this.CompileProgram = function()
+	this.CompileProgram = function(RenderContext)
 	{
-		let gl = this.GetGlContext();
+		let gl = RenderContext.GetGlContext();
+		
+		const FragShader = this.CompileShader( RenderContext, gl.FRAGMENT_SHADER, this.FragShaderSource );
+		const VertShader = this.CompileShader( RenderContext, gl.VERTEX_SHADER, this.VertShaderSource );
+		
 		let Program = gl.createProgram();
-		gl.attachShader( Program, this.VertShader );
-		gl.attachShader( Program, this.FragShader );
+		gl.attachShader( Program, VertShader );
+		gl.attachShader( Program, FragShader );
 		gl.linkProgram( Program );
 		
 		let LinkStatus = gl.getProgramParameter( Program, gl.LINK_STATUS );
@@ -778,11 +860,6 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		return Program;
 	}
 	
-	this.Bind = function()
-	{
-		let gl = this.GetGlContext();
-		gl.useProgram( this.Program );
-	}
 	
 	//	gr: can't tell the difference between int and float, so err that wont work
 	this.SetUniform = function(Uniform,Value)
@@ -791,7 +868,7 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		if ( !UniformMeta )
 			return;
 		if( Array.isArray(Value) )				this.SetUniformArray( Uniform, Value );
-		else if ( Value instanceof Pop.Image )	this.SetUniformTexture( Uniform, Value, Context.AllocTexureIndex() );
+		else if ( Value instanceof Pop.Image )	this.SetUniformTexture( Uniform, Value, this.Context.AllocTexureIndex() );
 		//else if ( Value instanceof float2 )		this.SetUniformFloat2( Uniform, Value );
 		//else if ( Value instanceof float3 )		this.SetUniformFloat3( Uniform, Value );
 		//else if ( Value instanceof float4 )		this.SetUniformFloat4( Uniform, Value );
@@ -850,7 +927,7 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 	
 	this.SetUniformTexture = function(Uniform,Image,TextureIndex)
 	{
-		let Texture = Image.GetOpenglTexture( Context );
+		let Texture = Image.GetOpenglTexture( this.Context );
 		let gl = this.GetGlContext();
 		let UniformPtr = gl.getUniformLocation( this.Program, Uniform );
 		//  https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Using_textures_in_WebGL
@@ -930,8 +1007,6 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		return Meta.type;
 	}
 	
-	this.UniformMetaCache = null;
-	
 	this.GetUniformMetas = function()
 	{
 		if ( this.UniformMetaCache )
@@ -1010,12 +1085,9 @@ Pop.Opengl.Shader = function(Context,VertShaderSource,FragShaderSource)
 		return Metas[MatchUniformName];
 	}
 	
-	
-	let gl = this.GetGlContext();
-	this.FragShader = this.CompileShader( gl.FRAGMENT_SHADER, FragShaderSource );
-	this.VertShader = this.CompileShader( gl.VERTEX_SHADER, VertShaderSource );
-	this.Program = this.CompileProgram();
 }
+
+
 function GetOpenglElementType(OpenglContext,Elements)
 {
 	if ( Elements instanceof Float32Array )	return OpenglContext.FLOAT;
