@@ -435,8 +435,9 @@ Pop.Opengl.Window = function(Name,Rect)
 				//	re-request to retry after lost context
 				window.requestAnimationFrame( Render.bind(this) );
 				//	re-throw
-				throw e;
+				//throw e;
 			}
+		
 			window.requestAnimationFrame( Render.bind(this) );
 		}
 		window.requestAnimationFrame( Render.bind(this) );
@@ -543,7 +544,7 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 		if ( gl.CurrentBoundGeometryHash != GetUniqueHash(Geometry) )
 		{
 			//	setup geometry for rendering
-			gl.bindBuffer( gl.ARRAY_BUFFER, Geometry.Buffer );
+			gl.bindBuffer( gl.ARRAY_BUFFER, Geometry.GetBuffer(RenderContext) );
 			
 			//	we'll need this if we start having multiple attributes
 			if ( DisableOldVertexAttribArrays )
@@ -551,7 +552,7 @@ Pop.Opengl.RenderTarget = function(RenderContext)
 					gl.disableVertexAttribArray(i);
 			//	gr: we get glDrawArrays: attempt to access out of range vertices in attribute 0, if we dont update every frame (this seems wrong)
 			//		even if we call gl.enableVertexAttribArray
-			Geometry.BindVertexPointers( Shader );
+			Geometry.BindVertexPointers( RenderContext, Shader );
 			
 			gl.CurrentBoundGeometryHash = GetUniqueHash(Geometry);
 		}
@@ -1024,32 +1025,78 @@ function GetOpenglElementType(OpenglContext,Elements)
 
 Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexData,VertexSize,TriangleIndexes)
 {
-	const gl = RenderContext.GetGlContext();
+	this.BufferContextVersion = null;
+	this.Buffer = null;
 	
-	//	data as array doesn't work properly and gives us
-	//	gldrawarrays attempt to access out of range vertices in attribute 0
-	if ( Array.isArray(VertexData) )
-		VertexData = new Float32Array( VertexData );
-	
-	this.Buffer = gl.createBuffer();
-	this.PrimitiveType = gl.TRIANGLES;
-	if ( TriangleIndexes )
+	this.GetBuffer = function(RenderContext)
 	{
-		this.IndexCount = TriangleIndexes.length;
-	}
-	else
-	{
-		this.IndexCount = (VertexData.length / VertexSize);
-	}
-
-	if ( this.IndexCount % 3 != 0 )
-	{
-		throw "Triangle index count not divisible by 3";
+		if ( this.BufferContextVersion !== RenderContext.ContextVersion )
+		{
+			Pop.Debug("Buffer context version changed",this.BufferContextVersion,RenderContext.ContextVersion);
+			this.CreateBuffer(RenderContext);
+		}
+		return this.Buffer;
 	}
 	
 	
-	this.BindVertexPointers = function(Shader)
+	this.CreateBuffer = function(RenderContext)
 	{
+		const gl = RenderContext.GetGlContext();
+		
+		//	data as array doesn't work properly and gives us
+		//	gldrawarrays attempt to access out of range vertices in attribute 0
+		if ( Array.isArray(VertexData) )
+			VertexData = new Float32Array( VertexData );
+		
+		this.Buffer = gl.createBuffer();
+		this.BufferContextVersion = RenderContext.ContextVersion;
+		
+		this.PrimitiveType = gl.TRIANGLES;
+		if ( TriangleIndexes )
+		{
+			this.IndexCount = TriangleIndexes.length;
+		}
+		else
+		{
+			this.IndexCount = (VertexData.length / VertexSize);
+		}
+		
+		if ( this.IndexCount % 3 != 0 )
+		{
+			throw "Triangle index count not divisible by 3";
+		}
+		
+		
+		let Attributes = [];
+		let PushAttribute = function(Name,Floats,Location,Size)
+		{
+			let Type = GetOpenglElementType( gl, Floats );
+			
+			let Attrib = {};
+			Attrib.Name = Name;
+			Attrib.Floats = VertexData;
+			Attrib.Size = Size;
+			Attrib.Type = Type;
+			Attrib.Location = Location;
+			Attributes.push( Attrib );
+		}
+		PushAttribute( VertexAttributeName, VertexData, 0, VertexSize );
+		
+		this.Attributes = Attributes;
+		
+		//	set the total buffer data
+		gl.bindBuffer( gl.ARRAY_BUFFER, this.Buffer );
+		gl.bufferData( gl.ARRAY_BUFFER, VertexData, gl.STATIC_DRAW );
+		
+		this.BindVertexPointers( RenderContext );
+	}
+	
+	
+	
+	this.BindVertexPointers = function(RenderContext,Shader)
+	{
+		const gl = RenderContext.GetGlContext();
+		
 		//	setup offset in buffer
 		let InitAttribute = function(Attrib)
 		{
@@ -1074,27 +1121,5 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 		this.Attributes.forEach( InitAttribute );
 	}
 	
-	let Attributes = [];
-	let PushAttribute = function(Name,Floats,Location,Size)
-	{
-		let Type = GetOpenglElementType( gl, Floats );
-		
-		let Attrib = {};
-		Attrib.Name = Name;
-		Attrib.Floats = VertexData;
-		Attrib.Size = Size;
-		Attrib.Type = Type;
-		Attrib.Location = Location;
-		Attributes.push( Attrib );
-	}
-	PushAttribute( VertexAttributeName, VertexData, 0, VertexSize );
-	
-	this.Attributes = Attributes;
-	
-	//	set the total buffer data
-	gl.bindBuffer( gl.ARRAY_BUFFER, this.Buffer );
-	gl.bufferData( gl.ARRAY_BUFFER, VertexData, gl.STATIC_DRAW );
-	
-	this.BindVertexPointers();
 }
 
