@@ -55,6 +55,7 @@ Pop.Image = function(Filename)
 {
 	this.Size = [undefined,undefined];
 	this.OpenglTexture = null;
+	this.OpenglTextureContextVersion = null;
 	this.OpenglVersion = undefined;
 	this.Pixels = null;
 	this.PixelsFormat = null;
@@ -111,6 +112,13 @@ Pop.Image = function(Filename)
 	
 	this.UpdateTexturePixels = function(RenderContext)
 	{
+		//	texture is from an old context
+		if ( this.OpenglTextureContextVersion !== RenderContext.ContextVersion )
+		{
+			this.OpenglVersion = null;
+			this.OpenglTexture = null;
+		}
+		
 		//	up to date
 		if ( this.OpenglVersion == this.GetLatestVersion() )
 			return;
@@ -128,6 +136,7 @@ Pop.Image = function(Filename)
 			//	create texture
 			this.OpenglTexture = gl.createTexture();
 			this.OpenglVersion = undefined;
+			this.OpenglTextureContextVersion = RenderContext.ContextVersion;
 		}
 		const Texture = this.OpenglTexture;
 		
