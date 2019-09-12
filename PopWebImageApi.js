@@ -51,6 +51,34 @@ function IsFloatFormat(Format)
 	}
 }
 
+function GetTextureFormatPixelByteSize(OpenglContext,Format,Type)
+{
+	const gl = OpenglContext;
+	let Channels = 0;
+	
+	//	overriding cases (I think)
+	switch ( Format )
+	{
+		case gl.R32F:		return 1 * 4;
+		case gl.RG32F:		return 2 * 4;
+		case gl.RGB32F:		return 3 * 4;
+		case gl.RGBA32F:	return 4 * 4;
+		case gl.LUMINANCE:	Channels = 1;	break;
+		case gl.LUMINANCE_ALPHA:	Channels = 2;	break;
+		case gl.RGB:		Channels = 3;	break;
+		case gl.RGBA:		Channels = 4;	break;
+		default:			throw "Unhandled Format GetTextureFormatPixelByteSize(" + Format + "," + Type + ")";
+	}
+	
+	switch ( Type )
+	{
+		case gl.UNSIGNED_BYTE:	return Channels * 1;
+		case gl.FLOAT:			return Channels * 4;
+		default:				throw "Unhandled Type GetTextureFormatPixelByteSize(" + Format + "," + Type + ")";
+	}
+}
+
+
 Pop.Image = function(Filename)
 {
 	this.Size = [undefined,undefined];
@@ -103,11 +131,53 @@ Pop.Image = function(Filename)
 		this.PixelsVersion = this.GetLatestVersion()+1;
 	}
 	
+	this.Clear = function()
+	{
+		//	this is getting convuluted, so maybe the API need to change (C++ side too)
+		this.DeleteOpenglTexture( this.OpenglOwnerContext );
+		
+		this.DeletePixels();
+	}
+	
+	this.DeletePixels = function()
+	{
+		this.PixelsVersion = null;
+		this.Pixels = null;
+		this.PixelsFormat = null;
+	}
+	
 	this.GetOpenglTexture = function(RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
 		this.UpdateTexturePixels( RenderContext );
+
 		return this.OpenglTexture;
+	}
+	
+	this.DeleteOpenglTexture = function(RenderContext)
+	{
+		if ( this.OpenglTexture == null )
+			return;
+		
+		if ( !RenderContext )
+			RenderContext = this.OpenglOwnerContext;
+		
+		try
+		{
+			const gl = RenderContext.GetGlContext();
+			//	actually delete
+			gl.deleteTexture( this.OpenglTexture );
+
+			this.OpenglVersion = null;
+			this.OpenglTexture = null;
+			RenderContext.OnDeletedTexture( this );
+			this.OpenglOwnerContext = null;
+			this.OpenglByteSize = null;
+		}
+		catch(e)
+		{
+			Pop.Debug("Error deleteing opengl texture",e);
+		}
 	}
 	
 	this.UpdateTexturePixels = function(RenderContext)
@@ -115,8 +185,7 @@ Pop.Image = function(Filename)
 		//	texture is from an old context
 		if ( this.OpenglTextureContextVersion !== RenderContext.ContextVersion )
 		{
-			this.OpenglVersion = null;
-			this.OpenglTexture = null;
+			this.DeleteOpenglTexture( RenderContext );
 		}
 		
 		//	up to date
@@ -137,6 +206,7 @@ Pop.Image = function(Filename)
 			this.OpenglTexture = gl.createTexture();
 			this.OpenglVersion = undefined;
 			this.OpenglTextureContextVersion = RenderContext.ContextVersion;
+			this.OpenglOwnerContext = RenderContext;
 		}
 		const Texture = this.OpenglTexture;
 		
@@ -158,6 +228,7 @@ Pop.Image = function(Filename)
 			const SourceFormat = gl.RGBA;
 			const SourceType = gl.UNSIGNED_BYTE;
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, SourceFormat, SourceType, this.Pixels );
+			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * this.Pixels.width * this.Pixels.height;
 		}
 		else if ( this.Pixels instanceof Uint8Array )
 		{
@@ -174,6 +245,8 @@ Pop.Image = function(Filename)
 
 			InternalFormat = SourceFormatTypes[0];
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
+			
+			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
 		}
 		else if ( this.Pixels instanceof Float32Array )
 		{
@@ -193,11 +266,15 @@ Pop.Image = function(Filename)
 			}
 			
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
+
+			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
 		}
 		else
 		{
 			throw "Unhandled Pixel buffer format " + (typeof this.Pixels) + "/" + this.Pixels.prototype.constructor;
 		}
+		
+		RenderContext.OnAllocatedTexture( this );
 		
 		//const RepeatMode = gl.CLAMP_TO_EDGE;
 		const RepeatMode = gl.MIRRORED_REPEAT;

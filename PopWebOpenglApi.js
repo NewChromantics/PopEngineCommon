@@ -31,6 +31,37 @@ Pop.SoyMouseButton.Back = 3;
 Pop.SoyMouseButton.Forward = 4;
 
 
+
+//	need a generic memory heap system in Pop for js side so
+//	we can do generic heap GUIs
+Pop.HeapMeta = function(Name)
+{
+	this.AllocCount = 0;
+	this.AllocSize = 0;
+	
+	this.OnAllocated = function(Size)
+	{
+		if ( isNaN(Size) )
+			throw "Bad size " + Size;
+		this.AllocCount++;
+		this.AllocSize += Size;
+	}
+	
+	this.OnDeallocated = function(Size)
+	{
+		if ( isNaN(Size) )
+			throw "Bad size " + Size;
+		this.AllocCount--;
+		this.AllocSize -= Size;
+	}
+}
+
+
+
+
+
+
+
 //	this is currenly in c++ in the engine. need to swap to javascript
 Pop.Opengl.RefactorGlslShader = function(Source)
 {
@@ -251,6 +282,7 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.CanvasMouseHandler = null;
 	this.ActiveTexureIndex = 0;
 	this.ScreenRectCache = null;
+	this.TextureHeap = new Pop.HeapMeta("Opengl Textures");
 
 
 	this.OnResize = function()
@@ -480,6 +512,18 @@ Pop.Opengl.Window = function(Name,Rect)
 		}
 		return this.Context;
 	}
+	
+	this.OnAllocatedTexture = function(Image)
+	{
+		this.TextureHeap.OnAllocated( Image.OpenglByteSize );
+	}
+	
+	this.OnDeletedTexture = function(Image)
+	{
+		this.TextureHeap.OnDeallocated( Image.OpenglByteSize );
+	}
+	
+	
 
 	this.InitialiseContext();
 	this.InitCanvasElement();
