@@ -322,6 +322,7 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.ActiveTexureIndex = 0;
 	this.ScreenRectCache = null;
 	this.TextureHeap = new Pop.HeapMeta("Opengl Textures");
+	this.GeometryHeap = new Pop.HeapMeta("Opengl Geometry");
 
 
 	this.OnResize = function()
@@ -563,6 +564,16 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.OnDeletedTexture = function(Image)
 	{
 		this.TextureHeap.OnDeallocated( Image.OpenglByteSize );
+	}
+	
+	this.OnAllocatedGeometry = function(Geometry)
+	{
+		this.GeometryHeap.OnAllocated( Geometry.OpenglByteSize );
+	}
+	
+	this.OnDeletedGeometry = function(Geometry)
+	{
+		this.GeometryHeap.OnDeallocated( Geometry.OpenglByteSize );
 	}
 	
 	
@@ -1200,6 +1211,10 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 		return this.Buffer;
 	}
 	
+	this.DeleteBuffer = function(RenderContext)
+	{
+		RenderContext.OnDeletedGeometry( this );
+	}
 	
 	this.CreateBuffer = function(RenderContext)
 	{
@@ -1249,6 +1264,9 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 		//	set the total buffer data
 		gl.bindBuffer( gl.ARRAY_BUFFER, this.Buffer );
 		gl.bufferData( gl.ARRAY_BUFFER, VertexData, gl.STATIC_DRAW );
+		
+		this.OpenglByteSize = VertexData.byteLength;
+		RenderContext.OnAllocatedGeometry( this );
 		
 		this.BindVertexPointers( RenderContext );
 	}
