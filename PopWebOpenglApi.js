@@ -267,6 +267,39 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 }
 
 
+//	wrapper for a generic element which converts input (touch, mouse etc) into
+//	our mouse functions
+function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
+{
+	function GetKeyFromKeyEventButton(KeyEvent)
+	{
+		Pop.Debug("KeyEvent",KeyEvent);
+		return KeyEvent.key;
+	}
+	
+	const KeyDown = function(KeyEvent)
+	{
+		const Key = GetKeyFromKeyEventButton(KeyEvent);
+		OnKeyDown( Key );
+		KeyEvent.preventDefault();
+	}
+	
+	const KeyUp = function(KeyEvent)
+	{
+		const Key = GetKeyFromKeyEventButton(KeyEvent);
+		OnKeyUp( Key );
+		KeyEvent.preventDefault();
+	}
+	
+
+	Element = document;
+	
+	//	use add listener to allow pre-existing canvas elements to retain any existing callbacks
+	Element.addEventListener('keydown', KeyDown );
+	Element.addEventListener('keyup', KeyUp );
+}
+
+
 Pop.Opengl.Window = function(Name,Rect)
 {
 	//	things to overload
@@ -275,11 +308,15 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.OnMouseMove = function(x,y,Button)					{	/*Pop.Debug("OnMouseMove",...arguments);*/	};
 	this.OnMouseUp = function(x,y,Button)					{	Pop.Debug('OnMouseUp',...arguments);	};
 	this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	Pop.Debug('OnMouseScroll',...arguments);	};
+	this.OnKeyDown = function(Key)							{	Pop.Debug('OnKeyDown',...arguments);	};
+	this.OnKeyUp = function(Key)							{	Pop.Debug('OnKeyUp',...arguments);	};
+
 
 	this.Context = null;
 	this.ContextVersion = 0;	//	used to tell if resources are out of date
 	this.RenderTarget = null;
 	this.CanvasMouseHandler = null;
+	this.CanvasKeyHandler = null;
 	this.ActiveTexureIndex = 0;
 	this.ScreenRectCache = null;
 	this.TextureHeap = new Pop.HeapMeta("Opengl Textures");
@@ -310,7 +347,10 @@ Pop.Opengl.Window = function(Name,Rect)
 		let OnMouseMove = function()	{	return this.OnMouseMove.apply( this, arguments );	}.bind(this);
 		let OnMouseUp = function()		{	return this.OnMouseUp.apply( this, arguments );	}.bind(this);
 		let OnMouseScroll = function()	{	return this.OnMouseScroll.apply( this, arguments );	}.bind(this);
+		let OnKeyDown = function()		{	return this.OnKeyDown.apply( this, arguments );	}.bind(this);
+		let OnKeyUp = function()		{	return this.OnKeyUp.apply( this, arguments );	}.bind(this);
 		this.CanvasMouseHandler = new TElementMouseHandler( Element, OnMouseDown, OnMouseMove, OnMouseUp, OnMouseScroll );
+		this.CanvasKeyHandler = new TElementKeyHandler( Element, OnKeyDown, OnKeyUp );
 	}
 	
 	this.GetScreenRect = function()
