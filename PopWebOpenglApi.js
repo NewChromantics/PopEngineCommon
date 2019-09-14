@@ -280,15 +280,17 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 	const KeyDown = function(KeyEvent)
 	{
 		const Key = GetKeyFromKeyEventButton(KeyEvent);
-		OnKeyDown( Key );
-		KeyEvent.preventDefault();
+		const Handled = OnKeyDown( Key );
+		if ( Handled === true )
+			KeyEvent.preventDefault();
 	}
 	
 	const KeyUp = function(KeyEvent)
 	{
 		const Key = GetKeyFromKeyEventButton(KeyEvent);
-		OnKeyUp( Key );
-		KeyEvent.preventDefault();
+		const Handled = OnKeyUp( Key );
+		if ( Handled === true )
+			KeyEvent.preventDefault();
 	}
 	
 
