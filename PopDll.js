@@ -52,6 +52,9 @@ Pop.Dll.ParseFunction = function(Declaration)
 	return Function;
 }
 
+//	__proto__ in jscore and prototype in v8. Need to sort this!
+Pop.Dll.Library.prototype = Pop.Dll.Library.prototype || Pop.Dll.Library.__proto__;
+
 //	parse C function and get a callable lambda/functor in return
 Pop.Dll.Library.prototype.GetFunctionFromDeclaration = function(CapiDeclaration)
 {
