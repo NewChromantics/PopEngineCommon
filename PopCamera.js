@@ -450,7 +450,7 @@ Pop.Camera = function(CopyCamera)
 	
 	this.OnCameraPanLocal = function(x,y,z,FirstClick)
 	{
-		if ( FirstClick )
+		if ( FirstClick || !this.LastPos_PanLocalPos )
 			this.LastPos_PanLocalPos = [x,y,z];
 	
 		let Deltax = this.LastPos_PanLocalPos[0] - x;
