@@ -325,10 +325,14 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.GeometryHeap = new Pop.HeapMeta("Opengl Geometry");
 
 
-	this.OnResize = function()
+	this.OnResize = function(ResizeEvent)
 	{
-		//	do more things
+		//	invalidate cache
 		this.ScreenRectCache = null;
+	
+		//	resize to original rect
+		const Canvas = this.GetCanvasElement();
+		this.SetCanvasSize( Canvas, Rect );
 	}
 	
 	this.AllocTexureIndex = function()
@@ -354,6 +358,9 @@ Pop.Opengl.Window = function(Name,Rect)
 		let OnKeyUp = function()		{	return this.OnKeyUp.apply( this, arguments );	}.bind(this);
 		this.CanvasMouseHandler = new TElementMouseHandler( Element, OnMouseDown, OnMouseMove, OnMouseUp, OnMouseScroll );
 		this.CanvasKeyHandler = new TElementKeyHandler( Element, OnKeyDown, OnKeyUp );
+
+		//	catch window resize
+		window.addEventListener('resize', this.OnResize.bind(this) );
 	}
 	
 	this.GetScreenRect = function()
@@ -367,6 +374,39 @@ Pop.Opengl.Window = function(Name,Rect)
 		return this.ScreenRectCache;
 	}
 	
+	this.SetCanvasSize = function(CanvasElement,Rect=null)
+	{
+		const ParentElement = CanvasElement.parentElement;
+		
+		//	if null, then fullscreen
+		//	go as fullscreen as possible
+		if ( !Rect )
+		{
+			Rect = [0,0,ParentElement.clientWidth,window.innerHeight];
+		}
+		
+		let Left = Rect[0];
+		let Top = Rect[1];
+		let Width = Rect[2];
+		let Height = Rect[3];
+			
+		CanvasElement.style.display = 'block';
+		CanvasElement.style.position = 'absolute';
+		//Element.style.border = '1px solid #f00';
+			
+		CanvasElement.style.left = Left+'px';
+		CanvasElement.style.top = Top+'px';
+		//Element.style.right = Right+'px';
+		//Element.style.bottom = Bottom+'px';
+		CanvasElement.style.width = Width+'px';
+		CanvasElement.style.height = Height+'px';
+		//Element.style.width = '100%';
+		//Element.style.height = '500px';
+		
+		CanvasElement.width = Rect[2];
+		CanvasElement.height = Rect[3];
+	}
+	
 	this.GetCanvasElement = function()
 	{
 		let Element = document.getElementById(Name);
@@ -375,38 +415,12 @@ Pop.Opengl.Window = function(Name,Rect)
 		
 		const ParentElement = document.body;
 		
-		//	go as fullscreen as possible
-		if ( !Rect )
-		{
-			Rect = [0,0,ParentElement.clientWidth,window.innerHeight];
-		}
-		
 		//	create!
 		Element = document.createElement('canvas');
 		Element.id = Name;
-		if ( Rect !== undefined )
-		{
-			let Left = Rect[0];
-			let Top = Rect[1];
-			let Width = Rect[2];
-			let Height = Rect[3];
-			
-			Element.style.display = 'block';
-			Element.style.position = 'absolute';
-			//Element.style.border = '1px solid #f00';
-			
-			Element.style.left = Left+'px';
-			Element.style.top = Top+'px';
-			//Element.style.right = Right+'px';
-			//Element.style.bottom = Bottom+'px';
-			Element.style.width = Width+'px';
-			Element.style.height = Height+'px';
-			//Element.style.width = '100%';
-			//Element.style.height = '500px';
-		}
+		
 		ParentElement.appendChild( Element );
-		Element.width = Rect[2];
-		Element.height = Rect[3];
+		this.SetCanvasSize( Element, Rect );
 
 		//	double check
 		{
