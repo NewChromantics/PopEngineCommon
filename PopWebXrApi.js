@@ -1,15 +1,38 @@
-function RenderTargetFrameBuffer(OpenglFrameBuffer,Viewport)
+function RenderTargetFrameBufferProxy(OpenglFrameBuffer,Viewport,RenderContext)
 {
-	this.Bind = function(OpenglContext)
+	Pop.Opengl.RenderTarget.call( this );
+	
+	this.GetFrameBuffer = function()
 	{
-		OpenglContext.bindFramebuffer( OpenglContext.FRAMEBUFFER, OpenglFrameBuffer );
-		
+		return OpenglFrameBuffer;
 	}
-	//gl.bindFramebuffer(gl.FRAMEBUFFER, glLayer.framebuffer);
-	//gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-	//	bind
+	
+	this.GetRenderContext = function()
+	{
+		return RenderContext;
+	}
+	
+	this.GetRenderTargetRect = function()
+	{
+		let Rect = [Viewport.x,Viewport.y,Viewport.width,Viewport.height];
+		return Rect;
+	}
+	
+	this.BindRenderTarget = function(RenderContext)
+	{
+		const gl = RenderContext.GetGlContext();
+		const FrameBuffer = this.GetFrameBuffer();
+	
+		//	todo: make this common code
+		gl.bindFramebuffer( gl.FRAMEBUFFER, FrameBuffer );
+		
+		const Viewport = this.GetRenderTargetRect();
+		gl.viewport( ...Viewport );
+		gl.scissor( ...Viewport );
+		
+		this.ResetState();
+	}
 }
-
 
 
 Pop.Xr = {};
@@ -29,14 +52,15 @@ Pop.Xr.Pose = function(RenderState,Pose)
 	//Pose.orientation is xyzw, quaternion?
 }
 
-Pop.Xr.Device = function(Session,ReferenceSpace,OpenglContext)
+Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 {
 	this.OnEndPromises = [];
 	
 	//	I think here we can re-create layers if context dies,
 	//	without recreating device
-	this.InitLayer = function(OpenglContext)
+	this.InitLayer = function(RenderContext)
 	{
+		const OpenglContext = RenderContext.GetGlContext();
 		this.Layer = new XRWebGLLayer(Session, OpenglContext);
 		Session.updateRenderState({ baseLayer: this.Layer });
 	}
@@ -69,7 +93,7 @@ Pop.Xr.Device = function(Session,ReferenceSpace,OpenglContext)
 	
 	this.OnFrame = function(TimeMs,Frame)
 	{
-		Pop.Debug("XR frame",Frame);
+		//Pop.Debug("XR frame",Frame);
 		//	request next frame
 		Session.requestAnimationFrame( this.OnFrame.bind(this) );
 		
@@ -82,27 +106,21 @@ Pop.Xr.Device = function(Session,ReferenceSpace,OpenglContext)
 		
 		//	or this.Layer
 		const glLayer = Session.renderState.baseLayer;
-		//	make camera + render target and send to render
-		const RenderTargets = [];
-		const Cameras = [];
 		
-		const PushView = function(View)
+		const RenderView = function(View)
 		{
-			//	make a Pop.RenderTarget from glLayer.glLayer.framebuffer
-			//gl.bindFramebuffer(gl.FRAMEBUFFER, glLayer.framebuffer);
-			//gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 			const ViewPort = glLayer.getViewport(View);
-			//gl.viewport(viewport.x, viewport.y, viewport.width, viewport.height);
 			//	scene.draw(view.projectionMatrix, view.transform);
-			const RenderTarget = new RenderTargetFrameBuffer( glLayer.framebuffer, ViewPort );
+			const RenderTarget = new RenderTargetFrameBufferProxy( glLayer.framebuffer, ViewPort, RenderContext );
 			const Camera = {};//new Pop.Camera();
 			Camera.Transform = View.transform;
 			Camera.ProjectionMatrix = View.projectionMatrix;
-			RenderTargets.push( RenderTarget );
-			Cameras.push( Camera );
+			const EyeNames = ['Left','Right'];
+			Camera.Name = EyeNames[View.eye];
+			RenderTarget.BindRenderTarget( RenderContext );
+			this.OnRender( RenderTarget, Camera );
 		}
-		Pose.views.forEach( PushView );
-		this.OnRender( RenderTargets, Cameras );
+		Pose.views.forEach( RenderView.bind(this) );
 	}
 	
 	this.Destroy = function()
@@ -111,28 +129,33 @@ Pop.Xr.Device = function(Session,ReferenceSpace,OpenglContext)
 	}
 
 	//	overload this!
-	this.OnRender = function(RenderTargets,Cameras)
+	this.OnRender = function(RenderTarget,Camera)
 	{
-		RenderTargets[0].ClearColour( 0,0.5,1 );
-		RenderTargets[1].ClearColour( 1,0,0 );
+		if ( Camera.Name == 'Left' )
+			RenderTarget.ClearColour( 0,0.5,1 );
+		else if ( Camera.Name == 'Right' )
+			RenderTarget.ClearColour( 1,0,0 );
+		else
+			RenderTarget.ClearColour( 0,0,1 );
 	}
 	
 	//	bind to device
 	Session.addEventListener('end', this.OnSessionEnded.bind(this) );
-	this.InitLayer( OpenglContext );
+	this.InitLayer( RenderContext );
 
 	//	start loop
 	Session.requestAnimationFrame( this.OnFrame.bind(this) );
 }
 
-Pop.Xr.CreateDevice = async function(Window)
+Pop.Xr.CreateDevice = async function(RenderContext)
 {
 	const SessionMode = 'inline';
 	const PlatformXr = navigator.xr;
 	if ( !PlatformXr )
 		throw "Browser doesn't support XR.";
-	if ( !PlatformXr.supportsSession(SessionMode) )
-		throw "Browser doesn't support XR mode (" + SessionMode + ")";
+
+	//	throws if not supported
+	await PlatformXr.supportsSession(SessionMode);
 	
 	//	if we have a device, wait for it to finish
 	if ( Pop.Xr.Devices.length )
@@ -143,11 +166,10 @@ Pop.Xr.CreateDevice = async function(Window)
 	{
 		try
 		{
-			const OpenglContext = Window.GetGlContext();
 			const Session = await PlatformXr.requestSession(SessionMode);
 			const ReferenceSpaceType = Session.isImmersive ? 'local' : 'viewer';
 			const ReferenceSpace = Session.requestReferenceSpace(ReferenceSpaceType);
-			const Device = new Pop.Xr.Device( Session, ReferenceSpace, OpenglContext );
+			const Device = new Pop.Xr.Device( Session, ReferenceSpace, RenderContext );
 			
 			//	add to our global list (currently only to make sure we have one at a time)
 			Pop.Xr.Devices.push( Device );

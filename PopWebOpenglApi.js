@@ -627,6 +627,7 @@ Pop.Opengl.RenderTarget = function()
 		gl.disable(gl.CULL_FACE);
 		gl.disable(gl.BLEND);
 		gl.enable(gl.DEPTH_TEST);
+		gl.enable(gl.SCISSOR_TEST);
 		//	to make blending work well, don't reject things on same plane
 		gl.depthFunc(gl.LEQUAL);
 	}
@@ -766,7 +767,7 @@ Pop.Opengl.TextureRenderTarget = function(Image)
 	
 	this.GetFrameBuffer = function()
 	{
-		
+		return this.FrameBuffer;
 	}
 	
 	//  bind for rendering
@@ -793,13 +794,14 @@ Pop.Opengl.TextureRenderTarget = function(Image)
 		const FrameBuffer = this.GetFrameBuffer();
 		
 		//	todo: make this common code
-		gl.bindFramebuffer( gl.FRAMEBUFFER, this.FrameBuffer );
+		gl.bindFramebuffer( gl.FRAMEBUFFER, FrameBuffer );
 		
 		//	gr: this is givng errors...
 		//let Status = gl.checkFramebufferStatus( this.FrameBuffer );
 		//Pop.Debug("Framebuffer status",Status);
 		const Viewport = this.GetRenderTargetRect();
 		gl.viewport( ...Viewport );
+		gl.scissor( ...Viewport );
 		
 		this.ResetState();
 	}
@@ -887,6 +889,7 @@ function WindowRenderTarget(Window)
 		//	viewport in pixels in webgl
 		const Viewport = [ViewportMinx, ViewportMiny, ViewportWidth, ViewportHeight];
 		gl.viewport( ...Viewport );
+		gl.scissor( ...Viewport );
 		
 		this.ResetState();
 	}
