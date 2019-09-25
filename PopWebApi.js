@@ -1,6 +1,7 @@
 //	namespace
 const Pop = {};
 
+//	file cache, not asset cache!
 Pop._AssetCache = [];
 
 //	simple aliases
