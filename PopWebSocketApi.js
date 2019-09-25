@@ -15,46 +15,6 @@ function GetWebsocketError(Event)
 }
 
 
-Pop.PromiseQueue = function()
-{
-	//	pending promises
-	this.Promises = [];
-	
-	this.Allocate = function()
-	{
-		const NewPromise = CreatePromise();
-		this.Promises.push( NewPromise );
-		return NewPromise;
-	}
-	
-	this.Flush = function(HandlePromise)
-	{
-		//	pop array incase handling results in more promises
-		const Promises = this.Promises.splice(0);
-		//	need to try/catch here otherwise some will be lost
-		Promises.forEach( HandlePromise );
-	}
-	
-	this.Resolve = function()
-	{
-		const Args = arguments;
-		const HandlePromise = function(Promise)
-		{
-			Promise.Resolve( ...Args );
-		}
-		this.Flush( HandlePromise );
-	}
-	
-	this.Reject = function()
-	{
-		const Args = arguments;
-		const HandlePromise = function(Promise)
-		{
-			Promise.Reject( ...Args );
-		}
-		this.Flush( HandlePromise );
-	}
-}
 
 //	wrapper for websocket
 Pop.Websocket.Client = function(ServerAddress)

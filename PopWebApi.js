@@ -27,20 +27,6 @@ Pop.GetExeArguments = function()
 	return UrlParams;
 }
 
-function CreatePromise()
-{
-	let Callbacks = {};
-	let PromiseHandler = function(Resolve,Reject)
-	{
-		Callbacks.Resolve = Resolve;
-		Callbacks.Reject = Reject;
-	}
-	let Prom = new Promise(PromiseHandler);
-	Prom.Resolve = Callbacks.Resolve;
-	Prom.Reject = Callbacks.Reject;
-	return Prom;
-}
-
 
 Pop.GetTimeNowMs = function()
 {
@@ -49,7 +35,7 @@ Pop.GetTimeNowMs = function()
 
 Pop.LoadFileAsImageAsync = async function(Filename)
 {
-	let Promise = CreatePromise();
+	let Promise = Pop.CreatePromise();
 	
 	const HtmlImage = new Image();
 	HtmlImage.crossOrigin = "anonymous";
@@ -193,7 +179,7 @@ Pop.CompileAndRun = function(Source,Filename)
 
 Pop.Yield = function(Milliseconds)
 {
-	let Promise = CreatePromise();
+	let Promise = Pop.CreatePromise();
 	setTimeout( Promise.Resolve, Milliseconds );
 	return Promise;
 }
