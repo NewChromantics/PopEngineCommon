@@ -106,7 +106,40 @@ Pop.LoadFileAsString = function(Filename)
 		throw "Cannot synchronously load " + Filename + ", needs to be precached first with [async] Pop.AsyncCacheAsset()";
 	}
 	
-	return Pop.GetCachedAsset(Filename);
+	//	gr: our asset loader currently replaces the contents of this
+	//		with binary, so do the conversion here (as native engine does)
+	const Contents = Pop.GetCachedAsset(Filename);
+	if ( typeof Contents == 'string' )
+		return Contents;
+	
+	//	convert array buffer to string
+	if ( Array.isArray( Contents ) )
+	{
+		Pop.Debug("Convert "+Filename+" from ", typeof Contents," to string");
+		//	this is super slow!
+		const ContentsString = BytesToString( Contents );
+		return ContentsString;
+	}
+
+	
+	function blobToString(b) {
+		var u, x;
+		u = URL.createObjectURL(b);
+		x = new XMLHttpRequest();
+		x.open('GET', u, false); // although sync, you're not fetching over internet
+		x.send();
+		URL.revokeObjectURL(u);
+		return x.responseText;
+	}
+	if ( Contents.constructor == Blob )
+	{
+		Pop.Debug("Convert "+Filename+" from ", typeof Contents," to string");
+		//	this is super slow!
+		const ContentsString = blobToString( Contents );
+		return ContentsString;
+	}
+	
+	throw "Pop.LoadFileAsString("+Filename+") failed as contents is type " + (typeof Contents) + " and needs converting";
 }
 
 Pop.LoadFileAsImage = function(Filename)
