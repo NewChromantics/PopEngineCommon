@@ -76,6 +76,7 @@ Pop.Websocket.Client = function(ServerAddress)
 	this.Socket.onopen = this.OnConnected.bind(this);
 	this.Socket.onerror = this.OnError.bind(this);
 	this.Socket.onclose = this.OnDisconnected.bind(this);
+	this.Socket.onmessage = this.OnMessage.bind(this);
 }
 
 //	asynchronously returns a websocket client once it connects
