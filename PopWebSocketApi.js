@@ -58,7 +58,28 @@ Pop.Websocket.Client = function(ServerAddress)
 	this.OnMessage = function(Event)
 	{
 		const Data = Event.data;
-		this.OnMessagePromises.Resolve(Data);
+		
+		//	if we get a blob, convert to array (no blobs in normal API)
+		if ( typeof Data == 'string' )
+		{
+			this.OnMessagePromises.Resolve(Data);
+			return;
+		}
+		
+		if ( Data instanceof Blob )
+		{
+			const ConvertData = async function()
+			{
+				const DataArrayBuffer = await Data.arrayBuffer();
+				const DataArray = new Uint8Array(DataArrayBuffer);
+				this.OnMessagePromises.Resolve( DataArray );
+			}.bind(this);
+			
+			ConvertData().then().catch( this.OnError.bind(this) );
+			return;
+		}
+		
+		throw "Unhandled type of websocket message; " + Data + " (" + (typeof Data) + ")";
 	}
 	
 	this.Send = function(Message)

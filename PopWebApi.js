@@ -113,7 +113,7 @@ Pop.LoadFileAsString = function(Filename)
 		return Contents;
 	
 	//	convert array buffer to string
-	if ( Array.isArray( Contents ) )
+	if ( Array.isArray( Contents ) || Contents instanceof Uint8Array )
 	{
 		Pop.Debug("Convert "+Filename+" from ", typeof Contents," to string");
 		//	this is super slow!
@@ -121,24 +121,6 @@ Pop.LoadFileAsString = function(Filename)
 		return ContentsString;
 	}
 
-	
-	function blobToString(b) {
-		var u, x;
-		u = URL.createObjectURL(b);
-		x = new XMLHttpRequest();
-		x.open('GET', u, false); // although sync, you're not fetching over internet
-		x.send();
-		URL.revokeObjectURL(u);
-		return x.responseText;
-	}
-	if ( Contents.constructor == Blob )
-	{
-		Pop.Debug("Convert "+Filename+" from ", typeof Contents," to string");
-		//	this is super slow!
-		const ContentsString = blobToString( Contents );
-		return ContentsString;
-	}
-	
 	throw "Pop.LoadFileAsString("+Filename+") failed as contents is type " + (typeof Contents) + " and needs converting";
 }
 
