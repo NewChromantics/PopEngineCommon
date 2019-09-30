@@ -631,6 +631,21 @@ Pop.Opengl.RenderTarget = function()
 		throw "Override this on your render target";
 	}
 	
+	this.RenderToRenderTarget = function(TargetTexture,RenderFunction)
+	{
+		const RenderContext = this.GetRenderContext();
+		
+		//	setup render target
+		let RenderTarget = GetTextureRenderTarget( TargetTexture );
+		RenderTarget.BindRenderTarget( RenderContext );
+		
+		RenderFunction( RenderTarget );
+		
+		//	todo: restore previously bound, not this.
+		//	restore rendertarget
+		this.BindRenderTarget( RenderContext );
+	}
+	
 	this.GetGlContext = function()
 	{
 		const RenderContext = this.GetRenderContext();
@@ -875,18 +890,6 @@ function WindowRenderTarget(Window)
 		return Rect;
 	}
 
-	this.RenderToRenderTarget = function(TargetTexture,RenderFunction)
-	{
-		//	setup render target
-		let RenderTarget = GetTextureRenderTarget( TargetTexture );
-		RenderTarget.BindRenderTarget( RenderContext );
-		
-		RenderFunction( RenderTarget );
-		
-		//	todo: restore previously bound, not this.
-		//	restore rendertarget
-		this.BindRenderTarget( RenderContext );
-	}
 	
 	this.BindRenderTarget = function(RenderContext)
 	{
