@@ -490,6 +490,7 @@ Pop.Gui.Button = function(Parent, Rect)
 Pop.Gui.Slider = function(Parent,Rect,Notches)
 {
 	this.InputElement = null;
+	this.ValueCache = undefined;
 	
 	this.SetMinMax = function(Min,Max)
 	{
@@ -499,7 +500,11 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 	
 	this.SetValue = function(Value)
 	{
+		if ( this.ValueCache === Value )
+			return;
+		
 		this.InputElement.value = Value;
+		this.ValueCache = Value;
 		
 		//	trigger js events attached to input
 		this.InputElement.dispatchEvent(new Event('change'));
@@ -626,6 +631,8 @@ Pop.Gui.Colour = function(Parent,Rect)
 {
 	this.InputElement = null;
 	this.LabelElement = null;
+	this.LabelTextCache = undefined;
+	this.ValueCache = undefined;
 	
 	this.GetValue = function()
 	{
@@ -637,12 +644,18 @@ Pop.Gui.Colour = function(Parent,Rect)
 	this.SetValue = function(Value)
 	{
 		let RgbHex = Pop.Colour.RgbfToHex( Value );
+		if ( this.ValueCache === RgbHex )
+			return;
 		this.InputElement.value = RgbHex;
+		this.ValueCache = RgbHex;
 	}
 	
 	this.SetLabel = function(Value)
 	{
+		if ( this.LabelTextCache === Value )
+			return;
 		this.LabelElement.innerText = Value;
+		this.LabelTextCache = Value;
 	}
 	
 	this.OnElementChanged = function(Event)
