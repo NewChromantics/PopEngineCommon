@@ -40,6 +40,52 @@ Pop.Xr = {};
 //	currently webxr lets us create infinite sessions, so monitor when we have a device already created
 Pop.Xr.Devices = [];
 
+Pop.Xr.SupportedSessionMode = null;
+
+Pop.Xr.IsSupported = function()
+{
+	const PlatformXr = navigator.xr;
+	if ( !PlatformXr )
+		return false;
+	
+	//	check session mode support
+	//	this replaces this function with true/fa
+	return Pop.Xr.SupportedSessionMode != false;
+}
+
+Pop.Xr.GetSupportedSessionMode = async function()
+{
+	const PlatformXr = navigator.xr;
+	if ( !PlatformXr )
+		return false;
+	try
+	{
+		await PlatformXr.supportsSession('immersive-vr');
+		return 'immersive-vr';
+	}
+	catch(e)
+	{
+		Pop.Debug("Browser doesn't support immersive-vr");
+	}
+	
+	try
+	{
+		await PlatformXr.supportsSession('inline');
+		return 'inline';
+	}
+	catch(e)
+	{
+		Pop.Debug("Browser doesn't support inline");
+	}
+	
+	return false;
+}
+
+//	setup cache of support for synchronous call
+Pop.Xr.GetSupportedSessionMode().then( Mode => Pop.Xr.SupportedSessionMode=Mode ).catch( Pop.Debug );
+
+
+
 Pop.Xr.Pose = function(RenderState,Pose)
 {
 	this.NearDistance = RenderState.depthNear;
@@ -147,13 +193,14 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 	Session.requestAnimationFrame( this.OnFrame.bind(this) );
 }
 
+
 Pop.Xr.CreateDevice = async function(RenderContext)
 {
-	const SessionMode = 'inline';
-	const PlatformXr = navigator.xr;
-	if ( !PlatformXr )
+	const SessionMode = await Pop.Xr.GetSupportedSessionMode();
+	
+	if ( SessionMode == false )
 		throw "Browser doesn't support XR.";
-
+	
 	//	throws if not supported
 	await PlatformXr.supportsSession(SessionMode);
 	
