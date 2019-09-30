@@ -197,17 +197,15 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 Pop.Xr.CreateDevice = async function(RenderContext)
 {
 	const SessionMode = await Pop.Xr.GetSupportedSessionMode();
-	
 	if ( SessionMode == false )
 		throw "Browser doesn't support XR.";
-	
-	//	throws if not supported
-	await PlatformXr.supportsSession(SessionMode);
 	
 	//	if we have a device, wait for it to finish
 	if ( Pop.Xr.Devices.length )
 		await Pop.Xr.Devices[0].WaitForEnd();
-	
+
+	const PlatformXr = navigator.xr;
+
 	//	loop until we get a session
 	while(true)
 	{
