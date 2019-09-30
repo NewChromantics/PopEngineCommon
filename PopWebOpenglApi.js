@@ -1004,14 +1004,15 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 		let UniformMeta = this.GetUniformMeta(Uniform);
 		if ( !UniformMeta )
 			return;
-		if( Array.isArray(Value) )				this.SetUniformArray( Uniform, Value );
-		else if ( Value instanceof Pop.Image )	this.SetUniformTexture( Uniform, Value, this.Context.AllocTexureIndex() );
+		if( Array.isArray(Value) )					this.SetUniformArray( Uniform, Value );
+		else if( Value instanceof Float32Array )	this.SetUniformArray( Uniform, Value );
+		else if ( Value instanceof Pop.Image )		this.SetUniformTexture( Uniform, Value, this.Context.AllocTexureIndex() );
 		//else if ( Value instanceof float2 )		this.SetUniformFloat2( Uniform, Value );
 		//else if ( Value instanceof float3 )		this.SetUniformFloat3( Uniform, Value );
 		//else if ( Value instanceof float4 )		this.SetUniformFloat4( Uniform, Value );
 		//else if ( Value instanceof Matrix4x4 )	this.SetUniformMatrix4x4( Uniform, Value );
-		else if ( typeof Value === 'number' )	this.SetUniformNumber( Uniform, Value );
-		else if ( typeof Value === 'boolean' )	this.SetUniformNumber( Uniform, Value );
+		else if ( typeof Value === 'number' )		this.SetUniformNumber( Uniform, Value );
+		else if ( typeof Value === 'boolean' )		this.SetUniformNumber( Uniform, Value );
 		else
 		{
 			console.log(typeof Value);
@@ -1028,7 +1029,7 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 		const ExpectedValueCount = UniformMeta.ElementSize * UniformMeta.ElementCount;
 		
 		//	all aligned
-		if ( Array.isArray(Values) && Values.length == ExpectedValueCount )
+		if ( Values.length == ExpectedValueCount )
 		{
 			UniformMeta.SetValues( Values );
 			return;
