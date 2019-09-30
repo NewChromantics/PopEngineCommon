@@ -5,6 +5,8 @@ Pop.Opengl.TrianglesDrawn = 0;
 Pop.Opengl.BatchesDrawn = 0;
 Pop.Opengl.GeometryBindSkip = 0;
 Pop.Opengl.ShaderBindSkip = 0;
+Pop.Opengl.GeometryBinds = 0;
+Pop.Opengl.ShaderBinds = 0;
 
 
 //	webgl only supports glsl 100!
@@ -14,6 +16,7 @@ Pop.GlslVersion = 100;
 const TestFrameBuffer = false;
 const TestAttribLocation = false;
 const DisableOldVertexAttribArrays = false;
+const AllowVao = !Pop.GetExeArguments().includes('DisableVao');
 
 //	if we fail to get a context (eg. lost context) wait this long before restarting the render loop (where it tries again)
 //	this stops thrashing cpu/system whilst waiting
@@ -464,7 +467,9 @@ Pop.Opengl.Window = function(Name,Rect)
 	{
 		const ContextMode = "webgl";
 		const Canvas = this.GetCanvasElement();
-		const Context = Canvas.getContext(ContextMode);
+		const Options = {};
+		//Options.antialias = true;
+		const Context = Canvas.getContext( ContextMode, Options );
 		
 		if ( !Context )
 			throw "Failed to initialise " + ContextMode;
@@ -492,13 +497,15 @@ Pop.Opengl.Window = function(Name,Rect)
 		
 		Pop.Debug("Supported Extensions", gl.getSupportedExtensions() );
 		
-		let EnableExtension = function(ExtensionName)
+		let EnableExtension = function(ExtensionName,Init)
 		{
 			try
 			{
 				const Extension = gl.getExtension(ExtensionName);
 				gl[ExtensionName] = Extension;
 				Pop.Debug("Loaded extension",ExtensionName,Extension);
+				if ( Init )
+					Init( gl, Extension );
 			}
 			catch(e)
 			{
@@ -507,12 +514,28 @@ Pop.Opengl.Window = function(Name,Rect)
 		};
 		EnableExtension('OES_texture_float');
 		EnableExtension('EXT_blend_minmax');
+		EnableExtension('OES_vertex_array_object', this.InitVao.bind(this) );
 		
 		//	texture load needs extension in webgl1
 		//	in webgl2 it's built in, but requires #version 300 es
+		//	gr: doesnt NEED to be enabled??
 		//EnableExtension('EXT_shader_texture_lod');
 		//EnableExtension('OES_standard_derivatives');
+		
+		//	bind VAO stuff
 		return Context;
+	}
+	
+	this.InitVao = function(Context,Extension)
+	{
+		//	already enabled with webgl2
+		if ( Context.createVertexArray )
+			return;
+		
+		Context.createVertexArray = Extension.createVertexArrayOES.bind(Extension);
+		Context.deleteVertexArray = Extension.deleteVertexArrayOES.bind(Extension);
+		Context.isVertexArray = Extension.isVertexArrayOES.bind(Extension);
+		Context.bindVertexArray = Extension.bindVertexArrayOES.bind(Extension);
 	}
 	
 	this.InitialiseContext = function()
@@ -556,6 +579,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		//	catch if we have a context but its lost
 		if ( this.Context )
 		{
+			//	gr: does this cause a sync?
 			if ( this.Context.isContextLost() )
 			{
 				this.OnLostContext("Found context.isContextLost()");
@@ -680,6 +704,7 @@ Pop.Opengl.RenderTarget = function()
 			const Program = Shader.GetProgram(RenderContext);
 			gl.useProgram( Program );
 			gl.CurrentBoundShaderHash = GetUniqueHash(Shader);
+			Pop.Opengl.ShaderBinds++;
 		}
 		else
 		{
@@ -689,18 +714,9 @@ Pop.Opengl.RenderTarget = function()
 		//	this doesn't make any difference
 		if ( gl.CurrentBoundGeometryHash != GetUniqueHash(Geometry) )
 		{
-			//	setup geometry for rendering
-			gl.bindBuffer( gl.ARRAY_BUFFER, Geometry.GetBuffer(RenderContext) );
-			
-			//	we'll need this if we start having multiple attributes
-			if ( DisableOldVertexAttribArrays )
-				for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
-					gl.disableVertexAttribArray(i);
-			//	gr: we get glDrawArrays: attempt to access out of range vertices in attribute 0, if we dont update every frame (this seems wrong)
-			//		even if we call gl.enableVertexAttribArray
-			Geometry.BindVertexPointers( RenderContext, Shader );
-			
+			Geometry.Bind( RenderContext );
 			gl.CurrentBoundGeometryHash = GetUniqueHash(Geometry);
+			Pop.Opengl.GeometryBinds++;
 		}
 		else
 		{
@@ -1217,6 +1233,7 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 {
 	this.BufferContextVersion = null;
 	this.Buffer = null;
+	this.Vao = null;
 	
 	this.GetBuffer = function(RenderContext)
 	{
@@ -1232,6 +1249,41 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 	{
 		RenderContext.OnDeletedGeometry( this );
 	}
+	
+	this.DeleteVao = function()
+	{
+		this.Vao = null;
+	}
+	
+	this.GetVao = function(RenderContext,Shader)
+	{
+		if ( this.BufferContextVersion !== RenderContext.ContextVersion )
+		{
+			this.DeleteVao();
+		}
+		if ( this.Vao )
+			return this.Vao;
+		
+		//	setup vao
+		{
+			const gl = RenderContext.GetGlContext();
+			//this.Vao = gl.OES_vertex_array_object.createVertexArrayOES();
+			this.Vao = gl.createVertexArray();
+			//	setup buffer & bind stuff in the vao
+			gl.bindVertexArray( this.Vao );
+			let Buffer = this.GetBuffer( RenderContext );
+			gl.bindBuffer( gl.ARRAY_BUFFER, Buffer );
+			//	we'll need this if we start having multiple attributes
+			if ( DisableOldVertexAttribArrays )
+				for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
+					gl.disableVertexAttribArray(i);
+			this.BindVertexPointers( RenderContext, Shader );
+		
+			gl.bindVertexArray( null );
+		}
+		return this.Vao;
+	}
+			
 	
 	this.CreateBuffer = function(RenderContext)
 	{
@@ -1318,5 +1370,28 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 		this.Attributes.forEach( InitAttribute );
 	}
 	
+	this.Bind = function(RenderContext,Shader)
+	{
+		const Vao = AllowVao ? this.GetVao( RenderContext, Shader ) : null;
+		const gl = RenderContext.GetGlContext();
+
+		if ( Vao )
+		{
+			gl.bindVertexArray( Vao );
+		}
+		else
+		{
+			const Buffer = this.GetBuffer(RenderContext);
+			gl.bindBuffer( gl.ARRAY_BUFFER, Buffer );
+			
+			//	we'll need this if we start having multiple attributes
+			if ( DisableOldVertexAttribArrays )
+				for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
+					gl.disableVertexAttribArray(i);
+			//	gr: we get glDrawArrays: attempt to access out of range vertices in attribute 0, if we dont update every frame (this seems wrong)
+			//		even if we call gl.enableVertexAttribArray
+			this.BindVertexPointers( RenderContext, Shader );
+		}
+	}
 }
 
