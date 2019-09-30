@@ -5,7 +5,8 @@ Pop.Camera = function(CopyCamera)
 	
 	this.Position = [ 0,2,20 ];
 	this.LookAt = [ 0,0,0 ];
-	this.Rotation4x4 = undefined;
+	this.Rotation4x4 = undefined;		//	override rotation
+	this.ProjectionMatrix = undefined;	//	override projection matrix
 	
 	this.NearDistance = 0.01;
 	this.FarDistance = 100;
@@ -195,6 +196,10 @@ Pop.Camera = function(CopyCamera)
 	//	GetOpencvProjectionMatrix but 4x4 with z correction for near/far
 	this.GetProjectionMatrix = function(ViewRect)
 	{
+		//	overriding user-provided matrix
+		if ( this.ProjectionMatrix )
+			return this.ProjectionMatrix;
+		
 		const OpenglFocal = this.GetOpenglFocalLengths( ViewRect );
 		
 		let Matrix = [];
