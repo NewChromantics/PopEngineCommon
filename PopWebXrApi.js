@@ -217,7 +217,7 @@ Pop.Xr.CreateDevice = async function(RenderContext)
 		{
 			const Session = await PlatformXr.requestSession(SessionMode);
 			const ReferenceSpaceType = Session.isImmersive ? 'local' : 'viewer';
-			const ReferenceSpace = Session.requestReferenceSpace(ReferenceSpaceType);
+			const ReferenceSpace = await Session.requestReferenceSpace(ReferenceSpaceType);
 			const Device = new Pop.Xr.Device( Session, ReferenceSpace, RenderContext );
 			
 			//	add to our global list (currently only to make sure we have one at a time)
