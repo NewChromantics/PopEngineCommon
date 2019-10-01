@@ -474,6 +474,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		const Canvas = this.GetCanvasElement();
 		const Options = {};
 		//Options.antialias = true;
+		Options.xrCompatible = true;
 		const Context = Canvas.getContext( ContextMode, Options );
 		
 		if ( !Context )
