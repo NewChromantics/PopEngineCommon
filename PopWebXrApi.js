@@ -60,22 +60,26 @@ Pop.Xr.GetSupportedSessionMode = async function()
 		return false;
 	try
 	{
-		await PlatformXr.supportsSession('immersive-vr');
+		const Supported = await PlatformXr.isSessionSupported('immersive-vr');
+		if (!Supported)
+			throw Supported;
 		return 'immersive-vr';
 	}
 	catch(e)
 	{
-		Pop.Debug("Browser doesn't support immersive-vr");
+		Pop.Debug("Browser doesn't support immersive-vr",e);
 	}
 	
 	try
 	{
-		await PlatformXr.supportsSession('inline');
+		const Supported = await PlatformXr.isSessionSupported('inline');
+		if (!Supported)
+			throw Supported;
 		return 'inline';
 	}
 	catch(e)
 	{
-		Pop.Debug("Browser doesn't support inline");
+		Pop.Debug("Browser doesn't support inline",e);
 	}
 	
 	return false;
