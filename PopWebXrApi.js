@@ -165,8 +165,19 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 			const Camera = {};//new Pop.Camera();
 			Camera.Transform = View.transform;
 			Camera.ProjectionMatrix = View.projectionMatrix;
-			const EyeNames = ['Left','Right'];
-			Camera.Name = EyeNames[View.eye];
+			if (typeof View.eye == 'string')
+			{
+				Camera.Name = View.eye;
+			}
+			else if (typeof View.eye == 'number')
+			{
+				const EyeNames = ['Left', 'Right'];
+				Camera.Name = EyeNames[View.eye];
+			}
+			else
+			{
+				Camera.Name = View.eye;
+			}
 			RenderTarget.BindRenderTarget( RenderContext );
 			this.OnRender( RenderTarget, Camera );
 		}
@@ -183,8 +194,10 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 	{
 		if ( Camera.Name == 'Left' )
 			RenderTarget.ClearColour( 0,0.5,1 );
-		else if ( Camera.Name == 'Right' )
-			RenderTarget.ClearColour( 1,0,0 );
+		else if (Camera.Name == 'Right')
+			RenderTarget.ClearColour(1, 0, 0);
+		else if (Camera.Name == 'none')
+			RenderTarget.ClearColour(0, 1, 0);
 		else
 			RenderTarget.ClearColour( 0,0,1 );
 	}
