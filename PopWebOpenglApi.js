@@ -282,6 +282,14 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 	
 	const KeyDown = function(KeyEvent)
 	{
+		//	if an input element has focus, ignore event
+		if ( KeyEvent.srcElement instanceof HTMLInputElement )
+		{
+			Pop.Debug("Ignoring OnKeyDown as input has focus",KeyEvent);
+			return false;
+		}
+		//Pop.Debug("OnKey down",KeyEvent);
+		
 		const Key = GetKeyFromKeyEventButton(KeyEvent);
 		const Handled = OnKeyDown( Key );
 		if ( Handled === true )
@@ -359,6 +367,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		let OnMouseScroll = function()	{	return this.OnMouseScroll.apply( this, arguments );	}.bind(this);
 		let OnKeyDown = function()		{	return this.OnKeyDown.apply( this, arguments );	}.bind(this);
 		let OnKeyUp = function()		{	return this.OnKeyUp.apply( this, arguments );	}.bind(this);
+		
 		this.CanvasMouseHandler = new TElementMouseHandler( Element, OnMouseDown, OnMouseMove, OnMouseUp, OnMouseScroll );
 		this.CanvasKeyHandler = new TElementKeyHandler( Element, OnKeyDown, OnKeyUp );
 
