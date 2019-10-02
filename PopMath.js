@@ -662,6 +662,14 @@ Math.CreateLookAtRotationMatrix = function(eye,up,center)
 	return out;
 }
 
+Math.SetMatrixTranslation = function(Matrix,x,y,z,w=1)
+{
+	Matrix[12] = x;
+	Matrix[13] = y;
+	Matrix[14] = z;
+	Matrix[15] = w;
+}
+
 Math.CreateTranslationMatrix = function(x,y,z)
 {
 	return [ 1,0,0,0,	0,1,0,0,	0,0,1,0,	x,y,z,1	];
