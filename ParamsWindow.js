@@ -62,6 +62,24 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 			//	init label
 			Control.OnValueChanged( Params[Name] );
 		}
+		else if ( typeof Params[Name] === 'string' )
+		{
+			Control = new Pop.Gui.TextBox( Window, [ControlLeft,ControlTop,ControlWidth,ControlHeight] );
+			Control.SetControlValue = Control.SetValue;
+			Control.SetValue( Params[Name] );
+			
+			Control.OnChanged = function(Value)
+			{
+				Value = CleanValue(Value);
+				Params[Name] = Value;
+				Label.SetValue( Name + ": " + Value );
+				OnAnyChanged( Params, Name );
+			}
+			Control.OnValueChanged = Control.OnChanged;
+			
+			//	init label
+			Control.OnValueChanged( Params[Name] );
+		}
 		else if ( Min == 'Colour' && Pop.Gui.Colour === undefined )
 		{
 			Control = new Pop.Gui.TickBox( Window, [ControlLeft,ControlTop,ControlWidth,ControlHeight] );
