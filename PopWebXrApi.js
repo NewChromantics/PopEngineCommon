@@ -58,6 +58,29 @@ Pop.Xr.GetSupportedSessionMode = async function()
 	const PlatformXr = navigator.xr;
 	if ( !PlatformXr )
 		return false;
+	
+	//	mozilla XR emulator has supportsSession
+	//	proper spec is isSessionSupported
+	if ( !PlatformXr.isSessionSupported && !PlatformXr.supportsSession )
+		throw "XR platform missing isSessionSupported and supportsSession";
+	if ( !PlatformXr.isSessionSupported )
+	{
+		//	make a wrapper
+		PlatformXr.isSessionSupported = async function(SessionType)
+		{
+			//	sessionSupported throws if not supported
+			try
+			{
+				await PlatformXr.supportsSession( SessionType );
+				return true;
+			}
+			catch(e)
+			{
+				return false;
+			}
+		}
+	}
+	
 	try
 	{
 		const Supported = await PlatformXr.isSessionSupported('immersive-vr');
