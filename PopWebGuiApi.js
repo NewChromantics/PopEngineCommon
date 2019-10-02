@@ -693,3 +693,74 @@ Pop.Gui.Colour = function(Parent,Rect)
 	
 	this.Element = this.CreateElement(Parent);
 }
+
+
+
+Pop.Gui.TextBox = function(Parent,Rect)
+{
+	this.Label = '';
+	this.InputElement = null;
+	this.LabelElement = null;
+	
+	this.GetValue = function()
+	{
+		return this.InputElement.value;
+	}
+	
+	this.SetValue = function(Value)
+	{
+		this.InputElement.value = Value;
+		this.RefreshLabel();
+	}
+	
+	this.SetLabel = function(Value)
+	{
+		this.Label = Value;
+		this.RefreshLabel();
+	}
+	
+	this.RefreshLabel = function()
+	{
+		this.LabelElement.innerText = this.Label;
+	}
+	
+	this.OnElementChanged = function(Event)
+	{
+		//	call our callback
+		let Value = this.GetValue();
+		this.RefreshLabel();
+		this.OnChanged( Value );
+	}
+	
+	this.CreateElement = function(Parent)
+	{
+		let Input = document.createElement('input');
+		this.InputElement = Input;
+		
+		//	gr: what are defaults in pop?
+		Input.type = 'text';
+		SetGuiControl_SubElementStyle( Input, 0, 50 );
+		//	oninput = every change
+		//	onchange = on lose focus
+		Input.oninput = this.OnElementChanged.bind(this);
+		Input.onchange = this.OnElementChanged.bind(this);
+
+		let Label = document.createElement('label');
+		this.LabelElement = Label;
+		Label.innerText = 'TextBox';
+		SetGuiControl_SubElementStyle( Label, 50, 100 );
+		
+		
+		let Div = document.createElement('div');
+		SetGuiControlStyle( Div, Rect );
+		
+		Div.appendChild( Input );
+		Div.appendChild( Label );
+		Parent.AddChildControl( this, Div );
+		
+		return Div;
+	}
+	
+	this.Element = this.CreateElement(Parent);
+	this.RefreshLabel();
+}
