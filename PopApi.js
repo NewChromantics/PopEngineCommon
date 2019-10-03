@@ -1,5 +1,35 @@
 //	some generic javascript helpers
 
+//	gr: this is to deal with
+//	SomeThing.constructor == Pop.Image <-- chrome/v8
+//	SomeThing.constructor == Pop.Image.constructor <-- javascript core
+function IsObjectInstanceOf(This,TypeConstructor)
+{
+	if ( !(This instanceof Object) )
+		return false;
+	
+	if ( This instanceof TypeConstructor )
+		return true;
+	
+	//	jscore
+	if ( This.__proto__ == TypeConstructor.__proto__ )
+		return true;
+
+	//	object == func... so wrong match
+	//if ( This instanceof TypeConstructor.constructor )
+	//	return true;
+	
+	if ( This.constructor )
+	{
+		if ( This.constructor == TypeConstructor )
+			return true;
+		//	jscore: {} is matching Pop.Image here
+		//if ( This.constructor == TypeConstructor.constructor )
+		//	return true;
+	}
+	return false;
+}
+
 //	create a promise function with the Resolve & Reject functions attached so we can call them
 Pop.CreatePromise = function()
 {
