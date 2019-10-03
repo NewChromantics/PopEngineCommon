@@ -445,7 +445,7 @@ Pop.Gui.Button = function(Parent, Rect)
 	
 	this.SetLabel = function(Value)
 	{
-		this.Element.innerText = Value;
+		this.Element.value = Value;
 	}
 	
 	this.OnElementClicked = function(Event)
@@ -479,7 +479,7 @@ Pop.Gui.Button = function(Parent, Rect)
 		SetupEvents(Div);
 		
 		Div.innerText = 'Pop.Gui.Button innertext';
-		Div.Value = 'Pop.Gui.Button value';
+		Div.value = 'Pop.Gui.Button value';
 		Parent.AddChildControl( Parent, Div );
 		return Div;
 	}
