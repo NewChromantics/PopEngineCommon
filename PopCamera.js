@@ -412,7 +412,7 @@ Pop.Camera = function(CopyCamera)
 		y = yxz[1];
 		z = yxz[2];
 		
-		if ( FirstClick )
+		if ( FirstClick || !this.Last_OrbitPos )
 		{
 			this.Start_OrbitPyrd = this.GetPitchYawRollDistance();
 			//Pop.Debug("this.Start_OrbitPyrd",this.Start_OrbitPyrd);
