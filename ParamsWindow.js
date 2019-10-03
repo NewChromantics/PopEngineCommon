@@ -44,7 +44,18 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 		Label.SetValue(Name);
 		
 		let Control;
-		if ( typeof Params[Name] === 'boolean' )
+		if ( Min == 'Button' )
+		{
+			//	button which may not have a value
+			Control = new Pop.Gui.Button( Window, [ControlLeft,ControlTop,ControlWidth,ControlHeight] );
+			Control.SetControlValue = Control.SetValue;
+			Control.SetLabel( Name );
+			Control.OnClicked = function()
+			{
+				OnAnyChanged( Params, Name );
+			}
+		}
+		else if ( typeof Params[Name] === 'boolean' )
 		{
 			Control = new Pop.Gui.TickBox( Window, [ControlLeft,ControlTop,ControlWidth,ControlHeight] );
 			Control.SetControlValue = Control.SetValue;
