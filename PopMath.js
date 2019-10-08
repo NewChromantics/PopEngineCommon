@@ -986,6 +986,69 @@ Math.PositionInsideBoxXZ = function(Position3,Box3)
 }
 
 
+//	wait, is this cubic? it's not quadratic!
+Math.GetCubicBezierPosition = function(Start,Middle,End,Time,TravelThroughMiddle=false)
+{
+	function GetBezier(p0,p1,p2,t)
+	{
+		const oneMinusT = 1 - t;
+		const oneMinusTsq = oneMinusT * oneMinusT;
+		const tsq = t*t;
+		return (p0*oneMinusTsq) + (p1 * 4.0 * t * oneMinusT) + (p2 * tsq);
+	}
+	
+	//	calculate the middle control point so it goes through middle
+	//	https://stackoverflow.com/a/6712095/355753
+	//const ControlMiddle_x = GetBezier(Start[0], Middle[0], End[0], 0.5 );
+	//const ControlMiddle_y = GetBezier(Start[1], Middle[1], End[1], 0.5 );
+	//const ControlMiddle_z = GetBezier(Start[2], Middle[2], End[2], 0.5 );
+	const GetControl = function(a,b,c,Index)
+	{
+		const p0 = a[Index];
+		const p1 = b[Index];
+		const p2 = c[Index];
+		
+		//	x(t) = x0 * (1-t)^2 + 2 * x1 * t * (1 - t) + x2 * t^2
+		//	x(t=1/2) = xt = x0 * 1/4 + 2 * x1 * 1/4 + x2 * 1/4
+		//	x1/2 = xt - (x0 + x2)/4
+		let pc = p1 - ((p0 + p2)/4);
+		return pc;
+		
+		//	need to work out what p1/middle/control point should be when
+		//	t=0.5 == p1
+		//	https://stackoverflow.com/a/9719997/355753
+		//const pc = 2 * (p1 - (p0 + p2)/2);
+		//return pc;
+	}
+	const GetControlPoint = function(a,b,c)
+	{
+		const ControlMiddle_x = GetControl( Start, Middle, End, 0 );
+		const ControlMiddle_y = GetControl( Start, Middle, End, 1 );
+		const ControlMiddle_z = GetControl( Start, Middle, End, 2 );
+		const ControlMiddle = [ ControlMiddle_x, ControlMiddle_y, ControlMiddle_z ];
+		return ControlMiddle;
+	}
+	
+	//	calculate where the control point needs to be for t=0.5 to go through the middle point
+	if ( TravelThroughMiddle )
+	{
+		Middle = GetControlPoint( Start, Middle, End );
+	}
+
+	//	enum dimensions
+	let Position = [];
+	for ( let i=0;	i<Start.length;	i++ )
+	{
+		let p0 = Start[i];
+		let p1 = Middle[i];
+		let p2 = End[i];
+		
+		Position[i] = GetBezier( p0, p1, p2, Time );
+	}
+	return Position;
+}
+
+
 //	this gives a point between Start & End
 Math.GetCatmullPosition = function(Previous,Start,End,Next,Time)
 {
