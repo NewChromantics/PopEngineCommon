@@ -131,15 +131,17 @@ Math.Length3 = function(a)
 	return Len;
 }
 
-Math.Normalise2 = function(xy)
+Math.Normalise2 = function(xy,NormalLength=1)
 {
 	let Length = Math.Length2( xy );
+	Length *= 1 / NormalLength;
 	return [ xy[0]/Length, xy[1]/Length ];
 }
 
-Math.Normalise3 = function(a)
+Math.Normalise3 = function(a,NormalLength=1)
 {
 	let Length = Math.Length3( a );
+	Length *= 1 / NormalLength;
 	return [ a[0]/Length, a[1]/Length, a[2]/Length ];
 }
 
