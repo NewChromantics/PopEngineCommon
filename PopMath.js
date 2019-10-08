@@ -1078,11 +1078,19 @@ Math.GetCatmullPosition = function(Previous,Start,End,Next,Time)
 	return Position;
 }
 
-//	Time is N.x in the path
-Math.GetCatmullPathPosition = function(Path,Time)
+//	Time normalised along the path to cope with looping
+Math.GetCatmullPathPosition = function(Path,Time,Loop=false)
 {
+	if ( Time > 1 )
+		throw "Math.GetCatmullPathPosition(Time="+Time+") should have normalised time";
+	
 	if ( Path.length < 4 )
 		throw "Catmull path must have at least 4 points (this has "+ Path.length + ")";
+	
+	if ( Loop )
+		Time *= Path.length;
+	else
+		Time *= Path.length - 1;
 	
 	//	get index from time
 	let Start = Math.floor( Time );
@@ -1092,26 +1100,37 @@ Math.GetCatmullPathPosition = function(Path,Time)
 	let End = Start + 1;
 	let Next = End + 1;
 	
-	//	debug, should the ends where we don't have enough nodes be linear?
-	const LinearEnds = false;
-	if ( Previous < 0 )
+	//	we're calculating points between start & end
+	const Lerp = Math.range( Start, End, Time );
+	if ( Lerp < 0 || Lerp > 1 )
+		throw "Trying to calculate wrong time between Start=" + Start + " End=" + End + " Time="+Time;
+
+	//	wrap numbers around if looping
+	//	otherwise clamp
+	let FixIndex = null;
+	
+	if ( Loop )
 	{
-		if ( LinearEnds )
-			return Math.Lerp3( Path[0], Path[1], Time );
-		//	no! clamp indexes
-		Previous = 0;
-		Start = Previous;
-	}
-	if ( Next > Path.length-1 )
-	{
-		if ( LinearEnds )
+		FixIndex = function(Index)
 		{
-			const Lerp = Math.range( Start, Start+1, Time );
-			return Math.Lerp3( Path[Start], Path[Start+1], Lerp );
+			if ( Index < 0 )			Index += Path.length;
+			if ( Index >= Path.length )	Index -= Path.length;
+			return Index;
 		}
-		Next = Path.length-1;
-		End = Next;
 	}
+	else
+	{
+		FixIndex = function(Index)
+		{
+			Index = Math.clamp( 0, Path.length-1, Index );
+			return Index;
+		}
+	}
+	
+	Previous = FixIndex( Previous );
+	Start = FixIndex( Start );
+	End = FixIndex( End );
+	Next = FixIndex( Next );
 	
 	//	indexes should be correct now
 	if ( Next >= Path.length )
@@ -1119,11 +1138,6 @@ Math.GetCatmullPathPosition = function(Path,Time)
 	if ( Previous < 0 )
 		throw "Previous is wrong";
 	
-	//	we're calculating points between start & end
-	const Lerp = Math.range( Start, End, Time );
-	if ( Lerp < 0 || Lerp > 1 )
-		throw "Trying to calculate wrong time between Start=" + Start + " End=" + End + " Time="+Time;
-
 	const Pos = Math.GetCatmullPosition( Path[Previous], Path[Start], Path[End], Path[Next], Lerp );
 	return Pos;
 }
