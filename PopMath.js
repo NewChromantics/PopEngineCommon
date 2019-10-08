@@ -984,3 +984,81 @@ Math.PositionInsideBoxXZ = function(Position3,Box3)
 	if ( Position3[2] > Box3.Max[2] )	return false;
 	return true;
 }
+
+
+//	this gives a point between Start & End
+Math.GetCatmullPosition = function(Previous,Start,End,Next,Time)
+{
+	function GetCatmull(p0,p1,p2,p3,t)
+	{
+		//	https://github.com/chen0040/cpp-spline/blob/master/spline/src/main/cpp/CatmullRom.cpp
+		let u = t;
+		let Result = u * u * u * ( (-1) * p0 + 3 * p1 - 3 * p2 + p3) / 2;
+		Result += u * u * ( 2 * p0 - 5 * p1 + 4 * p2 - p3) / 2;
+		Result += u * ((-1) * p0 + p2) / 2;
+		Result += p1;
+		return Result;
+	}
+
+	//	enum the dimensions
+	let Position = [];
+	for ( let i=0;	i<Start.length;	i++ )
+	{
+		let p0 = Previous[i];
+		let p1 = Start[i];
+		let p2 = End[i];
+		let p3 = Next[i];
+		Position[i] = GetCatmull( p0, p1, p2, p3, Time );
+	}
+	return Position;
+}
+
+//	Time is N.x in the path
+Math.GetCatmullPathPosition = function(Path,Time)
+{
+	if ( Path.length < 4 )
+		throw "Catmull path must have at least 4 points (this has "+ Path.length + ")";
+	
+	//	get index from time
+	let Start = Math.floor( Time );
+	
+	//	we calc the points between [Prev] Start & End [Next]
+	let Previous = Start - 1;
+	let End = Start + 1;
+	let Next = End + 1;
+	
+	//	debug, should the ends where we don't have enough nodes be linear?
+	const LinearEnds = false;
+	if ( Previous < 0 )
+	{
+		if ( LinearEnds )
+			return Math.Lerp3( Path[0], Path[1], Time );
+		//	no! clamp indexes
+		Previous = 0;
+		Start = Previous;
+	}
+	if ( Next > Path.length-1 )
+	{
+		if ( LinearEnds )
+		{
+			const Lerp = Math.range( Start, Start+1, Time );
+			return Math.Lerp3( Path[Start], Path[Start+1], Lerp );
+		}
+		Next = Path.length-1;
+		End = Next;
+	}
+	
+	//	indexes should be correct now
+	if ( Next >= Path.length )
+		throw "Next is wrong";
+	if ( Previous < 0 )
+		throw "Previous is wrong";
+	
+	//	we're calculating points between start & end
+	const Lerp = Math.range( Start, End, Time );
+	if ( Lerp < 0 || Lerp > 1 )
+		throw "Trying to calculate wrong time between Start=" + Start + " End=" + End + " Time="+Time;
+
+	const Pos = Math.GetCatmullPosition( Path[Previous], Path[Start], Path[End], Path[Next], Lerp );
+	return Pos;
+}
