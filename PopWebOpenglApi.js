@@ -330,11 +330,12 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.RenderTarget = null;
 	this.CanvasMouseHandler = null;
 	this.CanvasKeyHandler = null;
-	this.ActiveTexureIndex = 0;
 	this.ScreenRectCache = null;
 	this.TextureHeap = new Pop.HeapMeta("Opengl Textures");
 	this.GeometryHeap = new Pop.HeapMeta("Opengl Geometry");
 
+	this.ActiveTexureIndex = 0;
+	this.TextureRenderTargets = [];	//	this is a context asset, so maybe it shouldn't be kept here
 
 	this.OnResize = function(ResizeEvent)
 	{
@@ -455,7 +456,16 @@ Pop.Opengl.Window = function(Name,Rect)
 		this.Context = null;
 		this.CurrentBoundGeometryHash = null;
 		this.CurrentBoundShaderHash = null;
-		this.ActiveTexureIndex = 0;	//	dont need to reset this?
+		this.ResetContextAssets();
+	}
+	
+	this.ResetContextAssets = function()
+	{
+		//	dont need to reset this? but we will anyway
+		this.ActiveTexureIndex = 0;
+		
+		//	todo: proper cleanup
+		this.TextureRenderTargets = [];
 	}
 
 	this.TestLoseContext = function()
@@ -530,6 +540,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		EnableExtension('OES_texture_float');
 		EnableExtension('EXT_blend_minmax');
 		EnableExtension('OES_vertex_array_object', this.InitVao.bind(this) );
+		EnableExtension('WEBGL_draw_buffers', this.InitMultipleRenderTargets.bind(this) );
 		
 		//	texture load needs extension in webgl1
 		//	in webgl2 it's built in, but requires #version 300 es
@@ -552,6 +563,25 @@ Pop.Opengl.Window = function(Name,Rect)
 		Context.isVertexArray = Extension.isVertexArrayOES.bind(Extension);
 		Context.bindVertexArray = Extension.bindVertexArrayOES.bind(Extension);
 	}
+	
+	this.InitMultipleRenderTargets = function(Context,Extension)
+	{
+		Pop.Debug("MRT has MAX_COLOR_ATTACHMENTS_WEBGL=" + Extension.MAX_COLOR_ATTACHMENTS_WEBGL + " MAX_DRAW_BUFFERS_WEBGL=" + Extension.MAX_DRAW_BUFFERS_WEBGL );
+		Extension.AttachmentPoints =
+		[
+		 Extension.COLOR_ATTACHMENT0_WEBGL,	Extension.COLOR_ATTACHMENT1_WEBGL,	Extension.COLOR_ATTACHMENT2_WEBGL,	Extension.COLOR_ATTACHMENT3_WEBGL,	Extension.COLOR_ATTACHMENT4_WEBGL,
+		 Extension.COLOR_ATTACHMENT5_WEBGL,	Extension.COLOR_ATTACHMENT6_WEBGL,	Extension.COLOR_ATTACHMENT7_WEBGL,	Extension.COLOR_ATTACHMENT8_WEBGL,	Extension.COLOR_ATTACHMENT9_WEBGL,
+		 Extension.COLOR_ATTACHMENT10_WEBGL,	Extension.COLOR_ATTACHMENT11_WEBGL,	Extension.COLOR_ATTACHMENT12_WEBGL,	Extension.COLOR_ATTACHMENT13_WEBGL,	Extension.COLOR_ATTACHMENT14_WEBGL,	Extension.COLOR_ATTACHMENT15_WEBGL,
+		];
+		
+		//	already in webgl2
+		if ( !Context.drawBuffers )
+		{
+			Context.drawBuffers = Extension.drawBuffersWEBGL.bind(Extension);
+		}
+	}
+	
+	
 	
 	this.InitialiseContext = function()
 	{
@@ -616,6 +646,7 @@ Pop.Opengl.Window = function(Name,Rect)
 	
 	this.OnDeletedTexture = function(Image)
 	{
+		//	todo: delete render targets that use this image
 		this.TextureHeap.OnDeallocated( Image.OpenglByteSize );
 	}
 	
@@ -629,6 +660,38 @@ Pop.Opengl.Window = function(Name,Rect)
 		this.GeometryHeap.OnDeallocated( Geometry.OpenglByteSize );
 	}
 	
+	this.GetTextureRenderTarget = function(Textures)
+	{
+		if ( !Array.isArray(Textures) )
+			Textures = [Textures];
+		function MatchRenderTarget(RenderTarget)
+		{
+			const RTTextures = RenderTarget.Images;
+			if ( RTTextures.length != Textures.length )
+				return false;
+			//	check hash of each one
+			for ( let i=0;	i<RTTextures.length;	i++ )
+			{
+				const a = GetUniqueHash( RTTextures[i] );
+				const b = GetUniqueHash( Textures[i] );
+				if ( a != b )
+					return false;
+			}
+			return true;
+		}
+		
+		let RenderTarget = this.TextureRenderTargets.find(MatchRenderTarget);
+		if ( RenderTarget )
+			return RenderTarget;
+		
+		//	make a new one
+		RenderTarget = new Pop.Opengl.TextureRenderTarget( Textures );
+		this.TextureRenderTargets.push( RenderTarget );
+		if ( !this.TextureRenderTargets.find(MatchRenderTarget) )
+			throw "New render target didn't re-find";
+		return RenderTarget;
+	}
+
 	
 
 	this.InitialiseContext();
@@ -651,7 +714,7 @@ Pop.Opengl.RenderTarget = function()
 		const RenderContext = this.GetRenderContext();
 		
 		//	setup render target
-		let RenderTarget = GetTextureRenderTarget( TargetTexture );
+		let RenderTarget = RenderContext.GetTextureRenderTarget( TargetTexture );
 		RenderTarget.BindRenderTarget( RenderContext );
 		
 		RenderFunction( RenderTarget );
@@ -763,14 +826,17 @@ Pop.Opengl.RenderTarget = function()
 
 
 //	maybe this should be an API type
-Pop.Opengl.TextureRenderTarget = function(Image)
+Pop.Opengl.TextureRenderTarget = function(Images)
 {
 	Pop.Opengl.RenderTarget.call( this );
+	if ( !Array.isArray(Images) )
+		throw "Pop.Opengl.TextureRenderTarget now expects array of images for MRT support";
 	
 	this.FrameBuffer = null;
 	this.FrameBufferContextVersion = null;
 	this.FrameBufferRenderContext = null;
-	this.Image = Image;
+	this.Images = Images;
+	//	todo: verify each image is same dimensions (and format?)
 
 	this.GetRenderContext = function()
 	{
@@ -779,31 +845,56 @@ Pop.Opengl.TextureRenderTarget = function(Image)
 	
 	this.GetRenderTargetRect = function()
 	{
+		const FirstImage = this.Images[0];
 		let Rect = [0,0,0,0];
-		Rect[2] = this.Image.GetWidth();
-		Rect[3] = this.Image.GetHeight();
+		Rect[2] = FirstImage.GetWidth();
+		Rect[3] = FirstImage.GetHeight();
 		return Rect;
 	}
 	
-	this.CreateFrameBuffer = function(RenderContext,Image)
+	this.CreateFrameBuffer = function(RenderContext)
 	{
-		const Texture = Image.GetOpenglTexture( RenderContext );
 		const gl = RenderContext.GetGlContext();
 		this.FrameBuffer = gl.createFramebuffer();
 		this.FrameBufferContextVersion = RenderContext.ContextVersion;
 		this.FrameBufferRenderContext = RenderContext;
-		this.Image = Image;
 		
 		//this.BindRenderTarget();
 		gl.bindFramebuffer( gl.FRAMEBUFFER, this.FrameBuffer );
-
 		//let Status = gl.checkFramebufferStatus( this.FrameBuffer );
 		//Pop.Debug("Framebuffer status",Status);
 
 		//  attach this texture to colour output
-		const level = 0;
-		const attachmentPoint = gl.COLOR_ATTACHMENT0;
-		gl.framebufferTexture2D(gl.FRAMEBUFFER, attachmentPoint, gl.TEXTURE_2D, Texture, level);
+		const Level = 0;
+		
+		//	one binding, use standard mode
+		if ( this.Images.length == 1 )
+		{
+			const Image = this.Images[0];
+			const AttachmentPoint = gl.COLOR_ATTACHMENT0;
+			const Texture = Image.GetOpenglTexture( RenderContext );
+			gl.framebufferTexture2D(gl.FRAMEBUFFER, AttachmentPoint, gl.TEXTURE_2D, Texture, Level );
+		}
+		else
+		{
+			//	MRT
+			if ( !gl.WEBGL_draw_buffers )
+				throw "Context doesn't support MultipleRenderTargets/WEBGL_draw_buffers";
+			const AttachmentPoints = gl.WEBGL_draw_buffers.AttachmentPoints;
+			const Attachments = [];
+			function BindTextureColourAttachment(Image,Index)
+			{
+				const AttachmentPoint = AttachmentPoints[Index];
+				const Texture = Image.GetOpenglTexture( RenderContext );
+				Attachments.push( AttachmentPoint );
+				gl.framebufferTexture2D(gl.FRAMEBUFFER, AttachmentPoint, gl.TEXTURE_2D, Texture, Level );
+			}
+			this.Images.forEach( BindTextureColourAttachment );
+			
+			//	set gl_FragData binds in the shader
+			gl.drawBuffers( Attachments );
+		}
+		
 		if ( TestFrameBuffer )
 			if ( !gl.isFramebuffer( this.FrameBuffer ) )
 				throw "Is not frame buffer!";
@@ -830,7 +921,7 @@ Pop.Opengl.TextureRenderTarget = function(Image)
 
 		if ( !this.FrameBuffer )
 		{
-			this.CreateFrameBuffer( RenderContext, Image );
+			this.CreateFrameBuffer( RenderContext );
 		}
 		
 		if ( TestFrameBuffer )
@@ -841,6 +932,9 @@ Pop.Opengl.TextureRenderTarget = function(Image)
 		
 		//	todo: make this common code
 		gl.bindFramebuffer( gl.FRAMEBUFFER, FrameBuffer );
+				
+		const Attachments = gl.WEBGL_draw_buffers.AttachmentPoints.slice( 0, this.Images.length );
+		gl.drawBuffers( Attachments );
 		
 		//	gr: this is givng errors...
 		//let Status = gl.checkFramebufferStatus( this.FrameBuffer );
@@ -857,17 +951,6 @@ Pop.Opengl.TextureRenderTarget = function(Image)
 		return this.RenderContext.AllocTexureIndex();
 	}
 	
-}
-
-//	gr: horrible cyclic reference, this is currently here until we get some kinda cache I think
-//	because when the image is disposed, it doesn't know to get rid of the render target
-function GetTextureRenderTarget(Texture)
-{
-	if ( !Texture.RenderTarget )
-	{
-		Texture.RenderTarget = new Pop.Opengl.TextureRenderTarget( Texture );
-	}
-	return Texture.RenderTarget;
 }
 
 function WindowRenderTarget(Window)
