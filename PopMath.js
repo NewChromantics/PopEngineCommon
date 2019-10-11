@@ -90,6 +90,12 @@ Math.Dot3 = function(a,b)
 	return Dot;
 }
 
+Math.Dot4 = function(a,b)
+{
+	let Dot = (a[0]*b[0]) + (a[1]*b[1]) + (a[2]*b[2]) + (a[3]*b[3]);
+	return Dot;
+}
+
 
 Math.LengthSq2 = function(xy)
 {
