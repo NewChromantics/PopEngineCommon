@@ -846,8 +846,9 @@ Math.GetNormalisedPlane = function(Plane4)
 
 
 //	from https://stackoverflow.com/a/34960913/355753
-Math.GetFrustumPlanes = function(FrustumMatrix4x4,Normalised=true)
+Math.GetFrustumPlanes = function(ProjectionMatrix4x4,Normalised=true)
 {
+	const FrustumMatrix4x4 = ProjectionMatrix4x4;
 	let left = [];
 	let right = [];
 	let bottom = [];
@@ -856,7 +857,7 @@ Math.GetFrustumPlanes = function(FrustumMatrix4x4,Normalised=true)
 	let far = [];
 	
 	let mat;
-	if ( Params.TransposeFrustumPlanes )
+	if ( true )//Params.TransposeFrustumPlanes )
 	{
 		mat = function(row,col)
 		{
@@ -899,6 +900,64 @@ Math.GetFrustumPlanes = function(FrustumMatrix4x4,Normalised=true)
 	Planes.Near = near;
 	Planes.Far = far;
 	return Planes;
+}
+
+
+Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
+{
+	const INSIDE = true;//-1;
+	const INTERSECTS = true;//0;
+	const OUTSIDE = false;//1;
+	let Result = INSIDE;
+	
+	//	convert to list of planes from .Left .Near .Far etc
+	if ( !Array.isArray(Planes) )
+	{
+		function GetPlaneFromKey(Key)
+		{
+			return Planes[Key];
+		}
+		Planes = Object.keys( Planes ).map( GetPlaneFromKey );
+	}
+	
+	function float3(x,y,z)
+	{
+		let Vector = {};
+		Vector.x = x;
+		Vector.y = y;
+		Vector.z = z;
+		return Vector;
+	}
+	
+	function BoxGetMinMax(MinOrMax)
+	{
+		return (!MinOrMax) ? float3(...Box.Min) : float3(...Box.Max);
+	}
+	
+	//	https://www.gamedev.net/forums/topic/672043-perfect-aabb-frustum-intersection-test/?do=findComment&comment=5254253
+	for ( let i=0;	i<Planes.length;	i++	)
+	{
+		// planes have unit-length normal, offset = -dot(normal, point on plane)
+		const Plane = Planes[i];
+		const Normal = float3( ...Plane );
+		const PlaneOffset = Plane[3];
+		let nx = Normal.x > 0;
+		let ny = Normal.y > 0;
+		let nz = Normal.x > 0;
+		
+		// getMinMax(): 0 = return min coordinate. 1 = return max.
+		let dot = (Normal.x*BoxGetMinMax(nx).x) + (Normal.y*BoxGetMinMax(ny).y) + (Normal.z*BoxGetMinMax(nz).z);
+		
+		if ( dot < -PlaneOffset )
+			return OUTSIDE;
+		
+		let dot2 = (Normal.x*BoxGetMinMax(1-nx).x) + (Normal.y*BoxGetMinMax(1-ny).y) + (Normal.z*BoxGetMinMax(1-nz).z);
+		
+		if ( dot2 <= -PlaneOffset )
+			Result = INTERSECTS;
+	}
+	
+	return Result;
 }
 
 Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
