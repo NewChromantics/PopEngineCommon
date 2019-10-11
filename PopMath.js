@@ -909,13 +909,9 @@ Math.GetFrustumPlanes = function(ProjectionMatrix4x4,Normalised=true)
 }
 
 
+
 Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
 {
-	const INSIDE = true;//-1;
-	const INTERSECTS = true;//0;
-	const OUTSIDE = false;//1;
-	let Result = INSIDE;
-	
 	//	convert to list of planes from .Left .Near .Far etc
 	if ( !Array.isArray(Planes) )
 	{
@@ -925,45 +921,41 @@ Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
 		}
 		Planes = Object.keys( Planes ).map( GetPlaneFromKey );
 	}
+
+	const BoxCorners =
+	[
+		[Box.Min[0], Box.Min[1], Box.Min[2], 1],
+		[Box.Max[0], Box.Min[1], Box.Min[2], 1],
+		[Box.Min[0], Box.Max[1], Box.Min[2], 1],
+		[Box.Max[0], Box.Max[1], Box.Min[2], 1],
+		[Box.Min[0], Box.Min[1], Box.Max[2], 1],
+		[Box.Max[0], Box.Min[1], Box.Max[2], 1],
+		[Box.Min[0], Box.Max[1], Box.Max[2], 1],
+		[Box.Max[0], Box.Max[1], Box.Max[2], 1],
+	];
 	
-	function float3(x,y,z)
-	{
-		let Vector = {};
-		Vector.x = x;
-		Vector.y = y;
-		Vector.z = z;
-		return Vector;
-	}
-	
-	function BoxGetMinMax(MinOrMax)
-	{
-		return (!MinOrMax) ? float3(...Box.Min) : float3(...Box.Max);
-	}
-	
-	//	https://www.gamedev.net/forums/topic/672043-perfect-aabb-frustum-intersection-test/?do=findComment&comment=5254253
+	//	https://www.iquilezles.org/www/articles/frustumcorrect/frustumcorrect.htm
 	for ( let i=0;	i<Planes.length;	i++	)
 	{
-		// planes have unit-length normal, offset = -dot(normal, point on plane)
+		let out = 0;
 		const Plane = Planes[i];
-		const Normal = float3( ...Plane );
-		const PlaneOffset = Plane[3];
-		let nx = Normal.x > 0;
-		let ny = Normal.y > 0;
-		let nz = Normal.x > 0;
+		for ( let c=0;	c<BoxCorners.length;	c++ )
+			out += Math.Dot4( Plane, BoxCorners[c] ) < 0.0;
 		
-		// getMinMax(): 0 = return min coordinate. 1 = return max.
-		let dot = (Normal.x*BoxGetMinMax(nx).x) + (Normal.y*BoxGetMinMax(ny).y) + (Normal.z*BoxGetMinMax(nz).z);
-		
-		if ( dot < -PlaneOffset )
-			return OUTSIDE;
-		
-		let dot2 = (Normal.x*BoxGetMinMax(1-nx).x) + (Normal.y*BoxGetMinMax(1-ny).y) + (Normal.z*BoxGetMinMax(1-nz).z);
-		
-		if ( dot2 <= -PlaneOffset )
-			Result = INTERSECTS;
+		//	all corners are outside this plane
+		if( out == BoxCorners.length )
+			return false;
 	}
-	
-	return Result;
+	/*	extra check for when large box is outside frustum but being included
+	int out;
+	out=0; for( int i=0; i<8; i++ ) out += ((fru.mPoints[i].x > box.mMaxX)?1:0); if( out==8 ) return false;
+	out=0; for( int i=0; i<8; i++ ) out += ((fru.mPoints[i].x < box.mMinX)?1:0); if( out==8 ) return false;
+	out=0; for( int i=0; i<8; i++ ) out += ((fru.mPoints[i].y > box.mMaxY)?1:0); if( out==8 ) return false;
+	out=0; for( int i=0; i<8; i++ ) out += ((fru.mPoints[i].y < box.mMinY)?1:0); if( out==8 ) return false;
+	out=0; for( int i=0; i<8; i++ ) out += ((fru.mPoints[i].z > box.mMaxZ)?1:0); if( out==8 ) return false;
+	out=0; for( int i=0; i<8; i++ ) out += ((fru.mPoints[i].z < box.mMinZ)?1:0); if( out==8 ) return false;
+	*/
+	return true;
 }
 
 Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
