@@ -1191,6 +1191,10 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 		//	gr: this always returns 0 on imac12,2
 		//let UniformType = gl.getUniform( this.Program, UniformPtr );
 		
+		//	these are hard to track down and pretty rare anyone would want a nan
+		if ( isNaN(Value) )
+			throw "Setting NaN on Uniform " + Uniform.Name;
+		
 		switch ( UniformType )
 		{
 			case gl.INT:
