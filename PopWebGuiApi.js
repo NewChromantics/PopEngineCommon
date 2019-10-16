@@ -445,7 +445,12 @@ Pop.Gui.Button = function(Parent, Rect)
 	
 	this.SetLabel = function(Value)
 	{
-		this.Element.value = Value;
+		if ( this.Element instanceof HTMLButtonElement )
+			this.Element.value = Value;
+		else if ( this.Element.innerText !== undefined )
+			this.Element.innerText = Value;
+		else
+			throw "Not sure how to set label on this button " + this.Element.constructor;
 	}
 	
 	this.OnElementClicked = function(Event)
