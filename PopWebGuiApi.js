@@ -445,6 +445,7 @@ Pop.Gui.Button = function(Parent, Rect)
 	
 	this.SetLabel = function(Value)
 	{
+		Pop.Debug("Set button label",Value);
 		if ( this.Element.type && this.Element.type == 'button' )
 			this.Element.value = Value;
 		else if ( this.Element.innerText !== undefined )
@@ -490,7 +491,6 @@ Pop.Gui.Button = function(Parent, Rect)
 	}
 	
 	this.Element = this.CreateElement(Parent);
-	this.SetLabel( (typeof Parent == 'string') ? Parent : "Default Label");
 }
 
 Pop.Gui.Slider = function(Parent,Rect,Notches)
