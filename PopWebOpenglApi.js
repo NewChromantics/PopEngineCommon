@@ -1089,8 +1089,8 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 		let LinkStatus = gl.getProgramParameter( Program, gl.LINK_STATUS );
 		if ( !LinkStatus )
 		{
-			//let Error = gl.getShaderInfoLog(Shader);
-			throw "Failed to link " + this.Name + " shaders";
+			let Error = gl.getProgramInfoLog(Program);
+			throw "Failed to link " + this.Name + " shaders; " + Error;
 		}
 		return Program;
 	}
