@@ -81,6 +81,7 @@ function GetTextureFormatPixelByteSize(OpenglContext,Format,Type)
 
 Pop.Image = function(Filename)
 {
+	this.Name = (typeof Filename == 'string') ? Filename : "Pop.Image";
 	this.Size = [undefined,undefined];
 	this.OpenglTexture = null;
 	this.OpenglTextureContextVersion = null;
@@ -195,7 +196,7 @@ Pop.Image = function(Filename)
 		if ( !this.Pixels )
 			throw "Trying to create opengl texture, with no pixels";
 		
-		Pop.Debug("Updating opengl texture pixels");
+		Pop.Debug("Updating opengl texture pixels " + this.Name);
 		
 		//	update from pixels
 		const gl = RenderContext.GetGlContext();
@@ -299,7 +300,7 @@ Pop.Image = function(Filename)
 	
 	
 	//	load file
-	if ( typeof Filename == 'string' )
+	if ( typeof Filename == 'string' && Filename.includes('.') )
 	{
 		let HtmlImage = Pop.GetCachedAsset(Filename);
 		let PixelFormat = undefined;
@@ -317,6 +318,10 @@ Pop.Image = function(Filename)
 		PixelData.fill(0);
 		const Pixels = IsFloatFormat(PixelFormat) ? new Float32Array(PixelData) : new Uint8Array(PixelData);
 		this.WritePixels( Width, Height, Pixels, PixelFormat );
+	}
+	else if ( typeof Filename == 'string' )
+	{
+		//	just name
 	}
 	else if ( Filename !== undefined )
 	{
