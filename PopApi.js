@@ -1,5 +1,36 @@
 //	some generic javascript helpers
 
+Pop.Array = {};
+
+//	returns shuffled version of array
+Pop.Array.Shuffled = function(Array)
+{
+	let ArrayBin = Array.slice();
+	let NewArray = [];
+	//	avoid potential infinite loop errors
+	for ( let i=0;	i<Array.length;	i++ )
+	{
+		//	this is very slow on big arrays of subarrays
+		const Index = Math.floor( Math.random() * ArrayBin.length );
+		const Popped = ArrayBin.splice( Index, 1 )[0];
+		NewArray.push( Popped );
+	}
+	return NewArray;
+}
+
+//	shuffle in place
+Pop.Array.Shuffle = function(array)
+{
+	//	https://stackoverflow.com/a/47900462/355753
+	//	this is faster than splicing
+	for (var i = array.length - 1; i > 0; i--)
+	{
+		var j = Math.floor(Math.random() * (i + 1));
+		[array[i], array[j]] = [array[j], array[i]];
+	}
+}
+
+
 //	gr: this is to deal with
 //	SomeThing.constructor == Pop.Image <-- chrome/v8
 //	SomeThing.constructor == Pop.Image.constructor <-- javascript core
