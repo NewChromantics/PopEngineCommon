@@ -12,6 +12,35 @@ Pop.Opengl.ShaderBinds = 0;
 //	webgl only supports glsl 100!
 Pop.GlslVersion = 100;
 
+
+Pop.Opengl.GetString = function(Context,Enum)
+{
+	const gl = Context;
+	const Enums =
+	[
+	 'FRAMEBUFFER_COMPLETE',
+	 'FRAMEBUFFER_INCOMPLETE_ATTACHMENT',
+	 'FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT',
+	 'FRAMEBUFFER_INCOMPLETE_DIMENSIONS',
+	 'FRAMEBUFFER_UNSUPPORTED'
+	];
+	const EnumValues = {};
+	//	number -> string
+	function PushEnum(EnumString)
+	{
+		const Key = gl[EnumString];
+		if ( Key === undefined )
+			return;
+		EnumValues[Key] = EnumString;
+	}
+	Enums.forEach(PushEnum);
+	if ( EnumValues.hasOwnProperty(Enum) )
+		return EnumValues[Enum];
+	
+	return "<" + Enum + ">";
+}
+
+
 //	gl.isFrameBuffer is expensive! probably flushing
 const TestFrameBuffer = false;
 const TestAttribLocation = false;
