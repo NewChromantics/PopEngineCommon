@@ -901,11 +901,10 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 		this.FrameBufferContextVersion = RenderContext.ContextVersion;
 		this.FrameBufferRenderContext = RenderContext;
 		
+		
 		//this.BindRenderTarget();
 		gl.bindFramebuffer( gl.FRAMEBUFFER, this.FrameBuffer );
-		//let Status = gl.checkFramebufferStatus( this.FrameBuffer );
-		//Pop.Debug("Framebuffer status",Status);
-
+		
 		//  attach this texture to colour output
 		const Level = 0;
 		
@@ -915,6 +914,7 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 			const Image = this.Images[0];
 			const AttachmentPoint = gl.COLOR_ATTACHMENT0;
 			const Texture = Image.GetOpenglTexture( RenderContext );
+			gl.bindTexture(gl.TEXTURE_2D, null);
 			gl.framebufferTexture2D(gl.FRAMEBUFFER, AttachmentPoint, gl.TEXTURE_2D, Texture, Level );
 		}
 		else
@@ -937,6 +937,12 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 			gl.drawBuffers( Attachments );
 		}
 		
+		if ( !gl.isFramebuffer( this.FrameBuffer ) )
+			Pop.Debug("Is not frame buffer!");
+		const Status = gl.checkFramebufferStatus( gl.FRAMEBUFFER );
+		if ( Status != gl.FRAMEBUFFER_COMPLETE )
+			throw "New framebuffer attachment status not complete: " + Pop.Opengl.GetString(gl,Status);
+
 		if ( TestFrameBuffer )
 			if ( !gl.isFramebuffer( this.FrameBuffer ) )
 				throw "Is not frame buffer!";
