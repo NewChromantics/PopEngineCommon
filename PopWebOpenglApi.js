@@ -945,9 +945,12 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 		
 		//	todo: make this common code
 		gl.bindFramebuffer( gl.FRAMEBUFFER, FrameBuffer );
-				
-		const Attachments = gl.WEBGL_draw_buffers.AttachmentPoints.slice( 0, this.Images.length );
-		gl.drawBuffers( Attachments );
+		
+		if ( gl.WEBGL_draw_buffers )
+		{
+			const Attachments = gl.WEBGL_draw_buffers.AttachmentPoints.slice( 0, this.Images.length );
+			gl.drawBuffers( Attachments );
+		}
 		
 		//	gr: this is givng errors...
 		//let Status = gl.checkFramebufferStatus( this.FrameBuffer );
