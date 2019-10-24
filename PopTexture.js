@@ -19,6 +19,8 @@ Pop.CreateRandomImage = function(Width,Height)
 Pop.CreateColourTexture = function(Colour4)
 {
 	let NewTexture = new Pop.Image();
-	NewTexture.WritePixels( 1, 1, Colour4 );
+	if ( Array.isArray(Colour4) )
+		Colour4 = new Float32Array(Colour4);
+	NewTexture.WritePixels( 1, 1, Colour4, 'Float4' );
 	return NewTexture;
 }
