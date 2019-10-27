@@ -12,6 +12,10 @@ Pop.Opengl.ShaderBinds = 0;
 //	webgl only supports glsl 100!
 Pop.GlslVersion = 100;
 
+//	some options that can be forced externally
+//	mobile typically can not render to a float texture. Emulate this on desktop
+Pop.Opengl.CanRenderToFloat = true;
+
 
 Pop.Opengl.GetString = function(Context,Enum)
 {
@@ -878,8 +882,34 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 	this.FrameBufferContextVersion = null;
 	this.FrameBufferRenderContext = null;
 	this.Images = Images;
-	//	todo: verify each image is same dimensions (and format?)
-
+	
+	this.IsImagesValid = function()
+	{
+		Pop.Debug("IsImagesValid",this);
+		//	if multiple images, size and format need to be the same
+		const Image0 = this.Images[0];
+		const IsSameAsImage0 = function(Image)
+		{
+			if ( Image.GetWidth() != Image0.GetWidth() )	return false;
+			if ( Image.GetHeight() != Image0.GetHeight() )	return false;
+			if ( Image.PixelsFormat != Image0.PixelsFormat )	return false;
+			return true;
+		}
+		if ( !this.Images.every( IsSameAsImage0 ) )
+			throw "Images for MRT are not all same size & format";
+		
+		//	reject some formats
+		//	todo: need to pre-empt this some how on mobile, rather than at instantiation of the framebuffer
+		//
+		const IsImageRenderable = function(Image)
+		{
+			const IsFloat = Image.PixelsFormat.startsWith('Float');
+			if ( IsFloat && !Pop.Opengl.CanRenderToFloat )
+				throw "This platform cannot render to " + Image.PixelsFormat + " texture";
+		}
+		IsImageRenderable(Image0);
+	}
+	
 	this.GetRenderContext = function()
 	{
 		return this.FrameBufferRenderContext;
@@ -1002,6 +1032,8 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 		return this.RenderContext.AllocTexureIndex();
 	}
 	
+	//	verify each image is same dimensions (and format?)
+	this.IsImagesValid();
 }
 
 function WindowRenderTarget(Window)
