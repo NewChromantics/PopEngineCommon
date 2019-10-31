@@ -30,6 +30,18 @@ Pop.Array.Shuffle = function(array)
 	}
 }
 
+Pop.Array.MoveElementFromArrayToArray = function(Element,SourceArray,DestArray)
+{
+	const SourceIndex = SourceArray.indexOf( Element );
+	if ( SourceIndex < 0 )
+		throw "Element is not in source array";
+	const DestIndex = DestArray.indexOf( Element );
+	if ( DestIndex >= 0 )
+		throw "Element is already in destination array";
+	SourceArray.splice( SourceIndex, 1 );
+	DestArray.push( Element );
+}
+
 
 //	gr: this is to deal with
 //	SomeThing.constructor == Pop.Image <-- chrome/v8
