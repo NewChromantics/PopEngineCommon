@@ -1,3 +1,7 @@
+
+const WebApi_HtmlImageElement = this.hasOwnProperty('HTMLImageElement') ? this['HTMLImageElement'] : null;
+
+
 function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 {
 	const gl = OpenglContext;
@@ -78,6 +82,37 @@ function GetTextureFormatPixelByteSize(OpenglContext,Format,Type)
 	}
 }
 
+function GetPixelsFromHtmlImageElement(Img)
+{
+	//	html5 image
+	//if ( Img.constructor == WebApi_HtmlImageElement )
+	{
+		//	gr: is this really the best way :/
+		const Canvas = document.createElement('canvas');
+		const Context = Canvas.getContext('2d');
+		const Width = Img.width;
+		const Height = Img.height;
+		Canvas.width = Width;
+		Canvas.height = Height;
+		Context.drawImage( Img, 0, 0 );
+		const ImageData = Context.getImageData(0, 0, Width, Height);
+		const Buffer = ImageData.data;
+		
+		const Pixels = {};
+		Pixels.Width = Width;
+		Pixels.Height = Height;
+		Pixels.Buffer = Buffer;
+		//	gr: I checked pixels manually, canvas is always RGBA [in chrome]
+		Pixels.Format = 'RGBA';
+		
+		//	destroy canvas (safari suggests its hanging around)
+		Canvas.width = 0;
+		Canvas.height = 0;
+		delete Canvas;
+		//Canvas = null;
+		return Pixels;
+	}
+}
 
 Pop.Image = function(Filename)
 {
@@ -231,7 +266,7 @@ Pop.Image = function(Filename)
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, SourceFormat, SourceType, this.Pixels );
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * this.Pixels.width * this.Pixels.height;
 		}
-		else if ( this.Pixels instanceof Uint8Array )
+		else if ( this.Pixels instanceof Uint8Array || this.Pixels instanceof Uint8ClampedArray )
 		{
 			//Pop.Debug("Image from Uint8Array",this.PixelsFormat);
 			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
@@ -303,8 +338,17 @@ Pop.Image = function(Filename)
 	if ( typeof Filename == 'string' && Filename.includes('.') )
 	{
 		let HtmlImage = Pop.GetCachedAsset(Filename);
-		let PixelFormat = undefined;
-		this.WritePixels( HtmlImage.width, HtmlImage.height, Image, PixelFormat );
+		
+		if ( HtmlImage.constructor == WebApi_HtmlImageElement )
+		{
+			const Pixels = GetPixelsFromHtmlImageElement(HtmlImage);
+			this.WritePixels( Pixels.Width, Pixels.Height, Pixels.Buffer, Pixels.Format );
+		}
+		else
+		{
+			let PixelFormat = undefined;
+			this.WritePixels( HtmlImage.width, HtmlImage.height, Image, PixelFormat );
+		}
 	}
 	else if ( Array.isArray( Filename ) )
 	{
