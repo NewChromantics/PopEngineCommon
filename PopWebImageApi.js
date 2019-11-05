@@ -268,6 +268,9 @@ Pop.Image = function(Filename)
 		}
 		else if ( this.Pixels instanceof Uint8Array || this.Pixels instanceof Uint8ClampedArray )
 		{
+			if ( this.Pixels instanceof Uint8ClampedArray )
+				this.Pixels = new Uint8Array(this.Pixels);
+			
 			//Pop.Debug("Image from Uint8Array",this.PixelsFormat);
 			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
 			let SourceFormat = SourceFormatTypes[0];
