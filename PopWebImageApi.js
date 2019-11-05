@@ -231,7 +231,7 @@ Pop.Image = function(Filename)
 		if ( !this.Pixels )
 			throw "Trying to create opengl texture, with no pixels";
 		
-		Pop.Debug("Updating opengl texture pixels " + this.Name);
+		//Pop.Debug("Updating opengl texture pixels " + this.Name);
 		
 		//	update from pixels
 		const gl = RenderContext.GetGlContext();
