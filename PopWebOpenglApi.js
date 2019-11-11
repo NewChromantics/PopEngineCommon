@@ -978,7 +978,11 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 			Pop.Debug("Is not frame buffer!");
 		const Status = gl.checkFramebufferStatus( gl.FRAMEBUFFER );
 		if ( Status != gl.FRAMEBUFFER_COMPLETE )
+		{
+			//	gr: todo: make this check if the target is float before setting
+			Pop.Opengl.CanRenderToFloat = false;
 			throw "New framebuffer attachment status not complete: " + Pop.Opengl.GetString(gl,Status);
+		}
 
 		if ( TestFrameBuffer )
 			if ( !gl.isFramebuffer( this.FrameBuffer ) )
