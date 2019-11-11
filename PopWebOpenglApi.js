@@ -785,13 +785,20 @@ Pop.Opengl.RenderTarget = function()
 	this.SetBlendModeBlit = function()
 	{
 		const gl = this.GetGlContext();
-		if ( gl.EXT_blend_minmax === undefined )
-			throw "EXT_blend_minmax hasn't been setup on this context";
+		
+		gl.enable( gl.BLEND );
+		gl.blendFunc( gl.ONE, gl.ZERO );
+		gl.blendEquation( gl.FUNC_ADD );
+	}
+	
+	this.SetBlendModeAlpha = function()
+	{
+		const gl = this.GetGlContext();
 		
 		//	set mode
 		//	enable blend
 		gl.enable( gl.BLEND );
-		gl.blendFunc( gl.ONE, gl.ZERO );
+		gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
 		gl.blendEquation( gl.FUNC_ADD );
 	}
 	
