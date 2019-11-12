@@ -12,9 +12,13 @@ Pop.Opengl.ShaderBinds = 0;
 //	webgl only supports glsl 100!
 Pop.GlslVersion = 100;
 
-//	some options that can be forced externally
 //	mobile typically can not render to a float texture. Emulate this on desktop
-Pop.Opengl.CanRenderToFloat = true;
+//	gr: we now test for this on context creation.
+//		MAYBE this needs to be per-context, but it's typically by device
+//		(and we typically want to know it without a render context)
+//		set to false to force it off (eg. for testing on desktop against
+//		ios which doesn't support it [as of 13]
+Pop.Opengl.CanRenderToFloat = undefined;
 
 
 Pop.Opengl.GetString = function(Context,Enum)
@@ -580,10 +584,29 @@ Pop.Opengl.Window = function(Name,Rect)
 		//	gr: doesnt NEED to be enabled??
 		//EnableExtension('EXT_shader_texture_lod');
 		//EnableExtension('OES_standard_derivatives');
-		
-		//	bind VAO stuff
+
 		return Context;
 	}
+	
+	this.IsFloatRenderTargetSupported = function()
+	{
+		try
+		{
+			const FloatTexture = new Pop.Image([1,1],'Float4');
+			const RenderTarget = new Pop.Opengl.TextureRenderTarget( [FloatTexture] );
+			const RenderContext = this;
+			RenderTarget.BindRenderTarget( RenderContext );
+			//	cleanup!
+			//	todo: restore binding, viewports etc
+			return true;
+		}
+		catch(e)
+		{
+			Pop.Debug("IsFloatRenderTargetSupported failed: "+e);
+			return false;
+		}
+	}
+
 	
 	this.InitVao = function(Context,Extension)
 	{
@@ -620,6 +643,15 @@ Pop.Opengl.Window = function(Name,Rect)
 	{
 		this.Context = this.CreateContext();
 		this.ContextVersion++;
+		
+		//	gr: I want this in CreateContext, but the calls require this.Context to be setup
+		//		so doing it here for now
+		//	test support for float render targets
+		//	test for undefined, as it may have been forced off by client
+		if ( Pop.Opengl.CanRenderToFloat === undefined )
+		{
+			Pop.Opengl.CanRenderToFloat = this.IsFloatRenderTargetSupported();
+		}
 	}
 	
 	//	we could make this async for some more control...
@@ -911,7 +943,7 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 		const IsImageRenderable = function(Image)
 		{
 			const IsFloat = Image.PixelsFormat.startsWith('Float');
-			if ( IsFloat && !Pop.Opengl.CanRenderToFloat )
+			if ( IsFloat && Pop.Opengl.CanRenderToFloat===false )
 				throw "This platform cannot render to " + Image.PixelsFormat + " texture";
 		}
 		IsImageRenderable(Image0);
@@ -978,12 +1010,8 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 			Pop.Debug("Is not frame buffer!");
 		const Status = gl.checkFramebufferStatus( gl.FRAMEBUFFER );
 		if ( Status != gl.FRAMEBUFFER_COMPLETE )
-		{
-			//	gr: todo: make this check if the target is float before setting
-			Pop.Opengl.CanRenderToFloat = false;
 			throw "New framebuffer attachment status not complete: " + Pop.Opengl.GetString(gl,Status);
-		}
-
+		
 		if ( TestFrameBuffer )
 			if ( !gl.isFramebuffer( this.FrameBuffer ) )
 				throw "Is not frame buffer!";
