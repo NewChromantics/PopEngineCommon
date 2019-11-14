@@ -10,6 +10,7 @@ Pop.Obj.Parse = function(Contents,OnVertex)
 	Obj.Prefix_Material = 'mtllib ';
 	Obj.Prefix_Object = 'o ';
 	Obj.Prefix_Face = 'f ';
+	Obj.Prefix_SmoothShading = 's ';
 	Obj.Prefix_Scale = '# Scale ';
 
 	Pop.Debug("Contents.length",Contents.length);
@@ -23,6 +24,22 @@ Pop.Obj.Parse = function(Contents,OnVertex)
 		f *= Scale;
 		return f;
 	}
+	
+	
+	//	obj lists vertex attributes as it goes, interleaved with objects
+	//	but attribs aren't neccessarily 1:1:1
+	//	we don't know when a list is finished, so flush a vertex when a face references it
+	const Positions = [];	//	array of [x,y,z...]
+	const Normals = [];		//	array of [x,y,z...]
+	const Texcoords = [];	//	array of [u,v,w...]
+	const Faces = [];		//	array of [ [p,n,t], [p,n,t]... ] so can be a quad of 4 elements, but also means a vertex may be a mix and so can only flush a vertex once we've seen it here
+
+	const OnFace = function(Face)
+	{
+		//	split the face into triangles
+		//	flush each vertex
+	}
+	
 	
 	
 	const ParseLine = function(Line)
@@ -54,4 +71,207 @@ Pop.Obj.Parse = function(Contents,OnVertex)
 	}
 	
 	Lines.forEach( ParseLine );
+}
+
+
+//	new Object{} output
+//	.Positions
+//	.Normals
+//	.Uv0
+//	.Triangles
+Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
+{
+	Pop.Debug("Contents.length",Contents.length);
+	const Lines = Contents.split('\n');
+	
+	let Scale = 1.0;
+	
+	const ParsePositionFloat = function(FloatStr)
+	{
+		let f = parseFloat( FloatStr );
+		f *= Scale;
+		return f;
+	}
+	
+	
+	//	obj lists vertex attributes as it goes, interleaved with objects
+	//	but attribs aren't neccessarily 1:1:1
+	//	we don't know when a list is finished, so flush a vertex when a face references it
+	const Positions = [];	//	array of [x,y,z...]
+	const Normals = [];		//	array of [x,y,z...]
+	const TexCoords = [];	//	array of [u,v,w...]
+	const Triangles = [];	//	array of 3x [v,v,v] Vertexes indexes
+	const VertexPositions = [];	//	unrolled positions per vertex
+	const VertexNormals = [];	//	unrolled positions per vertex
+	const VertexTexCoords = [];	//	unrolled positions per vertex
+
+	function OnComment()
+	{
+	}
+	
+	//	returns new vertex index
+	function OnVertex(PositionIndex,TexCoordIndex,NormalIndex)
+	{
+		//	indexes start from 1
+		if ( PositionIndex )	PositionIndex--;
+		if ( NormalIndex )		NormalIndex--;
+		if ( TexCoordIndex )	TexCoordIndex--;
+		
+		//	gr: spreading here is gonna cause problems later when we have something with non-3 components
+		//		should unroll later
+		if ( PositionIndex !== undefined )
+			VertexPositions.push( ...Positions[PositionIndex] );
+		if ( NormalIndex !== undefined )
+			VertexNormals.push( ...Normals[NormalIndex] );
+		if ( TexCoordIndex !== undefined )
+			VertexTexCoords.push( ...TexCoords[TexCoordIndex] );
+		
+		//	check all the arrays align
+		const Lengths =
+		[
+		 VertexPositions.length,
+		 VertexNormals.length,
+		 VertexTexCoords.length,
+		].filter( l => l>0 );
+		
+		//	check all same
+		if ( !Lengths.every( l => l==Lengths[0] ) )
+			throw "Vertex attribute arrays misaligned";
+		
+		//	return new index
+		return Lengths[0]-1;
+	}
+	
+	function OnFace(Face)
+	{
+		//	Face is [ p/n/t, p/n/t, p/n/t ... ]
+		
+		//	split the face into triangles
+		if ( Face.length < 3 )
+			throw "OBJ face has less than 3 points";
+		if ( Face.length == 4 )
+		{
+			//	we don't have to recurse, but for now...
+			//	https://stackoverflow.com/a/23724231/355753
+			//	order for quad restarts at 0 so it's always triangle fan?
+			const t0 = [0,1,2];
+			const t1 = [0,2,3];
+			OnFace( t0.map( i => Face[i] ) );
+			OnFace( t1.map( i => Face[i] ) );
+			return;
+		}
+		if ( Face.length != 3 )
+			throw "OBJ face with " + Face.length + " != 3 points";
+		
+		//	flush each vertex
+		const FaceVertexIndexes = [];
+		function ParseFaceIndexes(FaceIndexes,FaceIndexIndex)
+		{
+			const Indexes = FaceIndexes.split('/');
+			const VertexIndex = OnVertex( ...Indexes );
+			FaceVertexIndexes.push( VertexIndex );
+		}
+		Face.forEach(ParseFaceIndexes);
+		Triangles.push( ...FaceVertexIndexes );
+	}
+	
+	function OnPosition(Values)
+	{
+		const xyz = Values.map( ParsePositionFloat );
+		Positions.push( xyz );
+	}
+	
+	function OnNormal(Values)
+	{
+		Normals.push( Values );
+	}
+
+	function OnTexCoord(Values)
+	{
+		TexCoords.push( Values );
+	}
+
+	function OnScale()
+	{
+		Scale = parseFloat( Line );
+		Pop.Debug("Found scale in obj: ",Scale);
+	}
+	
+	function OnMaterialAsset()
+	{
+	}
+	
+	function OnMaterial()
+	{
+	}
+
+	function OnObject()
+	{
+		//	todo: flush current face list
+	}
+	
+	function OnGroup()
+	{
+	}
+
+	function OnSmoothShading()
+	{
+	}
+
+
+	const ParseFuncTable = {};
+	ParseFuncTable['# Scale '] = OnScale;
+	ParseFuncTable['#'] = OnComment;
+	ParseFuncTable['v '] = OnPosition;
+	ParseFuncTable['vn '] = OnNormal;
+	ParseFuncTable['vt '] = OnTexCoord;
+	ParseFuncTable['mtllib '] = OnMaterialAsset;
+	ParseFuncTable['usemtl '] = OnMaterial;
+	ParseFuncTable['g '] = OnGroup;
+	ParseFuncTable['o '] = OnObject;
+	ParseFuncTable['f '] = OnFace;
+	ParseFuncTable['s '] = OnSmoothShading;
+
+	const ParseLine = function(Line)
+	{
+		Line = Line.trim();
+		if ( !Line.length )
+			return;
+		
+		//	gr: this depends on the table's keys being on populated-order as
+		//		we want scale to come before comments
+		let ParseFunc = null;
+		for ( let Command in ParseFuncTable )
+		{
+			if ( !Line.startsWith(Command) )
+				continue;
+			
+			//	get func and remove prefix
+			ParseFunc = ParseFuncTable[Command];
+			Line = Line.replace( Command,'');
+			break;
+		}
+
+		if ( !ParseFunc )
+		{
+			Pop.Debug("OBJ skipping unknown prefixed line", Line );
+			return;
+		}
+		
+		//	split spaces (&trim)
+		const LineParts = Line.split(' ').filter( x => x.length != 0 );
+		
+		ParseFunc( LineParts );
+	}
+	
+	Lines.forEach( ParseLine );
+	
+	//	todo: multiple geos
+	const Geometry = {};
+	Geometry.Positions = VertexPositions.length ? VertexPositions : undefined;
+	Geometry.Normals = VertexNormals.length ? VertexNormals : undefined;
+	Geometry.TexCoords = VertexTexCoords.length ? VertexTexCoords : undefined;
+	Geometry.TriangleIndexes = Triangles;
+
+	OnGeometry( Geometry );
 }
