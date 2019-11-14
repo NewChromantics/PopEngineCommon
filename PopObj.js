@@ -84,11 +84,34 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 	const Positions = [];	//	array of [x,y,z...]
 	const Normals = [];		//	array of [x,y,z...]
 	const TexCoords = [];	//	array of [u,v,w...]
-	const Triangles = [];	//	array of 3x [v,v,v] Vertexes indexes
-	const VertexPositions = [];	//	unrolled positions per vertex
-	const VertexNormals = [];	//	unrolled positions per vertex
-	const VertexTexCoords = [];	//	unrolled positions per vertex
+	let Triangles = [];	//	array of 3x [v,v,v] Vertexes indexes
+	let VertexPositions = [];	//	unrolled positions per vertex
+	let VertexNormals = [];	//	unrolled positions per vertex
+	let VertexTexCoords = [];	//	unrolled positions per vertex
 
+	let CurrentGeo = null;
+	
+	function FlushCurrentGeo()
+	{
+		if ( !CurrentGeo )
+			return;
+		
+		const Geometry = Object.assign( {}, CurrentGeo );
+		Geometry.Positions = VertexPositions.length ? VertexPositions : undefined;
+		Geometry.Normals = VertexNormals.length ? VertexNormals : undefined;
+		Geometry.TexCoords = VertexTexCoords.length ? VertexTexCoords : undefined;
+		Geometry.TriangleIndexes = Triangles;
+		OnGeometry( Geometry );
+		
+		
+		//	setup for new geo
+		Triangles = [];	//	array of 3x [v,v,v] Vertexes indexes
+		VertexPositions = [];	//	unrolled positions per vertex
+		VertexNormals = [];	//	unrolled positions per vertex
+		VertexTexCoords = [];	//	unrolled positions per vertex
+		CurrentGeo = null;
+	}
+	
 	function OnComment()
 	{
 	}
@@ -189,9 +212,20 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 	{
 	}
 
-	function OnObject()
+	function OnObject(Names)
 	{
+		const Name = Names.join(' ');
+		
+		//	order CAN go
+		//	verts
+		//	geo
+		//	faces
+		//	so we flush if there's already one
+		FlushCurrentGeo();
+		
 		//	todo: flush current face list
+		CurrentGeo = {};
+		CurrentGeo.Name = Name;
 	}
 	
 	function OnGroup()
@@ -250,12 +284,6 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 	
 	Lines.forEach( ParseLine );
 	
-	//	todo: multiple geos
-	const Geometry = {};
-	Geometry.Positions = VertexPositions.length ? VertexPositions : undefined;
-	Geometry.Normals = VertexNormals.length ? VertexNormals : undefined;
-	Geometry.TexCoords = VertexTexCoords.length ? VertexTexCoords : undefined;
-	Geometry.TriangleIndexes = Triangles;
-
-	OnGeometry( Geometry );
+	//	finish off any geo
+	FlushCurrentGeo();
 }
