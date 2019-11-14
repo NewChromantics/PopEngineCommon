@@ -26,22 +26,6 @@ Pop.Obj.Parse = function(Contents,OnVertex)
 	}
 	
 	
-	//	obj lists vertex attributes as it goes, interleaved with objects
-	//	but attribs aren't neccessarily 1:1:1
-	//	we don't know when a list is finished, so flush a vertex when a face references it
-	const Positions = [];	//	array of [x,y,z...]
-	const Normals = [];		//	array of [x,y,z...]
-	const Texcoords = [];	//	array of [u,v,w...]
-	const Faces = [];		//	array of [ [p,n,t], [p,n,t]... ] so can be a quad of 4 elements, but also means a vertex may be a mix and so can only flush a vertex once we've seen it here
-
-	const OnFace = function(Face)
-	{
-		//	split the face into triangles
-		//	flush each vertex
-	}
-	
-	
-	
 	const ParseLine = function(Line)
 	{
 		Line = Line.trim();
