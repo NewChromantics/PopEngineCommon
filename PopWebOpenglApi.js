@@ -376,6 +376,8 @@ Pop.Opengl.Window = function(Name,Rect)
 
 	this.OnResize = function(ResizeEvent)
 	{
+		Pop.Debug("OnResize",ResizeEvent);
+		
 		//	invalidate cache
 		this.ScreenRectCache = null;
 	
@@ -411,6 +413,9 @@ Pop.Opengl.Window = function(Name,Rect)
 
 		//	catch window resize
 		window.addEventListener('resize', this.OnResize.bind(this) );
+		
+		//	catch fullscreen state change
+		Element.addEventListener('fullscreenchange', this.OnFullscreenChanged.bind(this) );
 	}
 	
 	this.GetScreenRect = function()
@@ -757,6 +762,53 @@ Pop.Opengl.Window = function(Name,Rect)
 		return RenderTarget;
 	}
 
+	this.IsFullscreenSupported = function()
+	{
+		return document.fullscreenEnabled;
+	}
+	
+	this.OnFullscreenChanged = function(Event)
+	{
+		Pop.Debug("OnFullscreenChanged", Event);
+		//this.OnResize();
+	}
+	
+	this.IsFullscreen = function()
+	{
+		const Canvas = this.GetCanvasElement();
+		//if ( document.fullscreenElement == Canvas )
+		if ( document.fullscreenElement )
+			return true;
+		return false;
+	}
+	
+	this.SetFullscreen = function(Enable=true)
+	{
+		if ( !Enable )
+		{
+			//	undo after promise if there is a pending one
+			document.exitFullscreen();
+			return;
+		}
+		const Element = this.GetCanvasElement();
+		
+		const OnFullscreenSuccess = function()
+		{
+			//	maybe should be following fullscreenchange event
+		}.bind(this);
+		
+		const OnFullscreenError = function(Error)
+		{
+			Pop.Debug("OnFullscreenError", Error);
+		}.bind(this);
+		
+		//	gr: normally we want Element to go full screen
+		//		but for acidic ocean, we're using other HTML elements
+		//		and making the canvas fullscreen hides everything else
+		//		so.... may need some user-option
+		document.body.requestFullscreen().then( OnFullscreenSuccess ).catch( OnFullscreenError );
+		//Element.requestFullscreen().then( OnFullscreenSuccess ).catch( OnFullscreenError );
+	}
 	
 
 	this.InitialiseContext();
