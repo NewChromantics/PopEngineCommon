@@ -20,6 +20,9 @@ Pop.GlslVersion = 100;
 //		ios which doesn't support it [as of 13]
 Pop.Opengl.CanRenderToFloat = undefined;
 
+//	allow turning off float support
+Pop.Opengl.AllowFloatTextures = !Pop.GetExeArguments().includes('DisableFloatTextures');
+
 
 Pop.Opengl.GetString = function(Context,Enum)
 {
@@ -567,10 +570,12 @@ Pop.Opengl.Window = function(Name,Rect)
 		
 		Pop.Debug("Supported Extensions", gl.getSupportedExtensions() );
 
-		const InitFloatTexture = function()
+		const InitFloatTexture = function(Context)
 		{
 			//	gl.Float already exists, but this now allows it for texImage
 			this.FloatTextureSupported = true;
+			Context.FloatTextureSupported = true;
+			
 		}.bind(this);
 
 		const InitDepthTexture = function(Context,Extension)
@@ -586,6 +591,8 @@ Pop.Opengl.Window = function(Name,Rect)
 			{
 				const Extension = gl.getExtension(ExtensionName);
 				gl[ExtensionName] = Extension;
+				if ( Extension == null )
+					throw ExtensionName + " not supported (null)";
 				Pop.Debug("Loaded extension",ExtensionName,Extension);
 				if ( Init )
 					Init( gl, Extension );
@@ -595,7 +602,9 @@ Pop.Opengl.Window = function(Name,Rect)
 				Pop.Debug("Error enabling ",ExtensionName,e);
 			}
 		};
-		EnableExtension('OES_texture_float',InitFloatTexture);
+		
+		if ( Pop.Opengl.AllowFloatTextures )
+			EnableExtension('OES_texture_float',InitFloatTexture);
 		EnableExtension('WEBGL_depth_texture',InitDepthTexture);
 		EnableExtension('EXT_blend_minmax');
 		EnableExtension('OES_vertex_array_object', this.InitVao.bind(this) );
@@ -612,6 +621,12 @@ Pop.Opengl.Window = function(Name,Rect)
 	
 	this.IsFloatRenderTargetSupported = function()
 	{
+		//	gr: because of some internal workarounds/auto conversion in images
+		//		trying to create & bind a float4 will inadvertently work! if we
+		//		dont support float textures
+		if ( !this.FloatTextureSupported )
+			return false;
+		
 		try
 		{
 			const FloatTexture = new Pop.Image([1,1],'Float4');

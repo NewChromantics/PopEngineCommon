@@ -10,7 +10,7 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	//	or webgl2
 	//Pop.Debug( 'OpenglContext.FLOAT', gl.FLOAT );
 	
-	if ( this.FloatTextureSupported )
+	if ( OpenglContext.FloatTextureSupported )
 	{
 		if ( false && gl instanceof WebGL2RenderingContext )
 		{
@@ -306,7 +306,7 @@ Pop.Image = function(Filename)
 		//		"do the write"
 		
 		//	dont support float, convert
-		if ( this.Pixels instanceof Float32Array && !gl.FloatTextureSupported )
+		if ( this.Pixels instanceof Float32Array && !RenderContext.FloatTextureSupported )
 		{
 			//	for now, convert to 8bit
 			const NewPixels = FloatToInt8Pixels( this.Pixels, this.PixelsFormat, Width, Height );
