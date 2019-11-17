@@ -595,7 +595,7 @@ Pop.Opengl.Window = function(Name,Rect)
 				Pop.Debug("Error enabling ",ExtensionName,e);
 			}
 		};
-		//EnableExtension('OES_texture_float',InitFloatTexture);
+		EnableExtension('OES_texture_float',InitFloatTexture);
 		EnableExtension('WEBGL_depth_texture',InitDepthTexture);
 		EnableExtension('EXT_blend_minmax');
 		EnableExtension('OES_vertex_array_object', this.InitVao.bind(this) );
