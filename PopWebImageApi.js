@@ -10,24 +10,27 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	//	or webgl2
 	//Pop.Debug( 'OpenglContext.FLOAT', gl.FLOAT );
 	
-	if ( false && gl instanceof WebGL2RenderingContext )
+	if ( this.FloatTextureSupported )
 	{
-		switch ( PixelFormat )
+		if ( false && gl instanceof WebGL2RenderingContext )
 		{
-			case 'Float1':		return [ gl.R32F,		gl.FLOAT];
-			case 'Float2':		return [ gl.RG32F,		gl.FLOAT];
-			case 'Float3':		return [ gl.RGB32F,		gl.FLOAT];
-			case 'Float4':		return [ gl.RGBA32F,	gl.FLOAT];
+			switch ( PixelFormat )
+			{
+				case 'Float1':		return [ gl.R32F,		gl.FLOAT];
+				case 'Float2':		return [ gl.RG32F,		gl.FLOAT];
+				case 'Float3':		return [ gl.RGB32F,		gl.FLOAT];
+				case 'Float4':		return [ gl.RGBA32F,	gl.FLOAT];
+			}
 		}
-	}
-	else
-	{
-		switch ( PixelFormat )
+		else
 		{
-			case 'Float1':		return [ gl.LUMINANCE,	gl.FLOAT];
-			case 'Float2':		return [ gl.LUMINANCE_ALPHA,	gl.FLOAT];
-			case 'Float3':		return [ gl.RGB,		gl.FLOAT];
-			case 'Float4':		return [ gl.RGBA,		gl.FLOAT];
+			switch ( PixelFormat )
+			{
+				case 'Float1':		return [ gl.LUMINANCE,	gl.FLOAT];
+				case 'Float2':		return [ gl.LUMINANCE_ALPHA,	gl.FLOAT];
+				case 'Float3':		return [ gl.RGB,		gl.FLOAT];
+				case 'Float4':		return [ gl.RGBA,		gl.FLOAT];
+			}
 		}
 	}
 	
@@ -36,8 +39,8 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 		case 'Greyscale':	return [ gl.LUMINANCE,	gl.UNSIGNED_BYTE];
 		case 'RGBA':		return [ gl.RGBA,		gl.UNSIGNED_BYTE];
 		case 'RGB':			return [ gl.RGB,		gl.UNSIGNED_BYTE];
+		case 'RGBA32':		return [ gl.RGBA,		gl.UNSIGNED_INT_24_8];
 	}
-	
 	throw "PixelFormatToOpenglFormat: Unhandled pixel format " + PixelFormat;
 }
 
@@ -76,7 +79,8 @@ function GetTextureFormatPixelByteSize(OpenglContext,Format,Type)
 	
 	switch ( Type )
 	{
-		case gl.UNSIGNED_BYTE:	return Channels * 1;
+		case gl.UNSIGNED_BYTE:		return Channels * 1;
+		case gl.UNSIGNED_INT_24_8:	return Channels * 4;
 		case gl.FLOAT:			return Channels * 4;
 		default:				throw "Unhandled Type GetTextureFormatPixelByteSize(" + Format + "," + Type + ")";
 	}
@@ -113,6 +117,45 @@ function GetPixelsFromHtmlImageElement(Img)
 		return Pixels;
 	}
 }
+
+function Float3ToRgb(FloatArray)
+{
+	const IntArray = new Uint8Array( FloatArray.length );
+	for ( let i=0;	i<IntArray.length;	i++ )
+	{
+		const Float = FloatArray[i];
+		const Int = Math.clamp( 0, 255, Float * 255 );
+		IntArray[i] = Int;
+	}
+	return IntArray;
+}
+
+function Float4ToRgba(FloatArray)
+{
+	return Float3ToRgb(FloatArray);
+}
+
+function FloatToInt8Pixels(FloatArray,FloatFormat,Width,Height)
+{
+	if ( FloatFormat == 'Float3' )
+	{
+		const Output = {};
+		Output.Pixels = Float3ToRgb(FloatArray);
+		Output.PixelsFormat = 'RGB';
+		return Output;
+	}
+
+	if ( FloatFormat == 'Float4' )
+	{
+		const Output = {};
+		Output.Pixels = Float4ToRgba(FloatArray);
+		Output.PixelsFormat = 'RGBA';
+		return Output;
+	}
+	
+	throw "Unhandled float->8bit format " + FloatFormat;
+}
+
 
 Pop.Image = function(Filename)
 {
@@ -258,6 +301,35 @@ Pop.Image = function(Filename)
 		const Width = this.GetWidth();
 		const Height = this.GetHeight();
 
+		//	convert pixels
+		//	gr: ideally, we don't mess with original pixels. Refactor this so there's a more low level
+		//		"do the write"
+		
+		//	dont support float, convert
+		if ( this.Pixels instanceof Float32Array && !gl.FloatTextureSupported )
+		{
+			//	for now, convert to 8bit
+			const NewPixels = FloatToInt8Pixels( this.Pixels, this.PixelsFormat, Width, Height );
+			this.Pixels = NewPixels.Pixels;
+			this.PixelsFormat = NewPixels.PixelsFormat;
+			
+			
+			/*
+			if ( RenderContext.Int32TextureSupported )
+			{
+				Pop.Debug("Convert float to uint32");
+				const Pixels32 = new Uint32Array( this.Pixels );
+				this.Pixels = Pixels32;
+				this.PixelsFormat = "RGBA32";
+			}
+			else
+			{
+				throw "Float texture not supported, and no backup";
+			}
+			 */
+		}
+		
+		
 		if ( this.Pixels instanceof Image )
 		{
 			//Pop.Debug("Image from Image",this.PixelsFormat);
@@ -308,6 +380,21 @@ Pop.Image = function(Filename)
 
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
 		}
+		else if ( this.Pixels instanceof Uint32Array )
+		{
+			Pop.Debug("Image from Uint32Array",this.PixelsFormat);
+			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
+			let SourceFormat = SourceFormatTypes[0];
+			const SourceType = SourceFormatTypes[1];
+			InternalFormat = SourceFormat;
+			
+			//InternalFormat = gl.DEPTH24_STENCIL8;
+			//SourceFormat = gl.DEPTH_STENCIL;
+			
+			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
+			
+			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
+		}
 		else
 		{
 			throw "Unhandled Pixel buffer format " + (typeof this.Pixels) + "/" + this.Pixels.prototype.constructor;
@@ -342,6 +429,7 @@ Pop.Image = function(Filename)
 	{
 		let HtmlImage = Pop.GetCachedAsset(Filename);
 		
+		//	gr: this conversion should be in WritePixels()
 		if ( HtmlImage.constructor == WebApi_HtmlImageElement )
 		{
 			const Pixels = GetPixelsFromHtmlImageElement(HtmlImage);

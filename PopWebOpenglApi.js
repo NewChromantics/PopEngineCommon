@@ -371,6 +371,9 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.TextureHeap = new Pop.HeapMeta("Opengl Textures");
 	this.GeometryHeap = new Pop.HeapMeta("Opengl Geometry");
 
+	this.FloatTextureSupported = false;
+	this.Int32TextureSupported = false;	//	depth texture 24,8
+	
 	this.ActiveTexureIndex = 0;
 	this.TextureRenderTargets = [];	//	this is a context asset, so maybe it shouldn't be kept here
 
@@ -563,8 +566,21 @@ Pop.Opengl.Window = function(Name,Rect)
 		//	https://developer.mozilla.org/en-US/docs/Web/API/OES_texture_float
 		
 		Pop.Debug("Supported Extensions", gl.getSupportedExtensions() );
+
+		const InitFloatTexture = function()
+		{
+			//	gl.Float already exists, but this now allows it for texImage
+			this.FloatTextureSupported = true;
+		}.bind(this);
+
+		const InitDepthTexture = function(Context,Extension)
+		{
+			Context.UNSIGNED_INT_24_8 = Extension.UNSIGNED_INT_24_8_WEBGL;
+			this.Int32TextureSupported = true;
+		}.bind(this);
+
 		
-		let EnableExtension = function(ExtensionName,Init)
+		const EnableExtension = function(ExtensionName,Init)
 		{
 			try
 			{
@@ -579,7 +595,8 @@ Pop.Opengl.Window = function(Name,Rect)
 				Pop.Debug("Error enabling ",ExtensionName,e);
 			}
 		};
-		EnableExtension('OES_texture_float');
+		//EnableExtension('OES_texture_float',InitFloatTexture);
+		EnableExtension('WEBGL_depth_texture',InitDepthTexture);
 		EnableExtension('EXT_blend_minmax');
 		EnableExtension('OES_vertex_array_object', this.InitVao.bind(this) );
 		EnableExtension('WEBGL_draw_buffers', this.InitMultipleRenderTargets.bind(this) );
