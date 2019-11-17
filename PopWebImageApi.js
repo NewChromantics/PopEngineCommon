@@ -118,8 +118,54 @@ function GetPixelsFromHtmlImageElement(Img)
 	}
 }
 
-function Float3ToRgb(FloatArray)
+Math.Abs3 = function(xyz)
 {
+	const AbsXyz = xyz.map( Math.abs );
+	return AbsXyz;
+}
+
+//	from shaders
+function GetScaledOutput(Position,ScalarMinMax)
+{
+	//	get the scalar, but remember, we are normalising to -0.5,,,0.5
+	//	so it needs to double
+	//	and then its still 0...1 so we need to multiply by an arbritry number I guess
+	//	or 1/scalar
+	const ScalarMin = ScalarMinMax[0];
+	const ScalarMax = ScalarMinMax[1];
+	const PosAbs = Math.Abs3(Position);
+	const Big = Math.max( ScalarMin, Math.max( PosAbs[0], Math.max( PosAbs[1], PosAbs[2] ) ) );
+	const Scalar = Math.Range( ScalarMin, ScalarMax, Big );
+	
+	const x = ((Position[0] / Big) / 2.0) + 0.5;
+	const y = ((Position[1] / Big) / 2.0) + 0.5;
+	const z = ((Position[2] / Big) / 2.0) + 0.5;
+	
+	return [x,y,z,Scalar];
+}
+
+function Float3ToRgbHomogenous(FloatArray)
+{
+	const ScalarMinMax = [0,1];
+	const Length = FloatArray.length / 3;
+	const IntArray = new Uint8Array( Length * 4 );
+	for ( let i=0;	i<FloatArray.length;	i+=3 )
+	{
+		const xyz = FloatArray.slice( i, i+3 );
+		let xyzw = GetScaledOutput( xyz, ScalarMinMax );
+		xyzw = xyzw.map( Float => Math.clamp( 0, 255, Float * 255 ) );
+		const IntIndex = (i/3) * 4;
+		IntArray[IntIndex+0] = xyzw[0];
+		IntArray[IntIndex+1] = xyzw[1];
+		IntArray[IntIndex+2] = xyzw[2];
+		IntArray[IntIndex+3] = xyzw[3];
+	}
+	return IntArray;
+}
+
+function Float4ToRgba(FloatArray)
+{
+	//	flat conversion
 	const IntArray = new Uint8Array( FloatArray.length );
 	for ( let i=0;	i<IntArray.length;	i++ )
 	{
@@ -130,18 +176,13 @@ function Float3ToRgb(FloatArray)
 	return IntArray;
 }
 
-function Float4ToRgba(FloatArray)
-{
-	return Float3ToRgb(FloatArray);
-}
-
 function FloatToInt8Pixels(FloatArray,FloatFormat,Width,Height)
 {
 	if ( FloatFormat == 'Float3' )
 	{
 		const Output = {};
-		Output.Pixels = Float3ToRgb(FloatArray);
-		Output.PixelsFormat = 'RGB';
+		Output.Pixels = Float3ToRgbHomogenous(FloatArray);
+		Output.PixelsFormat = 'RGBA';
 		return Output;
 	}
 
@@ -308,6 +349,7 @@ Pop.Image = function(Filename)
 		//	dont support float, convert
 		if ( this.Pixels instanceof Float32Array && !RenderContext.FloatTextureSupported )
 		{
+			Pop.Debug("Float texture not supported, converting to 8bit");
 			//	for now, convert to 8bit
 			const NewPixels = FloatToInt8Pixels( this.Pixels, this.PixelsFormat, Width, Height );
 			this.Pixels = NewPixels.Pixels;
