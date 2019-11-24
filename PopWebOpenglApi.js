@@ -20,6 +20,9 @@ Pop.GlslVersion = 100;
 //		ios which doesn't support it [as of 13]
 Pop.Opengl.CanRenderToFloat = undefined;
 
+//	allow turning off float support
+Pop.Opengl.AllowFloatTextures = !Pop.GetExeArguments().includes('DisableFloatTextures');
+
 
 Pop.Opengl.GetString = function(Context,Enum)
 {
@@ -371,11 +374,16 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.TextureHeap = new Pop.HeapMeta("Opengl Textures");
 	this.GeometryHeap = new Pop.HeapMeta("Opengl Geometry");
 
+	this.FloatTextureSupported = false;
+	this.Int32TextureSupported = false;	//	depth texture 24,8
+	
 	this.ActiveTexureIndex = 0;
 	this.TextureRenderTargets = [];	//	this is a context asset, so maybe it shouldn't be kept here
 
 	this.OnResize = function(ResizeEvent)
 	{
+		Pop.Debug("OnResize",ResizeEvent);
+		
 		//	invalidate cache
 		this.ScreenRectCache = null;
 	
@@ -411,6 +419,9 @@ Pop.Opengl.Window = function(Name,Rect)
 
 		//	catch window resize
 		window.addEventListener('resize', this.OnResize.bind(this) );
+		
+		//	catch fullscreen state change
+		Element.addEventListener('fullscreenchange', this.OnFullscreenChanged.bind(this) );
 	}
 	
 	this.GetScreenRect = function()
@@ -558,13 +569,30 @@ Pop.Opengl.Window = function(Name,Rect)
 		//	https://developer.mozilla.org/en-US/docs/Web/API/OES_texture_float
 		
 		Pop.Debug("Supported Extensions", gl.getSupportedExtensions() );
+
+		const InitFloatTexture = function(Context)
+		{
+			//	gl.Float already exists, but this now allows it for texImage
+			this.FloatTextureSupported = true;
+			Context.FloatTextureSupported = true;
+			
+		}.bind(this);
+
+		const InitDepthTexture = function(Context,Extension)
+		{
+			Context.UNSIGNED_INT_24_8 = Extension.UNSIGNED_INT_24_8_WEBGL;
+			this.Int32TextureSupported = true;
+		}.bind(this);
+
 		
-		let EnableExtension = function(ExtensionName,Init)
+		const EnableExtension = function(ExtensionName,Init)
 		{
 			try
 			{
 				const Extension = gl.getExtension(ExtensionName);
 				gl[ExtensionName] = Extension;
+				if ( Extension == null )
+					throw ExtensionName + " not supported (null)";
 				Pop.Debug("Loaded extension",ExtensionName,Extension);
 				if ( Init )
 					Init( gl, Extension );
@@ -574,7 +602,10 @@ Pop.Opengl.Window = function(Name,Rect)
 				Pop.Debug("Error enabling ",ExtensionName,e);
 			}
 		};
-		EnableExtension('OES_texture_float');
+		
+		if ( Pop.Opengl.AllowFloatTextures )
+			EnableExtension('OES_texture_float',InitFloatTexture);
+		EnableExtension('WEBGL_depth_texture',InitDepthTexture);
 		EnableExtension('EXT_blend_minmax');
 		EnableExtension('OES_vertex_array_object', this.InitVao.bind(this) );
 		EnableExtension('WEBGL_draw_buffers', this.InitMultipleRenderTargets.bind(this) );
@@ -590,6 +621,12 @@ Pop.Opengl.Window = function(Name,Rect)
 	
 	this.IsFloatRenderTargetSupported = function()
 	{
+		//	gr: because of some internal workarounds/auto conversion in images
+		//		trying to create & bind a float4 will inadvertently work! if we
+		//		dont support float textures
+		if ( !this.FloatTextureSupported )
+			return false;
+		
 		try
 		{
 			const FloatTexture = new Pop.Image([1,1],'Float4');
@@ -757,6 +794,53 @@ Pop.Opengl.Window = function(Name,Rect)
 		return RenderTarget;
 	}
 
+	this.IsFullscreenSupported = function()
+	{
+		return document.fullscreenEnabled;
+	}
+	
+	this.OnFullscreenChanged = function(Event)
+	{
+		Pop.Debug("OnFullscreenChanged", Event);
+		//this.OnResize();
+	}
+	
+	this.IsFullscreen = function()
+	{
+		const Canvas = this.GetCanvasElement();
+		//if ( document.fullscreenElement == Canvas )
+		if ( document.fullscreenElement )
+			return true;
+		return false;
+	}
+	
+	this.SetFullscreen = function(Enable=true)
+	{
+		if ( !Enable )
+		{
+			//	undo after promise if there is a pending one
+			document.exitFullscreen();
+			return;
+		}
+		const Element = this.GetCanvasElement();
+		
+		const OnFullscreenSuccess = function()
+		{
+			//	maybe should be following fullscreenchange event
+		}.bind(this);
+		
+		const OnFullscreenError = function(Error)
+		{
+			Pop.Debug("OnFullscreenError", Error);
+		}.bind(this);
+		
+		//	gr: normally we want Element to go full screen
+		//		but for acidic ocean, we're using other HTML elements
+		//		and making the canvas fullscreen hides everything else
+		//		so.... may need some user-option
+		document.body.requestFullscreen().then( OnFullscreenSuccess ).catch( OnFullscreenError );
+		//Element.requestFullscreen().then( OnFullscreenSuccess ).catch( OnFullscreenError );
+	}
 	
 
 	this.InitialiseContext();
