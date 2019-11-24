@@ -95,8 +95,17 @@ Pop.AsyncCacheAssetAsImage = async function(Filename)
 		return;
 	}
 	
-	const Contents = await Pop.LoadFileAsImageAsync( Filename );
-	Pop._AssetCache[Filename] = Contents;
+	try
+	{
+		const Contents = await Pop.LoadFileAsImageAsync( Filename );
+		Pop._AssetCache[Filename] = Contents;
+	}
+	catch(e)
+	{
+		Pop.Debug("Error loading file",Filename,e);
+		Pop._AssetCache[Filename] = false;
+		throw "Error loading file " + Filename + ": " + e;
+	}
 }
 
 Pop.LoadFileAsString = function(Filename)
