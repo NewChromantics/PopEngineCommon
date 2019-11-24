@@ -228,8 +228,9 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 		CurrentGeo.Name = Name;
 	}
 	
-	function OnGroup()
+	function OnGroup(Names)
 	{
+		OnObject( Names );
 	}
 
 	function OnSmoothShading()
