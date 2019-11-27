@@ -1618,11 +1618,6 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 	{
 		const gl = RenderContext.GetGlContext();
 		
-		//	data as array doesn't work properly and gives us
-		//	gldrawarrays attempt to access out of range vertices in attribute 0
-		if ( Array.isArray(VertexData) )
-			VertexData = new Float32Array( VertexData );
-		
 		this.Buffer = gl.createBuffer();
 		this.BufferContextVersion = RenderContext.ContextVersion;
 		
@@ -1647,6 +1642,11 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 		{
 			let Type = GetOpenglElementType( gl, Floats );
 			
+			//	data as array doesn't work properly and gives us
+			//	gldrawarrays attempt to access out of range vertices in attribute 0
+			if ( Array.isArray(Floats) )
+				Floats = new Float32Array( Floats );
+
 			let Attrib = {};
 			Attrib.Name = Name;
 			Attrib.Floats = Floats;
