@@ -1637,16 +1637,20 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 			throw "Triangle index count not divisible by 3";
 		}
 		
+		function CleanupAttrib(Attrib)
+		{
+			//	fix attribs
+			//	data as array doesn't work properly and gives us
+			//	gldrawarrays attempt to access out of range vertices in attribute 0
+			if ( Array.isArray(Attrib.Data) )
+				Attrib.Data = new Float32Array( Attrib.Data );
+		}		
+		
 		let TotalByteLength = 0;
 		const GetOpenglAttribute = function(Name,Floats,Location,Size)
 		{
 			let Type = GetOpenglElementType( gl, Floats );
 			
-			//	data as array doesn't work properly and gives us
-			//	gldrawarrays attempt to access out of range vertices in attribute 0
-			if ( Array.isArray(Floats) )
-				Floats = new Float32Array( Floats );
-
 			let Attrib = {};
 			Attrib.Name = Name;
 			Attrib.Floats = Floats;
@@ -1660,6 +1664,7 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 			//	should get location from shader binding!
 			const Location = Index;
 			const Attrib = Attribs[Name];
+			CleanupAttrib(Attrib);
 			const OpenglAttrib = GetOpenglAttribute( Name, Attrib.Data, Location, Attrib.Size );
 			TotalByteLength += Attrib.Data.byteLength;
 			return OpenglAttrib;
