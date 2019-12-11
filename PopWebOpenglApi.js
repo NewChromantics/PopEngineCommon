@@ -882,11 +882,17 @@ Pop.Opengl.RenderTarget = function()
 	
 	this.ClearColour = function(r,g,b,a=1)
 	{
-		let gl = this.GetGlContext();
+		const gl = this.GetGlContext();
 		gl.clearColor( r, g, b, a );
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	}
-	
+
+	this.ClearDepth = function()
+	{
+		const gl = this.GetGlContext();
+		gl.clear(gl.DEPTH_BUFFER_BIT);
+	}
+
 	this.ResetState = function()
 	{
 		const gl = this.GetGlContext();
