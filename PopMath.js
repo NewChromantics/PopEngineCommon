@@ -578,7 +578,7 @@ Math.TransformPosition = function (Position,Transform)
 {
 	const PosMatrix = Math.CreateTranslationMatrix(...Position);
 	const TransMatrix = Math.MatrixMultiply4x4(Transform,PosMatrix);
-	const TransPos = Math.GetMatrixTranslation(TransMatrix);
+	const TransPos = Math.GetMatrixTranslation(TransMatrix,true);
 	return TransPos;
 }
 
