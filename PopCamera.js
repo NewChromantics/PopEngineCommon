@@ -12,6 +12,8 @@ Pop.Camera = function(CopyCamera)
 	this.NearDistance = 0.01;
 	this.FarDistance = 100;
 
+	this.FocalCenter = [0,0];		//	cx & cy for projection matrix
+
 	if ( CopyCamera instanceof Pop.Camera )
 	{
 		this.FovVertical = CopyCamera.FovVertical;
@@ -152,8 +154,8 @@ Pop.Camera = function(CopyCamera)
 		OpenglFocal.fy = 1.0 / Math.tan( Math.radians(FovVertical) / 2);
 		//OpenglFocal.fx = 1.0 / Math.tan( Math.radians(FovHorizontal) / 2);
 		OpenglFocal.fx = OpenglFocal.fy / Aspect;
-		OpenglFocal.cx = 0;
-		OpenglFocal.cy = 0;
+		OpenglFocal.cx = this.FocalCenter[0];
+		OpenglFocal.cy = this.FocalCenter[1];
 		OpenglFocal.s = 0;
 		return OpenglFocal;
 	}
