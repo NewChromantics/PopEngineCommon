@@ -19,7 +19,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 	Window.Controls = [];
 	Window.Labels = [];
 
-	Window.OnParamChanged = function(Name)
+	//	changed externally
 	{
 		if ( !this.Controls.hasOwnProperty(Name) )
 		{
@@ -32,7 +32,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 		//Pop.Debug("Updating control", JSON.stringify(Control), Value );
 		Control.SetControlValue( Value );
 		Control.OnValueChanged( Value );
-	}
+	}.bind(Window);
 	
 	let AddSlider = function(Name,Min,Max,CleanValue)
 	{
@@ -224,7 +224,25 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 	}
 	
 	Window.AddParam = AddSlider;
-	
+
+	//	changed externally
+	Window.OnParamsChanged = function ()
+	{
+		const Keys = Object.keys(Params);
+		Pop.Debug("OnParamsChanged",Keys);
+		const UpdateInParams = true;
+		for (const Key in Keys)
+		{
+			try
+			{
+				this.OnParamChanged(Key);
+			}
+			catch (e)
+			{
+				Pop.Debug("OnParamChanged(" + Key + ") error",e);
+			}
+		}
+	}.bind(Window);
 	
 	return Window;
 }
