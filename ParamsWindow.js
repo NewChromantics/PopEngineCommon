@@ -20,6 +20,7 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 	Window.Labels = [];
 
 	//	changed externally
+	Window.OnParamChanged = function(Name)
 	{
 		if ( !this.Controls.hasOwnProperty(Name) )
 		{
