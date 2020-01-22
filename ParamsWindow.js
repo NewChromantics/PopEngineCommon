@@ -344,3 +344,16 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 	return Window;
 }
 
+function RunParamsHttpServer(Params,OnAnyChanged,Port=80)
+{
+	//	serve HTTP, which delivers a page that creates a params window!
+	const Http = new Pop.Http.Server(Port);
+	const Address = Http.GetAddress();
+	Pop.Debug("Http server:",JSON.stringify(Address));
+
+	//	gr: this should change to be a WaitForRequest(UrlMatch) and default will serve files
+
+	//	note: this will GC the server if you don't save the variable!
+	return Http;
+}
+
