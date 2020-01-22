@@ -69,7 +69,7 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 }
 
 
-Pop.TParamsWindow = function(Params,OnAnyChanged,WindowRect)
+Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 {
 	OnAnyChanged = OnAnyChanged || function(){};
 	
@@ -339,7 +339,8 @@ Pop.TParamsWindow = function(Params,OnAnyChanged,WindowRect)
 
 function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 {
-	const Window = new Pop.TParamsWindow(Params,OnAnyChanged,WindowRect);
+	Pop.Debug("Using deprecated CreateParamsWindow(), switch to new Pop.TParamsWindow");
+	const Window = new Pop.ParamsWindow(Params,OnAnyChanged,WindowRect);
 	return Window;
 }
 
