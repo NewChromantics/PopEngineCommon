@@ -139,67 +139,91 @@ Pop.TParamsWindow = function(Params,OnAnyChanged,WindowRect)
 		}
 		else if (Min == 'Colour' && Pop.Gui.Colour === undefined)
 		{
-			throw "todo colour control";
-			//	no colour control, create a tick box
-			Control = new Pop.Gui.TickBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
-			/*
-			 * Control = new Pop.Gui.TickBox( Window, [ControlLeft,ControlTop,ControlWidth,ControlHeight] );
-			Control.SetControlValue = Control.SetValue;
-			Control.SetValue(false);
-
-			let GetValue8 = function(Rgbf)
+			//	no colour control, create a button
+			//	todo: implement a colour swatch in the PopEngine
+			//	todo: swap tickbox for a button when we have one
+			//	gr: lets use a text box for now
+			//	gr: could make 3 text boxes here
+			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			const ColourDecimals = 3;
+			function StringToColourfff(String)
 			{
-				let Rgb8 = [ Rgbf[0]*255, Rgbf[1]*255, Rgbf[2]*255 ];
-				return Rgb8;
+				let rgb = String.split(',',3);
+				while (rgb.length < 3) rgb.push('0');
+				rgb = rgb.map(parseFloat);
+				return rgb;
+			}
+			function StringToColour888(String)
+			{
+				let rgb = String.split(',',3);
+				while (rgb.length < 3) rgb.push('0');
+				rgb = rgb.map(parseFloat);
+				rgb = rgb.map(Math.floor);
+				return rgb;
+			}
+			function ColourfffToString(Colour)
+			{
+				let r = Colour[0].toFixed(ColourDecimals);
+				let g = Colour[1].toFixed(ColourDecimals);
+				let b = Colour[2].toFixed(ColourDecimals);
+				return `${r},${g},${b}`;
+			}
+			function Colour888ToString(Colour)
+			{
+				//	gr: these should be floored...
+				let r = Colour[0].toFixed(0);
+				let g = Colour[1].toFixed(0);
+				let b = Colour[2].toFixed(0);
+				return `${r},${g},${b}`;
+			}
+			function ColourfffToColour888(Colour)
+			{
+				function fffTo888(f)
+				{
+					return Math.floor(f * 255);
+				}
+				return Colour.map(fffTo888);
+			}
+			function Colour888ToColourfff(Colour)
+			{
+				function _888Tofff(f)
+				{
+					return f / 255;
+				}
+				return Colour.map(_888Tofff);
 			}
 
-			Control.OnChanged = function(Value)
+			const RealGetValue = GetValue;
+			const RealSetValue = SetValue;
+			const RealCleanValue = CleanValue || function (v) { return v };
+			GetValue = function ()
 			{
-				//	unticked, hide (should remove all references... but isn't)
-				if ( !Value )
-				{
-					Control.ColourPicker = null;
-					return;
-				}
-
-				let Rgbf = Params[Name];
-				let Rgb8 = GetValue8( Rgbf );
-
-				let ColourPicker = new Pop.Gui.ColourPicker( Rgb8 );
-				Control.ColourPicker = ColourPicker;
-
-				ColourPicker.OnChanged = function(Rgb8)
-				{
-					let r = Rgb8[0] / 255.0;
-					let g = Rgb8[1] / 255.0;
-					let b = Rgb8[2] / 255.0;
-					Value = [r,g,b];
-					Value = CleanValue(Value);
-					Params[Name] = Value;
-					Control.UpdateLabel( Value );
-					OnAnyChanged( Params, Name, );
-				}
-
-				ColourPicker.OnClosed = function()
-				{
-					Control.ColourPicker = null;
-					Control.SetValue(false);	//	untick
-				}
+				const Colourfff = RealGetValue();
+				const Colour888 = ColourfffToColour888(Colourfff);
+				const String = Colour888ToString(Colour888);
+				return String;
 			}
-			Control.OnValueChanged = Control.OnChanged;
-
-			Control.UpdateLabel = function(Value)
+			SetValue = function (ControlValue,IsFinalValue)
 			{
-				let r = Value[0].toFixed(2);
-				let g = Value[1].toFixed(2);
-				let b = Value[2].toFixed(2);
-				let Valuef = [r,g,b];
-				Control.SetLabel( "[" + Valuef + "]" );
+				const Colour888 = StringToColour888(ControlValue);
+				const Colourfff = Colour888ToColourfff(Colour888);
+				RealSetValue(Colourfff,IsFinalValue);
 			}
-
-			//	init label
-			Control.UpdateLabel( Params[Name] );
-			*/
+			GetLabelForValue = function (ControlValue)
+			{
+				const Colour888 = StringToColour888(ControlValue);
+				const Colourfff = Colour888ToColourfff(Colour888);
+				const rgb = ColourfffToString(Colourfff);
+				return `${Name}: [${rgb}]`;
+			}
+			CleanValue = function (ControlValue)
+			{
+				let Colourfff = StringToColourfff(ControlValue);
+				const Colour888 = ColourfffToColour888(Colourfff);
+				Colourfff = Colour888ToColourfff(Colour888);
+				const String = ColourfffToString(Colourfff);
+				return String;
+			}
 		}
 		else if (Min == 'Colour' && Pop.Gui.Colour !== undefined)
 		{
