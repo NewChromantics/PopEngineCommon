@@ -115,20 +115,18 @@ Pop.TParamsWindow = function(Params,OnAnyChanged,WindowRect)
 		const LabelControl = new Pop.Gui.Label(Window,[LabelLeft,LabelTop,LabelWidth,LabelHeight]);
 		LabelControl.SetValue(Name);
 		let Control = null;
-				
-		if (Min == 'Button')
+		
+		if (Min == 'Button' && Pop.Gui.Button!==undefined)
 		{
 			Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
-			throw "todo: button";
-			/*
-			const Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
-			Control.SetLabel(Name);
 			Control.OnClicked = function ()
 			{
-				OnAnyChanged(Params,Name);
-			}
-			Handler = new TParamHandler(Control,LabelControl)
-			*/
+				//	call the control's OnChanged func
+				const Value = GetValue();
+				Control.OnChanged(Value,true);
+			}			
+			//const Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			//Control.SetLabel(Name);
 		}
 		else if (typeof Params[Name] === 'boolean')
 		{
