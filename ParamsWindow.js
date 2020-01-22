@@ -137,7 +137,7 @@ Pop.TParamsWindow = function(Params,OnAnyChanged,WindowRect)
 		}
 		else if (typeof Params[Name] === 'string')
 		{
-			ControlConstructor = Pop.Gui.TextBox;
+			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 		}
 		else if (Min == 'Colour' && Pop.Gui.Colour === undefined)
 		{
