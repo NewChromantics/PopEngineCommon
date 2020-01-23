@@ -318,9 +318,9 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 	this.OnParamsChanged = function ()
 	{
 		const Keys = Object.keys(this.Handlers);
-		Pop.Debug("OnParamsChanged",Keys);
+		//Pop.Debug("OnParamsChanged",Keys);
 		const UpdateInParams = true;
-		for (const Key in Keys)
+		for (const Key of Keys)
 		{
 			try
 			{
