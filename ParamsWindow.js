@@ -1,6 +1,14 @@
 //	gr: need to sort a dependency system
 //		PopEngineCommon/PopMath.js
+function isFunction(functionToCheck)
+{
+	return functionToCheck && {}.toString.call(functionToCheck) === '[object Function]';
+}
 
+function isString(Variable)
+{
+	return typeof Variable === 'string';
+}
 
 //	user changes -> control changes -> update label, update data, save
 //	data changes -> change control -> update label
