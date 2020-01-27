@@ -60,9 +60,15 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 
 		//	set label (always!)
 		if (LabelControl)
+		{
 			LabelControl.SetValue(Label);
-		if (Control.SetLabel)
+			if (Control.SetLabel)
+				Control.SetLabel("");
+		}
+		else if (Control.SetLabel)
+		{
 			Control.SetLabel(Label);
+		}
 	}
 	
 	Control.OnChanged = OnChanged.bind(this);
