@@ -44,8 +44,20 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 
 		//	on changed
 		//	clean value
+		const OldValue = Value;
 		Value = CleanValue(Value);
 		this.UpdateLabel(Value);
+
+		//	clean has changed the input, re-set it on the control
+		//	gr: worried here that a control calls OnChanged again and we get recursion
+		/*	gr: currently disabled as we're unable to type 1.1 in a string box that's cleaned to a float
+		 *		maybe only do this OnFinalValue, but for a text box this would be return, or losing focus?
+		if (OldValue !== Value)
+		{
+			Pop.Debug(`CleanValue corrected ${OldValue} to ${Value}, re-setting on control`);
+			Control.SetValue(Value);
+		}
+		*/
 
 		//	is value much different from cache?
 		//	gr: this check was for when re-setting value would trigger OnChange, but it doesnt (on windows)
