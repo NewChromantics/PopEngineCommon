@@ -115,8 +115,32 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 	this.Handlers = {};
 	
 	//	add new control
-	this.AddParam = function(Name,Min,Max,CleanValue)
+	//	CleanValue = function
+	//	Min can sometimes be a cleanvalue function
+	//		AddParam('Float',Math.floor);
+	//	TreatAsType overrides the control
+	//		AddParam('Port',0,1,Math.floor,'String')
+	this.AddParam = function(Name,Min,Max,CleanValue,TreatAsType)
 	{
+		//	AddParam('x',Math.floor)
+		if (isFunction(Min) && CleanValue === undefined)
+		{
+			CleanValue = Min;
+			Min = undefined;
+		}
+		//	AddParam('x','Button')
+		if (isString(Min) && TreatAsType === undefined)
+		{
+			TreatAsType = Min;
+			Min = undefined;
+		}
+		//	AddParam('x',0,10,'String')
+		if (isString(CleanValue) && TreatAsType === undefined)
+		{
+			TreatAsType = CleanValue;
+			CleanValue = undefined;
+		}
+
 		let GetValue = function ()
 		{
 			return Params[Name];
@@ -142,7 +166,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 		LabelControl.SetValue(Name);
 		let Control = null;
 		
-		if (Min == 'Button' && Pop.Gui.Button!==undefined)
+		if (TreatAsType == 'Button' && Pop.Gui.Button!==undefined)
 		{
 			Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			Control.OnClicked = function ()
@@ -159,11 +183,11 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 			Control = new Pop.Gui.TickBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			CleanValue = function (Value) { return Value == true; }
 		}
-		else if (typeof Params[Name] === 'string')
+		else if ( isString(Params[Name]) )
 		{
 			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 		}
-		else if (Min == 'Colour' && Pop.Gui.Colour === undefined)
+		else if (TreatAsType == 'Colour' && Pop.Gui.Colour === undefined)
 		{
 			//	no colour control, create a button
 			//	todo: implement a colour swatch in the PopEngine
@@ -251,7 +275,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 				return String;
 			}
 		}
-		else if (Min == 'Colour' && Pop.Gui.Colour !== undefined)
+		else if (TreatAsType == 'Colour' && Pop.Gui.Colour !== undefined)
 		{
 			Control = new Pop.Gui.Colour(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			CleanValue = function (Valuefff)
@@ -267,8 +291,45 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 				return `[${r},${g},${b}]`;
 			}
 		}
+		else if (typeof Params[Name] === 'number' && TreatAsType == 'String')
+		{
+			//	add a default to-number clean
+			if (!CleanValue)
+				CleanValue = function (v) { return Number(v); };
+
+			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+
+			const RealGetValue = GetValue;
+			const RealSetValue = SetValue;
+			const RealCleanValue = CleanValue || function (v) { return v };
+			GetValue = function ()
+			{
+				//	control wants a string
+				return '' + RealGetValue();
+			}
+			SetValue = function (ControlValue,IsFinalValue)
+			{
+				//	control gives a string, output a number
+				const NumberValue = Number(ControlValue);
+				//	this should have been cleaned, but maybe needs it agian?
+				RealSetValue(NumberValue,IsFinalValue);
+			}
+			GetLabelForValue = function (ControlValue)
+			{
+				const NumberValue = Number(ControlValue);
+				return Name + ': ' + NumberValue;
+			}
+			CleanValue = function (ControlValue)
+			{
+				//	convert to number, clean, convert back to string
+				let NumberValue = Number(ControlValue);
+				NumberValue = RealCleanValue(NumberValue);
+				return '' + NumberValue;
+			}
+		}
 		else
 		{
+			//Pop.Debug("Defaulting param to number, typeof",typeof Params[Name]);
 			//	no min/max should revert to a string editor?
 			if (Min === undefined)	Min = 0;
 			if (Max === undefined)	Max = 100;
