@@ -179,6 +179,13 @@ Math.Cross3 = function(a,b)
 	return [x,y,z];
 }
 
+
+Math.Distance = function (a,b)
+{
+	let Delta = a - b;
+	return Math.abs(Delta);
+}
+
 Math.Distance2 = function(a,b)
 {
 	let Delta = Math.Subtract2( a,b );
