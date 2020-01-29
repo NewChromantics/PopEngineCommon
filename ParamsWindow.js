@@ -140,6 +140,12 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 			TreatAsType = CleanValue;
 			CleanValue = undefined;
 		}
+		//	AddParam('Index',[Enum0,Enum1,Enum2])
+		if (Array.isArray(Min))
+		{
+			TreatAsType = Min;
+			Min = undefined;
+		}
 
 		let GetValue = function ()
 		{
@@ -154,10 +160,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 		{
 			return Old != New;
 		}
-		let GetLabelForValue = function (Value)
-		{
-			return Name + ': ' + Value;
-		}
+		let GetLabelForValue = undefined;
 
 		let Window = this.Window;
 		let ControlTop = this.ControlTop;
@@ -329,6 +332,17 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 		}
 		else
 		{
+			//	todo: dropdown list that's an enum
+			const IsEnum = (typeof Params[Name] === 'number') && Array.isArray(TreatAsType);
+
+			if ( IsEnum )
+			{
+				//	todo: get key count and use those
+				Min = 0;
+				Max = TreatAsType.length - 1;
+				CleanValue = Math.floor;
+			}
+
 			//Pop.Debug("Defaulting param to number, typeof",typeof Params[Name]);
 			//	no min/max should revert to a string editor?
 			if (Min === undefined)	Min = 0;
@@ -363,6 +377,12 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 				const NormValue = Math.Range(TickMin,TickMax,ControlValue);
 				const RealValue = Math.Lerp(Min,Max,NormValue);
 				let Value = RealCleanValue(RealValue);
+				if (IsEnum)
+				{
+					Pop.Debug("Enum",Value,TreatAsType);
+					const EnumLabel = TreatAsType[Value];
+					return Name + ': ' + EnumLabel;					
+				}
 				return Name + ': ' + Value;
 			}
 			CleanValue = function (ControlValue)
@@ -380,6 +400,15 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 		if (!CleanValue)
 		{
 			CleanValue = function (v) { return v; }
+		}
+
+		//	default label
+		if (!GetLabelForValue)
+		{
+			GetLabelForValue = function (Value)
+			{
+				return Name + ': ' + Value;
+			}
 		}
 
 		const Handler = new TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue,SetValue,IsValueSignificantChange);
