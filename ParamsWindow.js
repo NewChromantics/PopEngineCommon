@@ -10,6 +10,11 @@ function isString(Variable)
 	return typeof Variable === 'string';
 }
 
+function isTypedArray(obj)
+{
+	return !!obj && obj.byteLength !== undefined;
+}
+
 //	user changes -> control changes -> update label, update data, save
 //	data changes -> change control -> update label
 function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue,SetValue,IsValueSignificantChange)
@@ -30,12 +35,20 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 		this.ValueCache = GetValue();
 		//		set control (should invoke change)
 		//		gr: DOES NOT invoke change unless done by user!
+		//Pop.Debug("UpdateDisplay SetValue",JSON.stringify(this.ValueCache),typeof this.ValueCache);
 		Control.SetValue(this.ValueCache);
 		this.UpdateLabel(this.ValueCache);
 	}
 
 	let OnChanged = function (Value,IsFinalValue)
 	{
+		//	PopEngine returns typed arrays, we want regular arrays in controls
+		//	(until we possibly need a control with a LOT of values)
+		if (isTypedArray(Value))
+		{
+			Value = Array.from(Value);
+		}
+
 		//Pop.Debug("OnChanged",Value);
 
 		//	let some controls send "not final value" so we can UI without expensive changes
