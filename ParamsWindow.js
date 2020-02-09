@@ -467,6 +467,10 @@ function RunParamsHttpServer(Params,OnAnyChanged,Port=80)
 	const Address = Http.GetAddress();
 	Pop.Debug("Http server:",JSON.stringify(Address));
 
+	Http.GetUrl = function ()
+	{
+		return 'http://' + Address[0].Address;
+	}
 	//	gr: this should change to be a WaitForRequest(UrlMatch) and default will serve files
 
 	//	note: this will GC the server if you don't save the variable!
