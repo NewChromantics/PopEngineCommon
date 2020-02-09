@@ -93,7 +93,9 @@ Pop.Websocket.Client = function(ServerAddress)
 	//	create a socket
 	//	we don't handle reconnecting, assume user is using Pop.Websocket.Connect
 	//	and when connect or message throws, this is discarded and it connects again
-	this.Socket = new WebSocket('ws://' + ServerAddress);
+	if (!ServerAddress.startsWith('ws://') && !ServerAddress.startsWith('wss://'))
+		ServerAddress = 'ws://' + ServerAddress;
+	this.Socket = new WebSocket(ServerAddress);
 	this.Socket.onopen = this.OnConnected.bind(this);
 	this.Socket.onerror = this.OnError.bind(this);
 	this.Socket.onclose = this.OnDisconnected.bind(this);
