@@ -126,15 +126,37 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 	this.Window = new Pop.Gui.Window("Params",WindowRect,false);
 	this.Window.EnableScrollbars(false,true);
 	this.Handlers = {};
-	
+	this.ParamMetas = {};
+
+	this.GetParamMetas = function ()
+	{
+		return this.ParamMetas;
+	}
+
+	function GetMetaFromArguments(Arguments)
+	{
+		//	first is name
+		const Name = Arguments.shift();
+		function RenameFunc(Arg)
+		{
+			if (isFunction(Arg))
+				return "function:" + Arg.name;
+			return Arg;
+		}
+		Arguments = Arguments.map(RenameFunc);
+		return Arguments;
+	}
+
 	//	add new control
 	//	CleanValue = function
 	//	Min can sometimes be a cleanvalue function
 	//		AddParam('Float',Math.floor);
 	//	TreatAsType overrides the control
 	//		AddParam('Port',0,1,Math.floor,'String')
-	this.AddParam = function(Name,Min,Max,CleanValue,TreatAsType)
+	this.AddParam = function (Name,Min,Max,CleanValue,TreatAsType)
 	{
+		this.ParamMetas[Name] = GetMetaFromArguments(Array.from(arguments));
+
 		//	AddParam('x',Math.floor)
 		if (isFunction(Min) && CleanValue === undefined)
 		{
@@ -181,8 +203,8 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 		const LabelControl = new Pop.Gui.Label(Window,[LabelLeft,LabelTop,LabelWidth,LabelHeight]);
 		LabelControl.SetValue(Name);
 		let Control = null;
-		
-		if (TreatAsType == 'Button' && Pop.Gui.Button!==undefined)
+
+		if (TreatAsType == 'Button' && Pop.Gui.Button !== undefined)
 		{
 			Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			Control.OnClicked = function ()
@@ -190,7 +212,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 				//	call the control's OnChanged func
 				const Value = GetValue();
 				Control.OnChanged(Value,true);
-			}			
+			}
 			//const Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			//Control.SetLabel(Name);
 		}
@@ -199,7 +221,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 			Control = new Pop.Gui.TickBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			CleanValue = function (Value) { return Value == true; }
 		}
-		else if ( isString(Params[Name]) )
+		else if (isString(Params[Name]))
 		{
 			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 		}
@@ -348,7 +370,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 			//	todo: dropdown list that's an enum
 			const IsEnum = (typeof Params[Name] === 'number') && Array.isArray(TreatAsType);
 
-			if ( IsEnum )
+			if (IsEnum)
 			{
 				//	todo: get key count and use those
 				Min = 0;
@@ -358,8 +380,8 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 
 			//Pop.Debug("Defaulting param to number, typeof",typeof Params[Name]);
 			//	no min/max should revert to a string editor?
-			if (Min === undefined)	Min = 0;
-			if (Max === undefined)	Max = 100;
+			if (Min === undefined) Min = 0;
+			if (Max === undefined) Max = 100;
 			//	non-specific control, slider
 			//	slider values are all int (16bit) so we need to normalise the value
 			const TickMin = 0;
@@ -394,7 +416,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 				{
 					Pop.Debug("Enum",Value,TreatAsType);
 					const EnumLabel = TreatAsType[Value];
-					return Name + ': ' + EnumLabel;					
+					return Name + ': ' + EnumLabel;
 				}
 				return Name + ': ' + Value;
 			}
@@ -431,7 +453,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 
 		this.ControlTop += ControlHeight;
 		this.ControlTop += ControlSpacing;
-	}
+	}.bind(this);
 	
 	//	changed externally, update display
 	this.OnParamChanged = function (Name)
@@ -441,7 +463,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 			throw "Tried to change param " + Name + " but no control assigned";
 
 		Handler.UpdateDisplay();
-	}
+	}.bind(this);
 
 	//	changed externally
 	this.OnParamsChanged = function ()
@@ -460,7 +482,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 				Pop.Debug("OnParamChanged(" + Key + ") error",e);
 			}
 		}
-	}
+	}.bind(this);
 	
 }
 
@@ -473,10 +495,47 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 	return Window;
 }
 
-function RunParamsHttpServer(Params,OnAnyChanged,Port=80)
+function RunParamsHttpServer(Params,ParamsWindow,OnAnyChanged,Port=80)
 {
+	function GetParamMetas()
+	{
+		if (!ParamsWindow)
+			return {};
+
+		return ParamsWindow.GetParamMetas();
+	}
+
+	function HandleVirtualFile(Response)
+	{
+		//	redirect PopEngine files to local filename
+		const Filename = Response.Url;
+
+		if (Filename == "Params.json")
+		{
+			Response.Content = JSON.stringify(Params,null,'\t');
+			Response.StatusCode = 200;
+			return;
+		}
+
+		if (Filename == "ParamMetas.json")
+		{
+			const ParamMetas = GetParamMetas();
+			Response.Content = JSON.stringify(ParamMetas,null,'\t');
+			Response.StatusCode = 200;
+			return;
+		}
+
+		if (Filename.startsWith('PopEngineCommon/'))
+		{
+			return "../" + Filename;
+		}
+
+		//	some other file
+		return Response;
+	}
+
 	//	serve HTTP, which delivers a page that creates a params window!
-	const Http = new Pop.Http.Server(Port);
+	const Http = new Pop.Http.Server(Port,HandleVirtualFile);
 	const Address = Http.GetAddress();
 	Pop.Debug("Http server:",JSON.stringify(Address));
 
