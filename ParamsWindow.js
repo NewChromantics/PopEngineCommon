@@ -127,6 +127,12 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 	this.Window.EnableScrollbars(false,true);
 	this.Handlers = {};
 	this.ParamMetas = {};
+	this.WaitForParamsChangedPromiseQueue = new Pop.PromiseQueue();
+
+	this.WaitForParamsChanged = function ()
+	{
+		return this.WaitForParamsChangedPromiseQueue.Allocate();
+	}
 
 	this.GetParamMetas = function ()
 	{
@@ -190,7 +196,8 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 		{
 			Params[Name] = Value;
 			OnAnyChanged(Params,Name,Value,IsFinalValue);
-		}
+			this.WaitForParamsChangedPromiseQueue.Resolve(Params,Name,Value,IsFinalValue);
+		}.bind(this);
 		let IsValueSignificantChange = function (Old,New)
 		{
 			return Old != New;
