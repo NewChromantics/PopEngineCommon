@@ -502,8 +502,103 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 	return Window;
 }
 
-function RunParamsHttpServer(Params,ParamsWindow,OnAnyChanged,Port=80)
+
+function RunParamsWebsocketServer(Port,OnJsonRecieved)
 {
+	let CurrentSocket = null;
+	
+	async function Loop()
+	{
+		while (true)
+		{
+			try
+			{
+				Pop.Debug()
+				const Socket = new Pop.Websocket.Server(Port);
+				CurrentSocket = Socket;
+				while (true)
+				{
+					const Message = await Socket.WaitForMessage();
+					Pop.Debug("Got message",JSON.stringify(Message));
+					const ParamsJson = JSON.parse(Message.Data);
+					OnJsonRecieved(ParamsJson);
+				}
+			}
+			catch (e)
+			{
+				Pop.Debug("ParamsWebsocketServer error",e);
+				CurrentSocket = null;
+			}
+			await Pop.Yield(1000);
+		}
+	}
+	Loop().then(Pop.Debug).catch(Pop.Debug);
+
+	const Output = {};
+	Output.SendJson = function (Object)
+	{
+		if (!CurrentSocket)
+		{
+			Pop.Debug("SendJson - not currently connected");
+			//throw "Not currently connected";
+			return;
+		}
+		const JsonString = JSON.stringify(Object,null,'\t');
+		const Peers = CurrentSocket.GetPeers();
+		function Send(Peer)
+		{
+			CurrentSocket.Send(Peer,JsonString);
+		}
+		Peers.forEach(Send);
+	}
+
+	Output.GetUrl = function ()
+	{
+		if (!CurrentSocket)
+			throw "Not currently connected";
+		const Addresses = CurrentSocket.GetAddress();
+		return "ws://" + Addresses[0].Address;
+	}
+
+	return Output;
+}
+
+function RunParamsHttpServer(Params,ParamsWindow,Port=80)
+{
+	function OnJsonRecieved(Json)
+	{
+		//Pop.Debug("Web changed params");
+		try
+		{
+			Object.assign(Params,Json);
+			ParamsWindow.OnParamsChanged(Params);
+		}
+		catch (e)
+		{
+			Pop.Debug("Exception setting new web params",JSON.stringify(Json));
+		}
+	}
+
+	const WebocketPort = Port + 1;
+	//	create websocket server to send & recieve param changes
+	const Websocket = RunParamsWebsocketServer(WebocketPort,OnJsonRecieved);
+
+	function SendNewParams(Params)
+	{
+		Websocket.SendJson(Params);
+	}
+
+	//	kick off async loop waiting for change
+	async function ParamsWindowWaitForChangeLoop()
+	{
+		while (true)
+		{
+			await ParamsWindow.WaitForParamsChanged();
+			SendNewParams(Params);
+		}
+	}
+	ParamsWindowWaitForChangeLoop().then(Pop.Debug).catch(Pop.Debug);
+
 	function GetParamMetas()
 	{
 		if (!ParamsWindow)
@@ -516,6 +611,13 @@ function RunParamsHttpServer(Params,ParamsWindow,OnAnyChanged,Port=80)
 	{
 		//	redirect PopEngine files to local filename
 		const Filename = Response.Url;
+
+		if (Filename == "Websocket.json")
+		{
+			Response.Content = Websocket.GetUrl();
+			Response.StatusCode = 200;
+			return;
+		}
 
 		if (Filename == "Params.json")
 		{
