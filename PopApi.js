@@ -51,12 +51,20 @@ function IsObjectInstanceOf(This,TypeConstructor)
 	if ( !(This instanceof Object) )
 		return false;
 	
+	//	this should work in chakracore/jsrt as long as the constructor .prototype "property" has been set
 	if ( This instanceof TypeConstructor )
 		return true;
-	
-	//	jscore
-	if ( This.__proto__ == TypeConstructor.__proto__ )
-		return true;
+
+	//	object == func... so wrong match
+	//if ( This instanceof TypeConstructor.constructor )
+	//	return true;
+
+	if (This.__proto__)
+	{
+		//	jscore
+		if (This.__proto__ == TypeConstructor.__proto__)
+			return true;
+	}
 
 	//	object == func... so wrong match
 	//if ( This instanceof TypeConstructor.constructor )
