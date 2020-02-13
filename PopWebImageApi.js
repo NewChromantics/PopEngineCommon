@@ -86,6 +86,7 @@ function GetTextureFormatPixelByteSize(OpenglContext,Format,Type)
 	}
 }
 
+
 function GetPixelsFromHtmlImageElement(Img)
 {
 	//	html5 image
@@ -117,6 +118,25 @@ function GetPixelsFromHtmlImageElement(Img)
 		return Pixels;
 	}
 }
+
+async function PngBytesToPixels(PngBytes)
+{
+	//	re-using browser's loader
+	const PngBlob = new Blob( [ PngBytes ], { type: "image/png" } );
+	const ImageUrl = URL.createObjectURL( PngBlob );
+	const Image = await Pop.LoadFileAsImageAsync(ImageUrl);
+	const Pixels = GetPixelsFromHtmlImageElement(Image);
+/*
+	const Pixels = {};
+	Pixels.Width = 1;
+	Pixels.Height = 1;
+	Pixels.Buffer = new Uint8Array( [0,255,0,255] );
+	Pixels.Format = 'RGBA';
+ */
+	return Pixels;
+}
+
+
 
 Math.Abs3 = function(xyz)
 {
@@ -465,6 +485,13 @@ Pop.Image = function(Filename)
 		this.WritePixels( Source.GetWidth(), Source.GetHeight(), Source.Pixels, Source.PixelsFormat );
 	}
 	
+	this.LoadPng = async function(PngBytes)
+	{
+		//	convert to RGBA buffer
+		const Pixels = await PngBytesToPixels(PngBytes);
+		this.WritePixels( Pixels.Width, Pixels.Height, Pixels.Buffer, Pixels.Format );
+	}
+	
 	
 	//	load file
 	if ( typeof Filename == 'string' && Filename.includes('.') )
@@ -505,4 +532,3 @@ Pop.Image = function(Filename)
 		throw "Unhandled Pop.Image constructor; " + [...arguments];
 	}
 }
-

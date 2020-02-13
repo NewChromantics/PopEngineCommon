@@ -453,6 +453,7 @@ Pop.Gui.Button = function(Parent, Rect)
 		else
 			throw "Not sure how to set label on this button " + this.Element.constructor;
 	}
+	this.SetValue = this.SetLabel;
 	
 	this.OnElementClicked = function(Event)
 	{

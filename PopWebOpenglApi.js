@@ -882,11 +882,17 @@ Pop.Opengl.RenderTarget = function()
 	
 	this.ClearColour = function(r,g,b,a=1)
 	{
-		let gl = this.GetGlContext();
+		const gl = this.GetGlContext();
 		gl.clearColor( r, g, b, a );
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	}
-	
+
+	this.ClearDepth = function()
+	{
+		const gl = this.GetGlContext();
+		gl.clear(gl.DEPTH_BUFFER_BIT);
+	}
+
 	this.ResetState = function()
 	{
 		const gl = this.GetGlContext();
@@ -1547,6 +1553,23 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 	this.Buffer = null;
 	this.Vao = null;
 	
+	let Attribs = {};
+	
+	//	backwards compatibility
+	if ( typeof VertexAttributeName == 'string' )
+	{
+		Pop.Debug("[deprecated] Old TriangleBuffer constructor, use a keyed object");
+		const Attrib = {};
+		Attrib.Size = VertexSize;
+		Attrib.Data = VertexData;
+		Attribs[VertexAttributeName] = Attrib;
+	}
+	else
+	{
+		Attribs = VertexAttributeName;
+	}
+	
+	
 	this.GetBuffer = function(RenderContext)
 	{
 		if ( this.BufferContextVersion !== RenderContext.ContextVersion )
@@ -1601,11 +1624,6 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 	{
 		const gl = RenderContext.GetGlContext();
 		
-		//	data as array doesn't work properly and gives us
-		//	gldrawarrays attempt to access out of range vertices in attribute 0
-		if ( Array.isArray(VertexData) )
-			VertexData = new Float32Array( VertexData );
-		
 		this.Buffer = gl.createBuffer();
 		this.BufferContextVersion = RenderContext.ContextVersion;
 		
@@ -1616,7 +1634,8 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 		}
 		else
 		{
-			this.IndexCount = (VertexData.length / VertexSize);
+			const FirstAttrib = Attribs[Object.keys(Attribs)[0]];
+			this.IndexCount = (FirstAttrib.Data.length / FirstAttrib.Size);
 		}
 		
 		if ( this.IndexCount % 3 != 0 )
@@ -1624,29 +1643,77 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 			throw "Triangle index count not divisible by 3";
 		}
 		
+		function CleanupAttrib(Attrib)
+		{
+			//	fix attribs
+			//	data as array doesn't work properly and gives us
+			//	gldrawarrays attempt to access out of range vertices in attribute 0
+			if ( Array.isArray(Attrib.Data) )
+				Attrib.Data = new Float32Array( Attrib.Data );
+		}		
 		
-		let Attributes = [];
-		let PushAttribute = function(Name,Floats,Location,Size)
+		let TotalByteLength = 0;
+		const GetOpenglAttribute = function(Name,Floats,Location,Size)
 		{
 			let Type = GetOpenglElementType( gl, Floats );
 			
 			let Attrib = {};
 			Attrib.Name = Name;
-			Attrib.Floats = VertexData;
+			Attrib.Floats = Floats;
 			Attrib.Size = Size;
 			Attrib.Type = Type;
 			Attrib.Location = Location;
-			Attributes.push( Attrib );
+			return Attrib;
 		}
-		PushAttribute( VertexAttributeName, VertexData, 0, VertexSize );
+		function AttribNameToOpenglAttrib(Name,Index)
+		{
+			//	should get location from shader binding!
+			const Location = Index;
+			const Attrib = Attribs[Name];
+			CleanupAttrib(Attrib);
+			const OpenglAttrib = GetOpenglAttribute( Name, Attrib.Data, Location, Attrib.Size );
+			TotalByteLength += Attrib.Data.byteLength;
+			return OpenglAttrib;
+		}
 		
-		this.Attributes = Attributes;
+		this.Attributes = Object.keys( Attribs ).map( AttribNameToOpenglAttrib );
+		
+		//	concat data
+		let TotalData = new Float32Array( TotalByteLength / 4 );//Float32Array.BYTES_PER_ELEMENT );
+		
+		let TotalDataOffset = 0;
+		for ( let Attrib of this.Attributes )
+		{
+			TotalData.set( Attrib.Floats, TotalDataOffset );
+			Attrib.ByteOffset = TotalDataOffset * Float32Array.BYTES_PER_ELEMENT;
+			TotalDataOffset += Attrib.Floats.length;
+			this.OpenglByteSize = TotalDataOffset;
+		}
 		
 		//	set the total buffer data
 		gl.bindBuffer( gl.ARRAY_BUFFER, this.Buffer );
-		gl.bufferData( gl.ARRAY_BUFFER, VertexData, gl.STATIC_DRAW );
+		if ( TotalData )
+		{
+			gl.bufferData( gl.ARRAY_BUFFER, TotalData, gl.STATIC_DRAW );
+		}
+		else
+		{
+			//	init buffer size
+			gl.bufferData(gl.ARRAY_BUFFER, TotalByteLength, gl.STREAM_DRAW);
+			//gl.bufferData( gl.ARRAY_BUFFER, VertexData, gl.STATIC_DRAW );
+
+			let AttribByteOffset = 0;
+			function BufferAttribData(Attrib)
+			{
+				//gl.bufferData( gl.ARRAY_BUFFER, VertexData, gl.STATIC_DRAW );
+				gl.bufferSubData( gl.ARRAY_BUFFER, AttribByteOffset, Attrib.Floats );
+				Attrib.ByteOffset = AttribByteOffset;
+				AttribByteOffset += Attrib.Floats.byteLength;
+			}
+			this.Attributes.forEach( BufferAttribData );
+			this.OpenglByteSize = AttribByteOffset;
+		}
 		
-		this.OpenglByteSize = VertexData.byteLength;
 		RenderContext.OnAllocatedGeometry( this );
 		
 		this.BindVertexPointers( RenderContext );
@@ -1675,7 +1742,7 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 			
 			let Normalised = false;
 			let StrideBytes = 0;
-			let OffsetBytes = 0;
+			let OffsetBytes = Attrib.ByteOffset;
 			gl.vertexAttribPointer( Attrib.Location, Attrib.Size, Attrib.Type, Normalised, StrideBytes, OffsetBytes );
 			gl.enableVertexAttribArray( Attrib.Location );
 		}

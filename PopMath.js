@@ -179,6 +179,13 @@ Math.Cross3 = function(a,b)
 	return [x,y,z];
 }
 
+
+Math.Distance = function (a,b)
+{
+	let Delta = a - b;
+	return Math.abs(Delta);
+}
+
 Math.Distance2 = function(a,b)
 {
 	let Delta = Math.Subtract2( a,b );
@@ -571,6 +578,15 @@ Math.MatrixInverse4x4 = function(Matrix)
 	
 	return r;
 
+}
+
+//	multiply position by matrix
+Math.TransformPosition = function (Position,Transform)
+{
+	const PosMatrix = Math.CreateTranslationMatrix(...Position);
+	const TransMatrix = Math.MatrixMultiply4x4(Transform,PosMatrix);
+	const TransPos = Math.GetMatrixTranslation(TransMatrix,true);
+	return TransPos;
 }
 
 //	gr: I've made this simpler, but its backwards to the other, and usual multiply notation, so maybe no...
