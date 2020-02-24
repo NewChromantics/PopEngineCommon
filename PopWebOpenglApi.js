@@ -364,6 +364,10 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.OnKeyDown = function(Key)							{	Pop.Debug('OnKeyDown',...arguments);	};
 	this.OnKeyUp = function(Key)							{	Pop.Debug('OnKeyUp',...arguments);	};
 
+	//	treat minimised and foreground as the same on web;
+	//	todo: foreground state for multiple windows on one page
+	this.IsForeground = function () { return Pop.WebApi.IsForeground(); }
+	this.IsMinimised = function () { return Pop.WebApi.IsForeground(); }
 
 	this.Context = null;
 	this.ContextVersion = 0;	//	used to tell if resources are out of date
