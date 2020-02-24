@@ -1,7 +1,46 @@
 //	namespace
 const Pop = {};
 
+
+//	specific web stuff, assume this doesn't exist on desktop
+Pop.WebApi = {};
+
+//	we cannot poll the focus/blur state of our page, so we
+//	assume it's foreground (may not be the case if opened via middle button?)
+Pop.WebApi.ForegroundState = true;
+Pop.WebApi.ForegroundChangePromises = new PromiseQueue();
+Pop.WebApi.IsForeground = function ()
+{
+	//	use page visibility if we have it
+	//	https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API
+	if (document.hidden !== undefined)
+		return !document.hidden;
+
+	return Pop.WebApi.ForegroundState;
+}
+
+Pop.WebApi.SetIsForeground = function (IsForeground)
+{
+	Pop.Debug("Foreground changed from ",Pop.WebApi.ForegroundState,"to",IsForeground);
+	if (Pop.WebApi.ForegroundState == IsForeground)
+		return;
+
+	Pop.WebApi.ForegroundState = IsForeground;
+	Pop.WebApi.ForegroundChangePromises.Resolve(IsForeground);
+}
+
+Pop.WebApi.WaitForForegroundChange = function ()
+{
+	return Pop.WebApi.ForegroundChangePromises.Allocate();
+}
+
+//	todo: call a func here in case we expand to have some async change promise queues
+window.addEventListener('focus',function () { Pop.WebApi.SetIsForeground(true); });
+window.addEventListener('blur',function () { Pop.WebApi.SetIsForeground(false); });
+
+
 //	file cache, not asset cache!
+//	rework this system so we have an async version on desktop too
 Pop._AssetCache = [];
 
 //	simple aliases
