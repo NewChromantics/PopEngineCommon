@@ -38,15 +38,29 @@ Pop.LoadFileAsImageAsync = async function(Filename)
 {
 	let Promise = Pop.CreatePromise();
 	
+	//	clean up blobs. There may be a time we DON'T this?
+	const Cleanup = function()
+	{
+		if ( Filename.startsWith('blob:' ) )
+		{
+			Pop.Debug("Cleaning up blob", Filename);
+			window.URL.revokeObjectURL( Filename );
+		}
+	}
+	
 	const HtmlImage = new Image();
 	HtmlImage.crossOrigin = "anonymous";
+	//	bind to this to remove the variable reference
+	//	so it wont leave a self-reference and stop being garbage collected
 	HtmlImage.onload = function()
 	{
-		Promise.Resolve( HtmlImage );
-	};
+		Promise.Resolve( this );
+		Cleanup();
+	}.bind(HtmlImage);
 	HtmlImage.onerror = function(Error)
 	{
 		Promise.Reject( Error );
+		Cleanup();
 	}
 	//  trigger load
 	HtmlImage.src = Filename;
