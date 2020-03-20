@@ -124,6 +124,17 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	const Meta = Svg.svg;
 	const Bounds = StringToFloats( Meta['-viewBox'] );
 	
+	function NormaliseSize(Value)
+	{
+		Pop.Debug("Normalise", Value);
+		//	todo: center
+		//	scale down to largest width or height
+		if ( Bounds[2] > Bounds[3] )
+			return Value / Bounds[2];
+		else
+			return Value / Bounds[3];
+	}
+	
 	//	center bounds so ratio is around height
 	if ( false )
 	{
@@ -171,55 +182,29 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		return Matrix;
 	}
 	
-	function PushVertex(x,y,z,Radius)
+	function StringToCoord(String)
 	{
-		x = Range( Bounds[0], Bounds[0]+Bounds[2], x );
-		y = Range( Bounds[1]+Bounds[3], Bounds[1], y );
-		
-		//	scale to -1..1
-		//	should be doing this outside...
-		x = Lerp( -1, 1, x );
-		y = Lerp( -1, 1, y );
-		
-		OnVertex( x, y, z, Radius );
-	}
-	
-	function StringToCoordX(String)
-	{
-		let x = StringToSizeX(String);
+		let x = StringToSize(String);
 		//x = Lerp( -1, 1, x );
 		return x;
 	}
 	
-	function StringToCoordY(String)
-	{
-		let y = StringToSizeY(String);
-		//y = Lerp( -1, 1, y );
-		return y;
-	}
-	
-	function StringToSizeX(String)
+	function StringToSize(String)
 	{
 		let x = StringToFloat(String);
-		x = Range( Bounds[0], Bounds[0]+Bounds[2], x );
+		x = NormaliseSize(x);
 		return x;
 	}
 	
-	function StringToSizeY(String)
-	{
-		let y = StringToFloat(String);
-		y = Range( Bounds[1], Bounds[1]+Bounds[3], y );
-		return y;
-	}
 	
 	
 	function ParseCircle(Node)
 	{
 		let Shape = {};
 		Shape.Matrix = StringToMatrix( Node['-matrix'] );
-		let x = StringToCoordX( Node['-cx'] );
-		let y = StringToCoordY( Node['-cy'] );
-		let r = StringToSizeX( Node['-r'] );
+		let x = StringToCoord( Node['-cx'] );
+		let y = StringToCoord( Node['-cy'] );
+		let r = StringToSize( Node['-r'] );
 		
 		Shape.Circle = {};
 		Shape.Circle.x = x;
@@ -233,10 +218,10 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	{
 		let Shape = {};
 		Shape.Matrix = StringToMatrix( Node['-matrix'] );
-		let x = StringToCoordX( Node['-cx'] );
-		let y = StringToCoordY( Node['-cy'] );
-		let rx = StringToSizeX( Node['-rx'] );
-		let ry = StringToSizeY( Node['-ry'] );
+		let x = StringToCoord( Node['-cx'] );
+		let y = StringToCoord( Node['-cy'] );
+		let rx = StringToSize( Node['-rx'] );
+		let ry = StringToSize( Node['-ry'] );
 		
 		Shape.Ellipse = {};
 		Shape.Ellipse.x = x;
@@ -259,16 +244,46 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	
 	function ParseLine(Node)
 	{
-		Pop.Debug("Todo: parse svg line", JSON.stringify(Node));
+		const Shape = {};
+		let x1 = StringToCoord( Node['-x1'] );
+		let y1 = StringToCoord( Node['-y1'] );
+		let x2 = StringToCoord( Node['-x2'] );
+		let y2 = StringToCoord( Node['-y2'] );
+		
+		Shape.Line = {};
+		Shape.Line.Points = [];
+		Shape.Line.Points.push( [x1,y1] );
+		Shape.Line.Points.push( [x2,y2] );
+		
+		OnShape( Shape );
+	}
+	
+	function ParsePolyLine(Node)
+	{
+		const Shape = {};
+		
+		Shape.Line = {};
+		Shape.Line.Points = [];
+
+		let Coords = StringToFloats(Node['-points']);
+		Coords = Coords.map(NormaliseSize);
+		for ( let i=0;	i<Coords.length;	i+=2 )
+		{
+			const x = Coords[i+0];
+			const y = Coords[i+1];
+			Shape.Line.Points.push( [x,y] );
+		}
+
+		OnShape( Shape );
 	}
 	
 	function ParseRect(Node)
 	{
 		const Shape = {};
-		let x = StringToCoordX( Node['-x'] );
-		let y = StringToCoordY( Node['-y'] );
-		let w = StringToSizeX( Node['-width'] );
-		let h = StringToSizeX( Node['-height'] );
+		let x = StringToCoord( Node['-x'] );
+		let y = StringToCoord( Node['-y'] );
+		let w = StringToSize( Node['-width'] );
+		let h = StringToSize( Node['-height'] );
 		
 		Shape.Rect = {};
 		Shape.Rect.x = x;
@@ -279,10 +294,6 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		OnShape( Shape );
 	}
 	
-	function ParsePolyLine(Node)
-	{
-		Pop.Debug("Todo: parse svg poly line", JSON.stringify(Node));
-	}
 	
 	function NodeAsArray(Node)
 	{
