@@ -167,6 +167,30 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		return Floats;
 	}
 	
+	function StringToFloat2s(String,Modifyx)
+	{
+		Modifyx = Modifyx || function(x){return x;};
+		
+		let Floats = String.split(' ');
+		Floats = Floats.map( parseFloat );
+		if ( Floats.some( isNaN ) )
+			throw "String (" + String + ") failed to turn to floats: " + Floats;
+		const Float2s = [];
+		for ( let i=0;	i<Floats.length;	i+=2 )
+		{
+			const x = Modifyx( Floats[i+0] );
+			const y = Modifyx( Floats[i+1] );
+			Float2s.push([x,y]);
+		}
+		return Float2s;
+	}
+	
+	function StringToFloat2Coords(String)
+	{
+		const Float2s = StringToFloat2s( String, NormaliseSize );
+		return Float2s;
+	}
+	
 	function StringToMatrix(String)
 	{
 		if ( !String )
@@ -234,12 +258,19 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	
 	function ParsePath(Node)
 	{
+		//	split commands
+		const Commands = Node['-d'];
 		Pop.Debug("Todo: parse svg path", JSON.stringify(Node));
 	}
 	
 	function ParsePolygon(Node)
 	{
-		Pop.Debug("Todo: parse svg polygon", JSON.stringify(Node));
+		const Shape = {};
+		
+		Shape.Polygon = {};
+		Shape.Polygon.Points = StringToFloat2Coords(Node['-points']);
+
+		OnShape(Shape);
 	}
 	
 	function ParseLine(Node)
@@ -263,16 +294,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		const Shape = {};
 		
 		Shape.Line = {};
-		Shape.Line.Points = [];
-
-		let Coords = StringToFloats(Node['-points']);
-		Coords = Coords.map(NormaliseSize);
-		for ( let i=0;	i<Coords.length;	i+=2 )
-		{
-			const x = Coords[i+0];
-			const y = Coords[i+1];
-			Shape.Line.Points.push( [x,y] );
-		}
+		Shape.Line.Points = StringToFloat2Coords(Node['-points']);
 
 		OnShape( Shape );
 	}
