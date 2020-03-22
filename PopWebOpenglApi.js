@@ -395,6 +395,8 @@ Pop.Opengl.Window = function(Name,Rect)
 		const Canvas = this.GetCanvasElement();
 		Pop.Debug("Re-setting canvas size to original rect",JSON.stringify(Rect))
 		this.SetCanvasSize( Canvas, Rect );
+		
+		this.RefreshCanvasResolution();
 	}
 	
 	this.AllocTexureIndex = function()
@@ -452,6 +454,20 @@ Pop.Opengl.Window = function(Name,Rect)
 			this.ScreenRectCache[3] = Canvas.height;
 		}
 		return this.ScreenRectCache;
+	}
+	
+	this.RefreshCanvasResolution = function()
+	{
+		const Canvas = this.GetCanvasElement();
+		
+		//	get element size
+		const Rect = Canvas.getBoundingClientRect();
+		const w = Rect.width;
+		const h = Rect.height;
+		
+		//	re-set resolution to match
+		Canvas.width = w;
+		Canvas.height = h;
 	}
 	
 	this.SetCanvasSize = function(CanvasElement,Rect=null)
@@ -513,6 +529,8 @@ Pop.Opengl.Window = function(Name,Rect)
 		Element.id = Name;
 		
 		ParentElement.appendChild( Element );
+		
+		//	gr: replace this with a CSS size-config here
 		this.SetCanvasSize( Element, Rect );
 
 		//	double check
@@ -566,6 +584,7 @@ Pop.Opengl.Window = function(Name,Rect)
 	{
 		const ContextMode = "webgl";
 		const Canvas = this.GetCanvasElement();
+		this.RefreshCanvasResolution();
 		const Options = {};
 		//Options.antialias = true;
 		Options.xrCompatible = true;
