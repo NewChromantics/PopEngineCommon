@@ -741,9 +741,11 @@ Pop.Opengl.Window = function(Name,Rect)
 			if ( !this.RenderTarget )
 				this.RenderTarget = new WindowRenderTarget(this);
 			this.RenderTarget.BindRenderTarget( RenderContext );
-			this.OnRender( this.RenderTarget );
-			
+
+			//	request next frame, before any render fails, so we will get exceptions thrown for debugging, but recover
 			window.requestAnimationFrame( Render.bind(this) );
+
+			this.OnRender( this.RenderTarget );
 		}
 		window.requestAnimationFrame( Render.bind(this) );
 	}
