@@ -15,46 +15,61 @@ Pop.WebApi.IsMinimised = function ()
 	//	android chome;
 	//		sleep or change app:	minimised
 	//		other tab:				NOT minimised (foreground=false)
-
+	
 	//	windows chrome:
-	//	Hidden==minimised (visibility!==Visible)
-	if (document.hidden !== undefined)
-		return document.hidden;
+	//		Hidden==minimised (visibility!==Visible)
 
+	//	ios (safari);
+	//		always hidden==false
+	if (document.hidden !== undefined)
+	{
+		//Pop.Debug("IsMinimised  document.hidden= ",document.hidden);
+		return document.hidden;
+	}
+	
 	if (document.visibilityState !== undefined)
 	{
 		const Visible = document.visibilityState === 'visible';
+		//Pop.Debug("IsMinimised document.visibilityState= ",document.visibilityState);
 		return !Visible;
 	}
-
+	
+	//Pop.Debug("IsMinimised not supported");
 	//	neither supported, never minimised
 	return false;
 }
 
 Pop.WebApi.IsForeground = function ()
 {
+	//	always returns true on ios
 	if (document.hasFocus !== undefined)
+	{
+		//Pop.Debug("IsForeground = ",document.hasFocus());
 		return document.hasFocus();
-
+	}
+	
 	//	android chrome
 	//	normal:				!hidden visible foreground
 	//	bring up tabs:		!hidden visible !foreground
 	//	sleep/changeapp:	hidden !visible foreground
 	//	wake tab visible:	!Hidden Visibility !Foreground
-
+	
 	//	desktop chrome:
 	//	normal:				!hidden visible foreground
 	//	click non-page:		!hidden visible !foreground
 	//	minimised:			hidden !visible foreground
+	//Pop.Debug("IsForeground hasFocus not supported,. state=",Pop.WebApi.ForegroundState);
 	return Pop.WebApi.ForegroundState;
 }
 
-Pop.WebApi.SetIsForeground = function (IsForeground)
+
+Pop.WebApi.SetIsForeground = function (IsForeground,Event)
 {
 	//Pop.Debug("Foreground changed from ",Pop.WebApi.ForegroundState,"to",IsForeground);
 	if (IsForeground!==undefined)
 		Pop.WebApi.ForegroundState = IsForeground;
 
+	Pop.Debug("Foreground change; ",Event);
 	const Foreground = Pop.WebApi.IsForeground() && !Pop.WebApi.IsMinimised();
 	Pop.WebApi.ForegroundChangePromises.Resolve(Foreground);
 }
@@ -66,9 +81,11 @@ Pop.WebApi.WaitForForegroundChange = function ()
 
 
 //	todo: call a func here in case we expand to have some async change promise queues
-window.addEventListener('focus',function () { Pop.WebApi.SetIsForeground(true); });
-window.addEventListener('blur',function () { Pop.WebApi.SetIsForeground(false); });
-window.addEventListener('visibilitychange',function () { Pop.WebApi.SetIsForeground(document.hidden); });
+window.addEventListener('focus',function () { Pop.WebApi.SetIsForeground(true,'focus'); });
+window.addEventListener('blur',function () { Pop.WebApi.SetIsForeground(false,'blur'); });
+window.addEventListener('visibilitychange',function () { Pop.WebApi.SetIsForeground(undefined,'visibilitychange'); });
+window.addEventListener('pagehide',function () { Pop.WebApi.SetIsForeground(undefined,'pagehide'); });
+window.addEventListener('pageshow',function () { Pop.WebApi.SetIsForeground(undefined,'pageshow'); });
 
 
 //	file cache, not asset cache!
