@@ -426,7 +426,7 @@ Pop.Opengl.Window = function(Name,Rect)
 
 		//	catch window resize
 		window.addEventListener('resize',this.OnResize.bind(this));
-
+		
 		//	https://medium.com/@susiekim9/how-to-compensate-for-the-ios-viewport-unit-bug-46e78d54af0d
 		/*	this doesn't help
 		window.onresize = function ()
@@ -584,7 +584,8 @@ Pop.Opengl.Window = function(Name,Rect)
 	{
 		const ContextMode = "webgl";
 		const Canvas = this.GetCanvasElement();
-		this.RefreshCanvasResolution();
+		//this.RefreshCanvasResolution();
+		this.OnResize();
 		const Options = {};
 		//Options.antialias = true;
 		Options.xrCompatible = true;
