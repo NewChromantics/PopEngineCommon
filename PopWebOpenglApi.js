@@ -498,7 +498,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		let Top = Rect[1];
 		let Width = Rect[2];
 		let Height = Rect[3];
-			
+			/*
 		CanvasElement.style.display = 'block';
 		CanvasElement.style.position = 'absolute';
 		//Element.style.border = '1px solid #f00';
@@ -511,7 +511,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		CanvasElement.style.height = Height+'px';
 		//Element.style.width = '100%';
 		//Element.style.height = '500px';
-		
+		*/
 		CanvasElement.width = Rect[2];
 		CanvasElement.height = Rect[3];
 	}
