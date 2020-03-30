@@ -461,7 +461,8 @@ Pop.Opengl.Window = function(Name,Rect)
 		const Canvas = this.GetCanvasElement();
 		
 		//	get element size
-		const Rect = Canvas.getBoundingClientRect();
+		const BoundingElement = Canvas.parentElement;
+		const Rect = BoundingElement.getBoundingClientRect();
 		const w = Rect.width;
 		const h = Rect.height;
 		
@@ -512,8 +513,8 @@ Pop.Opengl.Window = function(Name,Rect)
 		//Element.style.width = '100%';
 		//Element.style.height = '500px';
 		*/
-		CanvasElement.width = Rect[2];
-		CanvasElement.height = Rect[3];
+		//CanvasElement.width = Rect[2];
+		//CanvasElement.height = Rect[3];
 	}
 	
 	this.GetCanvasElement = function()
