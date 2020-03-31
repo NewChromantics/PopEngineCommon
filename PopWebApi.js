@@ -275,7 +275,7 @@ Pop.CompileAndRun = function(Source,Filename)
 
 Pop.Yield = function(Milliseconds)
 {
-	let Promise = Pop.CreatePromise();
+	const Promise = Pop.CreatePromise();
 	setTimeout( Promise.Resolve, Milliseconds );
 	return Promise;
 }
@@ -286,6 +286,22 @@ Pop.LeapMotion = {};
 Pop.LeapMotion.Input = function()
 {
 	throw "Leap motion not supported";
+}
+
+//	gr: does this need its own namespace?
+Pop.Xml = {};
+
+Pop.Xml.Parse = function(Xml)
+{
+	//	web version makes use of the dom parser
+	//	https://stackoverflow.com/a/7951947/355753
+	if ( typeof window.DOMParser == 'undefined' )
+		throw "XML parser not supported";
+	
+	const Parser = new window.DOMParser();
+	const Dom = Parser.parseFromString(Xml, 'text/xml');
+	const Object = Dom.documentElement;
+	return Object;
 }
 
 
