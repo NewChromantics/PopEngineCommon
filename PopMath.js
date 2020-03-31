@@ -453,9 +453,29 @@ function RectIsOverlapped(RectA,RectB)
 }
 
 
-function GetRectArea(Rect)
+Math.GetTriangleArea2 = function(PointA,PointB,PointC)
+{
+	//	get edge lengths
+	const a = Math.Distance2( PointA, PointB );
+	const b = Math.Distance2( PointB, PointC );
+	const c = Math.Distance2( PointC, PointA );
+	
+	//	Heron's formula
+	const PerimeterLength = a + b + c;
+	//	s=semi-permeter
+	const s = PerimeterLength / 2;
+	const Area = Math.sqrt( s * (s-a) * (s-b) * (s-c) );
+	return Area;
+}
+
+Math.GetRectArea = function(Rect)
 {
 	return Rect[2] * Rect[3];
+}
+
+Math.GetCircleArea = function(Radius)
+{
+	return Math.PI * (Radius*Radius);
 }
 
 //	overlap area is the overlap as a fraction of the biggest rect
