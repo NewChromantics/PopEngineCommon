@@ -227,7 +227,9 @@ Pop.SvgJson.ParseShapes = function(Contents,OnShape)
 	
 	function ParseCircle(Node)
 	{
-		let Shape = {};
+		const Shape = {};
+		Shape.Style = Node.Style;
+
 		Shape.Matrix = StringToMatrix( Node['-matrix'] );
 		let x = StringToCoord( Node['-cx'] );
 		let y = StringToCoord( Node['-cy'] );
@@ -243,7 +245,9 @@ Pop.SvgJson.ParseShapes = function(Contents,OnShape)
 	
 	function ParseEllipse(Node)
 	{
-		let Shape = {};
+		const Shape = {};
+		Shape.Style = Node.Style;
+
 		Shape.Matrix = StringToMatrix( Node['-matrix'] );
 		let x = StringToCoord( Node['-cx'] );
 		let y = StringToCoord( Node['-cy'] );
@@ -269,7 +273,8 @@ Pop.SvgJson.ParseShapes = function(Contents,OnShape)
 	function ParsePolygon(Node)
 	{
 		const Shape = {};
-		
+		Shape.Style = Node.Style;
+
 		Shape.Polygon = {};
 		Shape.Polygon.Points = StringToFloat2Coords(Node['-points']);
 
@@ -279,6 +284,8 @@ Pop.SvgJson.ParseShapes = function(Contents,OnShape)
 	function ParseLine(Node)
 	{
 		const Shape = {};
+		Shape.Style = Node.Style;
+
 		let x1 = StringToCoord( Node['-x1'] );
 		let y1 = StringToCoord( Node['-y1'] );
 		let x2 = StringToCoord( Node['-x2'] );
@@ -295,7 +302,8 @@ Pop.SvgJson.ParseShapes = function(Contents,OnShape)
 	function ParsePolyLine(Node)
 	{
 		const Shape = {};
-		
+		Shape.Style = Node.Style;
+
 		Shape.Line = {};
 		Shape.Line.Points = StringToFloat2Coords(Node['-points']);
 
@@ -305,6 +313,8 @@ Pop.SvgJson.ParseShapes = function(Contents,OnShape)
 	function ParseRect(Node)
 	{
 		const Shape = {};
+		Shape.Style = Node.Style;
+
 		let x = StringToCoord( Node['-x'] );
 		let y = StringToCoord( Node['-y'] );
 		let w = StringToSize( Node['-width'] );
@@ -402,6 +412,8 @@ function CleanSvg(DomSvg)
 		Attribs.forEach(AddAttribute);
 		if ( Node.attributes.class )
 			Shape.Style = GetStyleFromClass(Node.attributes.class.value);
+		else
+			Shape.Style = GetDefaultStyle();
 		Shape.Type = Type;
 		//const Style = Node.attributes.class;
 		//const Points = Node.attributes.points;
@@ -427,6 +439,18 @@ function CleanSvg(DomSvg)
 		}
 	}
 	
+	function GetDefaultStyle()
+	{
+		Pop.Debug("GetDefaultStyle");
+		//	defaults;
+		//	https://www.w3.org/TR/SVG/painting.html#StrokeWidthProperty
+		const SvgDefaults = {};
+		SvgDefaults['stroke-width'] = 1;
+		SvgDefaults['stroke'] = 'none';
+		SvgDefaults['fill'] = 'black';
+		return SvgDefaults;
+	}
+	
 	function ParseStyle(CssRule)
 	{
 		//	can get multiple selectors for one style!
@@ -442,8 +466,18 @@ function CleanSvg(DomSvg)
 		}
 		
 		for ( let SelectorName of SelectorNames )
-			CssMap[SelectorName] = Style;
-		Pop.Debug(SelectorNames,"Style",Style);
+		{
+			//	merge style values
+			let CurrentStyle = CssMap[SelectorName];
+			if ( CurrentStyle === undefined )
+				CurrentStyle = GetDefaultStyle();
+			
+			//	overwrite new values
+			Object.assign( CurrentStyle, Style );
+			Pop.Debug(`Merged style ${SelectorName};`,CurrentStyle);
+			CssMap[SelectorName] = CurrentStyle;
+		}
+		//Pop.Debug('SelectorNames',SelectorNames,"Style",Style);
 	}
 	
 	function ProcessStyles(Node)
@@ -502,6 +536,8 @@ function CleanSvg(DomSvg)
 		return PushNode(Child,Svg.Root);
 	}
 	Array.from(DomSvg.children).forEach(PushRootChild);
+	
+	Pop.Debug("CSS selectors", Object.keys(CssMap) );
 	
 	return Svg;
 }
@@ -616,7 +652,9 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	
 	function ParseCircle(Node)
 	{
-		let Shape = {};
+		const Shape = {};
+		Shape.Style = Node.Style;
+		
 		Shape.Matrix = StringToMatrix( Node['matrix'] );
 		let x = StringToCoord( Node['cx'] );
 		let y = StringToCoord( Node['cy'] );
@@ -632,7 +670,9 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	
 	function ParseEllipse(Node)
 	{
-		let Shape = {};
+		const Shape = {};
+		Shape.Style = Node.Style;
+		
 		Shape.Matrix = StringToMatrix( Node['matrix'] );
 		let x = StringToCoord( Node['cx'] );
 		let y = StringToCoord( Node['cy'] );
@@ -658,6 +698,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	function ParsePolygon(Node)
 	{
 		const Shape = {};
+		Shape.Style = Node.Style;
 		
 		Shape.Polygon = {};
 		Shape.Polygon.Points = StringToFloat2Coords(Node['points']);
@@ -668,6 +709,8 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	function ParseLine(Node)
 	{
 		const Shape = {};
+		Shape.Style = Node.Style;
+		
 		let x1 = StringToCoord( Node['x1'] );
 		let y1 = StringToCoord( Node['y1'] );
 		let x2 = StringToCoord( Node['x2'] );
@@ -684,6 +727,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	function ParsePolyLine(Node)
 	{
 		const Shape = {};
+		Shape.Style = Node.Style;
 		
 		Shape.Line = {};
 		Shape.Line.Points = StringToFloat2Coords(Node['points']);
@@ -694,6 +738,8 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	function ParseRect(Node)
 	{
 		const Shape = {};
+		Shape.Style = Node.Style;
+		
 		let x = StringToCoord( Node['x'] );
 		let y = StringToCoord( Node['y'] );
 		let w = StringToSize( Node['width'] );
