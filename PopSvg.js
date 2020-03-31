@@ -1,7 +1,10 @@
 Pop.Svg = {};
 
+//	for pre-xml parser, maybe could just support both in one func
+Pop.SvgJson = {};
 
-Pop.Svg.Parse = function(Contents,OnVertex)
+
+Pop.SvgJson.Parse = function(Contents,OnVertex)
 {
 	const Svg = JSON.parse(Contents);
 	
@@ -117,7 +120,7 @@ Pop.Svg.Parse = function(Contents,OnVertex)
 
 
 
-Pop.Svg.ParseShapes = function(Contents,OnShape)
+Pop.SvgJson.ParseShapes = function(Contents,OnShape)
 {
 	const Svg = JSON.parse(Contents);
 	
@@ -349,4 +352,397 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		//	todo: other children!
 	}
 	ParseGroup( Svg.svg, '' );
+}
+
+function CleanSvg(DomSvg)
+{
+	//	the DOMParser turns the svg into a proper svg object, so this func cleans it up
+	const Svg = {};
+	
+	Svg.ViewBox = DomSvg.attributes.viewBox.value;
+	
+	function CreateGroup()
+	{
+		const Group = {};
+		Group.Children = [];
+		return Group;
+	}
+	
+	Svg.Root = CreateGroup();
+
+	//
+	const CssMap = {};
+	const LinearGradientMap = {};
+	const RadialGradientMap = {};
+	
+	function GetStyleFromClass(Class)
+	{
+		const Selector = `.${Class}`;
+		if ( !CssMap.hasOwnProperty(Selector) )
+			throw `Failed to get css style for ${Class}`;
+		return CssMap[Selector];
+	}
+	
+	function PushGroup(Node,Parent)
+	{
+		const GroupName = Node.attributes.id;
+		Pop.Debug(`Todo process group ${GroupName}`,Node);
+	}
+
+	function GetShape(Node)
+	{
+		const Type = Node.tagName;
+		const Attribs = Array.from(Node.attributes);
+		const Shape = {};
+		
+		function AddAttribute(Attrib)
+		{
+			Shape[Attrib.name] = Attrib.value;
+		}
+		Attribs.forEach(AddAttribute);
+		if ( Node.attributes.class )
+			Shape.Style = GetStyleFromClass(Node.attributes.class.value);
+		Shape.Type = Type;
+		//const Style = Node.attributes.class;
+		//const Points = Node.attributes.points;
+
+		return Shape;
+	}
+	
+	function PushNode(Node,Parent)
+	{
+		const TagName = Node.tagName;
+		
+		if ( TagName == 'g' )
+		{
+			const Group = CreateGroup();
+			Group.Name = Node.attributes.id.value;
+			Array.from(Node.children).forEach( n => PushNode(n,Group) );
+			Parent.Children.push(Group);
+		}
+		else
+		{
+			const Shape = GetShape(Node);
+			Parent.Children.push(Shape);
+		}
+	}
+	
+	function ParseStyle(CssRule)
+	{
+		//	can get multiple selectors for one style!
+		const SelectorNames = CssRule.selectorText.split(',').map( s => s.trim() );
+		const Style = {};
+		
+		//	CssRule.style has members like 0:'fill' and an element 'fill':'value'
+		const Styles = Array.from(CssRule.style);
+		for ( let Property of Styles )
+		{
+			const Value = CssRule.style[Property];
+			Style[Property] = Value;
+		}
+		
+		for ( let SelectorName of SelectorNames )
+			CssMap[SelectorName] = Style;
+		Pop.Debug(SelectorNames,"Style",Style);
+	}
+	
+	function ProcessStyles(Node)
+	{
+		const CssText = Node.textContent;
+		const CssRules = Node.sheet.rules;
+		Array.from(CssRules).forEach( ParseStyle );
+	}
+	
+	function ProcessRadialGradient(Node)
+	{
+		/*
+		 <radialGradient id="radial-gradient-5" cx="1156.78" cy="233.61" r="54.68" gradientUnits="userSpaceOnUse">
+		 <stop offset="0.43" stop-color="#904c30"/>
+		 <stop offset="0.55" stop-color="#a81e27"/>
+		 <stop offset="0.7" stop-color="#dd3024"/>
+		 <stop offset="0.72" stop-color="#dc4436"/>
+		 <stop offset="0.79" stop-color="#da7460"/>
+		 <stop offset="0.85" stop-color="#d99a81"/>
+		 <stop offset="0.91" stop-color="#d8b699"/>
+		 <stop offset="0.96" stop-color="#d7c6a7"/>
+		 <stop offset="1" stop-color="#d7ccac"/>
+		 </radialGradient>*/
+	}
+	function ProcessLinearGradient(Node)
+	{
+		/*
+		 <linearGradient id="linear-gradient-4" x1="1246.44" y1="347.86" x2="1544.83" y2="257.4" gradientUnits="userSpaceOnUse">
+		 <stop offset="0.02" stop-color="#aa8789"/>
+		 <stop offset="0.04" stop-color="#6c445f"/>
+		 <stop offset="0.35" stop-color="#603757"/>
+		 <stop offset="0.37" stop-color="#ad8b8b"/>
+		 <stop offset="0.63" stop-color="#b99793"/>
+		 <stop offset="0.66" stop-color="#9a7d86"/>
+		 </linearGradient>
+		 */
+	}
+	
+	function ProcessDef(Node)
+	{
+		switch(Node.tagName)
+		{
+			case 'style':			return ProcessStyles(Node);
+			case 'linearGradient':	return ProcessLinearGradient(Node);
+			case 'radialGradient':	return ProcessRadialGradient(Node);
+			default:				throw `Unhandled svg tag ${Node.tagName}`;
+		}
+	}
+	
+	function PushRootChild(Child)
+	{
+		const TagName = Child.tagName;
+		if ( TagName == 'defs' )
+			return Array.from(Child.children).forEach(ProcessDef);
+		
+		return PushNode(Child,Svg.Root);
+	}
+	Array.from(DomSvg.children).forEach(PushRootChild);
+	
+	return Svg;
+}
+
+Pop.Svg.ParseShapes = function(Contents,OnShape)
+{
+	let Svg = Pop.Xml.Parse(Contents);
+	//	note: the DOMParser in chrome turns this into a proper svg object, not just a structure
+	Svg = CleanSvg(Svg);
+	Pop.Debug( JSON.stringify(Svg) );
+	
+	const Meta = Svg.svg;
+	const Bounds = StringToFloats( Svg.ViewBox );
+	
+	function NormaliseSize(Value)
+	{
+		Pop.Debug("Normalise", Value);
+		//	todo: center
+		//	scale down to largest width or height
+		if ( Bounds[2] > Bounds[3] )
+			return Value / Bounds[2];
+		else
+			return Value / Bounds[3];
+	}
+	
+	//	center bounds so ratio is around height
+	if ( false )
+	{
+		const LeftShift = Bounds[2] - Bounds[3];
+		Bounds[0] += LeftShift/2;
+		Bounds[2] -= LeftShift;
+	}
+	
+	function Range(Min,Max,Value)
+	{
+		return (Value-Min) / (Max-Min);
+	}
+	function Lerp(Min,Max,Time)
+	{
+		return Min + ((Max-Min) * Time);
+	}
+	
+	function StringToFloat(String)
+	{
+		let Float = parseFloat(String);
+		return Float;
+	}
+	
+	function StringToFloats(String)
+	{
+		let Floats = String.split(' ');
+		Floats = Floats.map( parseFloat );
+		if ( Floats.some( isNaN ) )
+			throw "String (" + String + ") failed to turn to floats: " + Floats;
+		return Floats;
+	}
+	
+	function StringToFloat2s(String,Modifyx)
+	{
+		Modifyx = Modifyx || function(x){return x;};
+		
+		let Floats = String.split(' ');
+		Floats = Floats.map( parseFloat );
+		if ( Floats.some( isNaN ) )
+			throw "String (" + String + ") failed to turn to floats: " + Floats;
+		const Float2s = [];
+		for ( let i=0;	i<Floats.length;	i+=2 )
+		{
+			const x = Modifyx( Floats[i+0] );
+			const y = Modifyx( Floats[i+1] );
+			Float2s.push([x,y]);
+		}
+		return Float2s;
+	}
+	
+	function StringToFloat2Coords(String)
+	{
+		const Float2s = StringToFloat2s( String, NormaliseSize );
+		return Float2s;
+	}
+	
+	function StringToMatrix(String)
+	{
+		if ( !String )
+			return String;
+		let Floats = StringToFloats(String);
+		let Matrix =
+		[
+		 a,c,e,0,
+		 b,d,f,0,
+		 0,0,1,0,
+		 0,0,0,1
+		 ];
+		return Matrix;
+	}
+	
+	function StringToCoord(String)
+	{
+		let x = StringToSize(String);
+		//x = Lerp( -1, 1, x );
+		return x;
+	}
+	
+	function StringToSize(String)
+	{
+		let x = StringToFloat(String);
+		x = NormaliseSize(x);
+		return x;
+	}
+	
+	
+	
+	function ParseCircle(Node)
+	{
+		let Shape = {};
+		Shape.Matrix = StringToMatrix( Node['matrix'] );
+		let x = StringToCoord( Node['cx'] );
+		let y = StringToCoord( Node['cy'] );
+		let r = StringToSize( Node['r'] );
+		
+		Shape.Circle = {};
+		Shape.Circle.x = x;
+		Shape.Circle.y = y;
+		Shape.Circle.Radius = r;
+		
+		OnShape(Shape);
+	}
+	
+	function ParseEllipse(Node)
+	{
+		let Shape = {};
+		Shape.Matrix = StringToMatrix( Node['matrix'] );
+		let x = StringToCoord( Node['cx'] );
+		let y = StringToCoord( Node['cy'] );
+		let rx = StringToSize( Node['rx'] );
+		let ry = StringToSize( Node['ry'] );
+		
+		Shape.Ellipse = {};
+		Shape.Ellipse.x = x;
+		Shape.Ellipse.y = y;
+		Shape.Ellipse.RadiusX = rx;
+		Shape.Ellipse.RadiusY = ry;
+		
+		OnShape(Shape);
+	}
+	
+	function ParsePath(Node)
+	{
+		//	split commands
+		const Commands = Node['d'];
+		Pop.Debug("Todo: parse svg path", JSON.stringify(Node));
+	}
+	
+	function ParsePolygon(Node)
+	{
+		const Shape = {};
+		
+		Shape.Polygon = {};
+		Shape.Polygon.Points = StringToFloat2Coords(Node['points']);
+		
+		OnShape(Shape);
+	}
+	
+	function ParseLine(Node)
+	{
+		const Shape = {};
+		let x1 = StringToCoord( Node['x1'] );
+		let y1 = StringToCoord( Node['y1'] );
+		let x2 = StringToCoord( Node['x2'] );
+		let y2 = StringToCoord( Node['y2'] );
+		
+		Shape.Line = {};
+		Shape.Line.Points = [];
+		Shape.Line.Points.push( [x1,y1] );
+		Shape.Line.Points.push( [x2,y2] );
+		
+		OnShape( Shape );
+	}
+	
+	function ParsePolyLine(Node)
+	{
+		const Shape = {};
+		
+		Shape.Line = {};
+		Shape.Line.Points = StringToFloat2Coords(Node['points']);
+		
+		OnShape( Shape );
+	}
+	
+	function ParseRect(Node)
+	{
+		const Shape = {};
+		let x = StringToCoord( Node['x'] );
+		let y = StringToCoord( Node['y'] );
+		let w = StringToSize( Node['width'] );
+		let h = StringToSize( Node['height'] );
+		
+		Shape.Rect = {};
+		Shape.Rect.x = x;
+		Shape.Rect.y = y;
+		Shape.Rect.w = w;
+		Shape.Rect.h = h;
+		
+		OnShape( Shape );
+	}
+	
+	
+	function NodeAsArray(Node)
+	{
+		if ( Node === undefined )
+			return [];
+		if ( !Array.isArray(Node) )
+			return [Node];
+		return Node;
+	}
+	
+	function ParseShape(Node)
+	{
+		switch ( Node.Type )
+		{
+			case 'circle':		return ParseCircle(Node);
+			case 'ellipse':		return ParseEllipse(Node);
+			case 'path':		return ParsePath(Node);
+			case 'polygon':		return ParsePolygon(Node);
+			case 'rect':		return ParseRect(Node);
+			case 'line':		return ParseLine(Node);
+			case 'polyline':	return ParsePolyLine(Node);
+		}
+		throw `Unhandled node type ${Node.Type}`;
+	}
+	
+	function ParseGroup(Node,PathName)
+	{
+		//	is a shape
+		if ( Node.Type )
+		{
+			ParseShape(Node);
+		}
+		
+		if ( Node.Children )
+			Node.Children.forEach( n => ParseGroup(n,PathName) );
+	}
+	ParseGroup( Svg.Root, '' );
 }
