@@ -555,6 +555,9 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	Svg = CleanSvg(Svg);
 	Pop.Debug( JSON.stringify(Svg) );
 	
+	//	name for each shape is group/group/name
+	const PathSeperator = '/';
+	
 	const Meta = Svg.svg;
 	const Bounds = StringToFloats( Svg.ViewBox );
 	
@@ -657,12 +660,13 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	}
 	
 	
-	
-	function ParseCircle(Node)
+	function ParseCircle(Node,ChildIndex,Path)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
-		
+		Shape.Name = Path + PathSeperator;
+		Shape.Name += Node.Name ? Node.Name : ChildIndex;
+
 		Shape.Matrix = StringToMatrix( Node['matrix'] );
 		let x = StringToCoord( Node['cx'] );
 		let y = StringToCoord( Node['cy'] );
@@ -676,11 +680,13 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		OnShape(Shape);
 	}
 	
-	function ParseEllipse(Node)
+	function ParseEllipse(Node,ChildIndex,Path)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
-		
+		Shape.Name = Path + PathSeperator;
+		Shape.Name += Node.Name ? Node.Name : ChildIndex;
+
 		Shape.Matrix = StringToMatrix( Node['matrix'] );
 		let x = StringToCoord( Node['cx'] );
 		let y = StringToCoord( Node['cy'] );
@@ -696,28 +702,37 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		OnShape(Shape);
 	}
 	
-	function ParsePath(Node)
+	function ParsePath(Node,ChildIndex,Path)
 	{
+		const Shape = {};
+		Shape.Style = Node.Style;
+		Shape.Name = Path + PathSeperator;
+		Shape.Name += Node.Name ? Node.Name : ChildIndex;
+
 		//	split commands
 		const Commands = Node['d'];
 		Pop.Debug("Todo: parse svg path", JSON.stringify(Node));
 	}
 	
-	function ParsePolygon(Node)
+	function ParsePolygon(Node,ChildIndex,Path)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
-		
+		Shape.Name = Path + PathSeperator;
+		Shape.Name += Node.Name ? Node.Name : ChildIndex;
+
 		Shape.Polygon = {};
 		Shape.Polygon.Points = StringToFloat2Coords(Node['points']);
 		
 		OnShape(Shape);
 	}
 	
-	function ParseLine(Node)
+	function ParseLine(Node,ChildIndex,Path)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
+		Shape.Name = Path + PathSeperator;
+		Shape.Name += Node.Name ? Node.Name : ChildIndex;
 		
 		let x1 = StringToCoord( Node['x1'] );
 		let y1 = StringToCoord( Node['y1'] );
@@ -732,22 +747,26 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		OnShape( Shape );
 	}
 	
-	function ParsePolyLine(Node)
+	function ParsePolyLine(Node,ChildIndex,Path)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
-		
+		Shape.Name = Path + PathSeperator;
+		Shape.Name += Node.Name ? Node.Name : ChildIndex;
+
 		Shape.Line = {};
 		Shape.Line.Points = StringToFloat2Coords(Node['points']);
 		
 		OnShape( Shape );
 	}
 	
-	function ParseRect(Node)
+	function ParseRect(Node,ChildIndex,Path)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
-		
+		Shape.Name = Path + PathSeperator;
+		Shape.Name += Node.Name ? Node.Name : ChildIndex;
+
 		let x = StringToCoord( Node['x'] );
 		let y = StringToCoord( Node['y'] );
 		let w = StringToSize( Node['width'] );
@@ -763,40 +782,57 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	}
 	
 	
-	function NodeAsArray(Node)
-	{
-		if ( Node === undefined )
-			return [];
-		if ( !Array.isArray(Node) )
-			return [Node];
-		return Node;
-	}
-	
-	function ParseShape(Node)
+	function ParseShape(Node,ChildIndex,Path)
 	{
 		switch ( Node.Type )
 		{
-			case 'circle':		return ParseCircle(Node);
-			case 'ellipse':		return ParseEllipse(Node);
-			case 'path':		return ParsePath(Node);
-			case 'polygon':		return ParsePolygon(Node);
-			case 'rect':		return ParseRect(Node);
-			case 'line':		return ParseLine(Node);
-			case 'polyline':	return ParsePolyLine(Node);
+			case 'circle':		return ParseCircle(Node,ChildIndex,Path);
+			case 'ellipse':		return ParseEllipse(Node,ChildIndex,Path);
+			case 'path':		return ParsePath(Node,ChildIndex,Path);
+			case 'polygon':		return ParsePolygon(Node,ChildIndex,Path);
+			case 'rect':		return ParseRect(Node,ChildIndex,Path);
+			case 'line':		return ParseLine(Node,ChildIndex,Path);
+			case 'polyline':	return ParsePolyLine(Node,ChildIndex,Path);
 		}
-		throw `Unhandled node type ${Node.Type}`;
+		throw `Unhandled node type ${Node.Type} at ${Path}[${ChildIndex}]`;
 	}
 	
-	function ParseGroup(Node,PathName)
+	function ParseNode(Node,NodeIndex,Path)
 	{
 		//	is a shape
 		if ( Node.Type )
 		{
-			ParseShape(Node);
+			ParseShape(Node,NodeIndex,Path);
 		}
 		
+		//	is a group
 		if ( Node.Children )
-			Node.Children.forEach( n => ParseGroup(n,PathName) );
+		{
+			let GroupName = Node.Name;
+			if ( GroupName === undefined )
+			{
+				if ( NodeIndex !== null )
+				{
+					GroupName = `Group${NodeIndex}`;
+				}
+				else
+				{
+					//	root!
+					GroupName = '';
+				}
+			}
+			
+			if ( Path === null || Path.length == 0 )
+				Path = '';
+			else
+				Path += PathSeperator;
+			const ChildPath = Path + GroupName;
+			function ParseChild(ChildNode,ChildIndex)
+			{
+				ParseNode( ChildNode, ChildIndex, ChildPath );
+			}
+			Node.Children.forEach(ParseChild);
+		}
 	}
-	ParseGroup( Svg.Root, '' );
+	ParseNode( Svg.Root, null, null );
 }
