@@ -588,8 +588,13 @@ Pop.Opengl.Window = function(Name,Rect)
 		//this.RefreshCanvasResolution();
 		this.OnResize();
 		const Options = {};
-		//Options.antialias = true;
+		Options.antialias = true;
 		Options.xrCompatible = true;
+		//	default is true. when true, this is causing an rgb blend with white,
+		//	instead of what's behind the canvas, causing a white halo
+		//	https://webglfundamentals.org/webgl/lessons/webgl-and-alpha.html
+		Options.premultipliedAlpha = false;
+		Options.alpha = true;	//	have alpha buffer
 		const Context = Canvas.getContext( ContextMode, Options );
 		
 		if ( !Context )
