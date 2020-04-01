@@ -430,7 +430,10 @@ function CleanSvg(DomSvg)
 		if ( TagName == 'g' )
 		{
 			const Group = CreateGroup();
-			Group.Name = Node.attributes.id.value;
+			if ( Node.attributes.id )
+				Group.Name = Node.attributes.id.value;
+			else
+				Group.Name = null;
 			Array.from(Node.children).forEach( n => PushNode(n,Group) );
 			Parent.Children.push(Group);
 		}
