@@ -448,6 +448,7 @@ function CleanSvg(DomSvg)
 		SvgDefaults['stroke-width'] = 1;
 		SvgDefaults['stroke'] = 'none';
 		SvgDefaults['fill'] = 'black';
+		SvgDefaults['stroke-linecap'] = 'butt';
 		return SvgDefaults;
 	}
 	
