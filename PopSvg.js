@@ -211,6 +211,8 @@ Pop.SvgJson.ParseShapes = function(Contents,OnShape)
 	
 	function StringToCoord(String)
 	{
+		if ( String === undefined )
+			return 0;
 		let x = StringToSize(String);
 		//x = Lerp( -1, 1, x );
 		return x;
