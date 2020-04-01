@@ -646,7 +646,8 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	function StringToCoord(String)
 	{
 		if ( String === undefined )
-			return 0;
+			return String;
+		
 		let x = StringToSize(String);
 		//x = Lerp( -1, 1, x );
 		return x;
@@ -767,8 +768,8 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		Shape.Name = Path + PathSeperator;
 		Shape.Name += Node.Name ? Node.Name : ChildIndex;
 
-		let x = StringToCoord( Node['x'] );
-		let y = StringToCoord( Node['y'] );
+		let x = StringToCoord( Node['x'] ) || 0;
+		let y = StringToCoord( Node['y'] ) || 0;
 		let w = StringToSize( Node['width'] );
 		let h = StringToSize( Node['height'] );
 		
