@@ -407,7 +407,7 @@ function CleanSvg(DomSvg)
 		}
 		catch(e)
 		{
-			Pop.Debug(e);
+			Pop.Debug(`Exception in GetStyleFromClass; ${e}`);
 			return GetDefaultStyle();
 		}
 	}
@@ -510,13 +510,18 @@ function CleanSvg(DomSvg)
 		ChromiumRule.selectorText = CssRule.selector;	//	csv names
 		ChromiumRule.style = {};
 		
-		const Styles = Array.from(CssRule.rules);
-		for ( let Property of Styles )
+		//	reformat to match the chromium style; [N]=key [Key]=Value
+		//	"rules":[{"directive":"fill","value":"#e3db7a"}]}
+		function PushStyle(Rule,RuleIndex)
 		{
-			const Key = Property.directive;
-			const Value = Property.value;
+			const Key = Rule.directive;
+			const Value = Rule.value;
+			ChromiumRule.style[RuleIndex] = Key;
 			ChromiumRule.style[Key] = Value;
 		}
+		CssRule.rules.forEach( PushStyle );
+		//	make it iterable for Array.from()
+		ChromiumRule.style.length = CssRule.rules.length;
 		
 		ParseChromiumStyle(ChromiumRule);
 	}
