@@ -366,6 +366,14 @@ Pop.SvgJson.ParseShapes = function(Contents,OnShape)
 	ParseGroup( Svg.svg, '' );
 }
 
+function ParseCss(CssString)
+{
+	//	requires PopEngineCommon/Css.js/css.js
+	const Parser = new cssjs();
+	const CssJson = Parser.parseCSS(CssString);
+	return CssJson;
+}
+
 function CleanSvg(DomSvg)
 {
 	//	the DOMParser turns the svg into a proper svg object, so this func cleans it up
@@ -389,10 +397,19 @@ function CleanSvg(DomSvg)
 	
 	function GetStyleFromClass(Class)
 	{
-		const Selector = `.${Class}`;
-		if ( !CssMap.hasOwnProperty(Selector) )
-			throw `Failed to get css style for ${Class}`;
-		return CssMap[Selector];
+		//	temp catch, safari doesn't pre-gen classes
+		try
+		{
+			const Selector = `.${Class}`;
+			if ( !CssMap.hasOwnProperty(Selector) )
+				throw `Failed to get css style for ${Class}`;
+			return CssMap[Selector];
+		}
+		catch(e)
+		{
+			Pop.Debug(e);
+			return GetDefaultStyle();
+		}
 	}
 	
 	function PushGroup(Node,Parent)
@@ -457,7 +474,7 @@ function CleanSvg(DomSvg)
 		return SvgDefaults;
 	}
 	
-	function ParseStyle(CssRule)
+	function ParseChromiumStyle(CssRule)
 	{
 		//	can get multiple selectors for one style!
 		const SelectorNames = CssRule.selectorText.split(',').map( s => s.trim() );
@@ -467,8 +484,9 @@ function CleanSvg(DomSvg)
 		const Styles = Array.from(CssRule.style);
 		for ( let Property of Styles )
 		{
-			const Value = CssRule.style[Property];
-			Style[Property] = Value;
+			const Key = Property;
+			const Value = CssRule.style[Key];
+			Style[Key] = Value;
 		}
 		
 		for ( let SelectorName of SelectorNames )
@@ -486,11 +504,39 @@ function CleanSvg(DomSvg)
 		//Pop.Debug('SelectorNames',SelectorNames,"Style",Style);
 	}
 	
+	function ParseCssjsStyle(CssRule)
+	{
+		const ChromiumRule = {};
+		ChromiumRule.selectorText = CssRule.selector;	//	csv names
+		ChromiumRule.style = {};
+		
+		const Styles = Array.from(CssRule.rules);
+		for ( let Property of Styles )
+		{
+			const Key = Property.directive;
+			const Value = Property.value;
+			ChromiumRule.style[Key] = Value;
+		}
+		
+		ParseChromiumStyle(ChromiumRule);
+	}
+	
 	function ProcessStyles(Node)
 	{
 		const CssText = Node.textContent;
-		const CssRules = Node.sheet.rules;
-		Array.from(CssRules).forEach( ParseStyle );
+		//	Node.sheet not on safari, so use 3rd party
+		//	3rd party parser
+		const CssRules = ParseCss(CssText);
+		Pop.Debug('css',JSON.stringify(CssRules));
+		CssRules.forEach( ParseCssjsStyle );
+
+		/*
+		if ( Node.sheet )
+		{
+			const CssRules = Node.sheet.rules;
+			Array.from(CssRules).forEach( ParseChromiumStyle );
+		}
+		 */
 	}
 	
 	function ProcessRadialGradient(Node)
@@ -563,7 +609,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	
 	function NormaliseSize(Value)
 	{
-		Pop.Debug("Normalise", Value);
+		//Pop.Debug("Normalise", Value);
 		//	todo: center
 		//	scale down to largest width or height
 		if ( Bounds[2] > Bounds[3] )
