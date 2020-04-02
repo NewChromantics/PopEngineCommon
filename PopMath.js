@@ -19,6 +19,81 @@ Pop.Colour.RgbfToHex = function(Rgb)
 	return HexRgb;
 }
 
+
+//	returns null if no colour
+Math.ColourToHue = function(Rgbaf)
+{
+	let [r,g,b,a] = [...Rgbaf];
+	
+	//	https://stackoverflow.com/a/26233318/355753
+	const Min = Math.min( r,g,b );
+	const Max = Math.max( r,g,b );
+	
+	if ( Min == Max )
+		return null;
+	
+	//	todo: change this so it's 0-1 instead of 360
+	let Hue = 0;
+	if ( Max == r )
+	{
+		Hue = (g - b) / (Max - Min);
+	}
+	else if (Max == g)
+	{
+		Hue = 2 + (b - r) / (Max - Min);
+	}
+	else
+	{
+		Hue = 4 + (r - g) / (Max - Min);
+	}
+	
+	Hue = Hue * (360/6);
+	if ( Hue < 0 )
+		Hue += 360;
+	
+	Hue /= 360;
+	return Hue;
+}
+
+Math.HueToColour = function(Hue,Alpha=1)
+{
+	if ( Hue === null )
+		return [0,0,0,Alpha];
+	
+	let Normal = Hue;
+	//	same as NormalToRedGreenBluePurple
+	if ( Normal < 1/6 )
+	{
+		Normal = Math.Range( 0/6, 1/6, Normal );
+		return [1, Normal, 0, Alpha];
+	}
+	else if ( Normal < 2/6 )
+	{
+		Normal = Math.Range( 1/6, 2/6, Normal );
+		return [1-Normal, 1, 0, Alpha];
+	}
+	else if ( Normal < 3/6 )
+	{
+		Normal = Math.Range( 2/6, 3/6, Normal );
+		return [0, 1, Normal, Alpha];
+	}
+	else if ( Normal < 4/6 )
+	{
+		Normal = Math.Range( 3/6, 4/6, Normal );
+		return [0, 1-Normal, 1, Alpha];
+	}
+	else if ( Normal < 5/6 )
+	{
+		Normal = Math.Range( 4/6, 5/6, Normal );
+		return [Normal, 0, 1, Alpha];
+	}
+	else //if ( Normal < 5/6 )
+	{
+		Normal = Math.Range( 5/6, 6/6, Normal );
+		return [1, 0, 1-Normal, Alpha];
+	}
+}
+
 Math.DegToRad = function(Degrees)
 {
 	return Degrees * (Math.PI / 180);
