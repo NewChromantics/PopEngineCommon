@@ -32,6 +32,14 @@ Math.ColourToHue = function(Rgbaf)
 	if ( Min == Max )
 		return null;
 	
+	//	have a darkness tolerance
+	if ( Max < 0.3 )
+		return null;
+	
+	//	and a brightness tolerance
+	if ( Min > 0.9 )
+		return null;
+	
 	//	todo: change this so it's 0-1 instead of 360
 	let Hue = 0;
 	if ( Max == r )
