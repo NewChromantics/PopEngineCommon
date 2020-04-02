@@ -565,12 +565,15 @@ function GetOverlapArea(Recta,Rectb)
 
 Pop.Colour.HexToRgb = function(HexRgb)
 {
-	let GetNibble = function(){};
+	let GetNibble;
+	let NibbleCount = 0;
 	
 	if ( typeof HexRgb == 'string' )
 	{
 		if ( HexRgb[0] != '#' )
 			throw HexRgb + " doesn't begin with #";
+		
+		NibbleCount = HexRgb.length-1;
 		
 		GetNibble = function(CharIndex)
 		{
@@ -589,6 +592,7 @@ Pop.Colour.HexToRgb = function(HexRgb)
 	}
 	else	//	int 0xffaa00
 	{
+		NibbleCount = 6;
 		GetNibble = function(Index)
 		{
 			Index = 5-Index;
@@ -598,17 +602,21 @@ Pop.Colour.HexToRgb = function(HexRgb)
 		}
 	}
 	
+	if ( NibbleCount != 3 && NibbleCount != 6 )
+		throw `Hex colour ${HexRgb} expected 3 or 6 nibbles, but is ${NibbleCount}`;
+
+	//Pop.Debug(`Hex colour ${HexRgb} nibbles; ${NibbleCount}`);
+	const NibbleMaps =
+	{
+		3: [0,0,1,1,2,2],
+		6: [0,1,2,3,4,5],
+	};
+	const NibbleMap = NibbleMaps[NibbleCount];
+	const [a,b,c,d,e,f] = NibbleMap.map(GetNibble);
 	
-	let a = GetNibble(0);
-	let b = GetNibble(1);
-	let c = GetNibble(2);
-	let d = GetNibble(3);
-	let e = GetNibble(4);
-	let f = GetNibble(5);
-	
-	let Red = (a<<4) | b;
-	let Green = (c<<4) | d;
-	let Blue = (e<<4) | f;
+	const Red = (a<<4) | b;
+	const Green = (c<<4) | d;
+	const Blue = (e<<4) | f;
 	//Pop.Debug(a,b,c,d,e,f);
 	//Pop.Debug(Red,Green,Blue);
 	return [Red,Green,Blue];
