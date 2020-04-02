@@ -1325,8 +1325,58 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 		return this.Program;
 	}
 	
+	function StringToAsciis(String)
+	{
+		const Asciis = [];
+		for ( let i=0;	i<String.length;	i++ )
+			Asciis.push( String.charCodeAt(i) );
+		return Asciis;
+	}
+	
+	function IsNonAsciiCharCode(CharCode)
+	{
+		if ( CharCode >= 128 )
+			return true;
+		if ( CharCode < 0 )
+			return true;
+		
+		//	wierdly, glsl (on a 2011 imac, AMD Radeon HD 6970M 1024 MB, safari, high sierra)
+		//	considers ' (ascii 39) a non-ascii char
+		if ( CharCode == 39 )
+			return true;
+		return false;
+	}
+	
+	function CleanNonAsciiString(TheString)
+	{
+		//	safari glsl (on a 2011 imac, AMD Radeon HD 6970M 1024 MB, safari, high sierra)
+		//	rejects these chracters as "non-ascii"
+		//const NonAsciiCharCodes = [39];
+		//const NonAsciiChars = NonAsciiCharCodes.map( cc => {	return String.fromCharCode(cc);});
+		const NonAsciiChars = "'@";
+		const ReplacementAsciiChar = '_';
+		const Match = `[${NonAsciiChars}]`;
+		var NonAsciiRegex = new RegExp(Match, 'g');
+		const CleanString = TheString.replace(NonAsciiRegex,ReplacementAsciiChar);
+		return CleanString;
+	}
+	
 	this.CompileShader = function(RenderContext,Type,Source)
 	{
+		Source = CleanNonAsciiString(Source);
+		
+		//	safari will fail in shaderSource with non-ascii strings, so detect them to make it easier
+		const Asciis = StringToAsciis(Source);
+		const FirstNonAscii = Asciis.findIndex(IsNonAsciiCharCode);
+		if ( FirstNonAscii != -1 )
+		{
+			const SubSample = 8;
+			let NonAsciiSubString = Source.substring( FirstNonAscii-SubSample, FirstNonAscii );
+			NonAsciiSubString += `>>>>${Source[FirstNonAscii]}<<<<`;
+			NonAsciiSubString += Source.substring( FirstNonAscii+1, FirstNonAscii+SubSample );
+			throw `glsl source has non-ascii char around ${NonAsciiSubString}`;
+		}
+		
 		const gl = RenderContext.GetGlContext();
 		const Shader = gl.createShader(Type);
 		gl.shaderSource( Shader, Source );
