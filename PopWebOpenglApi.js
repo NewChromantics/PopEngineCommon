@@ -274,6 +274,14 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		MouseEvent.preventDefault();
 	}
 	
+	let MouseUp = function(MouseEvent)
+	{
+		const Pos = GetMousePos(MouseEvent);
+		const Button = GetButtonFromMouseEventButton(MouseEvent);
+		OnMouseUp( Pos[0], Pos[1], Button );
+		MouseEvent.preventDefault();
+	}
+	
 	let MouseWheel = function(MouseEvent)
 	{
 		const Pos = GetMousePos(MouseEvent);
@@ -301,8 +309,8 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	Element.addEventListener('contextmenu', ContextMenu, false );
 	Element.addEventListener('mousedown', MouseDown, false );
 	Element.addEventListener('mousemove', MouseMove, false );
-	//	not currently handling up
-	//this.Element.addEventListener('mouseup', MouseUp, false );
+
+	Element.addEventListener('mouseup', MouseUp, false );
 	//this.Element.addEventListener('mouseleave', OnDisableDraw, false );
 	//this.Element.addEventListener('mouseenter', OnEnableDraw, false );
 	
