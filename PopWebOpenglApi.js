@@ -1424,18 +1424,14 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 	//	gr: can't tell the difference between int and float, so err that wont work
 	this.SetUniform = function(Uniform,Value)
 	{
-		let UniformMeta = this.GetUniformMeta(Uniform);
+		const UniformMeta = this.GetUniformMeta(Uniform);
 		if ( !UniformMeta )
 			return;
-		if( Array.isArray(Value) )					this.SetUniformArray( Uniform, Value );
-		else if( Value instanceof Float32Array )	this.SetUniformArray( Uniform, Value );
-		else if ( Value instanceof Pop.Image )		this.SetUniformTexture( Uniform, Value, this.Context.AllocTexureIndex() );
-		//else if ( Value instanceof float2 )		this.SetUniformFloat2( Uniform, Value );
-		//else if ( Value instanceof float3 )		this.SetUniformFloat3( Uniform, Value );
-		//else if ( Value instanceof float4 )		this.SetUniformFloat4( Uniform, Value );
-		//else if ( Value instanceof Matrix4x4 )	this.SetUniformMatrix4x4( Uniform, Value );
-		else if ( typeof Value === 'number' )		this.SetUniformNumber( Uniform, Value );
-		else if ( typeof Value === 'boolean' )		this.SetUniformNumber( Uniform, Value );
+		if( Array.isArray(Value) )					this.SetUniformArray( Uniform, UniformMeta, Value );
+		else if( Value instanceof Float32Array )	this.SetUniformArray( Uniform, UniformMeta, Value );
+		else if ( Value instanceof Pop.Image )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTexureIndex() );
+		else if ( typeof Value === 'number' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
+		else if ( typeof Value === 'boolean' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else
 		{
 			console.log(typeof Value);
@@ -1444,11 +1440,8 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 		}
 	}
 	
-	this.SetUniformArray = function(UniformName,Values)
+	this.SetUniformArray = function(UniformName,UniformMeta,Values)
 	{
-		//	determine type of array, and length, and is array
-		const UniformMeta = this.GetUniformMeta(UniformName);
-		
 		const ExpectedValueCount = UniformMeta.ElementSize * UniformMeta.ElementCount;
 		
 		//	all aligned
@@ -1486,14 +1479,13 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 		UniformMeta.SetValues( ValuesExpanded );
 	}
 	
-	this.SetUniformTexture = function(Uniform,Image,TextureIndex)
+	this.SetUniformTexture = function(Uniform,UniformMeta,Image,TextureIndex)
 	{
-		let Texture = Image.GetOpenglTexture( this.Context );
-		let gl = this.GetGlContext();
-		let UniformPtr = gl.getUniformLocation( this.Program, Uniform );
+		const Texture = Image.GetOpenglTexture( this.Context );
+		const gl = this.GetGlContext();
 		//  https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Using_textures_in_WebGL
 		//  WebGL provides a minimum of 8 texture units;
-		let GlTextureNames = [ gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7 ];
+		const GlTextureNames = [ gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7 ];
 		//	setup textures
 		gl.activeTexture( GlTextureNames[TextureIndex] );
 		try
@@ -1503,73 +1495,19 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 		catch(e)
 		{
 			Pop.Debug("SetUniformTexture: " + e);
-			//  todo: bind "invalid" texture
+			//  todo: bind an "invalid" texture
 		}
-		gl.uniform1i( UniformPtr, TextureIndex );
+		UniformMeta.SetValues( [TextureIndex] );
 	}
 	
-	this.SetUniformNumber = function(Uniform,Value)
+	this.SetUniformNumber = function(Uniform,UniformMeta,Value)
 	{
-		let gl = this.GetGlContext();
-		let UniformPtr = gl.getUniformLocation( this.Program, Uniform);
-		let UniformType = this.GetUniformType( Uniform );
-		//	gr: this always returns 0 on imac12,2
-		//let UniformType = gl.getUniform( this.Program, UniformPtr );
-		
 		//	these are hard to track down and pretty rare anyone would want a nan
 		if ( isNaN(Value) )
 			throw "Setting NaN on Uniform " + Uniform.Name;
-		
-		switch ( UniformType )
-		{
-			case gl.INT:
-			case gl.UNSIGNED_INT:
-			case gl.BOOL:
-				gl.uniform1i( UniformPtr, Value );
-				break;
-			case gl.FLOAT:
-				gl.uniform1f( UniformPtr, Value );
-				break;
-			default:
-				throw "Unhandled Number uniform type " + UniformType;
-		}
-	}
-	
-	this.SetUniformFloat2 = function(Uniform,Value)
-	{
-		let gl = this.GetGlContext();
-		let UniformPtr = gl.getUniformLocation( this.Program, Uniform);
-		gl.uniform2f( UniformPtr, Value.x, Value.y );
-	}
-	
-	this.SetUniformFloat3 = function(Uniform,Value)
-	{
-		let gl = this.GetGlContext();
-		let UniformPtr = gl.getUniformLocation( this.Program, Uniform);
-		gl.uniform3f( UniformPtr, Value.x, Value.y, Value.z );
-	}
-	
-	this.SetUniformFloat4 = function(Uniform,Value)
-	{
-		let gl = this.GetGlContext();
-		let UniformPtr = gl.getUniformLocation( this.Program, Uniform);
-		gl.uniform4f( UniformPtr, Value.x, Value.y, Value.z, Value.w );
-	}
-	
-	this.SetUniformMatrix4x4 = function(Uniform,Value)
-	{
-		let gl = this.GetGlContext();
-		let UniformPtr = gl.getUniformLocation( this.Program, Uniform);
-		let float16 = Value.Values;
-		let Transpose = false;
-		//console.log(float16);
-		gl.uniformMatrix4fv( UniformPtr, Transpose, float16 );
-	}
-	
-	this.GetUniformType = function(UniformName)
-	{
-		let Meta = this.GetUniformMeta(UniformName);
-		return Meta.type;
+
+		const gl = this.GetGlContext();
+		UniformMeta.SetValues( [Value] );
 	}
 	
 	this.GetUniformMetas = function()
