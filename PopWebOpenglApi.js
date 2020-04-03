@@ -1532,6 +1532,7 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 			UniformMeta.Location = gl.getUniformLocation( this.Program, UniformMeta.name );
 			switch( UniformMeta.type )
 			{
+				case gl.SAMPLER_2D:	//	samplers' value is the texture index
 				case gl.INT:
 				case gl.UNSIGNED_INT:
 				case gl.BOOL:
@@ -1568,7 +1569,7 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 					break;
 
 				default:
-					UniformMeta.SetValues = function(v)	{	throw "Unhandled type " + UniformMeta.type + " on " + MatchUniformName;	};
+					UniformMeta.SetValues = function(v)	{	throw "Unhandled type " + UniformMeta.type + " on " + UniformName;	};
 					break;
 			}
 			
