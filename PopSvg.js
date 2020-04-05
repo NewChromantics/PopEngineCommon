@@ -716,8 +716,9 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
-		Shape.Name = Path + PathSeperator;
-		Shape.Name += Node.Name ? Node.Name : ChildIndex;
+		Shape.Name = Node.id;
+		Shape.Path = Path + PathSeperator;
+		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
 
 		Shape.Matrix = StringToMatrix( Node['matrix'] );
 		let x = StringToCoord( Node['cx'] );
@@ -736,8 +737,9 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
-		Shape.Name = Path + PathSeperator;
-		Shape.Name += Node.Name ? Node.Name : ChildIndex;
+		Shape.Name = Node.id;
+		Shape.Path = Path + PathSeperator;
+		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
 
 		Shape.Matrix = StringToMatrix( Node['matrix'] );
 		let x = StringToCoord( Node['cx'] );
@@ -758,8 +760,9 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
-		Shape.Name = Path + PathSeperator;
-		Shape.Name += Node.Name ? Node.Name : ChildIndex;
+		Shape.Name = Node.id;
+		Shape.Path = Path + PathSeperator;
+		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
 
 		//	split commands
 		const Commands = Node['d'];
@@ -770,8 +773,9 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
-		Shape.Name = Path + PathSeperator;
-		Shape.Name += Node.Name ? Node.Name : ChildIndex;
+		Shape.Name = Node.id;
+		Shape.Path = Path + PathSeperator;
+		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
 
 		Shape.Polygon = {};
 		Shape.Polygon.Points = StringToFloat2Coords(Node['points']);
@@ -783,9 +787,10 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
-		Shape.Name = Path + PathSeperator;
-		Shape.Name += Node.Name ? Node.Name : ChildIndex;
-		
+		Shape.Name = Node.id;
+		Shape.Path = Path + PathSeperator;
+		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
+
 		let x1 = StringToCoord( Node['x1'] );
 		let y1 = StringToCoord( Node['y1'] );
 		let x2 = StringToCoord( Node['x2'] );
@@ -803,8 +808,9 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
-		Shape.Name = Path + PathSeperator;
-		Shape.Name += Node.Name ? Node.Name : ChildIndex;
+		Shape.Name = Node.id;
+		Shape.Path = Path + PathSeperator;
+		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
 
 		Shape.Line = {};
 		Shape.Line.Points = StringToFloat2Coords(Node['points']);
@@ -816,9 +822,10 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	{
 		const Shape = {};
 		Shape.Style = Node.Style;
-		Shape.Name = Path + PathSeperator;
-		Shape.Name += Node.Name ? Node.Name : ChildIndex;
-
+		Shape.Name = Node.id;
+		Shape.Path = Path + PathSeperator;
+		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
+		
 		let x = StringToCoord( Node['x'] ) || 0;
 		let y = StringToCoord( Node['y'] ) || 0;
 		let w = StringToSize( Node['width'] );
