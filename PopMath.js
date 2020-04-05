@@ -501,7 +501,7 @@ function ClipRectsToOverlap(RectA,RectB)
 }
 
 
-function PointInsideRect(xy,Rect)
+Math.PointInsideRect = function(xy,Rect)
 {
 	let x = xy[0];
 	let y = xy[1];
@@ -527,15 +527,15 @@ function RectIsOverlapped(RectA,RectB)
 
 	//	there's a better way of doing this by putting rectB into RectA space
 	//	but lets do that later
-	if ( PointInsideRect( [la,ta], RectB ) )	return true;
-	if ( PointInsideRect( [ra,ta], RectB ) )	return true;
-	if ( PointInsideRect( [ra,ba], RectB ) )	return true;
-	if ( PointInsideRect( [la,ba], RectB ) )	return true;
+	if ( Math.PointInsideRect( [la,ta], RectB ) )	return true;
+	if ( Math.PointInsideRect( [ra,ta], RectB ) )	return true;
+	if ( Math.PointInsideRect( [ra,ba], RectB ) )	return true;
+	if ( Math.PointInsideRect( [la,ba], RectB ) )	return true;
 	
-	if ( PointInsideRect( [lb,tb], RectA ) )	return true;
-	if ( PointInsideRect( [rb,tb], RectA ) )	return true;
-	if ( PointInsideRect( [rb,bb], RectA ) )	return true;
-	if ( PointInsideRect( [lb,bb], RectA ) )	return true;
+	if ( Math.PointInsideRect( [lb,tb], RectA ) )	return true;
+	if ( Math.PointInsideRect( [rb,tb], RectA ) )	return true;
+	if ( Math.PointInsideRect( [rb,bb], RectA ) )	return true;
+	if ( Math.PointInsideRect( [lb,bb], RectA ) )	return true;
 	
 	return false;
 }
