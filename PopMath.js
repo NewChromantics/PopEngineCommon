@@ -159,6 +159,11 @@ Math.Lerp2 = Math.LerpArray;
 Math.Lerp3 = Math.LerpArray;
 Math.Lerp4 = Math.LerpArray;
 
+Math.Fract = function(a)
+{
+	return a % 1;
+}
+Math.fract = Math.Fract;
 
 
 Math.Dot2 = function(a,b)
