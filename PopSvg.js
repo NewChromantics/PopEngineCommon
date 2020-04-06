@@ -875,20 +875,6 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 			}
 			Pop.Debug(`Path line x${PathShape.Line.Points.length}`,PathShape);
 			
-			//	reduce lines for shader
-			const MAX_LINE_COUNT = 20;
-			if ( PathShape.Line.Points.length > MAX_LINE_COUNT )
-			{
-				Pop.Debug(`Warning: Line of ${OutputShape.Path} has ${PathShape.Line.Points.length} points, reducing to ${MAX_LINE_COUNT}`);
-				let Step = Math.floor(PathShape.Line.Points.length / MAX_LINE_COUNT);
-				let NewPoints = [];
-				for ( let i=0;	i<PathShape.Line.Points.length;	i+=Step )
-				{
-					NewPoints.push( PathShape.Line.Points[i] );
-				}
-				PathShape.Line.Points = NewPoints;
-			}
-			
 			OnShape( OutputShape );
 		}
 		PathShapes.forEach( PushShape );
