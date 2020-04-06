@@ -373,7 +373,8 @@ function ProcessPathCommands(Commands)
 	let CurrentPos = null;
 	let InitialPos = null;
 	let CurrentLine = [];
-	
+	let LastBezierControl1Point = null;
+
 	function NewShape()
 	{
 		//	flush old shape
@@ -385,6 +386,7 @@ function ProcessPathCommands(Commands)
 			Shapes.push(NewShape);
 		}
 		CurrentLine = [];
+		LastBezierControl1Point = null;
 	}
 	
 	function SetInitialPos(x,y)
@@ -446,7 +448,6 @@ function ProcessPathCommands(Commands)
 		ProcessArc(RadiusX,RadiusY,Rotation,Arc,Sweep,EndX,EndY);
 	}
 
-	let LastBezierControl1Point = null;
 	
 	function ProcessBezier(ControlX0,ControlY0,ControlX1,ControlY1,EndX,EndY)
 	{
@@ -489,6 +490,16 @@ function ProcessPathCommands(Commands)
 		//	The first control point is assumed to be the reflection
 		//	of the second control point on the previous command relative
 		//	to the current point.
+		
+		//	If there is no previous command or if the previous command was not an
+		//	C, c, S or s, assume the first control point is coincident with the
+		//	current point.
+		
+		if ( !LastBezierControl1Point )
+		{
+			//	todo: is this coincident?
+			LastBezierControl1Point = CurrentPos.slice();
+		}
 		
 		let LastControlDeltaX = LastBezierControl1Point[0] - CurrentPos[0];
 		let LastControlDeltaY = LastBezierControl1Point[1] - CurrentPos[1];
@@ -838,6 +849,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	
 	function ParsePath(Node,ChildIndex,Path)
 	{
+		Pop.Debug(`ParsePath(${Node.id})`);
 		const Shape = {};
 		Shape.Style = Node.Style;
 		Shape.Name = Node.id;
@@ -867,6 +879,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 			const MAX_LINE_COUNT = 20;
 			if ( PathShape.Line.Points.length > MAX_LINE_COUNT )
 			{
+				Pop.Debug(`Warning: Line of ${OutputShape.Path} has ${PathShape.Line.Points.length} points, reducing to ${MAX_LINE_COUNT}`);
 				let Step = Math.floor(PathShape.Line.Points.length / MAX_LINE_COUNT);
 				let NewPoints = [];
 				for ( let i=0;	i<PathShape.Line.Points.length;	i+=Step )
