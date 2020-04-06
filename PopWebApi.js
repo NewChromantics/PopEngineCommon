@@ -95,7 +95,30 @@ Pop.GetExeDirectory = function()
 Pop.GetExeArguments = function()
 {
 	//	gr: probably shouldn't lowercase now it's proper
-	const UrlParams = window.location.search.replace('?',' ').trim().split('&');
+	const UrlArgs = window.location.search.replace('?',' ').trim().split('&');
+	
+	//	turn into keys & values - gr: we're not doing this in engine! fix so they match!
+	const UrlParams = {};
+	function AddParam(Argument)
+	{
+		let [Key,Value] = Argument.split('=',2);
+		if ( Value === undefined )
+			Value = true;
+		
+		//	attempt some auto conversions
+		if ( typeof Value == 'string' )
+		{
+			const NumberValue = Number(Value);
+			if ( !isNaN(NumberValue) )
+				Value = NumberValue;
+			else if ( Value == 'true' )
+				Value = true;
+			else if ( Value == 'false' )
+				Value = false;
+		}
+		UrlParams[Key] = Value;
+	}
+	UrlArgs.forEach(AddParam);
 	return UrlParams;
 }
 

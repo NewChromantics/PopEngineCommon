@@ -21,7 +21,7 @@ Pop.GlslVersion = 100;
 Pop.Opengl.CanRenderToFloat = undefined;
 
 //	allow turning off float support
-Pop.Opengl.AllowFloatTextures = !Pop.GetExeArguments().includes('DisableFloatTextures');
+Pop.Opengl.AllowFloatTextures = !Pop.GetExeArguments().DisableFloatTextures;
 
 
 Pop.Opengl.GetString = function(Context,Enum)
@@ -56,7 +56,7 @@ Pop.Opengl.GetString = function(Context,Enum)
 const TestFrameBuffer = false;
 const TestAttribLocation = false;
 const DisableOldVertexAttribArrays = false;
-const AllowVao = !Pop.GetExeArguments().includes('DisableVao');
+const AllowVao = !Pop.GetExeArguments().DisableVao;
 
 //	if we fail to get a context (eg. lost context) wait this long before restarting the render loop (where it tries again)
 //	this stops thrashing cpu/system whilst waiting
