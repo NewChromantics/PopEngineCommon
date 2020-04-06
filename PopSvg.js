@@ -484,8 +484,17 @@ function ProcessPathCommands(Commands)
 		//	Basically a C command that assumes the first bezier
 		//	control point is a reflection of the last bezier point
 		//	used in the previous S or C command
-		let ControlX0 = -LastBezierControl1Point[0];
-		let ControlY0 = -LastBezierControl1Point[1];
+		
+		//	from spec
+		//	The first control point is assumed to be the reflection
+		//	of the second control point on the previous command relative
+		//	to the current point.
+		
+		let LastControlDeltaX = LastBezierControl1Point[0] - CurrentPos[0];
+		let LastControlDeltaY = LastBezierControl1Point[1] - CurrentPos[1];
+
+		let ControlX0 = CurrentPos[0] + -LastControlDeltaX;
+		let ControlY0 = CurrentPos[1] + -LastControlDeltaY;
 		ProcessBezier( ControlX0, ControlY0, ControlX1, ControlY1, EndX, EndY );
 	}
 	
