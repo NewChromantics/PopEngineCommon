@@ -234,6 +234,141 @@ function CleanSvg(DomSvg)
 	return Svg;
 }
 
+function ProcessPathCommands(Commands)
+{
+	let Shapes = [];
+	
+	//	walk through
+	let CurrentPos = null;
+	let CurrentLine = [];
+	
+	function NewShape()
+	{
+		if ( CurrentLine.length )
+		{
+			const NewShape = {};
+			NewShape.Line = {};
+			NewShape.Line.Points = CurrentLine.slice();
+			Shapes.push(NewShape);
+		}
+		CurrentLine = [];
+	}
+	
+	function SetPos(xy)
+	{
+		if ( xy.some( isNaN ) )
+			throw `Trying to set position as nan; ${xy}`;
+		CurrentPos = xy;
+		CurrentLine.push(CurrentPos.slice());
+	}
+	
+	function AddPos(xy)
+	{
+		if ( !CurrentPos )	throw "Relative move when current pos is null";
+		const x = CurrentPos[0] + xy[0];
+		const y = CurrentPos[1] + xy[1];
+		SetPos([x,y]);
+	}
+	
+	function ProcessArc(RadiusX,RadiusY,Rotation,Arc,Sweep,EndX,EndY,EndIsAbsolute)
+	{
+		if ( !EndIsAbsolute )
+		{
+			EndX += CurrentPos[0];
+			EndY += CurrentPos[0];
+		}
+		Pop.Debug("todo: process arc");
+		SetPos( [EndX,EndY] );
+	}
+	
+	function ProcessBezier(ControlX0,ControlY0,ControlX1,ControlY1,EndX,EndY)
+	{
+		Pop.Debug("todo: process bezier");
+		SetPos( [EndX,EndY] );
+	}
+	
+	function ProcessBezierRelative(ControlX0,ControlY0,ControlX1,ControlY1,EndX,EndY)
+	{
+		ControlX0 += CurrentPos[0];
+		ControlY0 += CurrentPos[1];
+		ControlX1 += CurrentPos[0];
+		ControlY1 += CurrentPos[1];
+		EndX += CurrentPos[0];
+		EndY += CurrentPos[1];
+		ProcessBezier( ControlX0, ControlY0, ControlX1, ControlY1, EndX, EndY );
+	}
+	
+	while ( Commands.length )
+	{
+		const Cmd = Commands.shift();
+		const Args = Commands.shift();
+		
+		//	note:
+		//	For the relative versions of the commands, all coordinate values are relative to the current point at the start of the command.
+		switch(Cmd)
+		{
+			case 'M':	SetPos(Args);	break;
+			case 'm':	AddPos(Args);	break;
+			case 'A':	ProcessArc(...Args,true);	break;
+			case 'a':	ProcessArc(...Args,false);	break;
+			case 'C':	ProcessBezier(...Args);	break;
+			case 'c':	ProcessBezierRelative(...Args);	break;
+			default:	throw `Unhandled path command ${Cmd}`;
+		}
+	}
+	//	terminate last line
+	NewShape();
+	
+	return Shapes;
+}
+
+function ParseSvgPathCommands(Commands)
+{
+	//	https://css-tricks.com/svg-path-syntax-illustrated-guide/
+	
+	//	with split(), having (groups) means delim is kept
+	const IsCommandPattern = new RegExp('([a-zA-Z]{1})','g');
+	//	this regex is careful to split..
+	//		12.45-67.89
+	//		12.34.56	(12.34 and 0.56)
+	///[+-]?([0-9]*[.])?[0-9]+/
+	const IsNumber = new RegExp('[+-]?([0-9]*[.])?[0-9]+','g');
+
+	function StringToFloats(String)
+	{
+		//	find all floats
+		const Matches = [...String.matchAll(IsNumber)];
+		let Floats = Matches.map( m => m[0] );
+		Pop.Debug(`Floats: ${String}`,Matches);
+		
+		Floats = Floats.map( parseFloat );
+		if ( Floats.some( isNaN ) )
+			throw "String (" + String + ") failed to turn to floats: " + Floats;
+		return Floats;
+	}
+	
+	function ConvertIfNumbers(Command)
+	{
+		if ( Command.match(IsCommandPattern) )
+			return Command;
+		
+		//	assume is array of floats, convert
+		const Floats = StringToFloats(Command);
+		return Floats;
+	}
+	
+	//	split into commands & coords
+	Pop.Debug(`ParseSvgPathCommands(${Commands})`);
+	const Matches = Commands.split(IsCommandPattern);
+	const MatchesNotEmpty = Matches.filter( s => s.length );
+	const MatchesWithFloats = MatchesNotEmpty.map(ConvertIfNumbers);
+	//const Matches = [...Commands.matchAll( Pattern )];
+	Pop.Debug(MatchesWithFloats);
+	
+	const Shapes = ProcessPathCommands(MatchesWithFloats);
+	return Shapes;
+}
+
 Pop.Svg.ParseShapes = function(Contents,OnShape)
 {
 	let Svg = Pop.Xml.Parse(Contents);
@@ -399,9 +534,16 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		Shape.Path = Path + PathSeperator;
 		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
 
-		//	split commands
-		const Commands = Node['d'];
-		Pop.Debug("Todo: parse svg path", JSON.stringify(Node));
+		//	get all shapes from the path and output them
+		const PathShapes = ParseSvgPathCommands(Node['d']);
+
+		function PushShape(PathShape)
+		{
+			const OutputShape = Object.assign({},Shape);
+			Object.assign( OutputShape, PathShape );
+			OnShape( OutputShape );
+		}
+		PathShapes.forEach( PushShape );
 	}
 	
 	function ParsePolygon(Node,ChildIndex,Path)
@@ -478,17 +620,24 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	
 	function ParseShape(Node,ChildIndex,Path)
 	{
-		switch ( Node.Type )
+		try
 		{
-			case 'circle':		return ParseCircle(Node,ChildIndex,Path);
-			case 'ellipse':		return ParseEllipse(Node,ChildIndex,Path);
-			case 'path':		return ParsePath(Node,ChildIndex,Path);
-			case 'polygon':		return ParsePolygon(Node,ChildIndex,Path);
-			case 'rect':		return ParseRect(Node,ChildIndex,Path);
-			case 'line':		return ParseLine(Node,ChildIndex,Path);
-			case 'polyline':	return ParsePolyLine(Node,ChildIndex,Path);
+			switch ( Node.Type )
+			{
+				case 'circle':		return ParseCircle(Node,ChildIndex,Path);
+				case 'ellipse':		return ParseEllipse(Node,ChildIndex,Path);
+				case 'path':		return ParsePath(Node,ChildIndex,Path);
+				case 'polygon':		return ParsePolygon(Node,ChildIndex,Path);
+				case 'rect':		return ParseRect(Node,ChildIndex,Path);
+				case 'line':		return ParseLine(Node,ChildIndex,Path);
+				case 'polyline':	return ParsePolyLine(Node,ChildIndex,Path);
+			}
+			throw `Unhandled node type ${Node.Type} at ${Path}[${ChildIndex}]`;
 		}
-		throw `Unhandled node type ${Node.Type} at ${Path}[${ChildIndex}]`;
+		catch(e)
+		{
+			Pop.Debug(`Failed to parse shape ${Node.Type}; ${e}`);
+		}
 	}
 	
 	function ParseNode(Node,NodeIndex,Path)
