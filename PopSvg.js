@@ -849,12 +849,33 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 
 		function PushShape(PathShape)
 		{
-			//	todo: need to normalise control points etc too
+			//	todo: need to normalise control points etc too when outputting renderable shapes
 			if ( PathShape.Line )
 				PathShape.Line.Points = PathShape.Line.Points.map( NormaliseSize );
 			
 			const OutputShape = Object.assign({},Shape);
 			Object.assign( OutputShape, PathShape );
+
+			//	gr: as we're currently only making lines, force a stroke
+			if ( OutputShape.Style.stroke == "none" )
+			{
+				OutputShape.Style.stroke = OutputShape.Style.fill;
+			}
+			Pop.Debug(`Path line x${PathShape.Line.Points.length}`,PathShape);
+			
+			//	reduce lines for shader
+			const MAX_LINE_COUNT = 20;
+			if ( PathShape.Line.Points.length > MAX_LINE_COUNT )
+			{
+				let Step = Math.floor(PathShape.Line.Points.length / MAX_LINE_COUNT);
+				let NewPoints = [];
+				for ( let i=0;	i<PathShape.Line.Points.length;	i+=Step )
+				{
+					NewPoints.push( PathShape.Line.Points[i] );
+				}
+				PathShape.Line.Points = NewPoints;
+			}
+			
 			OnShape( OutputShape );
 		}
 		PathShapes.forEach( PushShape );
