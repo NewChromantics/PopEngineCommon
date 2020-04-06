@@ -1177,9 +1177,41 @@ Math.PositionInsideBoxXZ = function(Position3,Box3)
 }
 
 
+//	4 control points
+Math.GetBezier4Position = function(Start,ControlA,ControlB,End,Time)
+{
+	function GetBezier(p0,p1,p2,p3,t)
+	{
+		const OneMinusTcu = (1-t) * (1-t) * (1-t);
+		const OneMinusTsq = (1-t) * (1-t);
+		const Tsq = t*t;
+		const Tcu = t*t*t;
+		//	https://javascript.info/bezier-curve
+		const p = OneMinusTcu*p0 + 3*OneMinusTsq*t*p1 +3*(1-t)*Tsq*p2 + Tcu*p3;
+		return p;
+	}
+
+	const Out = [];
+	const Dims = Start.length;
+	for ( let d=0;	d<Dims;	d++ )
+	{
+		const p0 = Start[d];
+		const p1 = ControlA[d];
+		const p2 = ControlB[d];
+		const p3 = End[d];
+		const p = GetBezier(p0,p1,p2,p3,Time);
+		Out[d] = p;
+	}
+	return Out;
+}
+	
+
 //	wait, is this cubic? it's not quadratic!
+//	gr: this uses 3 points, can calc middle, rename it!
 Math.GetCubicBezierPosition = function(Start,Middle,End,Time,TravelThroughMiddle=false)
 {
+	//P = (1−t)2P1 + 2(1−t)tP2 + t2P3
+	
 	function GetBezier(p0,p1,p2,t)
 	{
 		const oneMinusT = 1 - t;
