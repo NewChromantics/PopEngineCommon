@@ -234,16 +234,149 @@ function CleanSvg(DomSvg)
 	return Svg;
 }
 
+
+//	https://github.com/MadLittleMods/svg-curve-lib/blob/master/src/js/svg-curve-lib.js#L84
+function GetPointOnArc(p0, rx, ry, xAxisRotation, largeArcFlag, sweepFlag, p1, t)
+{
+	function distance(p0, p1) {
+		return Math.sqrt(Math.pow(p1.x-p0.x, 2) + Math.pow(p1.y-p0.y, 2));
+	}
+	
+	function mod(x, m) {
+		return (x%m + m)%m;
+	}
+	
+	function toRadians(angle) {
+		return angle * (Math.PI / 180);
+	}
+	
+	function angleBetween(v0, v1) {
+		var p = v0.x*v1.x + v0.y*v1.y;
+		var n = Math.sqrt((Math.pow(v0.x, 2)+Math.pow(v0.y, 2)) * (Math.pow(v1.x, 2)+Math.pow(v1.y, 2)));
+		var sign = v0.x*v1.y - v0.y*v1.x < 0 ? -1 : 1;
+		var angle = sign*Math.acos(p/n);
+		
+		//var angle = Math.atan2(v0.y, v0.x) - Math.atan2(v1.y,  v1.x);
+		
+		return angle;
+	}
+	
+	function clamp(val, min, max) {
+		return Math.min(Math.max(val, min), max);
+	}
+	
+	// In accordance to: http://www.w3.org/TR/SVG/implnote.html#ArcOutOfRangeParameters
+	rx = Math.abs(rx);
+	ry = Math.abs(ry);
+	xAxisRotation = mod(xAxisRotation, 360);
+	var xAxisRotationRadians = toRadians(xAxisRotation);
+	// If the endpoints are identical, then this is equivalent to omitting the elliptical arc segment entirely.
+	if(p0.x === p1.x && p0.y === p1.y) {
+		return p0;
+	}
+	
+	// If rx = 0 or ry = 0 then this arc is treated as a straight line segment joining the endpoints.
+	if(rx === 0 || ry === 0) {
+		return this.pointOnLine(p0, p1, t);
+	}
+	
+	
+	// Following "Conversion from endpoint to center parameterization"
+	// http://www.w3.org/TR/SVG/implnote.html#ArcConversionEndpointToCenter
+	
+	// Step #1: Compute transformedPoint
+	var dx = (p0.x-p1.x)/2;
+	var dy = (p0.y-p1.y)/2;
+	var transformedPoint = {
+	x: Math.cos(xAxisRotationRadians)*dx + Math.sin(xAxisRotationRadians)*dy,
+	y: -Math.sin(xAxisRotationRadians)*dx + Math.cos(xAxisRotationRadians)*dy
+	};
+	// Ensure radii are large enough
+	var radiiCheck = Math.pow(transformedPoint.x, 2)/Math.pow(rx, 2) + Math.pow(transformedPoint.y, 2)/Math.pow(ry, 2);
+	if(radiiCheck > 1) {
+		rx = Math.sqrt(radiiCheck)*rx;
+		ry = Math.sqrt(radiiCheck)*ry;
+	}
+	
+	// Step #2: Compute transformedCenter
+	var cSquareNumerator = Math.pow(rx, 2)*Math.pow(ry, 2) - Math.pow(rx, 2)*Math.pow(transformedPoint.y, 2) - Math.pow(ry, 2)*Math.pow(transformedPoint.x, 2);
+	var cSquareRootDenom = Math.pow(rx, 2)*Math.pow(transformedPoint.y, 2) + Math.pow(ry, 2)*Math.pow(transformedPoint.x, 2);
+	var cRadicand = cSquareNumerator/cSquareRootDenom;
+	// Make sure this never drops below zero because of precision
+	cRadicand = cRadicand < 0 ? 0 : cRadicand;
+	var cCoef = (largeArcFlag !== sweepFlag ? 1 : -1) * Math.sqrt(cRadicand);
+	var transformedCenter = {
+	x: cCoef*((rx*transformedPoint.y)/ry),
+	y: cCoef*(-(ry*transformedPoint.x)/rx)
+	};
+	
+	// Step #3: Compute center
+	var center = {
+	x: Math.cos(xAxisRotationRadians)*transformedCenter.x - Math.sin(xAxisRotationRadians)*transformedCenter.y + ((p0.x+p1.x)/2),
+	y: Math.sin(xAxisRotationRadians)*transformedCenter.x + Math.cos(xAxisRotationRadians)*transformedCenter.y + ((p0.y+p1.y)/2)
+	};
+	
+	
+	// Step #4: Compute start/sweep angles
+	// Start angle of the elliptical arc prior to the stretch and rotate operations.
+	// Difference between the start and end angles
+	var startVector = {
+	x: (transformedPoint.x-transformedCenter.x)/rx,
+	y: (transformedPoint.y-transformedCenter.y)/ry
+	};
+	var startAngle = angleBetween({
+								  x: 1,
+								  y: 0
+								  }, startVector);
+	
+	var endVector = {
+	x: (-transformedPoint.x-transformedCenter.x)/rx,
+	y: (-transformedPoint.y-transformedCenter.y)/ry
+	};
+	var sweepAngle = angleBetween(startVector, endVector);
+	
+	if(!sweepFlag && sweepAngle > 0) {
+		sweepAngle -= 2*Math.PI;
+	}
+	else if(sweepFlag && sweepAngle < 0) {
+		sweepAngle += 2*Math.PI;
+	}
+	// We use % instead of `mod(..)` because we want it to be -360deg to 360deg(but actually in radians)
+	sweepAngle %= 2*Math.PI;
+	
+	// From http://www.w3.org/TR/SVG/implnote.html#ArcParameterizationAlternatives
+	var angle = startAngle+(sweepAngle*t);
+	var ellipseComponentX = rx*Math.cos(angle);
+	var ellipseComponentY = ry*Math.sin(angle);
+	
+	var point = {
+	x: Math.cos(xAxisRotationRadians)*ellipseComponentX - Math.sin(xAxisRotationRadians)*ellipseComponentY + center.x,
+	y: Math.sin(xAxisRotationRadians)*ellipseComponentX + Math.cos(xAxisRotationRadians)*ellipseComponentY + center.y
+	};
+	
+	// Attach some extra info to use
+	point.ellipticalArcStartAngle = startAngle;
+	point.ellipticalArcEndAngle = startAngle+sweepAngle;
+	point.ellipticalArcAngle = angle;
+	
+	point.ellipticalArcCenter = center;
+	point.resultantRx = rx;
+	point.resultantRy = ry;
+	return point;
+}
+
 function ProcessPathCommands(Commands)
 {
 	let Shapes = [];
 	
 	//	walk through
 	let CurrentPos = null;
+	let InitialPos = null;
 	let CurrentLine = [];
 	
 	function NewShape()
 	{
+		//	flush old shape
 		if ( CurrentLine.length )
 		{
 			const NewShape = {};
@@ -254,37 +387,85 @@ function ProcessPathCommands(Commands)
 		CurrentLine = [];
 	}
 	
-	function SetPos(xy)
+	function SetInitialPos(x,y)
 	{
-		if ( xy.some( isNaN ) )
-			throw `Trying to set position as nan; ${xy}`;
-		CurrentPos = xy;
+		InitialPos = [x,y];
+		SetPos(x,y);
+	}
+	
+	function SetPos(x,y)
+	{
+		if ( [x,y].some( isNaN ) )
+			throw `Trying to set position as nan; ${x},${y}`;
+		CurrentPos = [x,y];
 		CurrentLine.push(CurrentPos.slice());
 	}
 	
-	function AddPos(xy)
+	function AddPos(x,y)
 	{
-		if ( !CurrentPos )	throw "Relative move when current pos is null";
-		const x = CurrentPos[0] + xy[0];
-		const y = CurrentPos[1] + xy[1];
-		SetPos([x,y]);
+		if ( !InitialPos )
+			throw "Relative move when InitialPos is null";
+		x += InitialPos[0];
+		y += InitialPos[1];
+		SetPos(x,y);
 	}
 	
-	function ProcessArc(RadiusX,RadiusY,Rotation,Arc,Sweep,EndX,EndY,EndIsAbsolute)
+	function ClosePath()
 	{
-		if ( !EndIsAbsolute )
-		{
-			EndX += CurrentPos[0];
-			EndY += CurrentPos[0];
-		}
-		Pop.Debug("todo: process arc");
-		SetPos( [EndX,EndY] );
+		//	re-add first coord
+		const xy = CurrentLine[0];
+		SetPos( ...xy );
 	}
+	
+	
+	
+	function ProcessArc(RadiusX,RadiusY,Rotation,Arc,Sweep,EndX,EndY)
+	{
+		Pop.Debug('ProcessArc');
+		//	for now grab points
+		const PointCount = 10;
+
+		const p0 = {};
+		p0.x = CurrentPos[0];
+		p0.y = CurrentPos[1];
+		const p1 = {};
+		p1.x = EndX;
+		p1.y = EndY;
+		for ( let t=0;	t<=1;	t+=1/PointCount)
+		{
+			//	https://github.com/MadLittleMods/svg-curve-lib/blob/master/src/js/svg-curve-lib.js#L79
+			const Point = GetPointOnArc(p0, RadiusX, RadiusY, Rotation, Arc, Sweep, p1, t);
+			ProcessLine( Point.x, Point.y );
+		}
+	}
+
+	function ProcessArcRelative(RadiusX,RadiusY,Rotation,Arc,Sweep,EndX,EndY)
+	{
+		EndX += CurrentPos[0];
+		EndY += CurrentPos[1];
+		ProcessArc(RadiusX,RadiusY,Rotation,Arc,Sweep,EndX,EndY);
+	}
+
+	let LastBezierControl1Point = null;
 	
 	function ProcessBezier(ControlX0,ControlY0,ControlX1,ControlY1,EndX,EndY)
 	{
-		Pop.Debug("todo: process bezier");
-		SetPos( [EndX,EndY] );
+		//	for now, turn into points
+		const Control0 = [ControlX0,ControlY0];
+		const Control1 = [ControlX1,ControlY1];
+		const Start = CurrentPos.slice();
+		const End = [EndX,EndY];
+		const PointCount = 10;
+		
+		for ( let t=0;	t<=1;	t+=1/PointCount)
+		{
+			//const Pos = Math.GetCatmullPosition(Prev,Start,End,Next,t);
+			//const Pos = Math.GetCatmullPosition( Start,Control0,Control1,End,t);
+			const Pos = Math.GetBezier4Position( Start,Control0,Control1,End,t);
+			ProcessLine( ...Pos );
+		}
+		
+		LastBezierControl1Point = Control1.slice();
 	}
 	
 	function ProcessBezierRelative(ControlX0,ControlY0,ControlX1,ControlY1,EndX,EndY)
@@ -298,23 +479,137 @@ function ProcessPathCommands(Commands)
 		ProcessBezier( ControlX0, ControlY0, ControlX1, ControlY1, EndX, EndY );
 	}
 	
+	function ProcessBezierReflection(ControlX1,ControlY1,EndX,EndY)
+	{
+		//	Basically a C command that assumes the first bezier
+		//	control point is a reflection of the last bezier point
+		//	used in the previous S or C command
+		let ControlX0 = -LastBezierControl1Point[0];
+		let ControlY0 = -LastBezierControl1Point[1];
+		ProcessBezier( ControlX0, ControlY0, ControlX1, ControlY1, EndX, EndY );
+	}
+	
+	function ProcessBezierReflectionRelative(ControlX1,ControlY1,EndX,EndY)
+	{
+		ControlX1 += InitialPos[0];
+		ControlY1 += InitialPos[1];
+		EndX += InitialPos[0];
+		EndY += InitialPos[1];
+		ProcessBezierReflection( ControlX1, ControlY1, EndX, EndY );
+	}
+	
+	function ProcessQuadratic(ControlX,ControlY,EndX,EndY)
+	{
+		Pop.Debug("todo: process quadratic");
+		ProcessLine( EndX, EndY );
+	}
+	
+	function ProcessQuadraticRelative(ControlX,ControlY,EndX,EndY)
+	{
+		ControlX += InitialPos[0];
+		ControlY += InitialPos[1];
+		EndX += InitialPos[0];
+		EndY += InitialPos[1];
+		ProcessQuadratic( ControlX, ControlY, EndX, EndY );
+	}
+	
+	function ProcessQuadraticReflection(EndX,EndY)
+	{
+		Pop.Debug("todo: process quadratic reflection");
+		ProcessLine( EndX, EndY );
+	}
+	
+	function ProcessQuadraticReflectionRelative(EndX,EndY)
+	{
+		EndX += InitialPos[0];
+		EndY += InitialPos[1];
+		ProcessQuadraticReflection( EndX, EndY );
+	}
+	
+	function ProcessLine(x,y)
+	{
+		if ( x === undefined )	x = CurrentPos[0];
+		if ( y === undefined )	y = CurrentPos[1];
+		SetPos( x, y );
+	}
+	
+	function ProcessLineRelative(x,y)
+	{
+		if ( x !== undefined )
+			x += InitialPos[0];
+		if ( y !== undefined )
+			y += InitialPos[1];
+		ProcessLine( x, y );
+	}
+	
+	function ProcessHorzLine(x)
+	{
+		ProcessLine(x,undefined);
+	}
+	
+	function ProcessHorzLineRelative(x)
+	{
+		ProcessLineRelative(x,undefined);
+	}
+
+	function ProcessVertLine(y)
+	{
+		ProcessLine(undefined,y);
+	}
+	
+	function ProcessVertLineRelative(y)
+	{
+		ProcessLineRelative(undefined,y);
+	}
+
+	
 	while ( Commands.length )
 	{
-		const Cmd = Commands.shift();
-		const Args = Commands.shift();
-		
-		//	note:
-		//	For the relative versions of the commands, all coordinate values are relative to the current point at the start of the command.
-		switch(Cmd)
+		function CmdHasArguments(Cmd)
 		{
-			case 'M':	SetPos(Args);	break;
-			case 'm':	AddPos(Args);	break;
-			case 'A':	ProcessArc(...Args,true);	break;
-			case 'a':	ProcessArc(...Args,false);	break;
-			case 'C':	ProcessBezier(...Args);	break;
-			case 'c':	ProcessBezierRelative(...Args);	break;
-			default:	throw `Unhandled path command ${Cmd}`;
+			return (Cmd != 'Z' && Cmd != 'z');
 		}
+
+		const Cmd = Commands.shift();
+		//	gr: close path doesn't take params
+		const Args = CmdHasArguments(Cmd) ? Commands.shift() : [];
+		
+		do
+		{
+			function Call(Function,NumberOfArgs)
+			{
+				Function( ...Args.splice(0,NumberOfArgs) );
+			}
+		
+			switch(Cmd)
+			{
+				//	gr: Move shouldn't draw a line?
+				case 'M':	NewShape();	Call(SetInitialPos,2);	break;
+				case 'm':	NewShape();	Call(AddPos,2);		break;
+				case 'L':	Call(ProcessLine,2);			break;
+				case 'l':	Call(ProcessLineRelative,2);	break;
+				case 'H':	Call(ProcessHorzLine,1);		break;
+				case 'h':	Call(ProcessHorzLineRelative,1);	break;
+				case 'V':	Call(ProcessVertLine,1);	break;
+				case 'v':	Call(ProcessVertLineRelative,1);	break;
+				case 'A':	Call(ProcessArc,7);	break;
+				case 'a':	Call(ProcessArcRelative,7);	break;
+				case 'C':	Call(ProcessBezier,6);	break;
+				case 'c':	Call(ProcessBezierRelative,6);	break;
+				case 'S':	Call(ProcessBezierReflection,4);	break;
+				case 's':	Call(ProcessBezierReflectionRelative,4);	break;
+				case 'Z':	ClosePath(); 	break;
+				case 'z':	ClosePath();	break;
+				case 'Q':	Call(ProcessQuadratic,4);	break;
+				case 'q':	Call(ProcessQuadraticRelative,4);	break;
+				case 'T':	Call(ProcessQuadraticReflection,2);	break;
+				case 't':	Call(ProcessQuadraticReflectionRelative,2);	break;
+				default:	throw `Unhandled path command ${Cmd}`;
+			}
+			if ( Args.length > 0 )
+				Pop.Debug(`Multiple iteration of path command ${Cmd}`);
+		}
+		while(Args.length > 0);
 	}
 	//	terminate last line
 	NewShape();
@@ -384,6 +679,12 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	
 	function NormaliseSize(Value)
 	{
+		if ( Array.isArray(Value) )
+		{
+			const NormValues = Value.map(NormaliseSize);
+			return NormValues;
+		}
+		
 		//Pop.Debug("Normalise", Value);
 		//	todo: center
 		//	scale down to largest width or height
@@ -539,6 +840,10 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 
 		function PushShape(PathShape)
 		{
+			//	todo: need to normalise control points etc too
+			if ( PathShape.Line )
+				PathShape.Line.Points = PathShape.Line.Points.map( NormaliseSize );
+			
 			const OutputShape = Object.assign({},Shape);
 			Object.assign( OutputShape, PathShape );
 			OnShape( OutputShape );
@@ -624,9 +929,9 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		{
 			switch ( Node.Type )
 			{
+				case 'path':		return ParsePath(Node,ChildIndex,Path);
 				case 'circle':		return ParseCircle(Node,ChildIndex,Path);
 				case 'ellipse':		return ParseEllipse(Node,ChildIndex,Path);
-				case 'path':		return ParsePath(Node,ChildIndex,Path);
 				case 'polygon':		return ParsePolygon(Node,ChildIndex,Path);
 				case 'rect':		return ParseRect(Node,ChildIndex,Path);
 				case 'line':		return ParseLine(Node,ChildIndex,Path);
