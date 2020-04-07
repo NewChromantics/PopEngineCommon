@@ -461,7 +461,7 @@ Pop.Opengl.Window = function(Name,Rect)
 			this.ScreenRectCache[2] = Canvas.width;
 			this.ScreenRectCache[3] = Canvas.height;
 		}
-		return this.ScreenRectCache;
+		return this.ScreenRectCache.slice();
 	}
 	
 	this.RefreshCanvasResolution = function()
