@@ -381,8 +381,7 @@ function ProcessPathCommands(Commands)
 		if ( CurrentLine.length )
 		{
 			const NewShape = {};
-			NewShape.Line = {};
-			NewShape.Line.Points = CurrentLine.slice();
+			NewShape.Points = CurrentLine.slice();
 			Shapes.push(NewShape);
 		}
 		CurrentLine = [];
@@ -637,7 +636,7 @@ function ProcessPathCommands(Commands)
 	return Shapes;
 }
 
-function ParseSvgPathCommands(Commands)
+function ParseSvgPathCommandContours(Commands)
 {
 	//	https://css-tricks.com/svg-path-syntax-illustrated-guide/
 	
@@ -680,8 +679,8 @@ function ParseSvgPathCommands(Commands)
 	//const Matches = [...Commands.matchAll( Pattern )];
 	Pop.Debug(MatchesWithFloats);
 	
-	const Shapes = ProcessPathCommands(MatchesWithFloats);
-	return Shapes;
+	const Contours = ProcessPathCommands(MatchesWithFloats);
+	return Contours;
 }
 
 Pop.Svg.ParseShapes = function(Contents,OnShape)
@@ -857,27 +856,30 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
 
 		//	get all shapes from the path and output them
-		const PathShapes = ParseSvgPathCommands(Node['d']);
+		const PathContours = ParseSvgPathCommandContours(Node['d']);
 
-		function PushShape(PathShape)
+		function PushShape(Contour)
 		{
-			//	todo: need to normalise control points etc too when outputting renderable shapes
-			if ( PathShape.Line )
-				PathShape.Line.Points = PathShape.Line.Points.map( NormaliseSize );
-			
+			//	is it a line or a poly
+			let PathShape = {};
+			Pop.Debug("Countour",Contour);
+			if ( Shape.Style.fill == "none" )
+			{
+				PathShape.Line = {};
+				PathShape.Line.Points = Contour.Points.map( NormaliseSize );
+			}
+			else
+			{
+				PathShape.Polygon = {};
+				PathShape.Polygon.Points = Contour.Points.map( NormaliseSize );
+			}
+
 			const OutputShape = Object.assign({},Shape);
 			Object.assign( OutputShape, PathShape );
-
-			//	gr: as we're currently only making lines, force a stroke
-			if ( OutputShape.Style.stroke == "none" )
-			{
-				OutputShape.Style.stroke = OutputShape.Style.fill;
-			}
-			Pop.Debug(`Path line x${PathShape.Line.Points.length}`,PathShape);
 			
 			OnShape( OutputShape );
 		}
-		PathShapes.forEach( PushShape );
+		PathContours.forEach( PushShape );
 	}
 	
 	function ParsePolygon(Node,ChildIndex,Path)
@@ -971,6 +973,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		catch(e)
 		{
 			Pop.Debug(`Failed to parse shape ${Node.Type}; ${e}`);
+			console.error(`Failed to parse shape ${Node.Type}; ${e}`);
 		}
 	}
 	
