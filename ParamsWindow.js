@@ -10,6 +10,11 @@ function isString(Variable)
 	return typeof Variable === 'string';
 }
 
+function isTypedArray(obj)
+{
+	return !!obj && obj.byteLength !== undefined;
+}
+
 //	user changes -> control changes -> update label, update data, save
 //	data changes -> change control -> update label
 function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue,SetValue,IsValueSignificantChange)
@@ -30,12 +35,20 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 		this.ValueCache = GetValue();
 		//		set control (should invoke change)
 		//		gr: DOES NOT invoke change unless done by user!
+		//Pop.Debug("UpdateDisplay SetValue",JSON.stringify(this.ValueCache),typeof this.ValueCache);
 		Control.SetValue(this.ValueCache);
 		this.UpdateLabel(this.ValueCache);
 	}
 
 	let OnChanged = function (Value,IsFinalValue)
 	{
+		//	PopEngine returns typed arrays, we want regular arrays in controls
+		//	(until we possibly need a control with a LOT of values)
+		if (isTypedArray(Value))
+		{
+			Value = Array.from(Value);
+		}
+
 		//Pop.Debug("OnChanged",Value);
 
 		//	let some controls send "not final value" so we can UI without expensive changes
@@ -113,15 +126,43 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 	this.Window = new Pop.Gui.Window("Params",WindowRect,false);
 	this.Window.EnableScrollbars(false,true);
 	this.Handlers = {};
-	
+	this.ParamMetas = {};
+	this.WaitForParamsChangedPromiseQueue = new Pop.PromiseQueue();
+
+	this.WaitForParamsChanged = function ()
+	{
+		return this.WaitForParamsChangedPromiseQueue.Allocate();
+	}
+
+	this.GetParamMetas = function ()
+	{
+		return this.ParamMetas;
+	}
+
+	function GetMetaFromArguments(Arguments)
+	{
+		//	first is name
+		const Name = Arguments.shift();
+		function RenameFunc(Arg)
+		{
+			if (isFunction(Arg))
+				return "function:" + Arg.name;
+			return Arg;
+		}
+		Arguments = Arguments.map(RenameFunc);
+		return Arguments;
+	}
+
 	//	add new control
 	//	CleanValue = function
 	//	Min can sometimes be a cleanvalue function
 	//		AddParam('Float',Math.floor);
 	//	TreatAsType overrides the control
 	//		AddParam('Port',0,1,Math.floor,'String')
-	this.AddParam = function(Name,Min,Max,CleanValue,TreatAsType)
+	this.AddParam = function (Name,Min,Max,CleanValue,TreatAsType)
 	{
+		this.ParamMetas[Name] = GetMetaFromArguments(Array.from(arguments));
+
 		//	AddParam('x',Math.floor)
 		if (isFunction(Min) && CleanValue === undefined)
 		{
@@ -155,7 +196,8 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 		{
 			Params[Name] = Value;
 			OnAnyChanged(Params,Name,Value,IsFinalValue);
-		}
+			this.WaitForParamsChangedPromiseQueue.Resolve(Params,Name,Value,IsFinalValue);
+		}.bind(this);
 		let IsValueSignificantChange = function (Old,New)
 		{
 			return Old != New;
@@ -168,8 +210,8 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 		const LabelControl = new Pop.Gui.Label(Window,[LabelLeft,LabelTop,LabelWidth,LabelHeight]);
 		LabelControl.SetValue(Name);
 		let Control = null;
-		
-		if (TreatAsType == 'Button' && Pop.Gui.Button!==undefined)
+
+		if (TreatAsType == 'Button' && Pop.Gui.Button !== undefined)
 		{
 			Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			Control.OnClicked = function ()
@@ -177,7 +219,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 				//	call the control's OnChanged func
 				const Value = GetValue();
 				Control.OnChanged(Value,true);
-			}			
+			}
 			//const Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			//Control.SetLabel(Name);
 		}
@@ -186,7 +228,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 			Control = new Pop.Gui.TickBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			CleanValue = function (Value) { return Value == true; }
 		}
-		else if ( isString(Params[Name]) )
+		else if (isString(Params[Name]))
 		{
 			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 		}
@@ -335,7 +377,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 			//	todo: dropdown list that's an enum
 			const IsEnum = (typeof Params[Name] === 'number') && Array.isArray(TreatAsType);
 
-			if ( IsEnum )
+			if (IsEnum)
 			{
 				//	todo: get key count and use those
 				Min = 0;
@@ -345,8 +387,8 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 
 			//Pop.Debug("Defaulting param to number, typeof",typeof Params[Name]);
 			//	no min/max should revert to a string editor?
-			if (Min === undefined)	Min = 0;
-			if (Max === undefined)	Max = 100;
+			if (Min === undefined) Min = 0;
+			if (Max === undefined) Max = 100;
 			//	non-specific control, slider
 			//	slider values are all int (16bit) so we need to normalise the value
 			const TickMin = 0;
@@ -381,7 +423,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 				{
 					Pop.Debug("Enum",Value,TreatAsType);
 					const EnumLabel = TreatAsType[Value];
-					return Name + ': ' + EnumLabel;					
+					return Name + ': ' + EnumLabel;
 				}
 				return Name + ': ' + Value;
 			}
@@ -418,7 +460,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 
 		this.ControlTop += ControlHeight;
 		this.ControlTop += ControlSpacing;
-	}
+	}.bind(this);
 	
 	//	changed externally, update display
 	this.OnParamChanged = function (Name)
@@ -428,7 +470,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 			throw "Tried to change param " + Name + " but no control assigned";
 
 		Handler.UpdateDisplay();
-	}
+	}.bind(this);
 
 	//	changed externally
 	this.OnParamsChanged = function ()
@@ -447,7 +489,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 				Pop.Debug("OnParamChanged(" + Key + ") error",e);
 			}
 		}
-	}
+	}.bind(this);
 	
 }
 
@@ -460,13 +502,156 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 	return Window;
 }
 
-function RunParamsHttpServer(Params,OnAnyChanged,Port=80)
+
+function RunParamsWebsocketServer(Port,OnJsonRecieved)
 {
+	let CurrentSocket = null;
+	
+	async function Loop()
+	{
+		while (true)
+		{
+			try
+			{
+				Pop.Debug()
+				const Socket = new Pop.Websocket.Server(Port);
+				CurrentSocket = Socket;
+				while (true)
+				{
+					const Message = await Socket.WaitForMessage();
+					Pop.Debug("Got message",JSON.stringify(Message));
+					const ParamsJson = JSON.parse(Message.Data);
+					OnJsonRecieved(ParamsJson);
+				}
+			}
+			catch (e)
+			{
+				Pop.Debug("ParamsWebsocketServer error",e);
+				CurrentSocket = null;
+			}
+			await Pop.Yield(1000);
+		}
+	}
+	Loop().then(Pop.Debug).catch(Pop.Debug);
+
+	const Output = {};
+	Output.SendJson = function (Object)
+	{
+		if (!CurrentSocket)
+		{
+			Pop.Debug("SendJson - not currently connected");
+			//throw "Not currently connected";
+			return;
+		}
+		const JsonString = JSON.stringify(Object,null,'\t');
+		const Peers = CurrentSocket.GetPeers();
+		function Send(Peer)
+		{
+			CurrentSocket.Send(Peer,JsonString);
+		}
+		Peers.forEach(Send);
+	}
+
+	Output.GetUrl = function ()
+	{
+		if (!CurrentSocket)
+			throw "Not currently connected";
+		const Addresses = CurrentSocket.GetAddress();
+		return "ws://" + Addresses[0].Address;
+	}
+
+	return Output;
+}
+
+function RunParamsHttpServer(Params,ParamsWindow,Port=80)
+{
+	function OnJsonRecieved(Json)
+	{
+		//Pop.Debug("Web changed params");
+		try
+		{
+			Object.assign(Params,Json);
+			ParamsWindow.OnParamsChanged(Params);
+		}
+		catch (e)
+		{
+			Pop.Debug("Exception setting new web params",JSON.stringify(Json));
+		}
+	}
+
+	const WebocketPort = Port + 1;
+	//	create websocket server to send & recieve param changes
+	const Websocket = RunParamsWebsocketServer(WebocketPort,OnJsonRecieved);
+
+	function SendNewParams(Params)
+	{
+		Websocket.SendJson(Params);
+	}
+
+	//	kick off async loop waiting for change
+	async function ParamsWindowWaitForChangeLoop()
+	{
+		while (true)
+		{
+			await ParamsWindow.WaitForParamsChanged();
+			SendNewParams(Params);
+		}
+	}
+	ParamsWindowWaitForChangeLoop().then(Pop.Debug).catch(Pop.Debug);
+
+	function GetParamMetas()
+	{
+		if (!ParamsWindow)
+			return {};
+
+		return ParamsWindow.GetParamMetas();
+	}
+
+	function HandleVirtualFile(Response)
+	{
+		//	redirect PopEngine files to local filename
+		const Filename = Response.Url;
+
+		if (Filename == "Websocket.json")
+		{
+			Response.Content = Websocket.GetUrl();
+			Response.StatusCode = 200;
+			return;
+		}
+
+		if (Filename == "Params.json")
+		{
+			Response.Content = JSON.stringify(Params,null,'\t');
+			Response.StatusCode = 200;
+			return;
+		}
+
+		if (Filename == "ParamMetas.json")
+		{
+			const ParamMetas = GetParamMetas();
+			Response.Content = JSON.stringify(ParamMetas,null,'\t');
+			Response.StatusCode = 200;
+			return;
+		}
+
+		if (Filename.startsWith('PopEngineCommon/'))
+		{
+			return "../" + Filename;
+		}
+
+		//	some other file
+		return Response;
+	}
+
 	//	serve HTTP, which delivers a page that creates a params window!
-	const Http = new Pop.Http.Server(Port);
+	const Http = new Pop.Http.Server(Port,HandleVirtualFile);
 	const Address = Http.GetAddress();
 	Pop.Debug("Http server:",JSON.stringify(Address));
 
+	Http.GetUrl = function ()
+	{
+		return 'http://' + Address[0].Address;
+	}
 	//	gr: this should change to be a WaitForRequest(UrlMatch) and default will serve files
 
 	//	note: this will GC the server if you don't save the variable!

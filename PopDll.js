@@ -14,6 +14,10 @@ Pop.Dll.ParseFunction = function(Declaration)
 
 	const SplitFunctionRegex = new RegExp( Pattern_Return + Pattern_Name + Pattern_Parenthesis + Pattern_Tail );
 	const Match = Declaration.match(SplitFunctionRegex);
+	if (!Match)
+		throw `Failed to parse CAPI function; ${Declaration}`;
+	Pop.Debug("Split match",JSON.stringify(Match));
+
 	const ReturnType = Match[1];
 	const FunctionName = Match[2];
 	const Arguments = (Match[3].length==0) ? [] : Match[3].split(',');

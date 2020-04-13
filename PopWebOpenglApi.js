@@ -364,6 +364,10 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.OnKeyDown = function(Key)							{	Pop.Debug('OnKeyDown',...arguments);	};
 	this.OnKeyUp = function(Key)							{	Pop.Debug('OnKeyUp',...arguments);	};
 
+	//	treat minimised and foreground as the same on web;
+	//	todo: foreground state for multiple windows on one page
+	this.IsForeground = function () { return Pop.WebApi.IsForeground(); }
+	this.IsMinimised = function () { return Pop.WebApi.IsForeground(); }
 
 	this.Context = null;
 	this.ContextVersion = 0;	//	used to tell if resources are out of date
@@ -382,13 +386,14 @@ Pop.Opengl.Window = function(Name,Rect)
 
 	this.OnResize = function(ResizeEvent)
 	{
-		Pop.Debug("OnResize",ResizeEvent);
+		Pop.Debug("OnResize",JSON.stringify(ResizeEvent));
 		
 		//	invalidate cache
 		this.ScreenRectCache = null;
 	
 		//	resize to original rect
 		const Canvas = this.GetCanvasElement();
+		Pop.Debug("Re-setting canvas size to original rect",JSON.stringify(Rect))
 		this.SetCanvasSize( Canvas, Rect );
 	}
 	
@@ -418,8 +423,17 @@ Pop.Opengl.Window = function(Name,Rect)
 		this.CanvasKeyHandler = new TElementKeyHandler( Element, OnKeyDown, OnKeyUp );
 
 		//	catch window resize
-		window.addEventListener('resize', this.OnResize.bind(this) );
-		
+		window.addEventListener('resize',this.OnResize.bind(this));
+
+		//	https://medium.com/@susiekim9/how-to-compensate-for-the-ios-viewport-unit-bug-46e78d54af0d
+		/*	this doesn't help
+		window.onresize = function ()
+		{
+			document.body.height = window.innerHeight;
+		}
+		window.onresize(); // called to initially set the height.
+		*/
+
 		//	catch fullscreen state change
 		Element.addEventListener('fullscreenchange', this.OnFullscreenChanged.bind(this) );
 	}
@@ -448,7 +462,20 @@ Pop.Opengl.Window = function(Name,Rect)
 		//	go as fullscreen as possible
 		if ( !Rect )
 		{
-			Rect = [0,0,ParentElement.clientWidth,window.innerHeight];
+			//	try and go as big as parent
+			//	values may be zero, so then go for window (erk!)
+			const ParentSize = [ParentElement.clientWidth,ParentElement.clientHeight];
+			const ParentInnerSize = [ParentElement.innerWidth,ParentElement.innerHeight];
+			const WindowInnerSize = [window.innerWidth,window.innerHeight];
+
+			let Width = ParentSize[0];
+			let Height = ParentSize[1];
+			if (!Width)
+				Width = WindowInnerSize[0];
+			if (!Height)
+				Height = WindowInnerSize[1];
+			Rect = [0,0,Width,Height];
+			Pop.Debug("SetCanvasSize defaulting to ",Rect,"ParentSize=" + ParentSize,"ParentInnerSize=" + ParentInnerSize,"WindowInnerSize=" + WindowInnerSize);
 		}
 		
 		let Left = Rect[0];
@@ -714,9 +741,11 @@ Pop.Opengl.Window = function(Name,Rect)
 			if ( !this.RenderTarget )
 				this.RenderTarget = new WindowRenderTarget(this);
 			this.RenderTarget.BindRenderTarget( RenderContext );
-			this.OnRender( this.RenderTarget );
-			
+
+			//	request next frame, before any render fails, so we will get exceptions thrown for debugging, but recover
 			window.requestAnimationFrame( Render.bind(this) );
+
+			this.OnRender( this.RenderTarget );
 		}
 		window.requestAnimationFrame( Render.bind(this) );
 	}
