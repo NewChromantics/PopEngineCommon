@@ -54,18 +54,35 @@ function IsObjectInstanceOf(This,TypeConstructor)
 	if ( This instanceof TypeConstructor )
 		return true;
 	
-	//	jscore
-	if ( This.__proto__ == TypeConstructor.__proto__ )
-		return true;
-
 	//	object == func... so wrong match
 	//if ( This instanceof TypeConstructor.constructor )
 	//	return true;
+
+	if (This.__proto__)
+	{
+		//	jscore
+		if (This.__proto__ == TypeConstructor.__proto__)
+		{
+			Pop.Debug("This __proto__ == TypeConstructor.__proto__",TypeConstructor);
+			return true;
+		}
+
+		//	chakra
+		if (This.__proto__.constructor == TypeConstructor)
+		{
+			Pop.Debug("This __proto__.constructor == TypeConstructor",TypeConstructor);
+			return true;
+		}
+	}
+
 	
 	if ( This.constructor )
 	{
 		if ( This.constructor == TypeConstructor )
+		{
+			Pop.Debug("This.constructor == TypeConstructor",TypeConstructor);
 			return true;
+		}
 		//	jscore: {} is matching Pop.Image here
 		//if ( This.constructor == TypeConstructor.constructor )
 		//	return true;
