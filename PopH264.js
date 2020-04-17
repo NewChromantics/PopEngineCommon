@@ -26,21 +26,35 @@ Pop.H264.GetNaluLength = function(Packet)
 	throw `Nalu[${Data}] != 0001|001`;
 }
 
-Pop.H264.GetNaluType = function (Packet)
+
+Pop.H264.GetNaluMeta = function (Packet)
 {
 	const NaluSize = Pop.H264.GetNaluLength(Packet);
 	const TypeAndPriority = Packet[NaluSize];
 	const Type = TypeAndPriority & 0x1f;
 	const Priority = TypeAndPriority >> 5;
-
-	return Type;
+	
+	const Meta = {};
+	Meta.Content = Type;
+	Meta.Priority = Priority;
+	Meta.PacketSize = Packet.length;
+	
+	return Meta;
 }
+
+Pop.H264.GetNaluType = function (Packet)
+{
+	const Meta = Pop.H264.GetNaluMeta(Packet);
+	return Meta.Content;
+}
+
 
 
 Pop.H264.IsKeyframe = function (Packet)
 {
-	const Type = Pop.H264.GetNaluType(Packet);
-	switch (Type)
+	const Meta = Pop.H264.GetNaluMeta(Packet);
+	
+	switch (Meta.Content)
 	{
 		case Pop.H264.SPS:
 		case Pop.H264.PPS:
@@ -52,6 +66,7 @@ Pop.H264.IsKeyframe = function (Packet)
 
 		//	picture
 		default:
+			//Pop.Debug("Not keyframe H264",JSON.stringify(Meta));
 			return false;
 	}
 }
