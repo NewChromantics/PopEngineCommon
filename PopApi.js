@@ -54,7 +54,7 @@ function IsObjectInstanceOf(This,TypeConstructor)
 	//	this should work in chakracore/jsrt as long as the constructor .prototype "property" has been set
 	if ( This instanceof TypeConstructor )
 		return true;
-
+	
 	//	object == func... so wrong match
 	//if ( This instanceof TypeConstructor.constructor )
 	//	return true;
@@ -63,17 +63,27 @@ function IsObjectInstanceOf(This,TypeConstructor)
 	{
 		//	jscore
 		if (This.__proto__ == TypeConstructor.__proto__)
+		{
+			Pop.Debug("This __proto__ == TypeConstructor.__proto__",TypeConstructor);
 			return true;
+		}
+
+		//	chakra
+		if (This.__proto__.constructor == TypeConstructor)
+		{
+			Pop.Debug("This __proto__.constructor == TypeConstructor",TypeConstructor);
+			return true;
+		}
 	}
 
-	//	object == func... so wrong match
-	//if ( This instanceof TypeConstructor.constructor )
-	//	return true;
 	
 	if ( This.constructor )
 	{
 		if ( This.constructor == TypeConstructor )
+		{
+			Pop.Debug("This.constructor == TypeConstructor",TypeConstructor);
 			return true;
+		}
 		//	jscore: {} is matching Pop.Image here
 		//if ( This.constructor == TypeConstructor.constructor )
 		//	return true;

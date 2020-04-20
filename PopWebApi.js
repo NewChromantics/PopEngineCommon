@@ -83,6 +83,13 @@ Pop.GetPlatform = function()
 	return 'Web';
 }
 
+Pop.GetExeFilename = function()
+{
+	//	this may not actually be a filename
+	//	note here if there is ever a use for GetExeFilename on web
+	return window.location.pathname;
+}
+
 Pop.GetExeDirectory = function()
 {
 	//	exe could be path location.pathname
