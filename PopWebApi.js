@@ -137,22 +137,30 @@ Pop.GetTimeNowMs = function()
 
 Pop.LoadFileAsImageAsync = async function(Filename)
 {
-	let Promise = Pop.CreatePromise();
-	
-	const HtmlImage = new Image();
-	HtmlImage.crossOrigin = "anonymous";
-	HtmlImage.onload = function()
+	function LoadHtmlImageAsync()
 	{
-		Promise.Resolve( HtmlImage );
-	};
-	HtmlImage.onerror = function(Error)
-	{
-		Promise.Reject( Error );
+		let Promise = Pop.CreatePromise();
+		const HtmlImage = new Image();
+		HtmlImage.crossOrigin = "anonymous";
+		HtmlImage.onload = function ()
+		{
+			Promise.Resolve(HtmlImage);
+		};
+		HtmlImage.onerror = function (Error)
+		{
+			Promise.Reject(Error);
+		}
+		//  trigger load
+		HtmlImage.src = Filename;
+		return Promise;
 	}
-	//  trigger load
-	HtmlImage.src = Filename;
-	
-	return Promise;
+
+	//	the API expects to return an image, so wait for the load,
+	//	then make an image. This change will have broken the Pop.Image(Filename)
+	//	constructor as it uses the asset cache, which is only set after this
+	const HtmlImage = await LoadHtmlImageAsync();
+	const Image = new Pop.Image(HtmlImage);
+	return Image;
 }
 
 Pop.LoadFileAsStringAsync = async function(Filename)

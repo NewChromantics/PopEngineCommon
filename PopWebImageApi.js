@@ -511,6 +511,12 @@ Pop.Image = function(Filename)
 			this.WritePixels( HtmlImage.width, HtmlImage.height, Image, PixelFormat );
 		}
 	}
+	else if ( Filename.constructor == WebApi_HtmlImageElement )
+	{
+		//	gr: this conversion should be in WritePixels()
+		const Pixels = GetPixelsFromHtmlImageElement(HtmlImage);
+		this.WritePixels(Pixels.Width,Pixels.Height,Pixels.Buffer,Pixels.Format);
+	}
 	else if ( Array.isArray( Filename ) )
 	{
 		//	initialise size...
