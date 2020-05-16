@@ -497,18 +497,23 @@ Pop.Image = function(Filename)
 	//	load file
 	if ( typeof Filename == 'string' && Filename.includes('.') )
 	{
-		let HtmlImage = Pop.GetCachedAsset(Filename);
+		const ImageFile = Pop.GetCachedAsset(Filename);
 		
 		//	gr: this conversion should be in WritePixels()
-		if ( HtmlImage.constructor == WebApi_HtmlImageElement )
+		if ( ImageFile.constructor == WebApi_HtmlImageElement )
 		{
-			const Pixels = GetPixelsFromHtmlImageElement(HtmlImage);
+			const Pixels = GetPixelsFromHtmlImageElement(ImageFile);
 			this.WritePixels( Pixels.Width, Pixels.Height, Pixels.Buffer, Pixels.Format );
+		}
+		else if ( IsObjectInstanceOf(ImageFile,Pop.Image) )
+		{
+			console.warn(`Constructing Pop.Image(${Filename}) from filename results in a copy. Can now just async load the asset straight into a Pop.Image`);
+			this.Copy(ImageFile);
 		}
 		else
 		{
-			let PixelFormat = undefined;
-			this.WritePixels( HtmlImage.width, HtmlImage.height, Image, PixelFormat );
+			const PixelFormat = undefined;
+			this.WritePixels( ImageFile.width, ImageFile.height, Image, PixelFormat );
 		}
 	}
 	else if ( Filename.constructor == WebApi_HtmlImageElement )
