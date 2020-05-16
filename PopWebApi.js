@@ -83,11 +83,11 @@ Pop.GetPlatform = function()
 	return 'Web';
 }
 
+//	we're interpreting the url as
+//	http://exefilename/exedirectory/?exearguments
 Pop.GetExeFilename = function()
 {
-	//	this may not actually be a filename
-	//	note here if there is ever a use for GetExeFilename on web
-	return window.location.pathname;
+	return window.location.hostname;
 }
 
 Pop.GetExeDirectory = function()

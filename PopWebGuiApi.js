@@ -346,6 +346,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		Element.style.zIndex = $HighestZ;
 		//Element.style.overflow = 'scroll';	//	inner div handles scrolling
 		Element.className = 'PopGuiWindow';
+		Element.id = Name;	//	multiple classes, so we can style at a generic level, and 
 		Parent.appendChild( Element );
 		SetGuiControl_Draggable( Element );
 		

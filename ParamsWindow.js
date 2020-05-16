@@ -108,7 +108,7 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 }
 
 
-Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
+Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 {
 	OnAnyChanged = OnAnyChanged || function(){};
 	
@@ -123,7 +123,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 	const ControlHeight = LabelHeight;
 	const ControlSpacing = 10;
 
-	this.Window = new Pop.Gui.Window("Params",WindowRect,false);
+	this.Window = new Pop.Gui.Window(WindowName,WindowRect,false);
 	this.Window.EnableScrollbars(false,true);
 	this.Handlers = {};
 	this.ParamMetas = {};
