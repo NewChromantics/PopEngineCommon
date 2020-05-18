@@ -7,8 +7,10 @@ Pop.AssetServer = class
 		this.Ports = Array.isArray(WebsocketPorts) ? WebsocketPorts : [WebsocketPorts];
 
 		this.FileMonitor = new Pop.FileMonitor();
-		this.FileWatchLoop().then(Pop.Debug).catch(Pop.Debug);
 		this.ChangedQueue = new Pop.PromiseQueue();
+
+		this.WebsocketLoop().then(Pop.Debug).catch(Pop.Debug);
+		this.FileWatchLoop().then(Pop.Debug).catch(Pop.Debug);
 	}
 
 	ListenToDirectory(Directory)
@@ -73,7 +75,7 @@ Pop.AssetServer = class
 						SendToPeers(ChangedMeta);
 					}
 				}
-				SendLoop().then(Pop.Debug).catch(Pop.Debug);
+				SendLoop.bind(this)().then(Pop.Debug).catch(Pop.Debug);
 
 				while (Socket)
 				{
