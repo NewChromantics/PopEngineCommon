@@ -129,12 +129,20 @@ function Slice16(Array,Start)
 Pop.Midi = {};
 Pop.Midi.Parse = function (FileContents)
 {
+	function BpmToTempo(Bpm)
+	{
+		//	microsecs per 120bpm
+		const Mult = 500000 / 120;
+		return Bpm * Mult;
+	}
+	
 	const Midi = {};
 	Midi.TicksToMs = null;	//	func
 	Midi.Tracks = null;
 	Midi.Format = null;
 	Midi.DurationMs = 0;
-
+	Midi.TempoMicroSecs = BpmToTempo(120);	//	120bpm = default tempo
+	
 	function Parse_MTrk(Data)
 	{
 		//	add to next undefined track
@@ -235,6 +243,7 @@ Pop.Midi.Parse = function (FileContents)
 			const Meta = GetLastNote(Note,Channel);
 			Meta.EndTimeMs = TimeMs;
 			Meta.EndVelocity = Velocity;
+			Midi.DurationMs = Math.max( Midi.DurationMs, Meta.EndTimeMs );
 		}
 		
 		function PushPolyKeyPressure(Channel,TimeMs,Note,Velocity)
@@ -351,12 +360,18 @@ Pop.Midi.Parse = function (FileContents)
 		Midi.Tracks = Array(TrackCount).fill(null);
 
 		const TimeFormatSmpte = (TimeFormat16>>15) != 0;
-		if ( TimeFormatSmpte )
+		if ( !TimeFormatSmpte )
 		{
 			Midi.TicksToMs = function(Ticks)
 			{
-				//	TimeFormat16 = ticks per quarter-note
-				return Ticks;
+				const Tempo = Midi.TempoMicroSecs;
+				const TicksPerQuarter = TimeFormat16;
+				const MicroSecsPerQuarter = Tempo;
+				const MicroSecsPerTick = MicroSecsPerQuarter / TicksPerQuarter;
+				//const SecondsPerTick = MicroSecsPerTick / 1.000.000;
+				const MilliSecondsPerTick = MicroSecsPerTick / 1000;
+				const Ms = Ticks * MilliSecondsPerTick;
+				return Ms;
 			}
 		}
 		else
@@ -365,6 +380,7 @@ Pop.Midi.Parse = function (FileContents)
 			{
 				const NegativeSmpte = (TimeFormat16 >> 7) & (127);	//	bits 8-14
 				const TicksPerFrame = TimeFormat16 & 127;	//	bits 0-7
+				throw `Todo: calculate Smpte time conversion ${TimeFormatSmpte} ${TimeFormat16} = ${NegativeSmpte} ${TicksPerFrame}`;
 				//	negative SMPTE format	ticks per frame
 				return Ticks;
 			}
