@@ -25,7 +25,7 @@ function GetNoteName(MidiNoteValue)
 Pop.Midi.GetNoteNames = function()
 {
 	const Names = [];
-	for ( let i=0;	i<128;	i++ )
+	for ( let i=127;	i>=0;	i-- )
 		Names.push(GetNoteName(i));
 	return Names;
 }
