@@ -225,6 +225,9 @@ Pop.Midi.Parse = function (FileContents)
 		
 		function PushNoteOn(Channel,TimeMs,Note,Velocity)
 		{
+			if ( Velocity == 0 )
+				return PushNoteOff(Channel,TimeMs,Note,Velocity);
+			
 			const Meta = {};
 			Meta.Note = GetNoteName(Note);
 			Meta.Channel = Channel;
