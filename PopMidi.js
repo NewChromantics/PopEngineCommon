@@ -1,3 +1,5 @@
+Pop.Midi = {};
+
 
 function Array_GetKey(TheArray,Value)
 {
@@ -19,7 +21,7 @@ function GetNoteName(MidiNoteValue)
 	return NoteNames[Note]+OctaveNames[Octave];
 }
 
-function GetNoteNames()
+Pop.Midi.GetNoteNames = function()
 {
 	const Names = [];
 	for ( let i=0;	i<128;	i++ )
@@ -126,7 +128,6 @@ function Slice16(Array,Start)
 	return Size16;
 }
 
-Pop.Midi = {};
 Pop.Midi.Parse = function (FileContents)
 {
 	function BpmToTempo(Bpm)
