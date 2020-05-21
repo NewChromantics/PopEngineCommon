@@ -83,11 +83,11 @@ Pop.GetPlatform = function()
 	return 'Web';
 }
 
+//	we're interpreting the url as
+//	http://exefilename/exedirectory/?exearguments
 Pop.GetExeFilename = function()
 {
-	//	this may not actually be a filename
-	//	note here if there is ever a use for GetExeFilename on web
-	return window.location.pathname;
+	return window.location.hostname;
 }
 
 Pop.GetExeDirectory = function()
@@ -102,7 +102,30 @@ Pop.GetExeDirectory = function()
 Pop.GetExeArguments = function()
 {
 	//	gr: probably shouldn't lowercase now it's proper
-	const UrlParams = window.location.search.replace('?',' ').trim().split('&');
+	const UrlArgs = window.location.search.replace('?',' ').trim().split('&');
+	
+	//	turn into keys & values - gr: we're not doing this in engine! fix so they match!
+	const UrlParams = {};
+	function AddParam(Argument)
+	{
+		let [Key,Value] = Argument.split('=',2);
+		if ( Value === undefined )
+			Value = true;
+		
+		//	attempt some auto conversions
+		if ( typeof Value == 'string' )
+		{
+			const NumberValue = Number(Value);
+			if ( !isNaN(NumberValue) )
+				Value = NumberValue;
+			else if ( Value == 'true' )
+				Value = true;
+			else if ( Value == 'false' )
+				Value = false;
+		}
+		UrlParams[Key] = Value;
+	}
+	UrlArgs.forEach(AddParam);
 	return UrlParams;
 }
 
@@ -114,22 +137,30 @@ Pop.GetTimeNowMs = function()
 
 Pop.LoadFileAsImageAsync = async function(Filename)
 {
-	let Promise = Pop.CreatePromise();
-	
-	const HtmlImage = new Image();
-	HtmlImage.crossOrigin = "anonymous";
-	HtmlImage.onload = function()
+	function LoadHtmlImageAsync()
 	{
-		Promise.Resolve( HtmlImage );
-	};
-	HtmlImage.onerror = function(Error)
-	{
-		Promise.Reject( Error );
+		let Promise = Pop.CreatePromise();
+		const HtmlImage = new Image();
+		HtmlImage.crossOrigin = "anonymous";
+		HtmlImage.onload = function ()
+		{
+			Promise.Resolve(HtmlImage);
+		};
+		HtmlImage.onerror = function (Error)
+		{
+			Promise.Reject(Error);
+		}
+		//  trigger load
+		HtmlImage.src = Filename;
+		return Promise;
 	}
-	//  trigger load
-	HtmlImage.src = Filename;
-	
-	return Promise;
+
+	//	the API expects to return an image, so wait for the load,
+	//	then make an image. This change will have broken the Pop.Image(Filename)
+	//	constructor as it uses the asset cache, which is only set after this
+	const HtmlImage = await LoadHtmlImageAsync();
+	const Img = new Pop.Image(HtmlImage);
+	return Img;
 }
 
 Pop.LoadFileAsStringAsync = async function(Filename)
@@ -141,6 +172,19 @@ Pop.LoadFileAsStringAsync = async function(Filename)
 	if ( !Fetched.ok )
 		throw "Failed to fetch " + Filename + "; " + Fetched.statusText;
 	return Contents;
+}
+
+
+Pop.LoadFileAsArrayBufferAsync = async function(Filename)
+{
+	const Fetched = await fetch(Filename);
+	//Pop.Debug("Fetch created:", Filename, Fetched);
+	const Contents = await Fetched.arrayBuffer();
+	//Pop.Debug("Fetch finished:", Filename, Fetched);
+	if ( !Fetched.ok )
+		throw "Failed to fetch " + Filename + "; " + Fetched.statusText;
+	const Contents8 = new Uint8Array(Contents);
+	return Contents8;
 }
 
 
@@ -186,6 +230,27 @@ Pop.AsyncCacheAssetAsImage = async function(Filename)
 	}
 }
 
+Pop.AsyncCacheAssetAsArrayBuffer = async function(Filename)
+{
+	if ( Pop._AssetCache.hasOwnProperty(Filename) )
+	{
+		Pop.Debug("Asset " + Filename + " already cached");
+		return;
+	}
+	
+	try
+	{
+		const Contents = await Pop.LoadFileAsArrayBufferAsync( Filename );
+		Pop._AssetCache[Filename] = Contents;
+	}
+	catch(e)
+	{
+		Pop.Debug("Error loading file",Filename,e);
+		Pop._AssetCache[Filename] = false;
+		throw "Error loading file " + Filename + ": " + e;
+	}
+}
+
 Pop.LoadFileAsString = function(Filename)
 {
 	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
@@ -220,6 +285,21 @@ Pop.LoadFileAsImage = function(Filename)
 	
 	return Pop.GetCachedAsset(Filename);
 }
+
+
+Pop.LoadFileAsArrayBuffer = function(Filename)
+{
+	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
+	{
+		throw "Cannot synchronously load " + Filename + ", needs to be precached first with [async] Pop.AsyncCacheAsset()";
+	}
+	
+	//	gr: our asset loader currently replaces the contents of this
+	//		with binary, so do the conversion here (as native engine does)
+	const Contents = Pop.GetCachedAsset(Filename);
+	return Contents;
+}
+
 
 Pop.WriteStringToFile = function(Filename,Contents)
 {
@@ -282,7 +362,7 @@ Pop.CompileAndRun = function(Source,Filename)
 
 Pop.Yield = function(Milliseconds)
 {
-	let Promise = Pop.CreatePromise();
+	const Promise = Pop.CreatePromise();
 	setTimeout( Promise.Resolve, Milliseconds );
 	return Promise;
 }
@@ -293,6 +373,22 @@ Pop.LeapMotion = {};
 Pop.LeapMotion.Input = function()
 {
 	throw "Leap motion not supported";
+}
+
+//	gr: does this need its own namespace?
+Pop.Xml = {};
+
+Pop.Xml.Parse = function(Xml)
+{
+	//	web version makes use of the dom parser
+	//	https://stackoverflow.com/a/7951947/355753
+	if ( typeof window.DOMParser == 'undefined' )
+		throw "XML parser not supported";
+	
+	const Parser = new window.DOMParser();
+	const Dom = Parser.parseFromString(Xml, 'text/xml');
+	const Object = Dom.documentElement;
+	return Object;
 }
 
 

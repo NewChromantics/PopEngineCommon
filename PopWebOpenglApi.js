@@ -21,7 +21,7 @@ Pop.GlslVersion = 100;
 Pop.Opengl.CanRenderToFloat = undefined;
 
 //	allow turning off float support
-Pop.Opengl.AllowFloatTextures = !Pop.GetExeArguments().includes('DisableFloatTextures');
+Pop.Opengl.AllowFloatTextures = !Pop.GetExeArguments().DisableFloatTextures;
 
 
 Pop.Opengl.GetString = function(Context,Enum)
@@ -56,7 +56,7 @@ Pop.Opengl.GetString = function(Context,Enum)
 const TestFrameBuffer = false;
 const TestAttribLocation = false;
 const DisableOldVertexAttribArrays = false;
-const AllowVao = !Pop.GetExeArguments().includes('DisableVao');
+const AllowVao = !Pop.GetExeArguments().DisableVao;
 
 //	if we fail to get a context (eg. lost context) wait this long before restarting the render loop (where it tries again)
 //	this stops thrashing cpu/system whilst waiting
@@ -274,6 +274,14 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		MouseEvent.preventDefault();
 	}
 	
+	let MouseUp = function(MouseEvent)
+	{
+		const Pos = GetMousePos(MouseEvent);
+		const Button = GetButtonFromMouseEventButton(MouseEvent);
+		OnMouseUp( Pos[0], Pos[1], Button );
+		MouseEvent.preventDefault();
+	}
+	
 	let MouseWheel = function(MouseEvent)
 	{
 		const Pos = GetMousePos(MouseEvent);
@@ -301,8 +309,8 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	Element.addEventListener('contextmenu', ContextMenu, false );
 	Element.addEventListener('mousedown', MouseDown, false );
 	Element.addEventListener('mousemove', MouseMove, false );
-	//	not currently handling up
-	//this.Element.addEventListener('mouseup', MouseUp, false );
+
+	Element.addEventListener('mouseup', MouseUp, false );
 	//this.Element.addEventListener('mouseleave', OnDisableDraw, false );
 	//this.Element.addEventListener('mouseenter', OnEnableDraw, false );
 	
@@ -395,6 +403,8 @@ Pop.Opengl.Window = function(Name,Rect)
 		const Canvas = this.GetCanvasElement();
 		Pop.Debug("Re-setting canvas size to original rect",JSON.stringify(Rect))
 		this.SetCanvasSize( Canvas, Rect );
+		
+		this.RefreshCanvasResolution();
 	}
 	
 	this.AllocTexureIndex = function()
@@ -424,7 +434,7 @@ Pop.Opengl.Window = function(Name,Rect)
 
 		//	catch window resize
 		window.addEventListener('resize',this.OnResize.bind(this));
-
+		
 		//	https://medium.com/@susiekim9/how-to-compensate-for-the-ios-viewport-unit-bug-46e78d54af0d
 		/*	this doesn't help
 		window.onresize = function ()
@@ -451,7 +461,22 @@ Pop.Opengl.Window = function(Name,Rect)
 			this.ScreenRectCache[2] = Canvas.width;
 			this.ScreenRectCache[3] = Canvas.height;
 		}
-		return this.ScreenRectCache;
+		return this.ScreenRectCache.slice();
+	}
+	
+	this.RefreshCanvasResolution = function()
+	{
+		const Canvas = this.GetCanvasElement();
+		
+		//	get element size
+		const BoundingElement = Canvas.parentElement;
+		const Rect = BoundingElement.getBoundingClientRect();
+		const w = Rect.width;
+		const h = Rect.height;
+		
+		//	re-set resolution to match
+		Canvas.width = w;
+		Canvas.height = h;
 	}
 	
 	this.SetCanvasSize = function(CanvasElement,Rect=null)
@@ -482,7 +507,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		let Top = Rect[1];
 		let Width = Rect[2];
 		let Height = Rect[3];
-			
+			/*
 		CanvasElement.style.display = 'block';
 		CanvasElement.style.position = 'absolute';
 		//Element.style.border = '1px solid #f00';
@@ -495,9 +520,9 @@ Pop.Opengl.Window = function(Name,Rect)
 		CanvasElement.style.height = Height+'px';
 		//Element.style.width = '100%';
 		//Element.style.height = '500px';
-		
-		CanvasElement.width = Rect[2];
-		CanvasElement.height = Rect[3];
+		*/
+		//CanvasElement.width = Rect[2];
+		//CanvasElement.height = Rect[3];
 	}
 	
 	this.GetCanvasElement = function()
@@ -513,6 +538,8 @@ Pop.Opengl.Window = function(Name,Rect)
 		Element.id = Name;
 		
 		ParentElement.appendChild( Element );
+		
+		//	gr: replace this with a CSS size-config here
 		this.SetCanvasSize( Element, Rect );
 
 		//	double check
@@ -566,9 +593,16 @@ Pop.Opengl.Window = function(Name,Rect)
 	{
 		const ContextMode = "webgl";
 		const Canvas = this.GetCanvasElement();
+		//this.RefreshCanvasResolution();
+		this.OnResize();
 		const Options = {};
-		//Options.antialias = true;
+		Options.antialias = true;
 		Options.xrCompatible = true;
+		//	default is true. when true, this is causing an rgb blend with white,
+		//	instead of what's behind the canvas, causing a white halo
+		//	https://webglfundamentals.org/webgl/lessons/webgl-and-alpha.html
+		Options.premultipliedAlpha = false;
+		Options.alpha = true;	//	have alpha buffer
 		const Context = Canvas.getContext( ContextMode, Options );
 		
 		if ( !Context )
@@ -1299,8 +1333,58 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 		return this.Program;
 	}
 	
+	function StringToAsciis(String)
+	{
+		const Asciis = [];
+		for ( let i=0;	i<String.length;	i++ )
+			Asciis.push( String.charCodeAt(i) );
+		return Asciis;
+	}
+	
+	function IsNonAsciiCharCode(CharCode)
+	{
+		if ( CharCode >= 128 )
+			return true;
+		if ( CharCode < 0 )
+			return true;
+		
+		//	wierdly, glsl (on a 2011 imac, AMD Radeon HD 6970M 1024 MB, safari, high sierra)
+		//	considers ' (ascii 39) a non-ascii char
+		if ( CharCode == 39 )
+			return true;
+		return false;
+	}
+	
+	function CleanNonAsciiString(TheString)
+	{
+		//	safari glsl (on a 2011 imac, AMD Radeon HD 6970M 1024 MB, safari, high sierra)
+		//	rejects these chracters as "non-ascii"
+		//const NonAsciiCharCodes = [39];
+		//const NonAsciiChars = NonAsciiCharCodes.map( cc => {	return String.fromCharCode(cc);});
+		const NonAsciiChars = "'@";
+		const ReplacementAsciiChar = '_';
+		const Match = `[${NonAsciiChars}]`;
+		var NonAsciiRegex = new RegExp(Match, 'g');
+		const CleanString = TheString.replace(NonAsciiRegex,ReplacementAsciiChar);
+		return CleanString;
+	}
+	
 	this.CompileShader = function(RenderContext,Type,Source)
 	{
+		Source = CleanNonAsciiString(Source);
+		
+		//	safari will fail in shaderSource with non-ascii strings, so detect them to make it easier
+		const Asciis = StringToAsciis(Source);
+		const FirstNonAscii = Asciis.findIndex(IsNonAsciiCharCode);
+		if ( FirstNonAscii != -1 )
+		{
+			const SubSample = 8;
+			let NonAsciiSubString = Source.substring( FirstNonAscii-SubSample, FirstNonAscii );
+			NonAsciiSubString += `>>>>${Source[FirstNonAscii]}<<<<`;
+			NonAsciiSubString += Source.substring( FirstNonAscii+1, FirstNonAscii+SubSample );
+			throw `glsl source has non-ascii char around ${NonAsciiSubString}`;
+		}
+		
 		const gl = RenderContext.GetGlContext();
 		const Shader = gl.createShader(Type);
 		gl.shaderSource( Shader, Source );
@@ -1340,18 +1424,14 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 	//	gr: can't tell the difference between int and float, so err that wont work
 	this.SetUniform = function(Uniform,Value)
 	{
-		let UniformMeta = this.GetUniformMeta(Uniform);
+		const UniformMeta = this.GetUniformMeta(Uniform);
 		if ( !UniformMeta )
 			return;
-		if( Array.isArray(Value) )					this.SetUniformArray( Uniform, Value );
-		else if( Value instanceof Float32Array )	this.SetUniformArray( Uniform, Value );
-		else if ( Value instanceof Pop.Image )		this.SetUniformTexture( Uniform, Value, this.Context.AllocTexureIndex() );
-		//else if ( Value instanceof float2 )		this.SetUniformFloat2( Uniform, Value );
-		//else if ( Value instanceof float3 )		this.SetUniformFloat3( Uniform, Value );
-		//else if ( Value instanceof float4 )		this.SetUniformFloat4( Uniform, Value );
-		//else if ( Value instanceof Matrix4x4 )	this.SetUniformMatrix4x4( Uniform, Value );
-		else if ( typeof Value === 'number' )		this.SetUniformNumber( Uniform, Value );
-		else if ( typeof Value === 'boolean' )		this.SetUniformNumber( Uniform, Value );
+		if( Array.isArray(Value) )					this.SetUniformArray( Uniform, UniformMeta, Value );
+		else if( Value instanceof Float32Array )	this.SetUniformArray( Uniform, UniformMeta, Value );
+		else if ( Value instanceof Pop.Image )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTexureIndex() );
+		else if ( typeof Value === 'number' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
+		else if ( typeof Value === 'boolean' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else
 		{
 			console.log(typeof Value);
@@ -1360,11 +1440,8 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 		}
 	}
 	
-	this.SetUniformArray = function(UniformName,Values)
+	this.SetUniformArray = function(UniformName,UniformMeta,Values)
 	{
-		//	determine type of array, and length, and is array
-		const UniformMeta = this.GetUniformMeta(UniformName);
-		
 		const ExpectedValueCount = UniformMeta.ElementSize * UniformMeta.ElementCount;
 		
 		//	all aligned
@@ -1402,14 +1479,13 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 		UniformMeta.SetValues( ValuesExpanded );
 	}
 	
-	this.SetUniformTexture = function(Uniform,Image,TextureIndex)
+	this.SetUniformTexture = function(Uniform,UniformMeta,Image,TextureIndex)
 	{
-		let Texture = Image.GetOpenglTexture( this.Context );
-		let gl = this.GetGlContext();
-		let UniformPtr = gl.getUniformLocation( this.Program, Uniform );
+		const Texture = Image.GetOpenglTexture( this.Context );
+		const gl = this.GetGlContext();
 		//  https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Using_textures_in_WebGL
 		//  WebGL provides a minimum of 8 texture units;
-		let GlTextureNames = [ gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7 ];
+		const GlTextureNames = [ gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7 ];
 		//	setup textures
 		gl.activeTexture( GlTextureNames[TextureIndex] );
 		try
@@ -1419,73 +1495,19 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 		catch(e)
 		{
 			Pop.Debug("SetUniformTexture: " + e);
-			//  todo: bind "invalid" texture
+			//  todo: bind an "invalid" texture
 		}
-		gl.uniform1i( UniformPtr, TextureIndex );
+		UniformMeta.SetValues( [TextureIndex] );
 	}
 	
-	this.SetUniformNumber = function(Uniform,Value)
+	this.SetUniformNumber = function(Uniform,UniformMeta,Value)
 	{
-		let gl = this.GetGlContext();
-		let UniformPtr = gl.getUniformLocation( this.Program, Uniform);
-		let UniformType = this.GetUniformType( Uniform );
-		//	gr: this always returns 0 on imac12,2
-		//let UniformType = gl.getUniform( this.Program, UniformPtr );
-		
 		//	these are hard to track down and pretty rare anyone would want a nan
 		if ( isNaN(Value) )
 			throw "Setting NaN on Uniform " + Uniform.Name;
-		
-		switch ( UniformType )
-		{
-			case gl.INT:
-			case gl.UNSIGNED_INT:
-			case gl.BOOL:
-				gl.uniform1i( UniformPtr, Value );
-				break;
-			case gl.FLOAT:
-				gl.uniform1f( UniformPtr, Value );
-				break;
-			default:
-				throw "Unhandled Number uniform type " + UniformType;
-		}
-	}
-	
-	this.SetUniformFloat2 = function(Uniform,Value)
-	{
-		let gl = this.GetGlContext();
-		let UniformPtr = gl.getUniformLocation( this.Program, Uniform);
-		gl.uniform2f( UniformPtr, Value.x, Value.y );
-	}
-	
-	this.SetUniformFloat3 = function(Uniform,Value)
-	{
-		let gl = this.GetGlContext();
-		let UniformPtr = gl.getUniformLocation( this.Program, Uniform);
-		gl.uniform3f( UniformPtr, Value.x, Value.y, Value.z );
-	}
-	
-	this.SetUniformFloat4 = function(Uniform,Value)
-	{
-		let gl = this.GetGlContext();
-		let UniformPtr = gl.getUniformLocation( this.Program, Uniform);
-		gl.uniform4f( UniformPtr, Value.x, Value.y, Value.z, Value.w );
-	}
-	
-	this.SetUniformMatrix4x4 = function(Uniform,Value)
-	{
-		let gl = this.GetGlContext();
-		let UniformPtr = gl.getUniformLocation( this.Program, Uniform);
-		let float16 = Value.Values;
-		let Transpose = false;
-		//console.log(float16);
-		gl.uniformMatrix4fv( UniformPtr, Transpose, float16 );
-	}
-	
-	this.GetUniformType = function(UniformName)
-	{
-		let Meta = this.GetUniformMeta(UniformName);
-		return Meta.type;
+
+		const gl = this.GetGlContext();
+		UniformMeta.SetValues( [Value] );
 	}
 	
 	this.GetUniformMetas = function()
@@ -1510,6 +1532,7 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 			UniformMeta.Location = gl.getUniformLocation( this.Program, UniformMeta.name );
 			switch( UniformMeta.type )
 			{
+				case gl.SAMPLER_2D:	//	samplers' value is the texture index
 				case gl.INT:
 				case gl.UNSIGNED_INT:
 				case gl.BOOL:
@@ -1546,7 +1569,7 @@ Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSourc
 					break;
 
 				default:
-					UniformMeta.SetValues = function(v)	{	throw "Unhandled type " + UniformMeta.type + " on " + MatchUniformName;	};
+					UniformMeta.SetValues = function(v)	{	throw "Unhandled type " + UniformMeta.type + " on " + UniformName;	};
 					break;
 			}
 			
