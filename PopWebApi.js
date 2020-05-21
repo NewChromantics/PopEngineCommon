@@ -226,6 +226,10 @@ Pop.GetTimeNowMs = function()
 
 Pop.LoadFileAsImageAsync = async function(Filename)
 {
+	//	is already cached (we would want to use the browsers cache, but we also use this for special cases like drag & dropped files)
+	if (Pop._AssetCache.hasOwnProperty(Filename))
+		return Pop._AssetCache[Filename];
+
 	function LoadHtmlImageAsync()
 	{
 		let Promise = Pop.CreatePromise();
@@ -254,6 +258,10 @@ Pop.LoadFileAsImageAsync = async function(Filename)
 
 Pop.LoadFileAsStringAsync = async function(Filename)
 {
+	//	is already cached (we would want to use the browsers cache, but we also use this for special cases like drag & dropped files)
+	if (Pop._AssetCache.hasOwnProperty(Filename))
+		return Pop._AssetCache[Filename];
+
 	const Fetched = await fetch(Filename);
 	//Pop.Debug("Fetch created:", Filename, Fetched);
 	const Contents = await Fetched.text();
@@ -266,6 +274,10 @@ Pop.LoadFileAsStringAsync = async function(Filename)
 
 Pop.LoadFileAsArrayBufferAsync = async function(Filename)
 {
+	//	is already cached (we would want to use the browsers cache, but we also use this for special cases like drag & dropped files)
+	if (Pop._AssetCache.hasOwnProperty(Filename))
+		return Pop._AssetCache[Filename];
+
 	const Fetched = await fetch(Filename);
 	//Pop.Debug("Fetch created:", Filename, Fetched);
 	const Contents = await Fetched.arrayBuffer();
