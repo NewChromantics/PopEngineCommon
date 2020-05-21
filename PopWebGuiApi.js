@@ -3,6 +3,9 @@ Pop.Gui = {};
 
 function SetGuiControlStyle(Element,Rect)
 {
+	if ( !Rect )
+		return;
+	
 	let Left = Rect[0];
 	let Right = Rect[0] + Rect[2];
 	let Top = Rect[1];
