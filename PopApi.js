@@ -151,10 +151,12 @@ Pop.PromiseQueue = class
 		return NewPromise;
 	}
 	
-	Push(Value)
+	Push()
 	{
 		const Args = Array.from(arguments);
-		this.PendingValues.push( Args );
+		const Value = {};
+		Value.ResolveValues = Args;
+		this.PendingValues.push( Value );
 		this.FlushPending();
 	}
 	
@@ -171,7 +173,10 @@ Pop.PromiseQueue = class
 		const Value0 = this.PendingValues.shift();
 		const HandlePromise = function(Promise)
 		{
-			Promise.Resolve( ...Value0 );
+			if ( Value0.RejectionValues )
+				Promise.Reject( ...Value0.RejectionValues );
+			else
+				Promise.Resolve( ...Value0.ResolveValues );
 		}
 		
 		//	pop array incase handling results in more promises, so we avoid infinite loop
@@ -188,12 +193,11 @@ Pop.PromiseQueue = class
 	//	reject all the current promises
 	Reject()
 	{
-		const Args = arguments;
-		const HandlePromise = function(Promise)
-		{
-			Promise.Reject( ...Args );
-		}
-		this.Flush( HandlePromise );
+		const Args = Array.from(arguments);
+		const Value = {};
+		Value.RejectionValues = Args;
+		this.PendingValues.push(Value);
+		this.FlushPending();
 	}
 }
 
