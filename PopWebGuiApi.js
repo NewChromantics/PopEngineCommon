@@ -777,11 +777,94 @@ Pop.Gui.TextBox = function(Parent,Rect)
 }
 
 
+//	finally doing proper inheritance for gui
+Pop.Gui.BaseControl = class
+{
+	constructor()
+	{
+		this.OnDragDropQueue = new Pop.PromiseQueue();
+	}
 
-Pop.Gui.ImageMap = class
+	BindEvents()
+	{
+		const Element = this.GetElement();
+		Element.addEventListener('drop',this.OnDragDrop.bind(this));
+		Element.addEventListener('dragover',this.OnTryDragDropEvent.bind(this));
+	}
+
+	GetDragDropFilename(File)
+	{
+		//	gr: we may need to make random/unique names here
+		return File.name;
+	}
+
+	OnTryDragDropEvent(Event)
+	{
+		//	if this.OnTryDragDrop has been overloaded, call it
+		//	if it hasn't, we allow drag and drop
+		//	gr: maybe API really should change, so it only gets turned on if WaitForDragDrop has been called
+		let AllowDragDrop = false;
+		const Filenames = Array.from(Event.dataTransfer.files).map(this.GetDragDropFilename);
+
+		if (!this.OnTryDragDrop)
+			AllowDragDrop = true;
+		else
+			AllowDragDrop = this.OnTryDragDrop(Filenames);
+
+		if (AllowDragDrop)
+			Event.preventDefault();
+	}
+
+	OnDragDrop(Event)
+	{
+		async function LoadFilesAsync(Files)
+		{
+			let NewFilenames = [];
+			async function LoadFile(File)
+			{
+				const Filename = this.GetDragDropFilename(File);
+				const Mime = File.type;
+				Pop.Debug(`Filename ${Filename} mime ${Mime}`);
+				const FileArray = await File.arrayBuffer();
+				Pop._AssetCache[Filename] = new Uint8Array(FileArray);
+				NewFilenames.push(Filename);
+			}
+			//	make a promise for each file
+			const LoadPromises = Files.map(LoadFile.bind(this));
+			//	wait for them to all load
+			await Promise.all(LoadPromises);
+			
+			//	now notify with new filenames
+			this.OnDragDropQueue.Push(NewFilenames);
+		}
+
+		Event.preventDefault();
+
+		Pop.Debug(`OnDragDrop ${Event.dataTransfer}`);
+		if (Event.dataTransfer.files)
+		{
+			const Files = Array.from(Event.dataTransfer.files);
+			LoadFilesAsync.call(this,Files);
+		}
+		else
+		{
+			throw `Handle non-file drag&drop`;
+		}
+
+	}
+
+	async WaitForDragDrop()
+	{
+		return this.OnDragDropQueue.WaitForNext();
+	}
+}
+
+Pop.Gui.ImageMap = class extends Pop.Gui.BaseControl
 {
 	constructor(Parent,Rect)
 	{
+		super(...arguments);
+
 		//	this needs to be generic...
 		//	also, the opengl window already handles a lot of this
 		if ( typeof Rect == 'string' )
@@ -803,6 +886,13 @@ Pop.Gui.ImageMap = class
 			
 			Parent.AddChildControl( this, this.Element );
 		}
+
+		this.BindEvents();
+	}
+
+	GetElement()
+	{
+		return this.Element;
 	}
 
 	SetImage(Image)
