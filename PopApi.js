@@ -121,6 +121,10 @@ Pop.PromiseQueue = class
 	async WaitForNext()
 	{
 		const Promise = this.Allocate();
+		
+		//	if we have any pending data, flush now, this will return an already-resolved value
+		this.FlushPending();
+		
 		return Promise;
 	}
 	
@@ -147,31 +151,33 @@ Pop.PromiseQueue = class
 		return NewPromise;
 	}
 	
-	Flush(HandlePromise)
-	{
-		//	pop array incase handling results in more promises, so we avoid infinite loop
-		const Promises = this.Promises.splice(0);
-		//	need to try/catch here otherwise some will be lost
-		Promises.forEach( HandlePromise );
-	}
-	
 	Push(Value)
 	{
 		const Args = Array.from(arguments);
 		this.PendingValues.push( Args );
-		
-		//	now flush, in case there's something waiting for this value
+		this.FlushPending();
+	}
+	
+	FlushPending()
+	{
+		//	if there are promises and data's waiting, we can flush next
 		if ( this.Promises.length == 0 )
 			return;
+		if ( this.PendingValues.length == 0 )
+			return;
 		
-		//	and flush 0 (FIFO)
+		//	flush 0 (FIFO)
 		//	we pre-pop as we want all listeners to get the same value
 		const Value0 = this.PendingValues.shift();
 		const HandlePromise = function(Promise)
 		{
 			Promise.Resolve( ...Value0 );
 		}
-		this.Flush( HandlePromise );
+		
+		//	pop array incase handling results in more promises, so we avoid infinite loop
+		const Promises = this.Promises.splice(0);
+		//	need to try/catch here otherwise some will be lost
+		Promises.forEach( HandlePromise );
 	}
 	
 	Resolve()
