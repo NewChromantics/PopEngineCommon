@@ -143,7 +143,7 @@ Pop.Midi.Parse = function (FileContents)
 	Midi.Tracks = null;
 	Midi.Format = null;
 	Midi.DurationMs = 0;
-	Midi.TempoMicroSecs = BpmToTempo(120);	//	120bpm = default tempo
+	Midi.TempoMicroSecs = BpmToTempo(110);	//	120bpm = default tempo
 	
 	function Parse_MTrk(Data)
 	{
