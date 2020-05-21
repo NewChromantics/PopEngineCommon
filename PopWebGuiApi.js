@@ -775,3 +775,53 @@ Pop.Gui.TextBox = function(Parent,Rect)
 	this.Element = this.CreateElement(Parent);
 	this.RefreshLabel();
 }
+
+
+
+Pop.Gui.ImageMap = class
+{
+	constructor(Parent,Rect)
+	{
+		//	this needs to be generic...
+		//	also, the opengl window already handles a lot of this
+		if ( typeof Rect == 'string' )
+		{
+			this.Element = document.getElementById(Rect);
+		}
+		else
+		{
+			if ( !Parent )
+				throw `Creating new gui element requires parent`;
+
+			this.Element = document.createElement('canvas');
+
+			//	be smarter here
+			if ( Rect )
+				SetGuiControlStyle(this.Element,Rect);
+			else
+				SetGuiControl_SubElementStyle(this.Element);
+			
+			Parent.AddChildControl( this, this.Element );
+		}
+	}
+
+	SetImage(Image)
+	{
+		//	need to implement this in the proper image api
+		if ( Image.GetFormat() != 'RGBA' )
+			throw `todo: ImageMap requires RGBA pixels at the moment`;
+	
+		//	todo: init size
+		//	todo: platforms stretch input image
+		this.Element.width = Image.GetWidth();
+		this.Element.height = Image.GetHeight();
+		
+		//	we're kinda assuming the pixel buffer is an uint8array (but it needs to be clamped in chrome!)
+		const Pixels = new Uint8ClampedArray(Image.GetPixelBuffer());
+
+		const Context = this.Element.getContext('2d');
+		const Img = new ImageData( Pixels, Image.GetWidth(), Image.GetHeight() );
+		Context.putImageData(Img, 0, 0);
+	}
+}
+
