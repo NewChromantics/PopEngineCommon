@@ -56,16 +56,21 @@ Pop.Audio.Sound = class
 		
 		while(this.Sound)
 		{
-			const Action = await this.ActionQueue.Wait();
+			const Action = await this.ActionQueue.WaitForNext();
 			await Action.call(this);
 		}
 	}
 	
 	Play()
 	{
+		const QueueTime = Pop.GetTimeNowMs();
+		//Pop.Debug(`Queue play(${Name}) at ${Pop.GetTimeNow}
 		async function DoPlay()
 		{
 			await this.Sound.play();
+			const Delay = Pop.GetTimeNowMs() - QueueTime;
+			if ( Delay > 5 )
+				Pop.Debug(`Play delay ${this.Name} ${Delay}ms`);
 		}
 		this.ActionQueue.Push(DoPlay);
 	}
