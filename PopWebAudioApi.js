@@ -17,8 +17,10 @@ async function WaitForClick()
 
 Pop.Audio.Sound = class
 {
-	constructor(WaveData)
+	constructor(WaveData,Name)
 	{
+		this.Name = Name;
+		
 		//	convert wav to base64
 		const WaveData64 = btoa(
 						  WaveData.reduce((data, byte) => data + String.fromCharCode(byte), '')
