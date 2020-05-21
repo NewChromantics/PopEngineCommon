@@ -175,6 +175,19 @@ Pop.LoadFileAsStringAsync = async function(Filename)
 }
 
 
+Pop.LoadFileAsArrayBufferAsync = async function(Filename)
+{
+	const Fetched = await fetch(Filename);
+	//Pop.Debug("Fetch created:", Filename, Fetched);
+	const Contents = await Fetched.arrayBuffer();
+	//Pop.Debug("Fetch finished:", Filename, Fetched);
+	if ( !Fetched.ok )
+		throw "Failed to fetch " + Filename + "; " + Fetched.statusText;
+	const Contents8 = new Uint8Array(Contents);
+	return Contents8;
+}
+
+
 Pop.AsyncCacheAssetAsString = async function(Filename)
 {
 	if ( Pop._AssetCache.hasOwnProperty(Filename) )
@@ -207,6 +220,27 @@ Pop.AsyncCacheAssetAsImage = async function(Filename)
 	try
 	{
 		const Contents = await Pop.LoadFileAsImageAsync( Filename );
+		Pop._AssetCache[Filename] = Contents;
+	}
+	catch(e)
+	{
+		Pop.Debug("Error loading file",Filename,e);
+		Pop._AssetCache[Filename] = false;
+		throw "Error loading file " + Filename + ": " + e;
+	}
+}
+
+Pop.AsyncCacheAssetAsArrayBuffer = async function(Filename)
+{
+	if ( Pop._AssetCache.hasOwnProperty(Filename) )
+	{
+		Pop.Debug("Asset " + Filename + " already cached");
+		return;
+	}
+	
+	try
+	{
+		const Contents = await Pop.LoadFileAsArrayBufferAsync( Filename );
 		Pop._AssetCache[Filename] = Contents;
 	}
 	catch(e)
@@ -251,6 +285,21 @@ Pop.LoadFileAsImage = function(Filename)
 	
 	return Pop.GetCachedAsset(Filename);
 }
+
+
+Pop.LoadFileAsArrayBuffer = function(Filename)
+{
+	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
+	{
+		throw "Cannot synchronously load " + Filename + ", needs to be precached first with [async] Pop.AsyncCacheAsset()";
+	}
+	
+	//	gr: our asset loader currently replaces the contents of this
+	//		with binary, so do the conversion here (as native engine does)
+	const Contents = Pop.GetCachedAsset(Filename);
+	return Contents;
+}
+
 
 Pop.WriteStringToFile = function(Filename,Contents)
 {
