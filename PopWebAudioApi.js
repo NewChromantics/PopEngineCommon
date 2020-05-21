@@ -34,31 +34,35 @@ Pop.Audio.Sound = class
 		this.ActionQueue = new Pop.PromiseQueue();
 		this.Update().then(Pop.Debug).catch(Pop.Debug);
 	}
-	
-	Seek(TimeMs)
-	{
-		function DoSeek()
-		{
-			this.Sound.currentTime = TimeMs / 1000;
-		}
-		this.ActionQueue.Push( DoSeek );
-	}
-	
+
 	async Update()
 	{
 		//	load
 		//	wait until we can play in browser
 		await WaitForClick();
 		await this.Sound.play();
-		
+
 		//	immediately pause
 		this.Sound.pause();
-		
-		while(this.Sound)
+
+		while (this.Sound)
 		{
 			const Action = await this.ActionQueue.WaitForNext();
 			await Action.call(this);
 		}
+	}
+
+	Seek(TimeMs)
+	{
+		const QueueTime = Pop.GetTimeNowMs();
+		function DoSeek()
+		{
+			this.Sound.currentTime = TimeMs / 1000;
+			const Delay = Pop.GetTimeNowMs() - QueueTime;
+			//if (Delay > 5)
+				Pop.Debug(`Seek delay ${this.Name} ${Delay.toFixed(2)}ms now: ${this.Sound.currentTime}`);
+		}
+		this.ActionQueue.Push( DoSeek );
 	}
 	
 	Play()
@@ -69,9 +73,18 @@ Pop.Audio.Sound = class
 		{
 			await this.Sound.play();
 			const Delay = Pop.GetTimeNowMs() - QueueTime;
-			if ( Delay > 5 )
-				Pop.Debug(`Play delay ${this.Name} ${Delay}ms`);
+			//if ( Delay > 5 )
+				Pop.Debug(`Play delay ${this.Name} ${Delay.toFixed(2)}ms`);
 		}
 		this.ActionQueue.Push(DoPlay);
+	}
+
+	Stop()
+	{
+		async function DoStop()
+		{
+			this.Sound.pause();
+		}
+		this.ActionQueue.Push(DoStop);
 	}
 }
