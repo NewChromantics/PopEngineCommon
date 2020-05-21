@@ -2,13 +2,102 @@
 const Pop = {};
 
 
+
+//	gr; this is a duplicate in PopApi.js
+//		fix this cyclic dependency!
+class WebApi_PromiseQueue
+{
+	constructor()
+	{
+		//	pending promises
+		this.Promises = [];
+		//	values we've yet to resolve (each is array capturing arguments from push()
+		this.PendingValues = [];
+	}
+	
+	async WaitForNext()
+	{
+		const Promise = this.Allocate();
+		return Promise;
+	}
+	
+	//	allocate a promise, maybe deprecate this for the API WaitForNext() that makes more sense for a caller
+	Allocate()
+	{
+		//	create a promise function with the Resolve & Reject functions attached so we can call them
+		function CreatePromise()
+		{
+			let Callbacks = {};
+			let PromiseHandler = function (Resolve,Reject)
+			{
+				Callbacks.Resolve = Resolve;
+				Callbacks.Reject = Reject;
+			}
+			let Prom = new Promise(PromiseHandler);
+			Prom.Resolve = Callbacks.Resolve;
+			Prom.Reject = Callbacks.Reject;
+			return Prom;
+		}
+		
+		const NewPromise = CreatePromise();
+		this.Promises.push( NewPromise );
+		return NewPromise;
+	}
+	
+	Flush(HandlePromise)
+	{
+		//	pop array incase handling results in more promises, so we avoid infinite loop
+		const Promises = this.Promises.splice(0);
+		//	need to try/catch here otherwise some will be lost
+		Promises.forEach( HandlePromise );
+	}
+	
+	Push(Value)
+	{
+		const Args = Array.from(arguments);
+		this.PendingValues.push( Args );
+		
+		//	now flush, in case there's something waiting for this value
+		if ( this.Promises.length == 0 )
+			return;
+		
+		//	and flush 0 (FIFO)
+		//	we pre-pop as we want all listeners to get the same value
+		const Value0 = this.PendingValues.shift();
+		const HandlePromise = function(Promise)
+		{
+			Promise.Resolve( ...Value0 );
+		}
+		this.Flush( HandlePromise );
+	}
+	
+	Resolve()
+	{
+		throw "PromiseQueue.Resolve() has been deprecated for Push() to enforce the pattern that we're handling a queue of values";
+	}
+	
+	//	reject all the current promises
+	Reject()
+	{
+		const Args = arguments;
+		const HandlePromise = function(Promise)
+		{
+			Promise.Reject( ...Args );
+		}
+		this.Flush( HandlePromise );
+	}
+}
+
+
+
 //	specific web stuff, assume this doesn't exist on desktop
 Pop.WebApi = {};
 
 //	we cannot poll the focus/blur state of our page, so we
 //	assume it's foreground (may not be the case if opened via middle button?)
 Pop.WebApi.ForegroundState = true;
-Pop.WebApi.ForegroundChangePromises = new PromiseQueue();
+//	gr: currently require a PromiseQueue() class as we have a cyclic dependency. Fix this!
+Pop.WebApi.ForegroundChangePromises = new WebApi_PromiseQueue();
 
 Pop.WebApi.IsMinimised = function ()
 {
@@ -56,12 +145,12 @@ Pop.WebApi.SetIsForeground = function (IsForeground)
 		Pop.WebApi.ForegroundState = IsForeground;
 
 	const Foreground = Pop.WebApi.IsForeground() && !Pop.WebApi.IsMinimised();
-	Pop.WebApi.ForegroundChangePromises.Resolve(Foreground);
+	Pop.WebApi.ForegroundChangePromises.Push(Foreground);
 }
 
-Pop.WebApi.WaitForForegroundChange = function ()
+Pop.WebApi.WaitForForegroundChange = async function ()
 {
-	return Pop.WebApi.ForegroundChangePromises.Allocate();
+	return Pop.WebApi.ForegroundChangePromises.WaitForNext();
 }
 
 
