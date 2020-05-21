@@ -14,7 +14,7 @@ function GetNoteName(MidiNoteValue)
 	const Note = MidiNoteValue % 12;
 	const Octave = Math.floor(MidiNoteValue/12);
 	//	this produces a filename + url friendly note name C~_1 D_1 F~3 B5
-	const NoteNames = ['C','C~','D','D~','E','F','F~','G','G~','A','A~','B'];
+	const NoteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 	//const OctaveNames = ['_1',0,1,2,3,4,5,6,7,8,9];
 	const OctaveNames = ['_2','_1',0,1,2,3,4,5,6,7,8];
 	if ( Note < 0 || Note >= NoteNames.length || Octave < 0 || Octave >= OctaveNames.length )
