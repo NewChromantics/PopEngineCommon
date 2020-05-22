@@ -314,60 +314,20 @@ Pop.SetFileCacheError = function(Filename,Error)
 
 Pop.AsyncCacheAssetAsString = async function(Filename)
 {
-	if ( Pop._AssetCache.hasOwnProperty(Filename) )
-	{
-		Pop.Debug("Asset " + Filename + " already cached");
-		return;
-	}
-	
-	try
-	{
-		const Contents = await Pop.LoadFileAsStringAsync( Filename );
-		Pop.SetFileCache(Filename,Contents);
-	}
-	catch(e)
-	{
-		Pop.SetFileCacheError(Filename,e);
-	}
+	Pop.Debug(`Deprecated: AsyncCacheAssetAsString(), now just use LoadFileAsStringAsync(). Caveat is that this function used to mark file as error'd, but now will throw`);
+	return Pop.LoadFileAsStringAsync(Filename);
 }
 
 Pop.AsyncCacheAssetAsImage = async function(Filename)
 {
-	if ( Pop._AssetCache.hasOwnProperty(Filename) )
-	{
-		Pop.Debug("Asset " + Filename + " already cached");
-		return;
-	}
-	
-	try
-	{
-		const Contents = await Pop.LoadFileAsImageAsync( Filename );
-		Pop.SetFileCache(Filename,Contents);
-	}
-	catch(e)
-	{
-		Pop.SetFileCacheError(Filename,e);
-	}
-
+	Pop.Debug(`Deprecated: AsyncCacheAssetAsImage(), now just use LoadFileAsImageAsync(). Caveat is that this function used to mark file as error'd, but now will throw`);
+	return Pop.LoadFileAsImageAsync(Filename);
 }
 
 Pop.AsyncCacheAssetAsArrayBuffer = async function(Filename)
 {
-	if ( Pop._AssetCache.hasOwnProperty(Filename) )
-	{
-		Pop.Debug("Asset " + Filename + " already cached");
-		return;
-	}
-	
-	try
-	{
-		const Contents = await Pop.LoadFileAsArrayBufferAsync( Filename );
-		Pop.SetFileCache(Filename,Contents);
-	}
-	catch(e)
-	{
-		Pop.SetFileCacheError(Filename,e);
-	}
+	Pop.Debug(`Deprecated: AsyncCacheAssetAsArrayBuffer(), now just use LoadFileAsArrayBufferAsync(). Caveat is that this function used to mark file as error'd, but now will throw`);
+	return Pop.LoadFileAsArrayBufferAsync(Filename);
 }
 
 Pop.LoadFileAsString = function(Filename)
