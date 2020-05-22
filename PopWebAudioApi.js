@@ -59,7 +59,7 @@ Pop.Audio.Sound = class
 		{
 			this.Sound.currentTime = TimeMs / 1000;
 			const Delay = Pop.GetTimeNowMs() - QueueTime;
-			//if (Delay > 5)
+			if (Delay > 5)
 				Pop.Debug(`Seek delay ${this.Name} ${Delay.toFixed(2)}ms now: ${this.Sound.currentTime}`);
 		}
 		this.ActionQueue.Push( DoSeek );
@@ -73,7 +73,7 @@ Pop.Audio.Sound = class
 		{
 			await this.Sound.play();
 			const Delay = Pop.GetTimeNowMs() - QueueTime;
-			//if ( Delay > 5 )
+			if ( Delay > 5 )
 				Pop.Debug(`Play delay ${this.Name} ${Delay.toFixed(2)}ms`);
 		}
 		this.ActionQueue.Push(DoPlay);
