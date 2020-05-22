@@ -254,6 +254,7 @@ Pop.LoadFileAsImageAsync = async function(Filename)
 	//	constructor as it uses the asset cache, which is only set after this
 	const HtmlImage = await LoadHtmlImageAsync();
 	const Img = new Pop.Image(HtmlImage);
+	Pop.SetFileCache(Filename,Img);
 	return Img;
 }
 
@@ -270,6 +271,7 @@ Pop.LoadFileAsStringAsync = async function(Filename)
 	//Pop.Debug("Fetch finished:", Filename, Fetched);
 	if ( !Fetched.ok )
 		throw "Failed to fetch " + Filename + "; " + Fetched.statusText;
+	Pop.SetFileCache(Filename,Contents);
 	return Contents;
 }
 
