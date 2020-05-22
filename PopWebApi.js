@@ -226,10 +226,11 @@ Pop.GetTimeNowMs = function()
 
 Pop.LoadFileAsImageAsync = async function(Filename)
 {
-	//	is already cached (we would want to use the browsers cache, but we also use this for special cases like drag & dropped files)
-	if (Pop._AssetCache.hasOwnProperty(Filename))
-		return Pop._AssetCache[Filename];
-
+	//	return cache if availible, if it failed before, try and load again
+	const Cache = Pop.GetCachedAssetOrFalse(Filename);
+	if ( Cache !== false )
+		return Cache;
+	
 	function LoadHtmlImageAsync()
 	{
 		let Promise = Pop.CreatePromise();
@@ -258,10 +259,11 @@ Pop.LoadFileAsImageAsync = async function(Filename)
 
 Pop.LoadFileAsStringAsync = async function(Filename)
 {
-	//	is already cached (we would want to use the browsers cache, but we also use this for special cases like drag & dropped files)
-	if (Pop._AssetCache.hasOwnProperty(Filename))
-		return Pop._AssetCache[Filename];
-
+	//	return cache if availible, if it failed before, try and load again
+	const Cache = Pop.GetCachedAssetOrFalse(Filename);
+	if ( Cache !== false )
+		return Cache;
+	
 	const Fetched = await fetch(Filename);
 	//Pop.Debug("Fetch created:", Filename, Fetched);
 	const Contents = await Fetched.text();
@@ -274,18 +276,37 @@ Pop.LoadFileAsStringAsync = async function(Filename)
 
 Pop.LoadFileAsArrayBufferAsync = async function(Filename)
 {
-	//	is already cached (we would want to use the browsers cache, but we also use this for special cases like drag & dropped files)
-	if (Pop._AssetCache.hasOwnProperty(Filename))
-		return Pop._AssetCache[Filename];
+	//	return cache if availible, if it failed before, try and load again
+	const Cache = Pop.GetCachedAssetOrFalse(Filename);
+	if ( Cache !== false )
+		return Cache;
 
 	const Fetched = await fetch(Filename);
 	//Pop.Debug("Fetch created:", Filename, Fetched);
 	const Contents = await Fetched.arrayBuffer();
 	//Pop.Debug("Fetch finished:", Filename, Fetched);
+	
+	//	todo: SetFileCacheError ?
 	if ( !Fetched.ok )
 		throw "Failed to fetch " + Filename + "; " + Fetched.statusText;
 	const Contents8 = new Uint8Array(Contents);
+	Pop.SetFileCache(Filename,Contents8);
 	return Contents8;
+}
+
+Pop.SetFileCache = function(Filename,Contents)
+{
+	if ( Pop._AssetCache.hasOwnProperty(Filename) )
+	{
+		Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
+	}
+	Pop._AssetCache[Filename] = Contents;
+}
+
+Pop.SetFileCacheError = function(Filename,Error)
+{
+	Pop.Debug("Error loading file",Filename,e);
+	Pop.SetFileCache(Filename,false);
 }
 
 
@@ -300,13 +321,11 @@ Pop.AsyncCacheAssetAsString = async function(Filename)
 	try
 	{
 		const Contents = await Pop.LoadFileAsStringAsync( Filename );
-		Pop._AssetCache[Filename] = Contents;
+		Pop.SetFileCache(Filename,Contents);
 	}
 	catch(e)
 	{
-		Pop.Debug("Error loading file",Filename,e);
-		Pop._AssetCache[Filename] = false;
-		throw "Error loading file " + Filename + ": " + e;
+		Pop.SetFileCacheError(Filename,e);
 	}
 }
 
@@ -321,14 +340,13 @@ Pop.AsyncCacheAssetAsImage = async function(Filename)
 	try
 	{
 		const Contents = await Pop.LoadFileAsImageAsync( Filename );
-		Pop._AssetCache[Filename] = Contents;
+		Pop.SetFileCache(Filename,Contents);
 	}
 	catch(e)
 	{
-		Pop.Debug("Error loading file",Filename,e);
-		Pop._AssetCache[Filename] = false;
-		throw "Error loading file " + Filename + ": " + e;
+		Pop.SetFileCacheError(Filename,e);
 	}
+
 }
 
 Pop.AsyncCacheAssetAsArrayBuffer = async function(Filename)
@@ -342,13 +360,11 @@ Pop.AsyncCacheAssetAsArrayBuffer = async function(Filename)
 	try
 	{
 		const Contents = await Pop.LoadFileAsArrayBufferAsync( Filename );
-		Pop._AssetCache[Filename] = Contents;
+		Pop.SetFileCache(Filename,Contents);
 	}
 	catch(e)
 	{
-		Pop.Debug("Error loading file",Filename,e);
-		Pop._AssetCache[Filename] = false;
-		throw "Error loading file " + Filename + ": " + e;
+		Pop.SetFileCacheError(Filename,e);
 	}
 }
 
@@ -433,6 +449,15 @@ Pop.GetCachedAsset = function(Filename)
 		throw Filename + " failed to load";
 		
 	return Pop._AssetCache[Filename];
+}
+
+Pop.GetCachedAssetOrFalse = function(Filename)
+{
+	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
+		return false;
+
+	const Asset = Pop._AssetCache[Filename];
+	return Asset;
 }
 
 Pop.CompileAndRun = function(Source,Filename)
