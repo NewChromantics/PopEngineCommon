@@ -783,6 +783,7 @@ Pop.Gui.BaseControl = class
 	constructor()
 	{
 		this.OnDragDropQueue = new Pop.PromiseQueue();
+		this.PendingDragDropFilenames = [];	//	allow the user to remap any filenames in OnTryDragDrop (if contains filename, rename to it)
 	}
 
 	BindEvents()
@@ -792,8 +793,18 @@ Pop.Gui.BaseControl = class
 		Element.addEventListener('dragover',this.OnTryDragDropEvent.bind(this));
 	}
 
-	GetDragDropFilename(File)
+	GetDragDropFilename(File,FileIndex)
 	{
+		if (FileIndex !== undefined)
+		{
+			if (FileIndex < this.PendingDragDropFilenames.length)
+			{
+				const NewFilename = this.PendingDragDropFilenames[FileIndex];
+				if (NewFilename != null)
+					return NewFilename;
+			}
+		}
+
 		//	gr: we may need to make random/unique names here
 		return File.name;
 	}
@@ -804,12 +815,21 @@ Pop.Gui.BaseControl = class
 		//	if it hasn't, we allow drag and drop
 		//	gr: maybe API really should change, so it only gets turned on if WaitForDragDrop has been called
 		let AllowDragDrop = false;
-		const Filenames = Array.from(Event.dataTransfer.files).map(this.GetDragDropFilename);
 
+		//	gr: HTML doesnt allow us to see filenames, just type & count
+		//const Filenames = Array.from(Event.dataTransfer.files).map(this.GetDragDropFilename);
+		const Filenames = new Array(Event.dataTransfer.items.length);
+		Filenames.fill(null);
+		
 		if (!this.OnTryDragDrop)
+		{
 			AllowDragDrop = true;
+		}
 		else
+		{
 			AllowDragDrop = this.OnTryDragDrop(Filenames);
+			this.PendingDragDropFilenames = Filenames;
+		}
 
 		if (AllowDragDrop)
 			Event.preventDefault();
@@ -820,9 +840,9 @@ Pop.Gui.BaseControl = class
 		async function LoadFilesAsync(Files)
 		{
 			let NewFilenames = [];
-			async function LoadFile(File)
+			async function LoadFile(File,FileIndex)
 			{
-				const Filename = this.GetDragDropFilename(File);
+				const Filename = this.GetDragDropFilename(File,FileIndex);
 				const Mime = File.type;
 				Pop.Debug(`Filename ${Filename} mime ${Mime}`);
 				const FileArray = await File.arrayBuffer();
