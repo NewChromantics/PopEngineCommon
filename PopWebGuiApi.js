@@ -783,7 +783,12 @@ Pop.Gui.BaseControl = class
 	constructor()
 	{
 		this.OnDragDropQueue = new Pop.PromiseQueue();
-		this.PendingDragDropFilenames = [];	//	allow the user to remap any filenames in OnTryDragDrop (if contains filename, rename to it)
+		
+		//	WaitForDragDrop() can provide a function to rename files
+		//	this may have issues with multi-callers or race conditions
+		//	essentially if this wants to be different for different calls,
+		//	so we'd need to link this rename func to each promise waiting in the queue
+		this.OnDragDropRenameFiles = null;
 	}
 
 	BindEvents()
@@ -793,20 +798,16 @@ Pop.Gui.BaseControl = class
 		Element.addEventListener('dragover',this.OnTryDragDropEvent.bind(this));
 	}
 
-	GetDragDropFilename(File,FileIndex)
+	GetDragDropFilenames(Files)
 	{
-		if (FileIndex !== undefined)
-		{
-			if (FileIndex < this.PendingDragDropFilenames.length)
-			{
-				const NewFilename = this.PendingDragDropFilenames[FileIndex];
-				if (NewFilename != null)
-					return NewFilename;
-			}
-		}
-
 		//	gr: we may need to make random/unique names here
-		return File.name;
+		const Filenames = Files.map( f => f.name );
+		
+		//	let user modify filename array
+		if ( this.OnDragDropRenameFiles )
+			this.OnDragDropRenameFiles( Filenames );
+		
+		return Filenames;
 	}
 
 	OnTryDragDropEvent(Event)
@@ -828,7 +829,6 @@ Pop.Gui.BaseControl = class
 		else
 		{
 			AllowDragDrop = this.OnTryDragDrop(Filenames);
-			this.PendingDragDropFilenames = Filenames;
 		}
 
 		if (AllowDragDrop)
@@ -839,12 +839,12 @@ Pop.Gui.BaseControl = class
 	{
 		async function LoadFilesAsync(Files)
 		{
-			let NewFilenames = [];
+			const NewFilenames = this.GetDragDropFilenames(Files);
 			async function LoadFile(File,FileIndex)
 			{
-				const Filename = this.GetDragDropFilename(File,FileIndex);
+				const Filename = NewFilenames[FileIndex];
 				const Mime = File.type;
-				Pop.Debug(`Filename ${Filename} mime ${Mime}`);
+				Pop.Debug(`Filename ${File.name}->${Filename} mime ${Mime}`);
 				const FileArray = await File.arrayBuffer();
 				Pop._AssetCache[Filename] = new Uint8Array(FileArray);
 				NewFilenames.push(Filename);
@@ -873,8 +873,9 @@ Pop.Gui.BaseControl = class
 
 	}
 
-	async WaitForDragDrop()
+	async WaitForDragDrop(RenameFilenames)
 	{
+		this.OnDragDropRenameFiles = RenameFilenames;
 		return this.OnDragDropQueue.WaitForNext();
 	}
 }
