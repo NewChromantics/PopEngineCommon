@@ -40,7 +40,9 @@ Pop.Audio.Sound = class
 		//	load
 		//	wait until we can play in browser
 		await WaitForClick();
-		await this.Sound.play();
+		//	gr: having this after click means they all play straight away
+		//		see if we can do something to make sure it's ready to play, but not play()
+		//await this.Sound.play();
 
 		//	immediately pause
 		this.Sound.pause();
@@ -57,6 +59,7 @@ Pop.Audio.Sound = class
 		const QueueTime = Pop.GetTimeNowMs();
 		function DoSeek()
 		{
+			//this.Sound.pause();	//	not sure if neccessary
 			this.Sound.currentTime = TimeMs / 1000;
 			const Delay = Pop.GetTimeNowMs() - QueueTime;
 			if (Delay > 5)
