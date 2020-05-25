@@ -123,7 +123,7 @@ Pop.Audio.Sound = class
 		//	and kill themselves off.
 		//	we only need a reference to the last one in case we need to kill it
 		//	or modify the node tree (params on effects)
-		this.CurrentSource = null;
+		this.CurrentSampleNode = null;
 		
 		this.ReverbGainNode = null;
 		this.ReverbNode = null;
@@ -141,9 +141,12 @@ Pop.Audio.Sound = class
 			//	https://middleearmedia.com/demos/webaudio/convolver.html
 			//	todo: update existing sources with tree
 			const Convolver = Context.createConvolver();
-			Convolver.loop = false;
+			//const Convolver = Context.createBufferSource();
+			//Convolver.start();
+			Convolver.loop = true;
 			Convolver.normalize = true;
 			Convolver.buffer = AudioBuffer;
+			
 			
 			//	we then control the effect with gain
 			const ConvolverGain = Context.createGain();
@@ -155,6 +158,27 @@ Pop.Audio.Sound = class
 			
 			this.ReverbGainNode = ConvolverGain;
 			this.ReverbNode = Convolver;
+		}
+		this.ActionQueue.Push(Run);
+	}
+	
+	SetSample(WaveData,Loop=false)
+	{
+		async function Run(Context)
+		{
+			//	make a new reverb node
+			//const AudioBuffer = await this.DecodeAudioBuffer(Context,this.ReverbImpulseResponseWave);
+			const AudioBuffer = WaveData;
+			
+			this.SampleBuffer = AudioBuffer;
+			/*
+			CurrentSampleNode
+			const SampleNode = Context.createBufferSource();
+			SampleNode.buffer = AudioBuffer;
+			
+			this.NoiseNode = SampleNode;
+			this.NoiseNode.loop = true;
+			 */
 		}
 		this.ActionQueue.Push(Run);
 	}
@@ -190,7 +214,7 @@ Pop.Audio.Sound = class
 	
 	CullCurrentSource()
 	{
-		if ( !this.CurrentSource )
+		if ( !this.CurrentSampleNode )
 			return;
 		
 		//	check if it's ended
@@ -200,11 +224,11 @@ Pop.Audio.Sound = class
 	CreateSource(Context)
 	{
 		//	create node tree
-		//	todo: keep the tree (reverb, volume etc) in some meta
-		const BufferSource = Context.createBufferSource();
-		BufferSource.buffer = this.SampleBuffer;
+		const SampleNode = Context.createBufferSource();
+		SampleNode.buffer = this.SampleBuffer;
+		
 		//BufferSource.connect( Context.destination );
-		this.CurrentSource = BufferSource;
+		this.CurrentSampleNode = SampleNode;
 		
 		function ConnectNodes(Nodes)
 		{
@@ -219,13 +243,14 @@ Pop.Audio.Sound = class
 			}
 		}
 		
-		const SourceNodes = [BufferSource,Context.destination];
-		//const ReverbNodes = [BufferSource,this.ReverbGainNode,this.ReverbNode,Context.destination];
-		const ReverbNodes = [BufferSource,this.ReverbGainNode,Context.destination];
+		const SourceNodes = [SampleNode,Context.destination];
+		const ReverbNodes = [SampleNode,this.ReverbGainNode,this.ReverbNode,Context.destination];
+		//const ReverbNodes = [BufferSource,this.ReverbGainNode,Context.destination];
+		//const ReverbNodes = [this.ReverbNode,Context.destination];
 		//ConnectNodes(SourceNodes);
 		ConnectNodes(ReverbNodes);
 		
-		//this.CurrentSource.onended = function(){	Pop.Debug("Sample finished");	};
+		//this.CurrentSampleNode.onended = function(){	Pop.Debug("Sample finished");	};
 	}
 	
 	Play(TimeMs)
@@ -240,7 +265,7 @@ Pop.Audio.Sound = class
 			//	start!
 			const DelaySecs = 0;
 			const OffsetSecs = TimeMs / 1000;
-			this.CurrentSource.start(DelaySecs,OffsetSecs);
+			this.CurrentSampleNode.start(DelaySecs,OffsetSecs);
 			
 			//	debug
 			const JobDelay = Pop.GetTimeNowMs() - QueueTime;
@@ -254,10 +279,10 @@ Pop.Audio.Sound = class
 	{
 		async function DoStop()
 		{
-			if ( !this.CurrentSource )
+			if ( !this.CurrentSampleNode )
 				return;
 			const DelaySecs = 0;
-			this.CurrentSource.stop(DelaySecs);
+			this.CurrentSampleNode.stop(DelaySecs);
 		}
 		this.ActionQueue.Push(DoStop);
 	}
@@ -267,17 +292,28 @@ Pop.Audio.Sound = class
 //	https://github.com/Tonejs/Tone.js/blob/dd10bfa4b526f4b78ac48877fce31efac745329c/Tone/effect/Reverb.ts#L108
 Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDelaySecs=0.01)
 {
+	function CreateNoiseBuffer(Context)
+	{
+		const Channels = 2;
+		const Duration = 2;
+		const BufferSize = Duration * Channels * Context.sampleRate;
+		const NoiseBuffer = Context.createBuffer( Channels, BufferSize, Context.sampleRate );
+		for ( let c=0;	c<NoiseBuffer.numberOfChannels;	c++ )
+		{
+			const Data = NoiseBuffer.getChannelData(c);
+			for ( let i = 0; i < Data.length; i++)
+			{
+				Data[i] = Math.random() * 2 - 1;
+			}
+		}
+		return NoiseBuffer;
+	}
+	
 	function CreateNoiseNode(Context)
 	{
-		var bufferSize = 2 * Context.sampleRate,
-		noiseBuffer = Context.createBuffer(1, bufferSize, Context.sampleRate),
-		output = noiseBuffer.getChannelData(0);
-		for (var i = 0; i < bufferSize; i++) {
-			output[i] = Math.random() * 2 - 1;
-		}
-		
+		const NoiseBuffer = CreateNoiseBuffer(Context);
 		var whiteNoise = Context.createBufferSource();
-		whiteNoise.buffer = noiseBuffer;
+		whiteNoise.buffer = NoiseBuffer;
 		whiteNoise.loop = true;
 		whiteNoise.start(0);
 		
@@ -297,6 +333,9 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 	
 	const Context = await Pop.Audio.WaitForContext();
 
+	//	test noise buffer creation
+	//return CreateNoiseBuffer(Context);
+	
 	// create a noise burst which decays over the duration in each channel
 	const Channels = 2;
 	const SampleRate = Context.sampleRate;
@@ -312,6 +351,8 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 	noiseL.connect(gainNode);
 	//noiseL.start(0);
 	//noiseR.start(0);
+	
+	gainNode.connect( OfflineContext.destination );
 	
 	// predelay
 	gainNode.gain.setValueAtTime(0, 0);
