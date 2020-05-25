@@ -162,6 +162,7 @@ Pop.Audio.Sound = class
 
 		//	todo: update existing sources with tree
 		const Node = Context.createConvolver();
+		Node.buffer = AudioBuffer;
 		//Node.attack = 0;
 		//Node.decay = 0.1;
 		//Node.release = 10;
