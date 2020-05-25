@@ -109,10 +109,9 @@ Pop.Audio.WaitForContext = async function()
 //	more complex WebAudio sound
 Pop.Audio.Sound = class
 {
-	constructor(WaveData,Name,ReverbImpulseResponseWave)
+	constructor(WaveData,Name)
 	{
 		this.WaveData = WaveData;
-		this.ReverbImpulseResponseWave = ReverbImpulseResponseWave;
 		
 		this.Name = Name;
 		this.ActionQueue = new Pop.PromiseQueue();
@@ -126,16 +125,38 @@ Pop.Audio.Sound = class
 		//	or modify the node tree (params on effects)
 		this.CurrentSource = null;
 		
-		this.Nodes = [];
+		this.ReverbGainNode = null;
+		this.ReverbNode = null;
 	}
 	
 	
-	
-	SetReverb(Params)
+	SetReverb(ReverbImpulseResponseWaveData,Wetness)
 	{
-		this.ReverbNode.attack = Params.Attack;
-		this.ReverbNode.decay = Params.Decay;
-		this.ReverbNode.release = Params.Release;
+		async function Run(Context)
+		{
+			//	make a new reverb node
+			//const AudioBuffer = await this.DecodeAudioBuffer(Context,this.ReverbImpulseResponseWave);
+			const AudioBuffer = ReverbImpulseResponseWaveData;
+			
+			//	https://middleearmedia.com/demos/webaudio/convolver.html
+			//	todo: update existing sources with tree
+			const Convolver = Context.createConvolver();
+			Convolver.loop = false;
+			Convolver.normalize = true;
+			Convolver.buffer = AudioBuffer;
+			
+			//	we then control the effect with gain
+			const ConvolverGain = Context.createGain();
+			ConvolverGain.gain.setValueAtTime(Wetness,0);
+			//	in here;
+			//	https://middleearmedia.com/demos/webaudio/convolver.html
+			//	source -> convgain -> convolver -> master gain
+			//	source -> mastergain-> master compression(dynamics)
+			
+			this.ReverbGainNode = ConvolverGain;
+			this.ReverbNode = Convolver;
+		}
+		this.ActionQueue.Push(Run);
 	}
 	
 	async DecodeAudioBuffer(Context,WaveData)
@@ -152,26 +173,6 @@ Pop.Audio.Sound = class
 		return SampleBuffer;
 	}
 	
-	async LoadReverbNode(Context)
-	{
-		if ( !this.ReverbImpulseResponseWave )
-		{
-			Pop.Debug(`No ReverbImpulseResponseWave supplied. No reverb`);
-			return;
-		}
-		
-		//	gr: cache file in context?
-		const AudioBuffer = await this.DecodeAudioBuffer(Context,this.ReverbImpulseResponseWave);
-
-		//	todo: update existing sources with tree
-		const Node = Context.createConvolver();
-		Node.buffer = AudioBuffer;
-		//Node.attack = 0;
-		//Node.decay = 0.1;
-		//Node.release = 10;
-		this.Nodes.push(Node);
-		this.ReverbNode = Node;
-	}
 	
 	async Update()
 	{
@@ -179,7 +180,6 @@ Pop.Audio.Sound = class
 		const Context = await Pop.Audio.WaitForContext();
 		
 		this.SampleBuffer = await this.DecodeAudioBuffer(Context,this.WaveData);
-		await this.LoadReverbNode(Context);
 		
 		while (this.SampleBuffer)
 		{
@@ -206,15 +206,24 @@ Pop.Audio.Sound = class
 		//BufferSource.connect( Context.destination );
 		this.CurrentSource = BufferSource;
 		
-		const Tree = this.Nodes.slice();
-		Tree.splice(0,0,BufferSource);
-		Tree.push(Context.destination);
-		for ( let i=0;	i<Tree.length-1;	i++ )
+		function ConnectNodes(Nodes)
 		{
-			const Prev = Tree[i];
-			const Next = Tree[i+1];
-			Prev.connect(Next);
+			//	skip if any null nodes
+			if ( Nodes.some( n => n==null ) )
+				return;
+			for ( let i=0;	i<Nodes.length-1;	i++ )
+			{
+				const Prev = Nodes[i];
+				const Next = Nodes[i+1];
+				Prev.connect(Next);
+			}
 		}
+		
+		const SourceNodes = [BufferSource,Context.destination];
+		//const ReverbNodes = [BufferSource,this.ReverbGainNode,this.ReverbNode,Context.destination];
+		const ReverbNodes = [BufferSource,this.ReverbGainNode,Context.destination];
+		//ConnectNodes(SourceNodes);
+		ConnectNodes(ReverbNodes);
 		
 		//this.CurrentSource.onended = function(){	Pop.Debug("Sample finished");	};
 	}
@@ -252,4 +261,89 @@ Pop.Audio.Sound = class
 		}
 		this.ActionQueue.Push(DoStop);
 	}
+}
+
+
+//	https://github.com/Tonejs/Tone.js/blob/dd10bfa4b526f4b78ac48877fce31efac745329c/Tone/effect/Reverb.ts#L108
+Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDelaySecs=0.01)
+{
+	function CreateNoiseNode(Context)
+	{
+		var bufferSize = 2 * Context.sampleRate,
+		noiseBuffer = Context.createBuffer(1, bufferSize, Context.sampleRate),
+		output = noiseBuffer.getChannelData(0);
+		for (var i = 0; i < bufferSize; i++) {
+			output[i] = Math.random() * 2 - 1;
+		}
+		
+		var whiteNoise = Context.createBufferSource();
+		whiteNoise.buffer = noiseBuffer;
+		whiteNoise.loop = true;
+		whiteNoise.start(0);
+		
+		return whiteNoise;
+	}
+	/*
+	function CreateMergeNode(Context)
+	{
+		
+	}
+	*/
+	function CreateGainNode(Context)
+	{
+		const Node = Context.createGain();
+		return Node;
+	}
+	
+	const Context = await Pop.Audio.WaitForContext();
+
+	// create a noise burst which decays over the duration in each channel
+	const Channels = 2;
+	const SampleRate = Context.sampleRate;
+	const DurationSamples = (DecaySecs + PreDelaySecs) * SampleRate;
+	const OfflineContext = new OfflineAudioContext( Channels, DurationSamples, SampleRate );
+	const noiseL = CreateNoiseNode(OfflineContext);
+	//const noiseR = CreateNoiseNode(OfflineContext);
+	//const merge = CreateMergeNode(OfflineContext);
+	//noiseL.connect(merge, 0, 0);
+	//noiseR.connect(merge, 0, 1);
+	const gainNode = CreateGainNode(OfflineContext);
+	//merge.connect(gainNode);
+	noiseL.connect(gainNode);
+	//noiseL.start(0);
+	//noiseR.start(0);
+	
+	// predelay
+	gainNode.gain.setValueAtTime(0, 0);
+	gainNode.gain.setValueAtTime(1, PreDelaySecs);
+	const HundredPercent = PreDelaySecs + DecaySecs;
+	const NinetyPercent = HundredPercent * 0.9;
+	//	this needs to calc the value at 90% (exponential can't go to zero)
+	//gainNode.gain.exponentialRampToValueAtTime(0.01,NinetyPercent);
+	// at 90% start a linear ramp to the final value
+	gainNode.gain.linearRampToValueAtTime(0,HundredPercent);
+	/*
+	// decay
+	function exponentialApproachValueAtTime(Value,Time,RampTime)
+	{
+		//time = this.toSeconds(time);
+		//rampTime = this.toSeconds(rampTime);
+		const timeConstant = Math.log(rampTime + 1) / Math.log(200);
+		this.setTargetAtTime(value, time, timeConstant);
+		// at 90% start a linear ramp to the final value
+		this.cancelAndHoldAtTime(time + rampTime * 0.9);
+		this.linearRampToValueAtTime(value, time + rampTime);
+		return this;
+	}.bind(gainNode.gain);
+	//gainNode.gain.exponentialApproachValueAtTime(0, PreDelaySecs, DecaySecs );
+	exponentialApproachValueAtTime(0, PreDelaySecs, DecaySecs );
+	*/
+	
+	
+	// render the buffer
+	const CompletedEvent = await OfflineContext.startRendering();
+	Pop.Debug(`CompletedEvent ${CompletedEvent}`);
+	const AudioBuffer = CompletedEvent;
+	
+	return AudioBuffer;
 }
