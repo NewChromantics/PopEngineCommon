@@ -144,7 +144,10 @@ Pop.Audio.Sound = class
 		//	https://github.com/chrisguttandin/standardized-audio-context
 		//this.SampleBuffer = await Context.decodeAudioData( this.WaveData.buffer );
 		const DecodeAudioPromise = Pop.CreatePromise();
-		Context.decodeAudioData( WaveData.buffer, DecodeAudioPromise.Resolve, DecodeAudioPromise.Reject );
+		//	decodeAudioData detaches the data from the original source so becomes empty
+		//	as this can affect the original file, we duplicate here
+		const DataCopy = WaveData.slice();
+		Context.decodeAudioData( DataCopy.buffer, DecodeAudioPromise.Resolve, DecodeAudioPromise.Reject );
 		const SampleBuffer = await DecodeAudioPromise;
 		return SampleBuffer;
 	}
