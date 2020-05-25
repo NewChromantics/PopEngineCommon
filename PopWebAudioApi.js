@@ -124,13 +124,48 @@ Pop.Audio.Sound = class
 		//	we only need a reference to the last one in case we need to kill it
 		//	or modify the node tree (params on effects)
 		this.CurrentSampleNode = null;
-		
+
+		this.SampleGainNode = null;
 		this.ReverbGainNode = null;
 		this.ReverbNode = null;
+		this.SampleVolume = 1;	//	gain
+		this.ReverbVolume = 1;	//	wetness/gain
 	}
 	
+	GetReverbGain()
+	{
+		return this.ReverbVolume;
+	}
 	
-	SetReverb(ReverbImpulseResponseWaveData,Wetness)
+	Private_SetReverbWetness()
+	{
+		if ( !this.ReverbGainNode )
+			return;
+		this.ReverbGainNode.gain.setValueAtTime(this.GetReverbGain(),0);
+	}
+
+	Private_SetSampleVolume()
+	{
+		if ( !this.SampleGainNode )
+			return;
+		this.SampleGainNode.gain.setValueAtTime(this.SampleVolume,0);
+	}
+
+	SetReverbWetness(Gain)
+	{
+		this.ReverbVolume = Gain;
+		//	we queue this so it is set after creation if thats delayed
+		this.ActionQueue.Push(this.Private_SetReverbWetness.bind(this));
+	}
+	
+	SetVolume(Volume)
+	{
+		this.SampleVolume = Volume;
+		//	we queue this so it is set after creation if thats delayed
+		this.ActionQueue.Push(this.Private_SetSampleVolume.bind(this));
+	}
+	
+	SetReverb(ReverbImpulseResponseWaveData)
 	{
 		async function Run(Context)
 		{
@@ -138,8 +173,6 @@ Pop.Audio.Sound = class
 			//const AudioBuffer = await this.DecodeAudioBuffer(Context,this.ReverbImpulseResponseWave);
 			const AudioBuffer = ReverbImpulseResponseWaveData;
 			
-			//	https://middleearmedia.com/demos/webaudio/convolver.html
-			//	todo: update existing sources with tree
 			const Convolver = Context.createConvolver();
 			//const Convolver = Context.createBufferSource();
 			//Convolver.start();
@@ -147,14 +180,9 @@ Pop.Audio.Sound = class
 			Convolver.normalize = true;
 			Convolver.buffer = AudioBuffer;
 			
-			
 			//	we then control the effect with gain
 			const ConvolverGain = Context.createGain();
-			ConvolverGain.gain.setValueAtTime(Wetness,0);
-			//	in here;
-			//	https://middleearmedia.com/demos/webaudio/convolver.html
-			//	source -> convgain -> convolver -> master gain
-			//	source -> mastergain-> master compression(dynamics)
+			this.Private_SetReverbWetness.call(this);
 			
 			this.ReverbGainNode = ConvolverGain;
 			this.ReverbNode = Convolver;
@@ -162,23 +190,16 @@ Pop.Audio.Sound = class
 		this.ActionQueue.Push(Run);
 	}
 	
-	SetSample(WaveData,Loop=false)
+	SetSample(WaveData)
 	{
 		async function Run(Context)
 		{
-			//	make a new reverb node
+			//	todo: decode if wavedata rather than AudioBuffer
 			//const AudioBuffer = await this.DecodeAudioBuffer(Context,this.ReverbImpulseResponseWave);
 			const AudioBuffer = WaveData;
-			
 			this.SampleBuffer = AudioBuffer;
-			/*
-			CurrentSampleNode
-			const SampleNode = Context.createBufferSource();
-			SampleNode.buffer = AudioBuffer;
 			
-			this.NoiseNode = SampleNode;
-			this.NoiseNode.loop = true;
-			 */
+			Pop.Debug(`SetSample() todo: retrigger sample creation at current time if playing`);
 		}
 		this.ActionQueue.Push(Run);
 	}
@@ -227,7 +248,13 @@ Pop.Audio.Sound = class
 		const SampleNode = Context.createBufferSource();
 		SampleNode.buffer = this.SampleBuffer;
 		
-		//BufferSource.connect( Context.destination );
+		//	create gain node if it doesn't exist
+		if ( !this.SampleGainNode )
+			this.SampleGainNode = Context.createGain();
+		
+		//	update sound volume in case
+		this.Private_SetSampleVolume.call(this);
+
 		this.CurrentSampleNode = SampleNode;
 		
 		function ConnectNodes(Nodes)
@@ -243,10 +270,9 @@ Pop.Audio.Sound = class
 			}
 		}
 		
-		const SourceNodes = [SampleNode,Context.destination];
+		const SourceNodes = [SampleNode,this.SampleGainNode,Context.destination];
+		//	gr: may need to insert this.SampleGainNode here too
 		const ReverbNodes = [SampleNode,this.ReverbGainNode,this.ReverbNode,Context.destination];
-		//const ReverbNodes = [BufferSource,this.ReverbGainNode,Context.destination];
-		//const ReverbNodes = [this.ReverbNode,Context.destination];
 		//ConnectNodes(SourceNodes);
 		ConnectNodes(ReverbNodes);
 		
