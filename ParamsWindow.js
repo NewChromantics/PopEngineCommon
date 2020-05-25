@@ -196,7 +196,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 		{
 			Params[Name] = Value;
 			OnAnyChanged(Params,Name,Value,IsFinalValue);
-			this.WaitForParamsChangedPromiseQueue.Push(Params,Name,Value,IsFinalValue);
+			this.WaitForParamsChangedPromiseQueue.Push([Params,Name,Value,IsFinalValue]);
 		}.bind(this);
 		let IsValueSignificantChange = function (Old,New)
 		{
