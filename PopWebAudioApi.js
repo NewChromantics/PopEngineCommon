@@ -301,10 +301,7 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 		for ( let c=0;	c<NoiseBuffer.numberOfChannels;	c++ )
 		{
 			const Data = NoiseBuffer.getChannelData(c);
-			for ( let i = 0; i < Data.length; i++)
-			{
-				Data[i] = Math.random() * 2 - 1;
-			}
+			Pop.Math.FillRandomFloat(Data,-1,1);
 		}
 		return NoiseBuffer;
 	}

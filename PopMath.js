@@ -1,3 +1,5 @@
+Pop.Math = {};
+
 //	colour conversion namespace
 Pop.Colour = {};
 
@@ -1362,3 +1364,51 @@ Math.GetCatmullPathPosition = function(Path,Time,Loop=false)
 	const Pos = Math.GetCatmullPosition( Path[Previous], Path[Start], Path[End], Path[Next], Lerp );
 	return Pos;
 }
+
+
+
+//	generic function, which we can cache
+Pop.Math.RandomFloatCache = {};
+Pop.Math.FillRandomFloat = function(Array,Min=0,Max=1)
+{
+	if ( Array.constructor != Float32Array )
+		throw `Expecting Array(${typeof Array}/${Array.constructor}) to be Float32Array`;
+	
+	//	see if the old cache is big enough
+	const CacheName = `Float_${Min}_${Max}`;
+	
+	function WriteRandom(Array,Start,Length)
+	{
+		Pop.Debug(`WriteRandom(${Start},${Length})`,Array);
+		for ( let i=Start;	i<Start+Length;	i++ )
+			Array[i] = Math.random() * (Max-Min) - Min;
+	}
+	
+	const TargetSize = Array.length;
+	
+	//	resize/create cache
+	if ( Pop.Math.RandomFloatCache.hasOwnProperty(CacheName) )
+	{
+		//	check if its big enough
+		const Cache = Pop.Math.RandomFloatCache[CacheName];
+		if ( Cache.length < TargetSize )
+		{
+			//	todo: save old, alloc new, memcpy into new
+			Cache = null;
+		}
+	}
+	
+	if ( !Pop.Math.RandomFloatCache[CacheName] )
+	{
+		//	new cache
+		const Cache = new Float32Array(TargetSize);
+		WriteRandom(Cache,0,Cache.length);
+		Pop.Math.RandomFloatCache[CacheName] = Cache;
+	}
+	
+	//	copy to target
+	const Cache = Pop.Math.RandomFloatCache[CacheName];
+	Array.set( Cache, 0, Array.length );
+}
+
+
