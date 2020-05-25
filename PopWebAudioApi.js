@@ -111,95 +111,92 @@ Pop.Audio.Sound = class
 {
 	constructor(WaveData,Name)
 	{
-		this.WaveData = WaveData;
-		
-		this.Name = Name;
-		this.ActionQueue = new Pop.PromiseQueue();
-		this.Update().then(Pop.Debug).catch(Pop.Debug);
-		
 		this.SampleBuffer = null;
+		this.ReverbBuffer = null;
 		
 		//	webaudio says bufferSource's are one-shot and cheap to make
 		//	and kill themselves off.
 		//	we only need a reference to the last one in case we need to kill it
 		//	or modify the node tree (params on effects)
-		this.CurrentSampleNode = null;
+		this.SampleNode = null;
 
 		this.SampleGainNode = null;
 		this.ReverbGainNode = null;
 		this.ReverbNode = null;
 		this.SampleVolume = 1;	//	gain
 		this.ReverbVolume = 1;	//	wetness/gain
+
+		this.Name = Name;
+		this.ActionQueue = new Pop.PromiseQueue();
+		this.Update().then(Pop.Debug).catch(Pop.Debug);
+		
+		this.SetSample(WaveData);
 	}
 	
-	GetReverbGain()
+	IsSignificantVolumeChange(Old,New)
 	{
-		return this.ReverbVolume;
+		const Diff = Math.abs(Old-New);
+		if ( Diff < 0.01 )
+			return false;
+		return true;
 	}
 	
-	Private_SetReverbWetness()
-	{
-		if ( !this.ReverbGainNode )
-			return;
-		this.ReverbGainNode.gain.setValueAtTime(this.GetReverbGain(),0);
-	}
-
-	Private_SetSampleVolume()
-	{
-		if ( !this.SampleGainNode )
-			return;
-		this.SampleGainNode.gain.setValueAtTime(this.SampleVolume,0);
-	}
-
 	SetReverbWetness(Gain)
 	{
+		//	we need to change the nodes as little as possible, so have to check for differences
+		if ( !this.IsSignificantVolumeChange(this.ReverbVolume,Gain) )
+			return;
+		
 		this.ReverbVolume = Gain;
-		//	we queue this so it is set after creation if thats delayed
-		this.ActionQueue.Push(this.Private_SetReverbWetness.bind(this));
+		
+		if ( this.ReverbGainNode )
+			this.ReverbGainNode.gain.setValueAtTime( Gain, 0 );
 	}
 	
 	SetVolume(Volume)
 	{
+		//	we need to change the nodes as little as possible, so have to check for differences
+		if ( !this.IsSignificantVolumeChange(this.SampleVolume,Volume) )
+			return;
+		
 		this.SampleVolume = Volume;
-		//	we queue this so it is set after creation if thats delayed
-		this.ActionQueue.Push(this.Private_SetSampleVolume.bind(this));
-	}
-	
-	SetReverb(ReverbImpulseResponseWaveData)
-	{
-		async function Run(Context)
-		{
-			//	make a new reverb node
-			//const AudioBuffer = await this.DecodeAudioBuffer(Context,this.ReverbImpulseResponseWave);
-			const AudioBuffer = ReverbImpulseResponseWaveData;
-			
-			const Convolver = Context.createConvolver();
-			//const Convolver = Context.createBufferSource();
-			//Convolver.start();
-			Convolver.loop = true;
-			Convolver.normalize = true;
-			Convolver.buffer = AudioBuffer;
-			
-			//	we then control the effect with gain
-			const ConvolverGain = Context.createGain();
-			this.Private_SetReverbWetness.call(this);
-			
-			this.ReverbGainNode = ConvolverGain;
-			this.ReverbNode = Convolver;
-		}
-		this.ActionQueue.Push(Run);
+		
+		if ( this.SampleGainNode )
+			this.SampleGainNode.gain.setValueAtTime(Volume,0);
 	}
 	
 	SetSample(WaveData)
 	{
 		async function Run(Context)
 		{
+			if ( WaveData instanceof AudioBuffer )
+			{
+				this.SampleBuffer = WaveData;
+			}
+			else
+			{
+				this.SampleBuffer = await this.DecodeAudioBuffer(Context,WaveData);
+			}
+			//	now out of date/not dirt
+			this.SampleWaveData = null;
+			
+			//this.DestroySamplerNodes(Context);
+			//Pop.Debug(`SetSample() todo: retrigger sample creation at current time if playing`);
+		}
+		this.ActionQueue.Push(Run);
+	}
+	
+	SetReverb(ReverbData)
+	{
+		async function Run(Context)
+		{
 			//	todo: decode if wavedata rather than AudioBuffer
 			//const AudioBuffer = await this.DecodeAudioBuffer(Context,this.ReverbImpulseResponseWave);
-			const AudioBuffer = WaveData;
-			this.SampleBuffer = AudioBuffer;
+			const AudioBuffer = ReverbData;
+			this.ReverbBuffer = AudioBuffer;
 			
-			Pop.Debug(`SetSample() todo: retrigger sample creation at current time if playing`);
+			this.DestroyReverbNodes(Context);
+			Pop.Debug(`SetReverb() todo: retrigger sample creation at current time if playing`);
 		}
 		this.ActionQueue.Push(Run);
 	}
@@ -224,59 +221,113 @@ Pop.Audio.Sound = class
 		//	load
 		const Context = await Pop.Audio.WaitForContext();
 		
-		this.SampleBuffer = await this.DecodeAudioBuffer(Context,this.WaveData);
+		//	could decode data here
 		
-		while (this.SampleBuffer)
+		while (true)
 		{
 			const Action = await this.ActionQueue.WaitForNext();
 			await Action.call(this,Context);
 		}
 	}
 	
-	CullCurrentSource()
+	
+	DestroyReverbNodes(Context)
 	{
-		if ( !this.CurrentSampleNode )
-			return;
+		if ( this.ReverbNode )
+		{
+			if ( this.ReverbNode.stop )
+				this.ReverbNode.stop();
+			this.ReverbNode.disconnect();
+			this.ReverbNode = null;
+		}
 		
-		//	check if it's ended
-		//	warn if still playing, or stop?
+		if ( this.ReverbGainNode )
+		{
+			if ( this.ReverbGainNode.stop )
+				this.ReverbGainNode.stop();
+			this.ReverbGainNode.disconnect();
+			this.ReverbGainNode = null;
+		}
 	}
 	
-	CreateSource(Context)
+	DestroySamplerNodes(Context)
 	{
-		//	create node tree
-		const SampleNode = Context.createBufferSource();
-		SampleNode.buffer = this.SampleBuffer;
+		if ( this.SampleNode )
+		{
+			if ( this.SampleNode.stop )
+				this.SampleNode.stop();
+			this.SampleNode.disconnect();
+			this.SampleNode = null;
+		}
+		
+		//	gr: dont need to keep deleting this
+		/*
+		if ( this.SampleGainNode )
+		{
+			if ( this.SampleGainNode.stop )
+				this.SampleGainNode.stop();
+			this.SampleGainNode.disconnect();
+			this.SampleGainNode = null;
+		}
+		*/
+	}
+	
+	CreateSamplerNodes(Context)
+	{
+		this.DestroySamplerNodes(Context);
+		
+		//	create sample buffer if we need to (ie. out of date)
+		if ( !this.SampleBuffer )
+			throw `Sample Buffer is out of date`;
+		
+		//	create nodes
+		this.SampleNode = Context.createBufferSource();
+		this.SampleNode.buffer = this.SampleBuffer;
 		
 		//	create gain node if it doesn't exist
 		if ( !this.SampleGainNode )
-			this.SampleGainNode = Context.createGain();
-		
-		//	update sound volume in case
-		this.Private_SetSampleVolume.call(this);
-
-		this.CurrentSampleNode = SampleNode;
-		
-		function ConnectNodes(Nodes)
 		{
-			//	skip if any null nodes
-			if ( Nodes.some( n => n==null ) )
-				return;
-			for ( let i=0;	i<Nodes.length-1;	i++ )
-			{
-				const Prev = Nodes[i];
-				const Next = Nodes[i+1];
-				Prev.connect(Next);
-			}
+			this.SampleGainNode = Context.createGain();
+			//	make sure volume is correct
+			//	gr: doing this every time causes a click!
+			this.SampleGainNode.gain.setValueAtTime( this.SampleVolume, 0 );
+		}
+
+		this.SampleNode.connect( this.SampleGainNode );
+		this.SampleGainNode.connect( Context.destination );
+	}
+	
+	
+	CreateReverbNodes(Context)
+	{
+		//	recreating these nodes every time causes a click in chrome
+		//this.DestroyReverbNodes(Context);
+		
+		//	no reverb data
+		if ( !this.ReverbBuffer )
+			return;
+		
+		//	create nodes
+		if ( !this.ReverbNode )
+		{
+			this.ReverbNode = Context.createConvolver();
+			this.ReverbNode.loop = true;
+			this.ReverbNode.normalize = true;
+			this.ReverbNode.buffer = this.ReverbBuffer;
 		}
 		
-		const SourceNodes = [SampleNode,this.SampleGainNode,Context.destination];
-		//	gr: may need to insert this.SampleGainNode here too
-		const ReverbNodes = [SampleNode,this.ReverbGainNode,this.ReverbNode,Context.destination];
-		//ConnectNodes(SourceNodes);
-		ConnectNodes(ReverbNodes);
-		
-		//this.CurrentSampleNode.onended = function(){	Pop.Debug("Sample finished");	};
+		//	create gain node if it doesn't exist
+		if ( !this.ReverbGainNode )
+		{
+			this.ReverbGainNode = Context.createGain();
+
+			//	make sure gain is correct
+			this.ReverbGainNode.gain.setValueAtTime( this.ReverbVolume, 0 );
+		}
+
+		this.SampleNode.connect( this.ReverbNode );
+		this.ReverbNode.connect( this.ReverbGainNode );
+		this.ReverbGainNode.connect( Context.destination );
 	}
 	
 	Play(TimeMs)
@@ -285,13 +336,13 @@ Pop.Audio.Sound = class
 		//Pop.Debug(`Queue play(${Name}) at ${Pop.GetTimeNow}
 		async function DoPlay(Context)
 		{
-			this.CullCurrentSource();
-			this.CreateSource(Context);
+			this.CreateSamplerNodes(Context);
+			this.CreateReverbNodes(Context);
 
 			//	start!
 			const DelaySecs = 0;
 			const OffsetSecs = TimeMs / 1000;
-			this.CurrentSampleNode.start(DelaySecs,OffsetSecs);
+			this.SampleNode.start(DelaySecs,OffsetSecs);
 			
 			//	debug
 			const JobDelay = Pop.GetTimeNowMs() - QueueTime;
@@ -320,8 +371,8 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 {
 	function CreateNoiseBuffer(Context)
 	{
-		const Channels = 2;
-		const Duration = 2;
+		const Channels = 1;
+		const Duration = 4;
 		const BufferSize = Duration * Channels * Context.sampleRate;
 		const NoiseBuffer = Context.createBuffer( Channels, BufferSize, Context.sampleRate );
 		for ( let c=0;	c<NoiseBuffer.numberOfChannels;	c++ )
@@ -342,17 +393,6 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 		
 		return whiteNoise;
 	}
-	/*
-	function CreateMergeNode(Context)
-	{
-		
-	}
-	*/
-	function CreateGainNode(Context)
-	{
-		const Node = Context.createGain();
-		return Node;
-	}
 	
 	const Context = await Pop.Audio.WaitForContext();
 
@@ -360,7 +400,7 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 	//return CreateNoiseBuffer(Context);
 	
 	// create a noise burst which decays over the duration in each channel
-	const Channels = 2;
+	const Channels = 1;
 	const SampleRate = Context.sampleRate;
 	const DurationSamples = (DecaySecs + PreDelaySecs) * SampleRate;
 	const OfflineContext = new OfflineAudioContext( Channels, DurationSamples, SampleRate );
@@ -369,7 +409,7 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 	//const merge = CreateMergeNode(OfflineContext);
 	//noiseL.connect(merge, 0, 0);
 	//noiseR.connect(merge, 0, 1);
-	const gainNode = CreateGainNode(OfflineContext);
+	const gainNode = OfflineContext.createGain()
 	//merge.connect(gainNode);
 	noiseL.connect(gainNode);
 	//noiseL.start(0);
@@ -383,7 +423,7 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 	const HundredPercent = PreDelaySecs + DecaySecs;
 	const NinetyPercent = HundredPercent * 0.9;
 	//	this needs to calc the value at 90% (exponential can't go to zero)
-	//gainNode.gain.exponentialRampToValueAtTime(0.01,NinetyPercent);
+	gainNode.gain.exponentialRampToValueAtTime(0.01,NinetyPercent);
 	// at 90% start a linear ramp to the final value
 	gainNode.gain.linearRampToValueAtTime(0,HundredPercent);
 	/*
