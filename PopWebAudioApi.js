@@ -4,6 +4,14 @@ Pop.Audio = {};
 const DomTriggerPromise = Pop.CreatePromise();
 function OnDomTrigger()
 {
+	/*
+	//	on safari, this has to be inside the actual event callback
+	if ( !Pop.Audio.Context )
+	{
+		const TAudioContext = window.AudioContext || window.webkitAudioContext;
+		Pop.Audio.Context = new TAudioContext();
+	}*/
+
 	DomTriggerPromise.Resolve();
 }
 window.addEventListener('click',OnDomTrigger,true);
@@ -101,9 +109,11 @@ Pop.Audio.WaitForContext = async function()
 //	more complex WebAudio sound
 Pop.Audio.Sound = class
 {
-	constructor(WaveData,Name)
+	constructor(WaveData,Name,ReverbImpulseResponseWave)
 	{
 		this.WaveData = WaveData;
+		this.ReverbImpulseResponseWave = ReverbImpulseResponseWave;
+		
 		this.Name = Name;
 		this.ActionQueue = new Pop.PromiseQueue();
 		this.Update().then(Pop.Debug).catch(Pop.Debug);
@@ -115,13 +125,57 @@ Pop.Audio.Sound = class
 		//	we only need a reference to the last one in case we need to kill it
 		//	or modify the node tree (params on effects)
 		this.CurrentSource = null;
+		
+		this.Nodes = [];
+	}
+	
+	
+	
+	SetReverb(Params)
+	{
+		this.ReverbNode.attack = Params.Attack;
+		this.ReverbNode.decay = Params.Decay;
+		this.ReverbNode.release = Params.Release;
+	}
+	
+	async DecodeAudioBuffer(Context,WaveData)
+	{
+		//	safari doesn't currently support the promise version of this
+		//	https://github.com/chrisguttandin/standardized-audio-context
+		//this.SampleBuffer = await Context.decodeAudioData( this.WaveData.buffer );
+		const DecodeAudioPromise = Pop.CreatePromise();
+		Context.decodeAudioData( WaveData.buffer, DecodeAudioPromise.Resolve, DecodeAudioPromise.Reject );
+		const SampleBuffer = await DecodeAudioPromise;
+		return SampleBuffer;
+	}
+	
+	async LoadReverbNode(Context)
+	{
+		if ( !this.ReverbImpulseResponseWave )
+		{
+			Pop.Debug(`No ReverbImpulseResponseWave supplied. No reverb`);
+			return;
+		}
+		
+		//	gr: cache file in context?
+		const AudioBuffer = await this.DecodeAudioBuffer(Context,this.ReverbImpulseResponseWave);
+
+		//	todo: update existing sources with tree
+		const Node = Context.createConvolver();
+		//Node.attack = 0;
+		//Node.decay = 0.1;
+		//Node.release = 10;
+		this.Nodes.push(Node);
+		this.ReverbNode = Node;
 	}
 	
 	async Update()
 	{
 		//	load
 		const Context = await Pop.Audio.WaitForContext();
-		this.SampleBuffer = await Context.decodeAudioData( this.WaveData.buffer );
+		
+		this.SampleBuffer = await this.DecodeAudioBuffer(Context,this.WaveData);
+		await this.LoadReverbNode(Context);
 		
 		while (this.SampleBuffer)
 		{
@@ -145,8 +199,20 @@ Pop.Audio.Sound = class
 		//	todo: keep the tree (reverb, volume etc) in some meta
 		const BufferSource = Context.createBufferSource();
 		BufferSource.buffer = this.SampleBuffer;
-		BufferSource.connect( Context.destination );
+		//BufferSource.connect( Context.destination );
 		this.CurrentSource = BufferSource;
+		
+		const Tree = this.Nodes.slice();
+		Tree.splice(0,0,BufferSource);
+		Tree.push(Context.destination);
+		for ( let i=0;	i<Tree.length-1;	i++ )
+		{
+			const Prev = Tree[i];
+			const Next = Tree[i+1];
+			Prev.connect(Next);
+		}
+		
+		//this.CurrentSource.onended = function(){	Pop.Debug("Sample finished");	};
 	}
 	
 	Play(TimeMs)
