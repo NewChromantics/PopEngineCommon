@@ -526,7 +526,124 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 	return AudioBuffer;
 }
 
-//	Pop.Midi = file format
+Pop.Audio.FakeMidiInputName = 'FakeMidiInput';
+
+Pop.Audio.FakeMidiInput = class
+{
+	constructor()
+	{
+		this.name = Pop.Audio.FakeMidiInputName;
+
+		//	listen to keynboard
+		window.addEventListener('keydown',this.OnKeyDown.bind(this));
+		window.addEventListener('keyup',this.OnKeyUp.bind(this));
+		this.onmidimessage = function () { };
+	}
+
+	GetNoteFromKey(Key)
+	{
+		const FirstNote = 12 * 6;
+		switch (Key)
+		{
+			case 'a': return FirstNote + 0;
+			case 's': return FirstNote + 2;
+			case 'd': return FirstNote + 4;
+			case 'f': return FirstNote + 5;
+			case 'g': return FirstNote + 7;
+			case 'h': return FirstNote + 9;
+			case 'j': return FirstNote + 10;
+			default: return null;
+		}
+	}
+
+	OnKeyDown(KeyEvent)
+	{
+		//	dont retrigger if this is a repeat
+		if (KeyEvent.repeat)
+		{
+			KeyEvent.preventDefault();
+			return false;
+		}
+
+		Pop.Debug(`OnKeyDown`);
+		const Note = this.GetNoteFromKey(KeyEvent.key);
+		if (!Note)
+			return;
+
+		const MidiEvent = {};
+		MidiEvent.NoteOn = Note;
+		this.onmidimessage(MidiEvent);
+		KeyEvent.preventDefault();
+
+		//	stop this going up the dom
+		//KeyEvent.stopPropagation();
+	}
+
+	OnKeyUp(KeyEvent)
+	{
+		const Note = this.GetNoteFromKey(KeyEvent.key);
+		if (!Note)
+			return;
+
+		const MidiEvent = {};
+		MidiEvent.NoteOff = Note;
+		this.onmidimessage(MidiEvent);
+		KeyEvent.preventDefault();
+	}
+}
+
+Pop.Audio.MidiDevice = class
+{
+	constructor(Name)
+	{
+		this.Input = null;
+		this.EventQueue = new Pop.PromiseQueue();
+		this.Init(Name).catch(this.OnError.bind(this));
+	}
+
+	OnError(Error)
+	{
+		this.EventQueue.Reject(Error);
+	}
+
+	async Init(Name)
+	{
+		if (!window.navigator.requestMIDIAccess)
+			throw `Midi devices not supported`;
+
+		const Options = {};
+		Options.sysex = false;
+		const Access = await window.navigator.requestMIDIAccess(Options);
+		const Inputs = Array.from(Access.inputs);
+
+		if (Name == Pop.Audio.FakeMidiInputName)
+		{
+			this.Input = new Pop.Audio.FakeMidiInput();
+		}
+		else
+		{
+			const MatchingInputs = Inputs.filter(i => i.name == Name);
+			if (MatchingInputs.length == 0)
+				throw `No MIDI devices matching ${Name}`;
+			this.Input = MatchingInputs[0];
+		}
+		this.Input.onmidimessage = this.OnMidiMessage.bind(this);
+	}
+
+	OnMidiMessage(Event)
+	{
+		//	https://developer.mozilla.org/en-US/docs/Web/API/MIDIMessageEvent
+		//	turn event into something we can handle (or let raw midi stuff flow to mix with Pop.Midi)
+		this.EventQueue.Push(Event);
+	}
+
+	WaitForNext()
+	{
+		return this.EventQueue.WaitForNext();
+	}
+}
+
+//	Pop.Midi = file format, so put these under Pop.Audio
 Pop.Audio.OnNewMidiDevicePromiseQueue = null;
 
 Pop.Audio.EnumMidiDevicesLoop = async function()
@@ -536,7 +653,10 @@ Pop.Audio.EnumMidiDevicesLoop = async function()
 	if (!window.navigator.requestMIDIAccess)
 		throw `Midi devices not supported`;
 
-	const Access = await window.navigator.requestMIDIAccess();
+	const Options = {};
+	Options.sysex = false;
+
+	const Access = await window.navigator.requestMIDIAccess(Options);
 	const Inputs = Access.inputs;
 
 	for (let i = 0;i < Inputs.length;i++)
@@ -546,6 +666,12 @@ Pop.Audio.EnumMidiDevicesLoop = async function()
 		Pop.Audio.OnNewMidiDevicePromiseQueue.Push(Device);
 	}
 
+	//	add our fake device last
+	{
+		const FakeDeviceName = Pop.Audio.FakeMidiInputName;
+		Pop.Audio.OnNewMidiDevicePromiseQueue.Push(FakeDeviceName);
+	}
+	
 	//	how to we wait for new devices?
 }
 
