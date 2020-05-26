@@ -528,6 +528,24 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 
 Pop.Audio.FakeMidiInputName = 'FakeMidiInput';
 
+Pop.Audio.GetMidiInputs = async function ()
+{
+	if (!window.navigator.requestMIDIAccess)
+		throw `Midi devices not supported`;
+
+	const Options = {};
+	Options.sysex = true;
+	const Access = await window.navigator.requestMIDIAccess(Options);
+	const Inputs = [];
+
+	for (let [Key,Input] of Access.inputs)
+	{
+		Inputs.push(Input);
+	}
+
+	return Inputs;
+}
+
 Pop.Audio.FakeMidiInput = class
 {
 	constructor()
@@ -608,13 +626,7 @@ Pop.Audio.MidiDevice = class
 
 	async Init(Name)
 	{
-		if (!window.navigator.requestMIDIAccess)
-			throw `Midi devices not supported`;
-
-		const Options = {};
-		Options.sysex = false;
-		const Access = await window.navigator.requestMIDIAccess(Options);
-		const Inputs = Array.from(Access.inputs);
+		const Inputs = await Pop.Audio.GetMidiInputs();
 
 		if (Name == Pop.Audio.FakeMidiInputName)
 		{
@@ -632,9 +644,28 @@ Pop.Audio.MidiDevice = class
 
 	OnMidiMessage(Event)
 	{
+		const MidiData = Event.data;
+		//	reuse Pop.Midi stuff better!
+		let Read = 0;
+		function Pop8()	{	return MidiData[Read++];	}
+
+		//	function ParseMidiEvent(MidiEventAndChannel,TimeMs)
+		const MidiEventAndChannel = Pop8();
+		const MidiEvent = (MidiEventAndChannel & 0b11110000) >> 4;
+		const Channel = MidiEventAndChannel & 0b00001111;
+		//const MidiEventName = MidiEvents.GetName(MidiEvent) || MidiEvent.toString(16);
+
+		const OutputEvent = {};
+		OutputEvent.MidiEvent = MidiEvent;
+		OutputEvent.Channel = Channel;
+		OutputEvent.Note = Pop8();
+		OutputEvent.Velocity = Pop8();
+		OutputEvent.Time = Event.timeStamp;
+		
+		//	[144,44,105]
 		//	https://developer.mozilla.org/en-US/docs/Web/API/MIDIMessageEvent
 		//	turn event into something we can handle (or let raw midi stuff flow to mix with Pop.Midi)
-		this.EventQueue.Push(Event);
+		this.EventQueue.Push(OutputEvent);
 	}
 
 	WaitForNext()
@@ -646,27 +677,19 @@ Pop.Audio.MidiDevice = class
 //	Pop.Midi = file format, so put these under Pop.Audio
 Pop.Audio.OnNewMidiDevicePromiseQueue = null;
 
-Pop.Audio.EnumMidiDevicesLoop = async function()
+Pop.Audio.EnumMidiDevicesLoop = async function(IncludeFakeDevice)
 {
 	Pop.Audio.OnNewMidiDevicePromiseQueue = new Pop.PromiseQueue();
 
-	if (!window.navigator.requestMIDIAccess)
-		throw `Midi devices not supported`;
-
-	const Options = {};
-	Options.sysex = false;
-
-	const Access = await window.navigator.requestMIDIAccess(Options);
-	const Inputs = Access.inputs;
-
-	for (let i = 0;i < Inputs.length;i++)
+	const Inputs = await Pop.Audio.GetMidiInputs();
+	for ( let Input of Inputs )
 	{
-		const Input = Inputs[i];
-		const Device = Input.value;
-		Pop.Audio.OnNewMidiDevicePromiseQueue.Push(Device);
+		const DeviceName = Input.name;
+		Pop.Audio.OnNewMidiDevicePromiseQueue.Push(DeviceName);
 	}
 
 	//	add our fake device last
+	if ( IncludeFakeDevice )
 	{
 		const FakeDeviceName = Pop.Audio.FakeMidiInputName;
 		Pop.Audio.OnNewMidiDevicePromiseQueue.Push(FakeDeviceName);
@@ -675,12 +698,12 @@ Pop.Audio.EnumMidiDevicesLoop = async function()
 	//	how to we wait for new devices?
 }
 
-Pop.Audio.WaitForNewMidiDevice = async function ()
+Pop.Audio.WaitForNewMidiDevice = async function(IncludeFakeDevice)
 {
 	//	start the watch loop
 	if (!Pop.Audio.OnNewMidiDevicePromiseQueue)
 	{
-		Pop.Audio.EnumMidiDevicesLoop();
+		Pop.Audio.EnumMidiDevicesLoop(IncludeFakeDevice);
 	}
 
 	return Pop.Audio.OnNewMidiDevicePromiseQueue.WaitForNext();
