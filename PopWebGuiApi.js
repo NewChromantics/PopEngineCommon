@@ -403,6 +403,113 @@ function GetExistingElement(Name)
 	return null;
 }
 
+
+
+//	finally doing proper inheritance for gui
+Pop.Gui.BaseControl = class
+{
+	constructor()
+	{
+		this.OnDragDropQueue = new Pop.PromiseQueue();
+
+		//	WaitForDragDrop() can provide a function to rename files
+		//	this may have issues with multi-callers or race conditions
+		//	essentially if this wants to be different for different calls,
+		//	so we'd need to link this rename func to each promise waiting in the queue
+		this.OnDragDropRenameFiles = null;
+	}
+
+	BindEvents()
+	{
+		const Element = this.GetElement();
+		Element.addEventListener('drop',this.OnDragDrop.bind(this));
+		Element.addEventListener('dragover',this.OnTryDragDropEvent.bind(this));
+	}
+
+	GetDragDropFilenames(Files)
+	{
+		//	gr: we may need to make random/unique names here
+		const Filenames = Files.map(f => f.name);
+
+		//	let user modify filename array
+		if (this.OnDragDropRenameFiles)
+			this.OnDragDropRenameFiles(Filenames);
+
+		return Filenames;
+	}
+
+	OnTryDragDropEvent(Event)
+	{
+		//	if this.OnTryDragDrop has been overloaded, call it
+		//	if it hasn't, we allow drag and drop
+		//	gr: maybe API really should change, so it only gets turned on if WaitForDragDrop has been called
+		let AllowDragDrop = false;
+
+		//	gr: HTML doesnt allow us to see filenames, just type & count
+		//const Filenames = Array.from(Event.dataTransfer.files).map(this.GetDragDropFilename);
+		const Filenames = new Array(Event.dataTransfer.items.length);
+		Filenames.fill(null);
+
+		if (!this.OnTryDragDrop)
+		{
+			AllowDragDrop = true;
+		}
+		else
+		{
+			AllowDragDrop = this.OnTryDragDrop(Filenames);
+		}
+
+		if (AllowDragDrop)
+			Event.preventDefault();
+	}
+
+	OnDragDrop(Event)
+	{
+		async function LoadFilesAsync(Files)
+		{
+			const NewFilenames = this.GetDragDropFilenames(Files);
+			async function LoadFile(File,FileIndex)
+			{
+				const Filename = NewFilenames[FileIndex];
+				const Mime = File.type;
+				Pop.Debug(`Filename ${File.name}->${Filename} mime ${Mime}`);
+				const FileArray = await File.arrayBuffer();
+				Pop._AssetCache[Filename] = new Uint8Array(FileArray);
+				NewFilenames.push(Filename);
+			}
+			//	make a promise for each file
+			const LoadPromises = Files.map(LoadFile.bind(this));
+			//	wait for them to all load
+			await Promise.all(LoadPromises);
+
+			//	now notify with new filenames
+			this.OnDragDropQueue.Push(NewFilenames);
+		}
+
+		Event.preventDefault();
+
+		Pop.Debug(`OnDragDrop ${Event.dataTransfer}`);
+		if (Event.dataTransfer.files)
+		{
+			const Files = Array.from(Event.dataTransfer.files);
+			LoadFilesAsync.call(this,Files);
+		}
+		else
+		{
+			throw `Handle non-file drag&drop`;
+		}
+
+	}
+
+	async WaitForDragDrop(RenameFilenames)
+	{
+		this.OnDragDropRenameFiles = RenameFilenames;
+		return this.OnDragDropQueue.WaitForNext();
+	}
+}
+
+
+
 Pop.Gui.Label = function(Parent, Rect)
 {
 	this.ValueCache = null;
@@ -776,109 +883,6 @@ Pop.Gui.TextBox = function(Parent,Rect)
 	this.RefreshLabel();
 }
 
-
-//	finally doing proper inheritance for gui
-Pop.Gui.BaseControl = class
-{
-	constructor()
-	{
-		this.OnDragDropQueue = new Pop.PromiseQueue();
-		
-		//	WaitForDragDrop() can provide a function to rename files
-		//	this may have issues with multi-callers or race conditions
-		//	essentially if this wants to be different for different calls,
-		//	so we'd need to link this rename func to each promise waiting in the queue
-		this.OnDragDropRenameFiles = null;
-	}
-
-	BindEvents()
-	{
-		const Element = this.GetElement();
-		Element.addEventListener('drop',this.OnDragDrop.bind(this));
-		Element.addEventListener('dragover',this.OnTryDragDropEvent.bind(this));
-	}
-
-	GetDragDropFilenames(Files)
-	{
-		//	gr: we may need to make random/unique names here
-		const Filenames = Files.map( f => f.name );
-		
-		//	let user modify filename array
-		if ( this.OnDragDropRenameFiles )
-			this.OnDragDropRenameFiles( Filenames );
-		
-		return Filenames;
-	}
-
-	OnTryDragDropEvent(Event)
-	{
-		//	if this.OnTryDragDrop has been overloaded, call it
-		//	if it hasn't, we allow drag and drop
-		//	gr: maybe API really should change, so it only gets turned on if WaitForDragDrop has been called
-		let AllowDragDrop = false;
-
-		//	gr: HTML doesnt allow us to see filenames, just type & count
-		//const Filenames = Array.from(Event.dataTransfer.files).map(this.GetDragDropFilename);
-		const Filenames = new Array(Event.dataTransfer.items.length);
-		Filenames.fill(null);
-		
-		if (!this.OnTryDragDrop)
-		{
-			AllowDragDrop = true;
-		}
-		else
-		{
-			AllowDragDrop = this.OnTryDragDrop(Filenames);
-		}
-
-		if (AllowDragDrop)
-			Event.preventDefault();
-	}
-
-	OnDragDrop(Event)
-	{
-		async function LoadFilesAsync(Files)
-		{
-			const NewFilenames = this.GetDragDropFilenames(Files);
-			async function LoadFile(File,FileIndex)
-			{
-				const Filename = NewFilenames[FileIndex];
-				const Mime = File.type;
-				Pop.Debug(`Filename ${File.name}->${Filename} mime ${Mime}`);
-				const FileArray = await File.arrayBuffer();
-				Pop._AssetCache[Filename] = new Uint8Array(FileArray);
-				NewFilenames.push(Filename);
-			}
-			//	make a promise for each file
-			const LoadPromises = Files.map(LoadFile.bind(this));
-			//	wait for them to all load
-			await Promise.all(LoadPromises);
-			
-			//	now notify with new filenames
-			this.OnDragDropQueue.Push(NewFilenames);
-		}
-
-		Event.preventDefault();
-
-		Pop.Debug(`OnDragDrop ${Event.dataTransfer}`);
-		if (Event.dataTransfer.files)
-		{
-			const Files = Array.from(Event.dataTransfer.files);
-			LoadFilesAsync.call(this,Files);
-		}
-		else
-		{
-			throw `Handle non-file drag&drop`;
-		}
-
-	}
-
-	async WaitForDragDrop(RenameFilenames)
-	{
-		this.OnDragDropRenameFiles = RenameFilenames;
-		return this.OnDragDropQueue.WaitForNext();
-	}
-}
 
 Pop.Gui.ImageMap = class extends Pop.Gui.BaseControl
 {
