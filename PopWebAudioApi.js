@@ -23,6 +23,69 @@ async function WaitForClick()
 }
 
 
+//	we need to associate these per context really...
+Pop.Audio.Uniforms = {};
+Pop.Audio.ContextJobQueue = new Pop.PromiseQueue();
+
+Pop.Audio.ContextJobQueueProcessor = async function ()
+{
+	while (true)
+	{
+		const Context = await Pop.Audio.WaitForContext();
+		const Job = await Pop.Audio.ContextJobQueue.WaitForNext();
+		await Job(Context);
+	}
+}
+Pop.Audio.ContextJobQueueProcessor().then(Pop.Debug).catch(Pop.Debug);
+
+Pop.Audio.GetUniform = function (Name)
+{
+	if (!Pop.Audio.Uniforms.hasOwnProperty(Name))
+	{
+		throw `Pop.Audio.Uniforms has no key named ${Name}; ${Object.keys(Pop.Audio.Uniforms)}`;
+	}
+	return Pop.Audio.Uniforms[Name];
+}
+
+Pop.Audio.SetUniform = function (Name,Value)
+{
+	//	todo: call other cases for things like shared buffers
+	Pop.Audio.SetUniformValue(Name,Value);
+}
+
+Pop.Audio.SetUniformValue = function (Name,Value)
+{
+	function SetUniformValue()
+	{
+		//	if the object already exists, update it
+		if (!Pop.Audio.Uniforms.hasOwnProperty(Name))
+			return false;
+		const Uniform = Pop.Audio.Uniforms[Name];
+		//	assuming gain
+		//	todo: tolernace check
+		Uniform.offset = Value;
+	}
+
+	//	update immediately
+	if (SetUniformValue())
+		return;
+
+	//	create job to create & set
+	async function Job(Context)
+	{
+		//	has been created in the mean time
+		if (SetUniformValue())
+			return;
+
+		//	create
+		const Uniform = Context.createConstantSource();
+		Pop.Audio.Uniforms[Name] = Uniform;
+		SetUniformValue();
+	}
+	Pop.Audio.ContextJobQueue.Push(Job);
+}
+
+
 //	simply play a sound with HTMLAudio objects, no effects
 Pop.Audio.SimpleSound = class
 {
@@ -150,7 +213,7 @@ Pop.Audio.Sound = class
 		this.ReverbVolume = Gain;
 		
 		if ( this.ReverbGainNode )
-			this.ReverbGainNode.gain.setValueAtTime( Gain, 0 );
+			this.ReverbGainNode.gain.value = Gain;
 	}
 	
 	SetVolume(Volume)
@@ -162,7 +225,7 @@ Pop.Audio.Sound = class
 		this.SampleVolume = Volume;
 		
 		if ( this.SampleGainNode )
-			this.SampleGainNode.gain.setValueAtTime(Volume,0);
+			this.SampleGainNode.gain.value = Volume;
 	}
 	
 	SetSample(WaveData)
@@ -290,7 +353,7 @@ Pop.Audio.Sound = class
 			this.SampleGainNode = Context.createGain();
 			//	make sure volume is correct
 			//	gr: doing this every time causes a click!
-			this.SampleGainNode.gain.setValueAtTime( this.SampleVolume, 0 );
+			this.SampleGainNode.gain.value = this.SampleVolume;
 		}
 
 		this.SampleNode.connect( this.SampleGainNode );
@@ -322,7 +385,7 @@ Pop.Audio.Sound = class
 			this.ReverbGainNode = Context.createGain();
 
 			//	make sure gain is correct
-			this.ReverbGainNode.gain.setValueAtTime( this.ReverbVolume, 0 );
+			this.ReverbGainNode.gain.value = this.ReverbVolume;
 		}
 
 		this.SampleNode.connect( this.ReverbNode );
