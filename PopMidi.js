@@ -454,6 +454,7 @@ Pop.Midi.Parse = function (FileContents)
 	//	update duration
 	const TrackDurations = Midi.Tracks.map(t => t.GetDuration());
 	Midi.DurationMs = Math.max(...TrackDurations);
+	Midi.GetDurationMs = function () { return Math.floor(Midi.DurationMs); };
 
 	return Midi;
 }
