@@ -9,8 +9,11 @@ function Array_GetKey(TheArray,Value)
 
 //	http://www.music.mcgill.ca/~ich/classes/mumt306/StandardMIDIfileformat.html#BMA1_3
 //	value => name
-function GetNoteName(MidiNoteValue)
+Pop.Midi.GetNoteName = function(MidiNoteValue)
 {
+	if (!Number.isInteger(MidiNoteValue))
+		throw `Pop.Midi.GetNoteName(${MidiNoteValue}) is expecting an integer from 0-127`;
+
 	const Note = MidiNoteValue % 12;
 	const Octave = Math.floor(MidiNoteValue/12);
 	//	this produces a filename + url friendly note name C~_1 D_1 F~3 B5
@@ -26,7 +29,7 @@ Pop.Midi.GetNoteNames = function()
 {
 	const Names = [];
 	for ( let i=127;	i>=0;	i-- )
-		Names.push(GetNoteName(i));
+		Names.push(Pop.Midi.GetNoteName(i));
 	return Names;
 }
 
