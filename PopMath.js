@@ -1381,7 +1381,7 @@ Pop.Math.FillRandomFloat = function(Array,Min=0,Max=1)
 	{
 		Pop.Debug(`WriteRandom(${Start},${Length})`,Array);
 		for ( let i=Start;	i<Start+Length;	i++ )
-			Array[i] = Math.random() * (Max-Min) - Min;
+			Array[i] = Math.Lerp( Min, Max, Math.random() );
 	}
 	
 	const TargetSize = Array.length;
