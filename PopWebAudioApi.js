@@ -514,3 +514,37 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 	
 	return AudioBuffer;
 }
+
+//	Pop.Midi = file format
+Pop.Audio.OnNewMidiDevicePromiseQueue = null;
+
+Pop.Audio.EnumMidiDevicesLoop = async function()
+{
+	Pop.Audio.OnNewMidiDevicePromiseQueue = new Pop.PromiseQueue();
+
+	if (!window.navigator.requestMIDIAccess)
+		throw `Midi devices not supported`;
+
+	const Access = await window.navigator.requestMIDIAccess();
+	const Inputs = Access.inputs;
+
+	for (let i = 0;i < Inputs.length;i++)
+	{
+		const Input = Inputs[i];
+		const Device = Input.value;
+		Pop.Audio.OnNewMidiDevicePromiseQueue.Push(Device);
+	}
+
+	//	how to we wait for new devices?
+}
+
+Pop.Audio.WaitForNewMidiDevice = async function ()
+{
+	//	start the watch loop
+	if (!Pop.Audio.OnNewMidiDevicePromiseQueue)
+	{
+		Pop.Audio.EnumMidiDevicesLoop();
+	}
+
+	return Pop.Audio.OnNewMidiDevicePromiseQueue.WaitForNext();
+}
