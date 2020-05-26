@@ -165,14 +165,14 @@ Pop.Midi.Track = class
 		Meta.StartTimeMs = TimeMs;
 		Meta.EndTimeMs = null;
 		Meta.Velocity = Velocity;
-		Pop.Debug(`Note on: ${JSON.stringify(Meta)}`);
+		//Pop.Debug(`Note on: ${JSON.stringify(Meta)}`);
 		this.Notes.push(Meta);
 	}
 
 	PushNoteOff(Channel,TimeMs,Note,Velocity)
 	{
 		Note = Pop.Midi.GetNoteName(Note);
-		Pop.Debug(`Note off @${TimeMs}: ${Note} vel=${Velocity}`);
+		//Pop.Debug(`Note off @${TimeMs}: ${Note} vel=${Velocity}`);
 		//	get the last matching note and end it
 		const Meta = this.GetLastNote(Note,Channel);
 		Meta.EndTimeMs = TimeMs;
