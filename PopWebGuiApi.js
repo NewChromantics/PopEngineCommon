@@ -547,62 +547,78 @@ Pop.Gui.Label = function(Parent, Rect)
 
 
 
-Pop.Gui.Button = function(Parent, Rect)
+Pop.Gui.Button = class extends Pop.Gui.BaseControl
 {
-	this.OnClicked = function()
+	constructor(Parent,Rect)
 	{
-		Pop.Debug("Pop.Gui.Button.OnClicked");
+		super(...arguments);
+
+		//	overload
+		this.OnClicked = function ()
+		{
+			Pop.Debug("Pop.Gui.Button.OnClicked");
+		}
+
+		this.Element = this.CreateElement(Parent,Rect);
+		this.BindEvents();
 	}
-	
-	this.SetLabel = function(Value)
+
+	SetLabel(Value)
 	{
 		Pop.Debug("Set button label",Value);
-		if ( this.Element.type && this.Element.type == 'button' )
+		if (this.Element.type && this.Element.type == 'button')
 			this.Element.value = Value;
-		else if ( this.Element.innerText !== undefined )
+		else if (this.Element.innerText !== undefined)
 			this.Element.innerText = Value;
 		else
 			throw "Not sure how to set label on this button " + this.Element.constructor;
 	}
-	this.SetValue = this.SetLabel;
+
+	SetValue(Value)
+	{
+		return this.SetLabel(Value);
+	}
 	
-	this.OnElementClicked = function(Event)
+	OnElementClicked(Event)
 	{
 		this.OnClicked();
 	}
-	
-	this.CreateElement = function(Parent)
+
+	GetElement()
 	{
-		let SetupEvents = function(Element)
-		{
-			//	make sure its clickable!
-			Element.style.pointerEvents = 'auto';
-			Element.style.cursor = 'pointer';
-			
-			//	gr; this overrides old instance
-			Element.oninput = this.OnElementClicked.bind(this);
-			Element.onclick = this.OnElementClicked.bind(this);
-		}.bind(this);
-		
+		return this.Element;
+	}
+
+	BindEvents()
+	{
+		super.BindEvents();
+
+		const Element = this.GetElement();
+		//	make sure its clickable!
+		Element.style.pointerEvents = 'auto';
+		Element.style.cursor = 'pointer';
+
+		//	gr; this overrides old instance
+		Element.oninput = this.OnElementClicked.bind(this);
+		Element.onclick = this.OnElementClicked.bind(this);
+	}
+
+	CreateElement(Parent,Rect)
+	{		
 		let Div = GetExistingElement(Parent);
 		if ( Div )
-		{
-			SetupEvents(Div);
 			return Div;
-		}
 		
 		Div = document.createElement('input');
-		SetGuiControlStyle( Div, Rect );
+		if ( Rect )
+			SetGuiControlStyle( Div, Rect );
 		Div.type = 'button';
-		SetupEvents(Div);
 		
 		Div.innerText = 'Pop.Gui.Button innertext';
 		Div.value = 'Pop.Gui.Button value';
 		Parent.AddChildControl( Parent, Div );
 		return Div;
 	}
-	
-	this.Element = this.CreateElement(Parent);
 }
 
 Pop.Gui.Slider = function(Parent,Rect,Notches)
