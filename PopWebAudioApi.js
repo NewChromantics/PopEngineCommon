@@ -22,7 +22,7 @@ async function WaitForClick()
 	await DomTriggerPromise;
 }
 
-
+/*
 //	we need to associate these per context really...
 Pop.Audio.Uniforms = {};
 Pop.Audio.ContextJobQueue = new Pop.PromiseQueue();
@@ -84,6 +84,7 @@ Pop.Audio.SetUniformValue = function (Name,Value)
 	}
 	Pop.Audio.ContextJobQueue.Push(Job);
 }
+*/
 
 
 //	simply play a sound with HTMLAudio objects, no effects
