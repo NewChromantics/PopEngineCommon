@@ -393,7 +393,7 @@ Pop.Audio.Sound = class
 		this.ReverbGainNode.connect( Context.destination );
 	}
 	
-	Play(TimeMs)
+	Play(TimeMs=0)
 	{
 		const QueueTime = Pop.GetTimeNowMs();
 		//Pop.Debug(`Queue play(${Name}) at ${Pop.GetTimeNow}
