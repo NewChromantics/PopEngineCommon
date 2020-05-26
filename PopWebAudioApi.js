@@ -389,8 +389,18 @@ Pop.Audio.Sound = class
 		}
 
 		this.SampleNode.connect( this.ReverbNode );
-		this.ReverbNode.connect( this.ReverbGainNode );
-		this.ReverbGainNode.connect( Context.destination );
+		this.ReverbNode.connect(this.ReverbGainNode);
+
+		const ApplySampleGain = true;
+		if (ApplySampleGain)
+		{
+			this.ReverbGainNode.connect(this.SampleGainNode);
+			this.SampleGainNode.connect(Context.destination);
+		}
+		else
+		{
+			this.ReverbGainNode.connect(Context.destination);
+		}
 	}
 	
 	Play(TimeMs=0)
