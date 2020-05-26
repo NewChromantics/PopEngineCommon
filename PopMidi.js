@@ -132,6 +132,65 @@ function Slice16(Array,Start)
 	return Size16;
 }
 
+
+Pop.Midi.Track = class
+{
+	constructor()
+	{
+		this.Notes = [];
+	}
+
+	GetLastNote(Note,Channel)
+	{
+		for (let i = this.Notes.length - 1;i >= 0;i--)
+		{
+			const NoteMeta = this.Notes[i];
+			if (NoteMeta.Channel != Channel)
+				continue;
+			if (NoteMeta.Note != Note)
+				continue;
+			return NoteMeta;
+		}
+		throw `No last note (${Note},${Channel}) found`;
+	}
+
+	PushNoteOn(Channel,TimeMs,Note,Velocity)
+	{
+		if (Velocity == 0)
+			return this.PushNoteOff(Channel,TimeMs,Note,Velocity);
+
+		const Meta = {};
+		Meta.Note = Pop.Midi.GetNoteName(Note);
+		Meta.Channel = Channel;
+		Meta.StartTimeMs = TimeMs;
+		Meta.EndTimeMs = null;
+		Meta.Velocity = Velocity;
+		Pop.Debug(`Note on: ${JSON.stringify(Meta)}`);
+		this.Notes.push(Meta);
+	}
+
+	PushNoteOff(Channel,TimeMs,Note,Velocity)
+	{
+		Note = Pop.Midi.GetNoteName(Note);
+		Pop.Debug(`Note off @${TimeMs}: ${Note} vel=${Velocity}`);
+		//	get the last matching note and end it
+		const Meta = this.GetLastNote(Note,Channel);
+		Meta.EndTimeMs = TimeMs;
+		Meta.EndVelocity = Velocity;
+	}
+
+	GetDuration()
+	{
+		function GetNoteEnd(Note)
+		{
+			return (Note.EndTimeMs !== null) ? Note.EndTimeMs : Note.StartTimeMs;
+		}
+		const NoteEnds = this.Notes.map(GetNoteEnd);
+		const MaxTime = Math.max(...NoteEnds);
+		return MaxTime;
+	}
+}
+
 Pop.Midi.Parse = function (FileContents)
 {
 	function BpmToTempo(Bpm)
@@ -152,26 +211,13 @@ Pop.Midi.Parse = function (FileContents)
 	{
 		//	add to next undefined track
 		const NextTrack = Midi.Tracks.indexOf(null);
-		const NewTrack = {};
+		const NewTrack = new Pop.Midi.Track();
 		Midi.Tracks[NextTrack] = NewTrack;
 		
-		NewTrack.Notes = [];
-
 		function GetLastNote(Note,Channel)
 		{
-			for ( let i=NewTrack.Notes.length-1;	i>=0;	i-- )
-			{
-				const NoteMeta = NewTrack.Notes[i];
-				if ( NoteMeta.Channel != Channel )
-					continue;
-				if ( NoteMeta.Note != Note )
-					continue;
-				return NoteMeta;
-			}
-			throw `No last note (${Note},${Channel}) found`;
+			return NewTrack.GetLastNote(Note,Channel);
 		}
-		
-		//Pop.Debug(`NextTrack = ${NextTrack}`);
 
 		let DataPosition = 0;
 		function Peek8(Count=1)
@@ -227,36 +273,10 @@ Pop.Midi.Parse = function (FileContents)
 			return Data;
 		}
 		
-		function PushNoteOn(Channel,TimeMs,Note,Velocity)
-		{
-			if ( Velocity == 0 )
-				return PushNoteOff(Channel,TimeMs,Note,Velocity);
-			
-			const Meta = {};
-			Meta.Note = GetNoteName(Note);
-			Meta.Channel = Channel;
-			Meta.StartTimeMs = TimeMs;
-			Meta.EndTimeMs = null;
-			Meta.Velocity = Velocity;
-			Pop.Debug(`Note on: ${JSON.stringify(Meta)}`);
-			NewTrack.Notes.push(Meta);
-			Midi.DurationMs = Math.max( Midi.DurationMs, Meta.StartTimeMs );
-		}
-		
-		function PushNoteOff(Channel,TimeMs,Note,Velocity)
-		{
-			Note = GetNoteName(Note);
-			Pop.Debug(`Note off @${TimeMs}: ${Note} vel=${Velocity}`);
-			//	get the last matching note and end it
-			const Meta = GetLastNote(Note,Channel);
-			Meta.EndTimeMs = TimeMs;
-			Meta.EndVelocity = Velocity;
-			Midi.DurationMs = Math.max( Midi.DurationMs, Meta.EndTimeMs );
-		}
 		
 		function PushPolyKeyPressure(Channel,TimeMs,Note,Velocity)
 		{
-			Note = GetNoteName(Note);
+			Note = Pop.Midi.GetNoteName(Note);
 			Pop.Debug(`PolyKeyPressure @${TimeMs}: ${Note} x${Velocity}`);
 		}
 		
@@ -293,8 +313,8 @@ Pop.Midi.Parse = function (FileContents)
 			//	http://www.music.mcgill.ca/~ich/classes/mumt306/StandardMIDIfileformat.html#BMA1_
 			switch(MidiEvent)
 			{
-				case MidiEvents.NoteOn:				PushNoteOn(Channel,TimeMs,Pop8(),Pop8());	break;
-				case MidiEvents.NoteOff:			PushNoteOff(Channel,TimeMs,Pop8(),Pop8());	break;
+				case MidiEvents.NoteOn:				NewTrack.PushNoteOn(Channel,TimeMs,Pop8(),Pop8());	break;
+				case MidiEvents.NoteOff:			NewTrack.PushNoteOff(Channel,TimeMs,Pop8(),Pop8());	break;
 				case MidiEvents.PolyKeyPressure:	PushPolyKeyPressure(Channel,TimeMs,Pop8(),Pop8());	break;
 				case MidiEvents.ControlChange:		PushControlChange(Channel,TimeMs,Pop8(),Pop8());	break;
 				case MidiEvents.ProgramChange:		PushProgramChange(Channel,TimeMs,Pop8());	break;
@@ -430,6 +450,10 @@ Pop.Midi.Parse = function (FileContents)
 		EnumAtom( Atom.Fourcc, AtomData );
 		i += Atom.AtomSize;
 	}
-	
+
+	//	update duration
+	const TrackDurations = Midi.Tracks.map(t => t.GetDuration());
+	Midi.DurationMs = Math.max(...TrackDurations);
+
 	return Midi;
 }
