@@ -90,22 +90,22 @@ MetaEvents.EndOfTrack = 0x2f;
 
 //	http://www.music.mcgill.ca/~ich/classes/mumt306/StandardMIDIfileformat.html#BMA1_
 //	https://www.midi.org/specifications-old/item/table-1-summary-of-midi-message
-const MidiEvents = {};
-MidiEvents.Zero = 0b0000;
-MidiEvents.Six = 0b0110;
-MidiEvents.Three = 0b0011;
-MidiEvents.NoteOff = 0b1000;
-MidiEvents.NoteOn = 0b1001;
-MidiEvents.PolyKeyPressure = 0b1010;
-MidiEvents.ControlChange = 0b1011;
-MidiEvents.ProgramChange = 0b1100;
-MidiEvents.ChannelPressure = 0b1101;
-MidiEvents.PitchBendChange = 0b1110;
-MidiEvents.SystemMessage = 0b1111;
+Pop.Midi.MidiEvents = {};
+Pop.Midi.MidiEvents.Zero = 0b0000;
+Pop.Midi.MidiEvents.Six = 0b0110;
+Pop.Midi.MidiEvents.Three = 0b0011;
+Pop.Midi.MidiEvents.NoteOff = 0b1000;
+Pop.Midi.MidiEvents.NoteOn = 0b1001;
+Pop.Midi.MidiEvents.PolyKeyPressure = 0b1010;
+Pop.Midi.MidiEvents.ControlChange = 0b1011;
+Pop.Midi.MidiEvents.ProgramChange = 0b1100;
+Pop.Midi.MidiEvents.ChannelPressure = 0b1101;
+Pop.Midi.MidiEvents.PitchBendChange = 0b1110;
+Pop.Midi.MidiEvents.SystemMessage = 0b1111;
 
-MidiEvents.GetName = function(Event)
+Pop.Midi.MidiEvents.GetName = function(Event)
 {
-	const Name = Array_GetKey(MidiEvents,Event);
+	const Name = Array_GetKey(Pop.Midi.MidiEvents,Event);
 	return Name;
 }
 
@@ -305,7 +305,7 @@ Pop.Midi.Parse = function (FileContents)
 		{
 			const MidiEvent = (MidiEventAndChannel & 0b11110000) >> 4;
 			const Channel = MidiEventAndChannel & 0b00001111;
-			const MidiEventName = MidiEvents.GetName(MidiEvent) || MidiEvent.toString(16);
+			const MidiEventName = Pop.Midi.MidiEvents.GetName(MidiEvent) || MidiEvent.toString(16);
 			
 			const Next8 = Peek8();
 			//Pop.Debug(`Midi event: ${MidiEventName} Channel[${Channel}] Next=${Next8}`);
@@ -313,13 +313,13 @@ Pop.Midi.Parse = function (FileContents)
 			//	http://www.music.mcgill.ca/~ich/classes/mumt306/StandardMIDIfileformat.html#BMA1_
 			switch(MidiEvent)
 			{
-				case MidiEvents.NoteOn:				NewTrack.PushNoteOn(Channel,TimeMs,Pop8(),Pop8());	break;
-				case MidiEvents.NoteOff:			NewTrack.PushNoteOff(Channel,TimeMs,Pop8(),Pop8());	break;
-				case MidiEvents.PolyKeyPressure:	PushPolyKeyPressure(Channel,TimeMs,Pop8(),Pop8());	break;
-				case MidiEvents.ControlChange:		PushControlChange(Channel,TimeMs,Pop8(),Pop8());	break;
-				case MidiEvents.ProgramChange:		PushProgramChange(Channel,TimeMs,Pop8());	break;
-				case MidiEvents.ChannelPressure:	PushChannelPressure(Channel,TimeMs,Pop8());	break;
-				case MidiEvents.PitchBendChange:	PushPitchBendChange(Channel,TimeMs,Pop14());	break;
+				case Pop.Midi.MidiEvents.NoteOn:			NewTrack.PushNoteOn(Channel,TimeMs,Pop8(),Pop8());	break;
+				case Pop.Midi.MidiEvents.NoteOff:			NewTrack.PushNoteOff(Channel,TimeMs,Pop8(),Pop8());	break;
+				case Pop.Midi.MidiEvents.PolyKeyPressure:	PushPolyKeyPressure(Channel,TimeMs,Pop8(),Pop8());	break;
+				case Pop.Midi.MidiEvents.ControlChange:		PushControlChange(Channel,TimeMs,Pop8(),Pop8());	break;
+				case Pop.Midi.MidiEvents.ProgramChange:		PushProgramChange(Channel,TimeMs,Pop8());	break;
+				case Pop.Midi.MidiEvents.ChannelPressure:	PushChannelPressure(Channel,TimeMs,Pop8());	break;
+				case Pop.Midi.MidiEvents.PitchBendChange:	PushPitchBendChange(Channel,TimeMs,Pop14());	break;
 				default:
 					Pop.Debug(`Midi event: ${MidiEventName} Channel[${Channel}] Next=${Next8}`);
 					throw `Undhandled Midi event ${MidiEventName}`;
