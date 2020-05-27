@@ -185,9 +185,11 @@ Pop.Audio.Sound = class
 		this.SampleNode = null;
 
 		this.SampleGainNode = null;
+		this.SampleVelocityGainNode = null;
 		this.ReverbGainNode = null;
 		this.ReverbNode = null;
 		this.SampleVolume = 1;	//	gain
+		this.SampleVelocity = 1;	//	gain
 		this.ReverbVolume = 1;	//	wetness/gain
 
 		this.Name = Name;
@@ -200,7 +202,7 @@ Pop.Audio.Sound = class
 	IsSignificantVolumeChange(Old,New)
 	{
 		const Diff = Math.abs(Old-New);
-		if ( Diff < 0.01 )
+		if ( Diff < 0.001 )
 			return false;
 		return true;
 	}
@@ -227,6 +229,32 @@ Pop.Audio.Sound = class
 		
 		if ( this.SampleGainNode )
 			this.SampleGainNode.gain.value = Volume;
+	}
+	
+	SetVelocity(Velocity)
+	{
+		//	assume has not been transformed and still 0-127
+		if (!Number.isInteger(Velocity))
+			throw `Pop.Sound.SetVelocity(${Velocity}) is expecting an integer from 0-127`;
+		
+		//Velocity = (Velocity*Velocity) / (127*127);
+		const Velocity01 = Velocity/127;
+		//	velocity is a logarithmic curve, which gives us attenuation
+		//	gain is DB change (also logarithmic) so do we still need to convert attenuation to db change?
+		Velocity = Math.log1p(Velocity01);
+		
+		//	we need to change the nodes as little as possible, so have to check for differences
+		if ( !this.IsSignificantVolumeChange(this.SampleVelocity,Velocity) )
+			return;
+		/*
+		if ( Velocity < 0 || Velocity > 1 )
+			throw `Expecting Velocity(${Velocity}) 0...1`;
+*/
+		this.SampleVelocity = Velocity;
+		Pop.Debug(`New Velocity ${Velocity}`);
+		
+		if ( this.SampleVelocityGainNode )
+			this.SampleVelocityGainNode.gain.value = Velocity;
 	}
 	
 	SetSample(WaveData)
@@ -357,8 +385,17 @@ Pop.Audio.Sound = class
 			//	gr: doing this every time causes a click!
 			this.SampleGainNode.gain.value = this.SampleVolume;
 		}
-
-		this.SampleNode.connect( this.SampleGainNode );
+		
+		if ( !this.SampleVelocityGainNode )
+		{
+			this.SampleVelocityGainNode = Context.createGain();
+			//	make sure volume is correct
+			//	gr: doing this every time causes a click!
+			this.SampleVelocityGainNode.gain.value = this.SampleVelocity;
+		}
+		
+		this.SampleNode.connect( this.SampleVelocityGainNode );
+		this.SampleVelocityGainNode.connect( this.SampleGainNode );
 		this.SampleGainNode.connect( Context.destination );
 	}
 	
@@ -396,7 +433,8 @@ Pop.Audio.Sound = class
 		const ApplySampleGain = true;
 		if (ApplySampleGain)
 		{
-			this.ReverbGainNode.connect(this.SampleGainNode);
+			this.ReverbGainNode.connect(this.SampleVelocityGainNode);
+			this.SampleVelocityGainNode.connect(this.SampleGainNode);
 			this.SampleGainNode.connect(Context.destination);
 		}
 		else
