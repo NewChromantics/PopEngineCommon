@@ -108,7 +108,7 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 }
 
 
-Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
+Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 {
 	OnAnyChanged = OnAnyChanged || function(){};
 	
@@ -123,7 +123,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 	const ControlHeight = LabelHeight;
 	const ControlSpacing = 10;
 
-	this.Window = new Pop.Gui.Window("Params",WindowRect,false);
+	this.Window = new Pop.Gui.Window(WindowName,WindowRect,false);
 	this.Window.EnableScrollbars(false,true);
 	this.Handlers = {};
 	this.ParamMetas = {};
@@ -196,7 +196,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect)
 		{
 			Params[Name] = Value;
 			OnAnyChanged(Params,Name,Value,IsFinalValue);
-			this.WaitForParamsChangedPromiseQueue.Resolve(Params,Name,Value,IsFinalValue);
+			this.WaitForParamsChangedPromiseQueue.Push([Params,Name,Value,IsFinalValue]);
 		}.bind(this);
 		let IsValueSignificantChange = function (Old,New)
 		{

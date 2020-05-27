@@ -1,3 +1,5 @@
+Pop.Math = {};
+
 //	colour conversion namespace
 Pop.Colour = {};
 
@@ -17,6 +19,89 @@ Pop.Colour.RgbfToHex = function(Rgb)
 	let HexRgb = '#' + FloatToHex(Rgb[0]) + FloatToHex(Rgb[1]) + FloatToHex(Rgb[2]);
 	//Pop.Debug(Rgb,HexRgb);
 	return HexRgb;
+}
+
+
+//	returns null if no colour
+Math.ColourToHue = function(Rgbaf)
+{
+	let [r,g,b,a] = [...Rgbaf];
+	
+	//	https://stackoverflow.com/a/26233318/355753
+	const Min = Math.min( r,g,b );
+	const Max = Math.max( r,g,b );
+	
+	if ( Min == Max )
+		return null;
+	
+	//	have a darkness tolerance
+	if ( Max < 0.3 )
+		return null;
+	
+	//	and a brightness tolerance
+	if ( Min > 0.9 )
+		return null;
+	
+	//	todo: change this so it's 0-1 instead of 360
+	let Hue = 0;
+	if ( Max == r )
+	{
+		Hue = (g - b) / (Max - Min);
+	}
+	else if (Max == g)
+	{
+		Hue = 2 + (b - r) / (Max - Min);
+	}
+	else
+	{
+		Hue = 4 + (r - g) / (Max - Min);
+	}
+	
+	Hue = Hue * (360/6);
+	if ( Hue < 0 )
+		Hue += 360;
+	
+	Hue /= 360;
+	return Hue;
+}
+
+Math.HueToColour = function(Hue,Alpha=1)
+{
+	if ( Hue === null )
+		return [0,0,0,Alpha];
+	
+	let Normal = Hue;
+	//	same as NormalToRedGreenBluePurple
+	if ( Normal < 1/6 )
+	{
+		Normal = Math.Range( 0/6, 1/6, Normal );
+		return [1, Normal, 0, Alpha];
+	}
+	else if ( Normal < 2/6 )
+	{
+		Normal = Math.Range( 1/6, 2/6, Normal );
+		return [1-Normal, 1, 0, Alpha];
+	}
+	else if ( Normal < 3/6 )
+	{
+		Normal = Math.Range( 2/6, 3/6, Normal );
+		return [0, 1, Normal, Alpha];
+	}
+	else if ( Normal < 4/6 )
+	{
+		Normal = Math.Range( 3/6, 4/6, Normal );
+		return [0, 1-Normal, 1, Alpha];
+	}
+	else if ( Normal < 5/6 )
+	{
+		Normal = Math.Range( 4/6, 5/6, Normal );
+		return [Normal, 0, 1, Alpha];
+	}
+	else //if ( Normal < 5/6 )
+	{
+		Normal = Math.Range( 5/6, 6/6, Normal );
+		return [1, 0, 1-Normal, Alpha];
+	}
 }
 
 Math.DegToRad = function(Degrees)
@@ -76,6 +161,11 @@ Math.Lerp2 = Math.LerpArray;
 Math.Lerp3 = Math.LerpArray;
 Math.Lerp4 = Math.LerpArray;
 
+Math.Fract = function(a)
+{
+	return a % 1;
+}
+Math.fract = Math.Fract;
 
 
 Math.Dot2 = function(a,b)
@@ -413,7 +503,7 @@ function ClipRectsToOverlap(RectA,RectB)
 }
 
 
-function PointInsideRect(xy,Rect)
+Math.PointInsideRect = function(xy,Rect)
 {
 	let x = xy[0];
 	let y = xy[1];
@@ -439,23 +529,43 @@ function RectIsOverlapped(RectA,RectB)
 
 	//	there's a better way of doing this by putting rectB into RectA space
 	//	but lets do that later
-	if ( PointInsideRect( [la,ta], RectB ) )	return true;
-	if ( PointInsideRect( [ra,ta], RectB ) )	return true;
-	if ( PointInsideRect( [ra,ba], RectB ) )	return true;
-	if ( PointInsideRect( [la,ba], RectB ) )	return true;
+	if ( Math.PointInsideRect( [la,ta], RectB ) )	return true;
+	if ( Math.PointInsideRect( [ra,ta], RectB ) )	return true;
+	if ( Math.PointInsideRect( [ra,ba], RectB ) )	return true;
+	if ( Math.PointInsideRect( [la,ba], RectB ) )	return true;
 	
-	if ( PointInsideRect( [lb,tb], RectA ) )	return true;
-	if ( PointInsideRect( [rb,tb], RectA ) )	return true;
-	if ( PointInsideRect( [rb,bb], RectA ) )	return true;
-	if ( PointInsideRect( [lb,bb], RectA ) )	return true;
+	if ( Math.PointInsideRect( [lb,tb], RectA ) )	return true;
+	if ( Math.PointInsideRect( [rb,tb], RectA ) )	return true;
+	if ( Math.PointInsideRect( [rb,bb], RectA ) )	return true;
+	if ( Math.PointInsideRect( [lb,bb], RectA ) )	return true;
 	
 	return false;
 }
 
 
-function GetRectArea(Rect)
+Math.GetTriangleArea2 = function(PointA,PointB,PointC)
+{
+	//	get edge lengths
+	const a = Math.Distance2( PointA, PointB );
+	const b = Math.Distance2( PointB, PointC );
+	const c = Math.Distance2( PointC, PointA );
+	
+	//	Heron's formula
+	const PerimeterLength = a + b + c;
+	//	s=semi-permeter
+	const s = PerimeterLength / 2;
+	const Area = Math.sqrt( s * (s-a) * (s-b) * (s-c) );
+	return Area;
+}
+
+Math.GetRectArea = function(Rect)
 {
 	return Rect[2] * Rect[3];
+}
+
+Math.GetCircleArea = function(Radius)
+{
+	return Math.PI * (Radius*Radius);
 }
 
 //	overlap area is the overlap as a fraction of the biggest rect
@@ -470,12 +580,15 @@ function GetOverlapArea(Recta,Rectb)
 
 Pop.Colour.HexToRgb = function(HexRgb)
 {
-	let GetNibble = function(){};
+	let GetNibble;
+	let NibbleCount = 0;
 	
 	if ( typeof HexRgb == 'string' )
 	{
 		if ( HexRgb[0] != '#' )
 			throw HexRgb + " doesn't begin with #";
+		
+		NibbleCount = HexRgb.length-1;
 		
 		GetNibble = function(CharIndex)
 		{
@@ -494,6 +607,7 @@ Pop.Colour.HexToRgb = function(HexRgb)
 	}
 	else	//	int 0xffaa00
 	{
+		NibbleCount = 6;
 		GetNibble = function(Index)
 		{
 			Index = 5-Index;
@@ -503,17 +617,21 @@ Pop.Colour.HexToRgb = function(HexRgb)
 		}
 	}
 	
+	if ( NibbleCount != 3 && NibbleCount != 6 )
+		throw `Hex colour ${HexRgb} expected 3 or 6 nibbles, but is ${NibbleCount}`;
+
+	//Pop.Debug(`Hex colour ${HexRgb} nibbles; ${NibbleCount}`);
+	const NibbleMaps =
+	{
+		3: [0,0,1,1,2,2],
+		6: [0,1,2,3,4,5],
+	};
+	const NibbleMap = NibbleMaps[NibbleCount];
+	const [a,b,c,d,e,f] = NibbleMap.map(GetNibble);
 	
-	let a = GetNibble(0);
-	let b = GetNibble(1);
-	let c = GetNibble(2);
-	let d = GetNibble(3);
-	let e = GetNibble(4);
-	let f = GetNibble(5);
-	
-	let Red = (a<<4) | b;
-	let Green = (c<<4) | d;
-	let Blue = (e<<4) | f;
+	const Red = (a<<4) | b;
+	const Green = (c<<4) | d;
+	const Blue = (e<<4) | f;
 	//Pop.Debug(a,b,c,d,e,f);
 	//Pop.Debug(Red,Green,Blue);
 	return [Red,Green,Blue];
@@ -1061,9 +1179,41 @@ Math.PositionInsideBoxXZ = function(Position3,Box3)
 }
 
 
+//	4 control points
+Math.GetBezier4Position = function(Start,ControlA,ControlB,End,Time)
+{
+	function GetBezier(p0,p1,p2,p3,t)
+	{
+		const OneMinusTcu = (1-t) * (1-t) * (1-t);
+		const OneMinusTsq = (1-t) * (1-t);
+		const Tsq = t*t;
+		const Tcu = t*t*t;
+		//	https://javascript.info/bezier-curve
+		const p = OneMinusTcu*p0 + 3*OneMinusTsq*t*p1 +3*(1-t)*Tsq*p2 + Tcu*p3;
+		return p;
+	}
+
+	const Out = [];
+	const Dims = Start.length;
+	for ( let d=0;	d<Dims;	d++ )
+	{
+		const p0 = Start[d];
+		const p1 = ControlA[d];
+		const p2 = ControlB[d];
+		const p3 = End[d];
+		const p = GetBezier(p0,p1,p2,p3,Time);
+		Out[d] = p;
+	}
+	return Out;
+}
+	
+
 //	wait, is this cubic? it's not quadratic!
+//	gr: this uses 3 points, can calc middle, rename it!
 Math.GetCubicBezierPosition = function(Start,Middle,End,Time,TravelThroughMiddle=false)
 {
+	//P = (1-t)2P1 + 2(1-t)tP2 + t2P3
+	
 	function GetBezier(p0,p1,p2,t)
 	{
 		const oneMinusT = 1 - t;
@@ -1214,3 +1364,51 @@ Math.GetCatmullPathPosition = function(Path,Time,Loop=false)
 	const Pos = Math.GetCatmullPosition( Path[Previous], Path[Start], Path[End], Path[Next], Lerp );
 	return Pos;
 }
+
+
+
+//	generic function, which we can cache
+Pop.Math.RandomFloatCache = {};
+Pop.Math.FillRandomFloat = function(Array,Min=0,Max=1)
+{
+	if ( Array.constructor != Float32Array )
+		throw `Expecting Array(${typeof Array}/${Array.constructor}) to be Float32Array`;
+	
+	//	see if the old cache is big enough
+	const CacheName = `Float_${Min}_${Max}`;
+	
+	function WriteRandom(Array,Start,Length)
+	{
+		Pop.Debug(`WriteRandom(${Start},${Length})`,Array);
+		for ( let i=Start;	i<Start+Length;	i++ )
+			Array[i] = Math.Lerp( Min, Max, Math.random() );
+	}
+	
+	const TargetSize = Array.length;
+	
+	//	resize/create cache
+	if ( Pop.Math.RandomFloatCache.hasOwnProperty(CacheName) )
+	{
+		//	check if its big enough
+		const Cache = Pop.Math.RandomFloatCache[CacheName];
+		if ( Cache.length < TargetSize )
+		{
+			//	todo: save old, alloc new, memcpy into new
+			Cache = null;
+		}
+	}
+	
+	if ( !Pop.Math.RandomFloatCache[CacheName] )
+	{
+		//	new cache
+		const Cache = new Float32Array(TargetSize);
+		WriteRandom(Cache,0,Cache.length);
+		Pop.Math.RandomFloatCache[CacheName] = Cache;
+	}
+	
+	//	copy to target
+	const Cache = Pop.Math.RandomFloatCache[CacheName];
+	Array.set( Cache, 0, Array.length );
+}
+
+

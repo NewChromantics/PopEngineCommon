@@ -1,6 +1,8 @@
-Pop.Opengl.ShaderCache = [];
+//	gr: this shader cache should be gone in place of the asset manager now
+//		this file now provides RegisterShaderAssetFilename
+//		so this file should be shader-asset helper stuff
 
-//	modify object, but don't store a reference to it! otherwise it wont garbage collect
+Pop.Opengl.ShaderCache = [];
 var UniqueHashCounter = 1000;
 function GetUniqueHash(Object)
 {

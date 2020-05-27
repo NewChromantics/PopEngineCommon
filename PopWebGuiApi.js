@@ -3,6 +3,9 @@ Pop.Gui = {};
 
 function SetGuiControlStyle(Element,Rect)
 {
+	if ( !Rect )
+		return;
+	
 	let Left = Rect[0];
 	let Right = Rect[0] + Rect[2];
 	let Top = Rect[1];
@@ -346,6 +349,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		Element.style.zIndex = $HighestZ;
 		//Element.style.overflow = 'scroll';	//	inner div handles scrolling
 		Element.className = 'PopGuiWindow';
+		Element.id = Name;	//	multiple classes, so we can style at a generic level, and 
 		Parent.appendChild( Element );
 		SetGuiControl_Draggable( Element );
 		
@@ -399,6 +403,113 @@ function GetExistingElement(Name)
 	return null;
 }
 
+
+
+//	finally doing proper inheritance for gui
+Pop.Gui.BaseControl = class
+{
+	constructor()
+	{
+		this.OnDragDropQueue = new Pop.PromiseQueue();
+
+		//	WaitForDragDrop() can provide a function to rename files
+		//	this may have issues with multi-callers or race conditions
+		//	essentially if this wants to be different for different calls,
+		//	so we'd need to link this rename func to each promise waiting in the queue
+		this.OnDragDropRenameFiles = null;
+	}
+
+	BindEvents()
+	{
+		const Element = this.GetElement();
+		Element.addEventListener('drop',this.OnDragDrop.bind(this));
+		Element.addEventListener('dragover',this.OnTryDragDropEvent.bind(this));
+	}
+
+	GetDragDropFilenames(Files)
+	{
+		//	gr: we may need to make random/unique names here
+		const Filenames = Files.map(f => f.name);
+
+		//	let user modify filename array
+		if (this.OnDragDropRenameFiles)
+			this.OnDragDropRenameFiles(Filenames);
+
+		return Filenames;
+	}
+
+	OnTryDragDropEvent(Event)
+	{
+		//	if this.OnTryDragDrop has been overloaded, call it
+		//	if it hasn't, we allow drag and drop
+		//	gr: maybe API really should change, so it only gets turned on if WaitForDragDrop has been called
+		let AllowDragDrop = false;
+
+		//	gr: HTML doesnt allow us to see filenames, just type & count
+		//const Filenames = Array.from(Event.dataTransfer.files).map(this.GetDragDropFilename);
+		const Filenames = new Array(Event.dataTransfer.items.length);
+		Filenames.fill(null);
+
+		if (!this.OnTryDragDrop)
+		{
+			AllowDragDrop = true;
+		}
+		else
+		{
+			AllowDragDrop = this.OnTryDragDrop(Filenames);
+		}
+
+		if (AllowDragDrop)
+			Event.preventDefault();
+	}
+
+	OnDragDrop(Event)
+	{
+		async function LoadFilesAsync(Files)
+		{
+			const NewFilenames = this.GetDragDropFilenames(Files);
+			async function LoadFile(File,FileIndex)
+			{
+				const Filename = NewFilenames[FileIndex];
+				const Mime = File.type;
+				Pop.Debug(`Filename ${File.name}->${Filename} mime ${Mime}`);
+				const FileArray = await File.arrayBuffer();
+				Pop._AssetCache[Filename] = new Uint8Array(FileArray);
+				NewFilenames.push(Filename);
+			}
+			//	make a promise for each file
+			const LoadPromises = Files.map(LoadFile.bind(this));
+			//	wait for them to all load
+			await Promise.all(LoadPromises);
+
+			//	now notify with new filenames
+			this.OnDragDropQueue.Push(NewFilenames);
+		}
+
+		Event.preventDefault();
+
+		Pop.Debug(`OnDragDrop ${Event.dataTransfer}`);
+		if (Event.dataTransfer.files)
+		{
+			const Files = Array.from(Event.dataTransfer.files);
+			LoadFilesAsync.call(this,Files);
+		}
+		else
+		{
+			throw `Handle non-file drag&drop`;
+		}
+
+	}
+
+	async WaitForDragDrop(RenameFilenames)
+	{
+		this.OnDragDropRenameFiles = RenameFilenames;
+		return this.OnDragDropQueue.WaitForNext();
+	}
+}
+
+
+
 Pop.Gui.Label = function(Parent, Rect)
 {
 	this.ValueCache = null;
@@ -436,62 +547,93 @@ Pop.Gui.Label = function(Parent, Rect)
 
 
 
-Pop.Gui.Button = function(Parent, Rect)
+Pop.Gui.Button = class extends Pop.Gui.BaseControl
 {
-	this.OnClicked = function()
+	constructor(Parent,Rect)
 	{
-		Pop.Debug("Pop.Gui.Button.OnClicked");
+		super(...arguments);
+
+		//	overload
+		this.OnClicked = function ()
+		{
+			Pop.Debug("Pop.Gui.Button.OnClicked");
+		}
+
+		this.Element = this.CreateElement(Parent,Rect);
+		this.BindEvents();
+	}
+
+	//	todo: generic pop api for this
+	SetStyle(Key,Value)
+	{
+		this.Element.setAttribute(Key,Value);
+		this.Element.style.setProperty(`--${Key}`,Value);
 	}
 	
-	this.SetLabel = function(Value)
+	SetLabel(Value)
 	{
-		Pop.Debug("Set button label",Value);
-		if ( this.Element.type && this.Element.type == 'button' )
+		//Pop.Debug("Set button label",Value);
+		const ElementType = this.Element.tagName.toLowerCase();
+		
+		if ( ElementType == 'input' && this.Element.type == 'button' )
+		{
 			this.Element.value = Value;
-		else if ( this.Element.innerText !== undefined )
+		}
+		else if (this.Element.innerText !== undefined)
+		{
 			this.Element.innerText = Value;
+		}
 		else
 			throw "Not sure how to set label on this button " + this.Element.constructor;
 	}
-	this.SetValue = this.SetLabel;
+
+	SetValue(Value)
+	{
+		return this.SetLabel(Value);
+	}
 	
-	this.OnElementClicked = function(Event)
+	OnElementClicked(Event)
 	{
 		this.OnClicked();
 	}
-	
-	this.CreateElement = function(Parent)
+
+	GetElement()
 	{
-		let SetupEvents = function(Element)
-		{
-			//	make sure its clickable!
-			Element.style.pointerEvents = 'auto';
-			Element.style.cursor = 'pointer';
-			
-			//	gr; this overrides old instance
-			Element.oninput = this.OnElementClicked.bind(this);
-			Element.onclick = this.OnElementClicked.bind(this);
-		}.bind(this);
-		
+		return this.Element;
+	}
+
+	BindEvents()
+	{
+		super.BindEvents();
+
+		const Element = this.GetElement();
+		//	make sure its clickable!
+		Element.style.pointerEvents = 'auto';
+		Element.style.cursor = 'pointer';
+
+		//	gr; this overrides old instance
+		Element.oninput = this.OnElementClicked.bind(this);
+		Element.onclick = this.OnElementClicked.bind(this);
+	}
+
+	CreateElement(Parent,Rect)
+	{		
 		let Div = GetExistingElement(Parent);
 		if ( Div )
-		{
-			SetupEvents(Div);
 			return Div;
-		}
 		
-		Div = document.createElement('input');
-		SetGuiControlStyle( Div, Rect );
+		//	gr: hard to style buttons/inputs, no benefit afaik, but somehow we shoulld make this an option
+		const ElementType = 'span';//'input';
+		Div = document.createElement(ElementType);
+		if ( Rect )
+			SetGuiControlStyle( Div, Rect );
 		Div.type = 'button';
-		SetupEvents(Div);
 		
 		Div.innerText = 'Pop.Gui.Button innertext';
 		Div.value = 'Pop.Gui.Button value';
 		Parent.AddChildControl( Parent, Div );
 		return Div;
 	}
-	
-	this.Element = this.CreateElement(Parent);
 }
 
 Pop.Gui.Slider = function(Parent,Rect,Notches)
@@ -771,3 +913,61 @@ Pop.Gui.TextBox = function(Parent,Rect)
 	this.Element = this.CreateElement(Parent);
 	this.RefreshLabel();
 }
+
+
+Pop.Gui.ImageMap = class extends Pop.Gui.BaseControl
+{
+	constructor(Parent,Rect)
+	{
+		super(...arguments);
+
+		//	this needs to be generic...
+		//	also, the opengl window already handles a lot of this
+		if ( typeof Rect == 'string' )
+		{
+			this.Element = document.getElementById(Rect);
+		}
+		else
+		{
+			if ( !Parent )
+				throw `Creating new gui element requires parent`;
+
+			this.Element = document.createElement('canvas');
+
+			//	be smarter here
+			if ( Rect )
+				SetGuiControlStyle(this.Element,Rect);
+			else
+				SetGuiControl_SubElementStyle(this.Element);
+			
+			Parent.AddChildControl( this, this.Element );
+		}
+
+		this.BindEvents();
+	}
+
+	GetElement()
+	{
+		return this.Element;
+	}
+
+	SetImage(Image)
+	{
+		//	need to implement this in the proper image api
+		if ( Image.GetFormat() != 'RGBA' )
+			throw `todo: ImageMap requires RGBA pixels at the moment`;
+	
+		//	todo: init size
+		//	todo: platforms stretch input image
+		this.Element.width = Image.GetWidth();
+		this.Element.height = Image.GetHeight();
+		
+		//	we're kinda assuming the pixel buffer is an uint8array (but it needs to be clamped in chrome!)
+		const Pixels = new Uint8ClampedArray(Image.GetPixelBuffer());
+
+		const Context = this.Element.getContext('2d');
+		const Img = new ImageData( Pixels, Image.GetWidth(), Image.GetHeight() );
+		Context.putImageData(Img, 0, 0);
+	}
+}
+

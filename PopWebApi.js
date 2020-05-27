@@ -2,13 +2,102 @@
 const Pop = {};
 
 
+
+//	gr; this is a duplicate in PopApi.js
+//		fix this cyclic dependency!
+class WebApi_PromiseQueue
+{
+	constructor()
+	{
+		//	pending promises
+		this.Promises = [];
+		//	values we've yet to resolve (each is array capturing arguments from push()
+		this.PendingValues = [];
+	}
+	
+	async WaitForNext()
+	{
+		const Promise = this.Allocate();
+		return Promise;
+	}
+	
+	//	allocate a promise, maybe deprecate this for the API WaitForNext() that makes more sense for a caller
+	Allocate()
+	{
+		//	create a promise function with the Resolve & Reject functions attached so we can call them
+		function CreatePromise()
+		{
+			let Callbacks = {};
+			let PromiseHandler = function (Resolve,Reject)
+			{
+				Callbacks.Resolve = Resolve;
+				Callbacks.Reject = Reject;
+			}
+			let Prom = new Promise(PromiseHandler);
+			Prom.Resolve = Callbacks.Resolve;
+			Prom.Reject = Callbacks.Reject;
+			return Prom;
+		}
+		
+		const NewPromise = CreatePromise();
+		this.Promises.push( NewPromise );
+		return NewPromise;
+	}
+	
+	Flush(HandlePromise)
+	{
+		//	pop array incase handling results in more promises, so we avoid infinite loop
+		const Promises = this.Promises.splice(0);
+		//	need to try/catch here otherwise some will be lost
+		Promises.forEach( HandlePromise );
+	}
+	
+	Push(Value)
+	{
+		const Args = Array.from(arguments);
+		this.PendingValues.push( Args );
+		
+		//	now flush, in case there's something waiting for this value
+		if ( this.Promises.length == 0 )
+			return;
+		
+		//	and flush 0 (FIFO)
+		//	we pre-pop as we want all listeners to get the same value
+		const Value0 = this.PendingValues.shift();
+		const HandlePromise = function(Promise)
+		{
+			Promise.Resolve( ...Value0 );
+		}
+		this.Flush( HandlePromise );
+	}
+	
+	Resolve()
+	{
+		throw "PromiseQueue.Resolve() has been deprecated for Push() to enforce the pattern that we're handling a queue of values";
+	}
+	
+	//	reject all the current promises
+	Reject()
+	{
+		const Args = arguments;
+		const HandlePromise = function(Promise)
+		{
+			Promise.Reject( ...Args );
+		}
+		this.Flush( HandlePromise );
+	}
+}
+
+
+
 //	specific web stuff, assume this doesn't exist on desktop
 Pop.WebApi = {};
 
 //	we cannot poll the focus/blur state of our page, so we
 //	assume it's foreground (may not be the case if opened via middle button?)
 Pop.WebApi.ForegroundState = true;
-Pop.WebApi.ForegroundChangePromises = new PromiseQueue();
+//	gr: currently require a PromiseQueue() class as we have a cyclic dependency. Fix this!
+Pop.WebApi.ForegroundChangePromises = new WebApi_PromiseQueue();
 
 Pop.WebApi.IsMinimised = function ()
 {
@@ -56,12 +145,12 @@ Pop.WebApi.SetIsForeground = function (IsForeground)
 		Pop.WebApi.ForegroundState = IsForeground;
 
 	const Foreground = Pop.WebApi.IsForeground() && !Pop.WebApi.IsMinimised();
-	Pop.WebApi.ForegroundChangePromises.Resolve(Foreground);
+	Pop.WebApi.ForegroundChangePromises.Push(Foreground);
 }
 
-Pop.WebApi.WaitForForegroundChange = function ()
+Pop.WebApi.WaitForForegroundChange = async function ()
 {
-	return Pop.WebApi.ForegroundChangePromises.Allocate();
+	return Pop.WebApi.ForegroundChangePromises.WaitForNext();
 }
 
 
@@ -83,11 +172,11 @@ Pop.GetPlatform = function()
 	return 'Web';
 }
 
+//	we're interpreting the url as
+//	http://exefilename/exedirectory/?exearguments
 Pop.GetExeFilename = function()
 {
-	//	this may not actually be a filename
-	//	note here if there is ever a use for GetExeFilename on web
-	return window.location.pathname;
+	return window.location.hostname;
 }
 
 Pop.GetExeDirectory = function()
@@ -102,7 +191,30 @@ Pop.GetExeDirectory = function()
 Pop.GetExeArguments = function()
 {
 	//	gr: probably shouldn't lowercase now it's proper
-	const UrlParams = window.location.search.replace('?',' ').trim().split('&');
+	const UrlArgs = window.location.search.replace('?',' ').trim().split('&');
+	
+	//	turn into keys & values - gr: we're not doing this in engine! fix so they match!
+	const UrlParams = {};
+	function AddParam(Argument)
+	{
+		let [Key,Value] = Argument.split('=',2);
+		if ( Value === undefined )
+			Value = true;
+		
+		//	attempt some auto conversions
+		if ( typeof Value == 'string' )
+		{
+			const NumberValue = Number(Value);
+			if ( !isNaN(NumberValue) )
+				Value = NumberValue;
+			else if ( Value == 'true' )
+				Value = true;
+			else if ( Value == 'false' )
+				Value = false;
+		}
+		UrlParams[Key] = Value;
+	}
+	UrlArgs.forEach(AddParam);
 	return UrlParams;
 }
 
@@ -114,76 +226,108 @@ Pop.GetTimeNowMs = function()
 
 Pop.LoadFileAsImageAsync = async function(Filename)
 {
-	let Promise = Pop.CreatePromise();
+	//	return cache if availible, if it failed before, try and load again
+	const Cache = Pop.GetCachedAssetOrFalse(Filename);
+	if ( Cache !== false )
+		return Cache;
 	
-	const HtmlImage = new Image();
-	HtmlImage.crossOrigin = "anonymous";
-	HtmlImage.onload = function()
+	function LoadHtmlImageAsync()
 	{
-		Promise.Resolve( HtmlImage );
-	};
-	HtmlImage.onerror = function(Error)
-	{
-		Promise.Reject( Error );
+		let Promise = Pop.CreatePromise();
+		const HtmlImage = new Image();
+		HtmlImage.crossOrigin = "anonymous";
+		HtmlImage.onload = function ()
+		{
+			Promise.Resolve(HtmlImage);
+		};
+		HtmlImage.onerror = function (Error)
+		{
+			Promise.Reject(Error);
+		}
+		//  trigger load
+		HtmlImage.src = Filename;
+		return Promise;
 	}
-	//  trigger load
-	HtmlImage.src = Filename;
-	
-	return Promise;
+
+	//	the API expects to return an image, so wait for the load,
+	//	then make an image. This change will have broken the Pop.Image(Filename)
+	//	constructor as it uses the asset cache, which is only set after this
+	const HtmlImage = await LoadHtmlImageAsync();
+	const Img = new Pop.Image(HtmlImage);
+	Pop.SetFileCache(Filename,Img);
+	return Img;
 }
 
 Pop.LoadFileAsStringAsync = async function(Filename)
 {
+	//	return cache if availible, if it failed before, try and load again
+	const Cache = Pop.GetCachedAssetOrFalse(Filename);
+	if ( Cache !== false )
+		return Cache;
+	
 	const Fetched = await fetch(Filename);
 	//Pop.Debug("Fetch created:", Filename, Fetched);
 	const Contents = await Fetched.text();
 	//Pop.Debug("Fetch finished:", Filename, Fetched);
 	if ( !Fetched.ok )
 		throw "Failed to fetch " + Filename + "; " + Fetched.statusText;
+	Pop.SetFileCache(Filename,Contents);
 	return Contents;
+}
+
+
+Pop.LoadFileAsArrayBufferAsync = async function(Filename)
+{
+	//	return cache if availible, if it failed before, try and load again
+	const Cache = Pop.GetCachedAssetOrFalse(Filename);
+	if ( Cache !== false )
+		return Cache;
+
+	const Fetched = await fetch(Filename);
+	//Pop.Debug("Fetch created:", Filename, Fetched);
+	const Contents = await Fetched.arrayBuffer();
+	//Pop.Debug("Fetch finished:", Filename, Fetched);
+	
+	//	todo: SetFileCacheError ?
+	if ( !Fetched.ok )
+		throw "Failed to fetch " + Filename + "; " + Fetched.statusText;
+	const Contents8 = new Uint8Array(Contents);
+	Pop.SetFileCache(Filename,Contents8);
+	return Contents8;
+}
+
+Pop.SetFileCache = function(Filename,Contents)
+{
+	if ( Pop._AssetCache.hasOwnProperty(Filename) )
+	{
+		Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
+	}
+	Pop._AssetCache[Filename] = Contents;
+}
+
+Pop.SetFileCacheError = function(Filename,Error)
+{
+	Pop.Debug("Error loading file",Filename,e);
+	Pop.SetFileCache(Filename,false);
 }
 
 
 Pop.AsyncCacheAssetAsString = async function(Filename)
 {
-	if ( Pop._AssetCache.hasOwnProperty(Filename) )
-	{
-		Pop.Debug("Asset " + Filename + " already cached");
-		return;
-	}
-	
-	try
-	{
-		const Contents = await Pop.LoadFileAsStringAsync( Filename );
-		Pop._AssetCache[Filename] = Contents;
-	}
-	catch(e)
-	{
-		Pop.Debug("Error loading file",Filename,e);
-		Pop._AssetCache[Filename] = false;
-		throw "Error loading file " + Filename + ": " + e;
-	}
+	Pop.Debug(`Deprecated: AsyncCacheAssetAsString(), now just use LoadFileAsStringAsync(). Caveat is that this function used to mark file as error'd, but now will throw`);
+	return Pop.LoadFileAsStringAsync(Filename);
 }
 
 Pop.AsyncCacheAssetAsImage = async function(Filename)
 {
-	if ( Pop._AssetCache.hasOwnProperty(Filename) )
-	{
-		Pop.Debug("Asset " + Filename + " already cached");
-		return;
-	}
-	
-	try
-	{
-		const Contents = await Pop.LoadFileAsImageAsync( Filename );
-		Pop._AssetCache[Filename] = Contents;
-	}
-	catch(e)
-	{
-		Pop.Debug("Error loading file",Filename,e);
-		Pop._AssetCache[Filename] = false;
-		throw "Error loading file " + Filename + ": " + e;
-	}
+	Pop.Debug(`Deprecated: AsyncCacheAssetAsImage(), now just use LoadFileAsImageAsync(). Caveat is that this function used to mark file as error'd, but now will throw`);
+	return Pop.LoadFileAsImageAsync(Filename);
+}
+
+Pop.AsyncCacheAssetAsArrayBuffer = async function(Filename)
+{
+	Pop.Debug(`Deprecated: AsyncCacheAssetAsArrayBuffer(), now just use LoadFileAsArrayBufferAsync(). Caveat is that this function used to mark file as error'd, but now will throw`);
+	return Pop.LoadFileAsArrayBufferAsync(Filename);
 }
 
 Pop.LoadFileAsString = function(Filename)
@@ -221,6 +365,21 @@ Pop.LoadFileAsImage = function(Filename)
 	return Pop.GetCachedAsset(Filename);
 }
 
+
+Pop.LoadFileAsArrayBuffer = function(Filename)
+{
+	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
+	{
+		throw "Cannot synchronously load " + Filename + ", needs to be precached first with [async] Pop.AsyncCacheAsset()";
+	}
+	
+	//	gr: our asset loader currently replaces the contents of this
+	//		with binary, so do the conversion here (as native engine does)
+	const Contents = Pop.GetCachedAsset(Filename);
+	return Contents;
+}
+
+
 Pop.WriteStringToFile = function(Filename,Contents)
 {
 	throw "WriteStringToFile not supported on this platform";
@@ -254,6 +413,15 @@ Pop.GetCachedAsset = function(Filename)
 	return Pop._AssetCache[Filename];
 }
 
+Pop.GetCachedAssetOrFalse = function(Filename)
+{
+	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
+		return false;
+
+	const Asset = Pop._AssetCache[Filename];
+	return Asset;
+}
+
 Pop.CompileAndRun = function(Source,Filename)
 {
 	let OnLoaded = function(x)
@@ -282,7 +450,7 @@ Pop.CompileAndRun = function(Source,Filename)
 
 Pop.Yield = function(Milliseconds)
 {
-	let Promise = Pop.CreatePromise();
+	const Promise = Pop.CreatePromise();
 	setTimeout( Promise.Resolve, Milliseconds );
 	return Promise;
 }
@@ -293,6 +461,22 @@ Pop.LeapMotion = {};
 Pop.LeapMotion.Input = function()
 {
 	throw "Leap motion not supported";
+}
+
+//	gr: does this need its own namespace?
+Pop.Xml = {};
+
+Pop.Xml.Parse = function(Xml)
+{
+	//	web version makes use of the dom parser
+	//	https://stackoverflow.com/a/7951947/355753
+	if ( typeof window.DOMParser == 'undefined' )
+		throw "XML parser not supported";
+	
+	const Parser = new window.DOMParser();
+	const Dom = Parser.parseFromString(Xml, 'text/xml');
+	const Object = Dom.documentElement;
+	return Object;
 }
 
 
