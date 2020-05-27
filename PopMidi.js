@@ -19,7 +19,7 @@ Pop.Midi.GetNoteName = function(MidiNoteValue)
 	//	this produces a filename + url friendly note name C~_1 D_1 F~3 B5
 	const NoteNames = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 	//const OctaveNames = ['_1',0,1,2,3,4,5,6,7,8,9];
-	const OctaveNames = ['_2','_1',0,1,2,3,4,5,6,7,8];
+	const OctaveNames = ['-2','-1',0,1,2,3,4,5,6,7,8];
 	if ( Note < 0 || Note >= NoteNames.length || Octave < 0 || Octave >= OctaveNames.length )
 		throw `Midi note value ${MidiNoteValue} out of range (Note=${Note} Octave=${Octave})`;
 	return NoteNames[Note]+OctaveNames[Octave];
