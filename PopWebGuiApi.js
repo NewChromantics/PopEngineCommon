@@ -566,10 +566,16 @@ Pop.Gui.Button = class extends Pop.Gui.BaseControl
 	SetLabel(Value)
 	{
 		//Pop.Debug("Set button label",Value);
-		if (this.Element.type && this.Element.type == 'button')
+		const ElementType = this.Element.tagName.toLowerCase();
+		
+		if ( ElementType == 'input' && this.Element.type == 'button' )
+		{
 			this.Element.value = Value;
+		}
 		else if (this.Element.innerText !== undefined)
+		{
 			this.Element.innerText = Value;
+		}
 		else
 			throw "Not sure how to set label on this button " + this.Element.constructor;
 	}
@@ -609,7 +615,9 @@ Pop.Gui.Button = class extends Pop.Gui.BaseControl
 		if ( Div )
 			return Div;
 		
-		Div = document.createElement('input');
+		//	gr: hard to style buttons/inputs, no benefit afaik, but somehow we shoulld make this an option
+		const ElementType = 'span';//'input';
+		Div = document.createElement(ElementType);
 		if ( Rect )
 			SetGuiControlStyle( Div, Rect );
 		Div.type = 'button';
