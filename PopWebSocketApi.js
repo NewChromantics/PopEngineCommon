@@ -24,17 +24,17 @@ Pop.Websocket.Client = function(Hostname,Port=80)
 	
 	this.WaitForConnect = async function()
 	{
-		return this.OnConnectPromises.Allocate();
+		return this.OnConnectPromises.WaitForNext();
 	}
 	
 	this.WaitForMessage = async function()
 	{
-		return this.OnMessagePromises.Allocate();
+		return this.OnMessagePromises.WaitForNext();
 	}
 	
 	this.OnConnected = function(Event)
 	{
-		this.OnConnectPromises.Resolve(Event);
+		this.OnConnectPromises.Push(Event);
 	}
 	
 	this.OnError = function(Event)
@@ -58,11 +58,15 @@ Pop.Websocket.Client = function(Hostname,Port=80)
 	this.OnMessage = function(Event)
 	{
 		const Data = Event.data;
-		
+		const Packet = {};
+		Packet.Peer = this.GetPeers()[0];
+		Packet.Data = null;
+
 		//	if we get a blob, convert to array (no blobs in normal API)
 		if ( typeof Data == 'string' )
 		{
-			this.OnMessagePromises.Resolve(Data);
+			Packet.Data = Data;
+			this.OnMessagePromises.Push(Packet);
 			return;
 		}
 		
@@ -72,7 +76,8 @@ Pop.Websocket.Client = function(Hostname,Port=80)
 			{
 				const DataArrayBuffer = await Data.arrayBuffer();
 				const DataArray = new Uint8Array(DataArrayBuffer);
-				this.OnMessagePromises.Resolve( DataArray );
+				Packet.Data = DataArray;
+				this.OnMessagePromises.Push( Packet );
 			}.bind(this);
 			
 			ConvertData().then().catch( this.OnError.bind(this) );
