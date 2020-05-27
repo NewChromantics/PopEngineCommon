@@ -175,6 +175,9 @@ Pop.Audio.Sound = class
 {
 	constructor(WaveData,Name)
 	{
+		//	overload this for visualisation
+		this.OnVolumeChanged = function(Volume01){};
+		
 		this.SampleBuffer = null;
 		this.ReverbBuffer = null;
 		
@@ -351,6 +354,8 @@ Pop.Audio.Sound = class
 				this.SampleNode.stop();
 			this.SampleNode.disconnect();
 			this.SampleNode = null;
+			
+			this.OnVolumeChanged(0);
 		}
 		
 		//	gr: dont need to keep deleting this
@@ -394,6 +399,10 @@ Pop.Audio.Sound = class
 			this.SampleVelocityGainNode.gain.value = this.SampleVelocity;
 		}
 		
+		//	report for visualisation
+		const Volume = this.SampleGainNode.gain.value * this.SampleVelocityGainNode.gain.value;
+		this.OnVolumeChanged(Volume);
+
 		this.SampleNode.connect( this.SampleVelocityGainNode );
 		this.SampleVelocityGainNode.connect( this.SampleGainNode );
 		this.SampleGainNode.connect( Context.destination );
