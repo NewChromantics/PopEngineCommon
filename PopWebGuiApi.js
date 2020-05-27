@@ -565,7 +565,7 @@ Pop.Gui.Button = class extends Pop.Gui.BaseControl
 
 	SetLabel(Value)
 	{
-		Pop.Debug("Set button label",Value);
+		//Pop.Debug("Set button label",Value);
 		if (this.Element.type && this.Element.type == 'button')
 			this.Element.value = Value;
 		else if (this.Element.innerText !== undefined)
