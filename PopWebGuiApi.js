@@ -563,6 +563,13 @@ Pop.Gui.Button = class extends Pop.Gui.BaseControl
 		this.BindEvents();
 	}
 
+	//	todo: generic pop api for this
+	SetStyle(Key,Value)
+	{
+		this.Element.setAttribute(Key,Value);
+		this.Element.style.setProperty(`--${Key}`,Value);
+	}
+	
 	SetLabel(Value)
 	{
 		//Pop.Debug("Set button label",Value);
