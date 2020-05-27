@@ -6,6 +6,7 @@ Pop.AssetServer = class
 		this.CurrentPort = null;
 		this.Ports = Array.isArray(WebsocketPorts) ? WebsocketPorts : [WebsocketPorts];
 
+		this.ListenDirectories = [];
 		this.FileMonitor = new Pop.FileMonitor();
 		this.ChangedQueue = new Pop.PromiseQueue();
 
@@ -15,9 +16,25 @@ Pop.AssetServer = class
 
 	ListenToDirectory(Directory)
 	{
+		this.ListenDirectories.push(Directory);
 		this.FileMonitor.Add(Directory);
 	}
 
+	TouchAllFiles()
+	{
+		//	get all files in directories we're watching
+		function ListFiles(Directory)
+		{
+			function ListFile(Filename)
+			{
+				this.ChangedQueue.Push(Filename);
+			}
+			const Filenames = Pop.EnumDirectory(Directory);
+			Filenames.forEach(ListFile.bind(this));
+		}
+		this.ListenDirectories.forEach(ListFiles.bind(this));
+	}
+	
 	async FileWatchLoop()
 	{
 		while (true)
@@ -39,12 +56,37 @@ Pop.AssetServer = class
 		return Port;
 	}
 
-	OnMessage(Message,SendReply)
+	OnMessage(Packet,SendReply)
 	{
 		//	check for meta or file requests and send stuff back
-		Pop.Debug(`Got Message ${Message}`);
+		Pop.Debug(`Got Message ${Packet.Data}`);
+		
+		try
+		{
+			const Message = JSON.parse(Packet.Data);
+			if ( Message.Command == 'TouchAll' )
+				this.TouchAllFiles();
+			else if ( Message.Command == 'RequestFile' )
+				this.OnRequestFile(Message,SendReply);
+			else
+				throw `Unhandled Command ${Message.Command}`;
+		}
+		catch(e)
+		{
+			const Reply = {};
+			Reply.Error = e;
+			SendReply( JSON.stringify(Reply) );
+			Pop.Debug(`Error with incoming message ${JSON.stringify(Packet)}; ${e}`);
+		}
 	}
 
+	OnRequestFile(Message,SendReply)
+	{
+		//	grab file... as what!? always send binary?
+		const Contents = Pop.LoadFileAsString(Message.Filename);
+		SendReply(Contents);
+	}
+	
 	async WebsocketLoop()
 	{
 		while (true)
@@ -70,6 +112,7 @@ Pop.AssetServer = class
 					{
 						const ChangedFile = await this.ChangedQueue.WaitForNext();
 						let ChangedMeta = {};
+						ChangedMeta.Command = 'FileChanged';
 						ChangedMeta.Filename = ChangedFile;
 						ChangedMeta = JSON.stringify(ChangedMeta);
 						SendToPeers(ChangedMeta);
