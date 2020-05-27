@@ -318,6 +318,7 @@ Pop.Audio.Sound = class
 	{
 		if ( this.SampleNode )
 		{
+			//	this should stop the reverb too as it's linked to this node
 			if ( this.SampleNode.stop )
 				this.SampleNode.stop();
 			this.SampleNode.disconnect();
@@ -430,10 +431,7 @@ Pop.Audio.Sound = class
 	{
 		async function DoStop()
 		{
-			if ( !this.CurrentSampleNode )
-				return;
-			const DelaySecs = 0;
-			this.CurrentSampleNode.stop(DelaySecs);
+			this.DestroySamplerNodes();
 		}
 		this.ActionQueue.Push(DoStop);
 	}
