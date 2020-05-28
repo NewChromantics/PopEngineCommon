@@ -420,6 +420,37 @@ Pop.WriteStringToFile = function(Filename,Contents)
 	}		
 }
 
+Pop.LoadFilePromptAsStringAsync = async function (Filename)
+{
+	const OnChangedPromise = Pop.CreatePromise();
+	const InputElement = window.document.createElement('input');
+	InputElement.setAttribute('type','file');
+	//InputElement.multiple = true;
+	InputElement.setAttribute('accept','Any/*');
+
+	function OnFilesChanged(Event)
+	{
+		//	extract files from the control
+		const Files = Array.from(InputElement.files);
+		Pop.Debug(`OnChanged: ${JSON.stringify(Files)}`);
+		OnChangedPromise.Resolve(Files);
+		InputElement.files = null;
+	}
+	//InputElement.addEventListener('input',OnFilesChanged,false);
+	InputElement.addEventListener('change',OnFilesChanged,false);
+	InputElement.click();
+
+	const Files = await OnChangedPromise;
+	if (!Files.length)
+		throw `User selected no files`;
+
+	//	read file contents
+	//	currently only interested in first
+	const File = Files[0];
+	const Contents = await File.text();
+	return Contents;
+}
+
 Pop.FileExists = function(Filename)
 {
 	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
