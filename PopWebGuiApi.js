@@ -566,7 +566,11 @@ Pop.Gui.Button = class extends Pop.Gui.BaseControl
 	//	todo: generic pop api for this
 	SetStyle(Key,Value)
 	{
+		//	change an attribute
 		this.Element.setAttribute(Key,Value);
+		//	set a css value
+		this.Element.style.setProperty(`${Key}`,Value);
+		//	set a css variable
 		this.Element.style.setProperty(`--${Key}`,Value);
 	}
 	
