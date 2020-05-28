@@ -382,7 +382,25 @@ Pop.LoadFileAsArrayBuffer = function(Filename)
 
 Pop.WriteStringToFile = function(Filename,Contents)
 {
-	throw "WriteStringToFile not supported on this platform";
+	//	gr: "not a sequence" error means the contents need to be an array
+	const ContentsBlob = new Blob([Contents],
+		{
+			type: "text/plain;charset=utf-8"
+		}
+	);
+
+	const DataUrl = URL.createObjectURL(ContentsBlob);
+	Pop.Debug(`WriteFile blob url: `)
+
+	//	make a temp element to invoke the download
+	const a = window.document.createElement('a');
+	a.href = DataUrl;
+	a.download = Filename;
+	document.body.appendChild(a);
+	a.click();
+	document.body.removeChild(a);
+	//	delete is okay here?
+	URL.revokeObjectURL(ContentsBlob);
 }
 
 Pop.FileExists = function(Filename)
