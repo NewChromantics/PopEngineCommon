@@ -382,6 +382,11 @@ Pop.LoadFileAsArrayBuffer = function(Filename)
 
 Pop.WriteStringToFile = function(Filename,Contents)
 {
+	//	on web (chrome?)
+	//		folder/folder/file.txt
+	//	turns in folder_folder_file.txt, so clip the name
+	const DownloadFilename = Filename.split('/').slice(-1)[0];
+
 	//	gr: "not a sequence" error means the contents need to be an array
 	const ContentsBlob = new Blob([Contents],
 		{
@@ -394,13 +399,25 @@ Pop.WriteStringToFile = function(Filename,Contents)
 
 	//	make a temp element to invoke the download
 	const a = window.document.createElement('a');
-	a.href = DataUrl;
-	a.download = Filename;
-	document.body.appendChild(a);
-	a.click();
-	document.body.removeChild(a);
-	//	delete is okay here?
-	URL.revokeObjectURL(ContentsBlob);
+	function Cleanup()
+	{
+		document.body.removeChild(a);
+		//	delete seems okay here
+		URL.revokeObjectURL(ContentsBlob);
+	}
+	try
+	{
+		a.href = DataUrl;
+		a.download = DownloadFilename;
+		document.body.appendChild(a);
+		a.click();
+		Cleanup();
+	}
+	catch (e)
+	{
+		Cleanup();
+		throw e;
+	}		
 }
 
 Pop.FileExists = function(Filename)
