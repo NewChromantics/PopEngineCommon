@@ -382,7 +382,73 @@ Pop.LoadFileAsArrayBuffer = function(Filename)
 
 Pop.WriteStringToFile = function(Filename,Contents)
 {
-	throw "WriteStringToFile not supported on this platform";
+	//	on web (chrome?)
+	//		folder/folder/file.txt
+	//	turns in folder_folder_file.txt, so clip the name
+	const DownloadFilename = Filename.split('/').slice(-1)[0];
+
+	//	gr: "not a sequence" error means the contents need to be an array
+	const ContentsBlob = new Blob([Contents],
+		{
+			type: "text/plain;charset=utf-8"
+		}
+	);
+
+	const DataUrl = URL.createObjectURL(ContentsBlob);
+	Pop.Debug(`WriteFile blob url: `)
+
+	//	make a temp element to invoke the download
+	const a = window.document.createElement('a');
+	function Cleanup()
+	{
+		document.body.removeChild(a);
+		//	delete seems okay here
+		URL.revokeObjectURL(ContentsBlob);
+	}
+	try
+	{
+		a.href = DataUrl;
+		a.download = DownloadFilename;
+		document.body.appendChild(a);
+		a.click();
+		Cleanup();
+	}
+	catch (e)
+	{
+		Cleanup();
+		throw e;
+	}		
+}
+
+Pop.LoadFilePromptAsStringAsync = async function (Filename)
+{
+	const OnChangedPromise = Pop.CreatePromise();
+	const InputElement = window.document.createElement('input');
+	InputElement.setAttribute('type','file');
+	//InputElement.multiple = true;
+	InputElement.setAttribute('accept','Any/*');
+
+	function OnFilesChanged(Event)
+	{
+		//	extract files from the control
+		const Files = Array.from(InputElement.files);
+		Pop.Debug(`OnChanged: ${JSON.stringify(Files)}`);
+		OnChangedPromise.Resolve(Files);
+		InputElement.files = null;
+	}
+	//InputElement.addEventListener('input',OnFilesChanged,false);
+	InputElement.addEventListener('change',OnFilesChanged,false);
+	InputElement.click();
+
+	const Files = await OnChangedPromise;
+	if (!Files.length)
+		throw `User selected no files`;
+
+	//	read file contents
+	//	currently only interested in first
+	const File = Files[0];
+	const Contents = await File.text();
+	return Contents;
 }
 
 Pop.FileExists = function(Filename)
