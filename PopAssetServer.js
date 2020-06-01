@@ -119,6 +119,8 @@ Pop.AssetServer = class
 			const Contents = new Uint8Array( MetaJsonBin.length + FileContents.length );
 			Contents.set( MetaJsonBin, 0 );
 			Contents.set( FileContents, MetaJsonBin.length );
+			//const ContentsStr = Pop.BytesToString(Contents);
+			//Pop.Debug(`New contents ${ContentsStr}`);
 			
 			SendReply(Contents);
 			return;
