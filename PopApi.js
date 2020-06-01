@@ -43,6 +43,38 @@ Pop.Array.MoveElementFromArrayToArray = function(Element,SourceArray,DestArray)
 }
 
 
+//	maybe better named as BufferToString? but this should be clear its "text vs binary"
+//	this is for ascii, NOT UTF16 (hence bytes, not shorts)
+Pop.BytesToString = function(Bytes)
+{
+	let Str = "";
+	for ( let i=0;	i<Bytes.length;	i++ )
+	{
+		const Char = String.fromCharCode(Bytes[i]);
+		Str += Char;
+	}
+	return String;
+}
+
+
+Pop.StringToBytes = function(Str,AsArrayBuffer=false)
+{
+	let Bytes = [];
+	for ( let i=0;	i<Str.length;	i++ )
+	{
+		const CharCode = Str.charCodeAt(i);
+		if ( CharCode >= 128 )
+			throw `Pop.StringToBytes(${Str.substr(i,10)}) has non-ascii char`;
+		Bytes.push(CharCode);
+	}
+	
+	if ( AsArrayBuffer )
+		Bytes = new Uint8Array(Bytes);
+	return Bytes;
+}
+
+
+
 //	gr: this is to deal with
 //	SomeThing.constructor == Pop.Image <-- chrome/v8
 //	SomeThing.constructor == Pop.Image.constructor <-- javascript core
