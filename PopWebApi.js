@@ -263,7 +263,16 @@ Pop.LoadFileAsStringAsync = async function(Filename)
 	//	return cache if availible, if it failed before, try and load again
 	const Cache = Pop.GetCachedAssetOrFalse(Filename);
 	if ( Cache !== false )
-		return Cache;
+	{
+		//	convert cache if its not a string. Remote system may deliver raw binary file
+		//	and we don't know the type until it's requested
+		if ( typeof Cache == 'string' )
+			return Cache;
+
+		const CacheString = Pop.BytesToString(Cache);
+		Pop.SetFileCache(Filename,CacheString);
+		return CacheString;
+	}
 	
 	const Fetched = await fetch(Filename);
 	//Pop.Debug("Fetch created:", Filename, Fetched);
