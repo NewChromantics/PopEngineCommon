@@ -53,7 +53,7 @@ Pop.BytesToString = function(Bytes)
 		const Char = String.fromCharCode(Bytes[i]);
 		Str += Char;
 	}
-	return String;
+	return Str;
 }
 
 
