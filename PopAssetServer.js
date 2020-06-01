@@ -8,10 +8,18 @@ Pop.AssetServer = class
 
 		this.ListenDirectories = [];
 		this.FileMonitor = new Pop.FileMonitor();
-		this.ChangedQueue = new Pop.PromiseQueue();
+		this.ChangedQueue = new Pop.PromiseQueue();	//	queue of filename (or filenames) everytime a file changes
 
 		this.WebsocketLoop().then(Pop.Debug).catch(Pop.Debug);
 		this.FileWatchLoop().then(Pop.Debug).catch(Pop.Debug);
+	}
+	
+	FilterFilename(Filename)
+	{
+		//	todo: Pop.GetOsFilenames (I think there's been a need for this before)
+		if ( Filename.endsWith('.DS_Store') )
+			return false;
+		return true;
 	}
 
 	ListenToDirectory(Directory)
@@ -20,17 +28,15 @@ Pop.AssetServer = class
 		this.FileMonitor.Add(Directory);
 	}
 
-	TouchAllFiles()
+	OnRequestListFiles()
 	{
 		//	get all files in directories we're watching
 		function ListFiles(Directory)
 		{
-			function ListFile(Filename)
-			{
-				this.ChangedQueue.Push(Filename);
-			}
-			const Filenames = Pop.EnumDirectory(Directory);
-			Filenames.forEach(ListFile.bind(this));
+			//	lets send a big group of the filenames
+			const Filenames = Pop.GetFilenames(Directory);
+			Pop.Debug(`Filenames in ${Directory}; ${Filenames}`);
+			this.ChangedQueue.Push(Filenames);
 		}
 		this.ListenDirectories.forEach(ListFiles.bind(this));
 	}
@@ -40,7 +46,13 @@ Pop.AssetServer = class
 		while (true)
 		{
 			const ChangedFile = await this.FileMonitor.WaitForChange();
+			if ( !this.FilterFilename(ChangedFile) )
+			{
+				Pop.Debug(`ChangedFile ${ChangedFile} ignored`);
+				continue;
+			}
 			Pop.Debug(`ChangedFile ${ChangedFile}`);
+			
 			this.ChangedQueue.Push(ChangedFile);
 		}
 	}
@@ -64,8 +76,8 @@ Pop.AssetServer = class
 		try
 		{
 			const Message = JSON.parse(Packet.Data);
-			if ( Message.Command == 'TouchAll' )
-				this.TouchAllFiles();
+			if ( Message.Command == 'RequestList' )
+				this.OnRequestListFiles();
 			else if ( Message.Command == 'RequestFile' )
 				this.OnRequestFile(Message,SendReply);
 			else
@@ -82,9 +94,38 @@ Pop.AssetServer = class
 
 	OnRequestFile(Message,SendReply)
 	{
-		//	grab file... as what!? always send binary?
-		const Contents = Pop.LoadFileAsString(Message.Filename);
-		SendReply(Contents);
+		//	client is requesting a file from one of our listening directories!
+		function GetListenFilename(ListenDirectory)
+		{
+			return ListenDirectory + '/' + Message.Filename;
+		}
+		const ListenFilenames = this.ListenDirectories.map(GetListenFilename);
+		
+		//	todo: find last-modified in case there's a clash
+		for ( let Path of ListenFilenames )
+		{
+			if ( !Pop.FileExists(Path) )
+				continue;
+			
+			//	get the file as binary, then insert simple meta json at the start
+			//	this way, binary packets are always independent files and independent
+			//	meta so OOO packets are okay (client can handle encoding)
+			const FileContents = Pop.LoadFileAsArrayBuffer(Path);
+			const Meta = {};
+			Meta.Filename = Message.Filename;
+			const MetaJsonBin = Pop.StringToBytes(JSON.stringify(Meta));
+			
+			//	concat
+			const Contents = new Uint8Array( MetaJsonBin.length + FileContents.length );
+			Contents.set( MetaJsonBin, 0 );
+			Contents.set( FileContents, MetaJsonBin.length );
+			
+			SendReply(Contents);
+			return;
+		}
+
+		//	todo: specifically throw a "file not found Message.Filename" response so caller can forget about the file?
+		throw `Requested file (${Message.Filename}) failed to load from options; ${ListenFilenames}`;
 	}
 	
 	async WebsocketLoop()
