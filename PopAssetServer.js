@@ -19,6 +19,11 @@ Pop.AssetServer = class
 		//	todo: Pop.GetOsFilenames (I think there's been a need for this before)
 		if ( Filename.endsWith('.DS_Store') )
 			return false;
+		if (Filename.startsWith('.git'))
+			return false;
+		if (Filename.includes('/.git'))
+			return false;
+
 		return true;
 	}
 
@@ -34,7 +39,8 @@ Pop.AssetServer = class
 		function ListFiles(Directory)
 		{
 			//	lets send a big group of the filenames
-			const Filenames = Pop.GetFilenames(Directory);
+			let Filenames = Pop.GetFilenames(Directory);
+			Filenames = Filenames.filter(this.FilterFilename);
 			Pop.Debug(`Filenames in ${Directory}; ${Filenames}`);
 			this.ChangedQueue.Push(Filenames);
 		}
