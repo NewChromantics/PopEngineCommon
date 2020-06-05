@@ -160,6 +160,12 @@ Pop.PromiseQueue = class
 		return Promise;
 	}
 	
+	ClearQueue()
+	{
+		//	delete values, losing data!
+		this.PendingValues = [];
+	}
+	
 	//	allocate a promise, maybe deprecate this for the API WaitForNext() that makes more sense for a caller
 	Allocate()
 	{
