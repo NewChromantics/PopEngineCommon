@@ -527,11 +527,14 @@ Pop.Opengl.Window = function(Name,Rect)
 	
 	this.GetCanvasElement = function()
 	{
+		//	gr: a bit of a clash here, we fill the parent named Rect
+		//		and if there's an element with our name, then we use that
+		//		but it might not be inside the parent...
 		let Element = document.getElementById(Name);
 		if ( Element )
 			return Element;
 		
-		const ParentElement = document.body;
+		const ParentElement = this.ParentElement;
 		
 		//	create!
 		Element = document.createElement('canvas');
@@ -906,6 +909,12 @@ Pop.Opengl.Window = function(Name,Rect)
 	}
 	
 
+	this.ParentElement = document.body;
+	if ( typeof Rect == 'string' )
+		this.ParentElement = document.getElementById(Rect);
+	else if ( Rect instanceof HTMLElement )
+		this.ParentElement = Rect;
+	
 	this.InitialiseContext();
 	this.InitCanvasElement();
 

@@ -342,6 +342,11 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		this.ElementParent.appendChild( Element );
 	}
 	
+	this.GetContainerElement = function()
+	{
+		return this.ElementParent;
+	}
+	
 	this.CreateElement = function(Parent)
 	{
 		let Element = document.createElement('div');
