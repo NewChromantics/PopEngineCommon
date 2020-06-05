@@ -24,7 +24,8 @@ function SetGuiControlStyle(Element,Rect)
 function SetGuiControl_SubElementStyle(Element,LeftPercent=0,RightPercent=100)
 {
 	Element.style.display = 'block';
-	Element.style.width = (RightPercent-LeftPercent) + '%';
+	//	this makes it overflow, shouldn't be needed?
+	//Element.style.width = (RightPercent-LeftPercent) + '%';
 	Element.style.position = 'absolute';
 	Element.style.left = LeftPercent + '%';
 	Element.style.right = (100-RightPercent) + '%';
@@ -344,14 +345,26 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 	this.CreateElement = function(Parent)
 	{
 		let Element = document.createElement('div');
-		SetGuiControlStyle( Element, Rect );
+		if ( Rect == Parent.id )
+			SetGuiControl_SubElementStyle(Element);
+		else
+			SetGuiControlStyle( Element, Rect );
 		//Element.innerText = 'Pop.Gui.Window';
 		Element.style.zIndex = $HighestZ;
 		//Element.style.overflow = 'scroll';	//	inner div handles scrolling
 		Element.className = 'PopGuiWindow';
 		Element.id = Name;	//	multiple classes, so we can style at a generic level, and 
 		Parent.appendChild( Element );
-		SetGuiControl_Draggable( Element );
+		
+		if ( Rect == Parent.id )
+		{
+			//	filling parent, so can't drag
+			//	maybe better if we check style settings?
+		}
+		else
+		{
+			SetGuiControl_Draggable( Element );
+		}
 		
 		//	purely for styling
 		let AddChild = function(Parent,ClassName,InnerText='')
@@ -372,11 +385,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		//	this may need some style to force position
 		this.ElementParent = AddChild( Element, 'PopGuiIconView');
 		//	need to make this absolute as the new static position-base for child controls
-		this.ElementParent.style.position = 'absolute';
-		this.ElementParent.style.top = '0px';
-		this.ElementParent.style.left = '0px';
-		this.ElementParent.style.right = '0px';
-		this.ElementParent.style.bottom = '0px';
+		SetGuiControl_SubElementStyle(this.ElementParent);
 		//	toggle this with enablescrollbars
 		this.ElementParent.style.overflow = 'scroll';
 		
@@ -388,7 +397,10 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		
 	}
 
-	this.Element = this.CreateElement(document.body);
+	let Parent = document.body;
+	if ( typeof Rect == 'string' )
+		Parent = document.getElementById(Rect);
+	this.Element = this.CreateElement(Parent);
 }
 
 function GetExistingElement(Name)
