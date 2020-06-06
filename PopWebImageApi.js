@@ -87,6 +87,15 @@ function GetTextureFormatPixelByteSize(OpenglContext,Format,Type)
 }
 
 
+function GetPixelsMetaFromHtmlImageElement(Img)
+{
+	const Meta = {};
+	Meta.Width = Img.width;
+	Meta.Height = Img.height;
+	Meta.Format = 'RGBA';
+	return Meta;
+}
+
 function GetPixelsFromHtmlImageElement(Img)
 {
 	//	html5 image
@@ -252,6 +261,9 @@ Pop.Image = function(Filename)
 	
 	this.GetPixelBuffer = function()
 	{
+		if ( this.Pixels.constructor == WebApi_HtmlImageElement )
+			throw `GetPixelBuffer() is Image element, need to read pixels`;
+						  
 		return this.Pixels;
 	}
 	
@@ -520,8 +532,11 @@ Pop.Image = function(Filename)
 	{
 		const HtmlImage = Filename;
 		//	gr: this conversion should be in WritePixels()
-		const Pixels = GetPixelsFromHtmlImageElement(HtmlImage);
-		this.WritePixels(Pixels.Width,Pixels.Height,Pixels.Buffer,Pixels.Format);
+		//const Pixels = GetPixelsFromHtmlImageElement(HtmlImage);
+		//this.WritePixels(Pixels.Width,Pixels.Height,Pixels.Buffer,Pixels.Format);
+		const PixelsMeta = GetPixelsMetaFromHtmlImageElement(HtmlImage);
+		const Pixels = HtmlImage;
+		this.WritePixels(PixelsMeta.Width,PixelsMeta.Height,Pixels,PixelsMeta.Format);
 	}
 	else if ( Array.isArray( Filename ) )
 	{
