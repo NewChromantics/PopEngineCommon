@@ -6,19 +6,23 @@ function SetGuiControlStyle(Element,Rect)
 	if ( !Rect )
 		return;
 	
-	let Left = Rect[0];
-	let Right = Rect[0] + Rect[2];
-	let Top = Rect[1];
-	let Bottom = Rect[1] +  Rect[3];
+	//	to allow vw/% etc, we're using w/h now
+	//	also, if you have bottom, but no height,
+	//	you need block display to make that style work
 	
+	function NumberToPx(Number)
+	{
+		if ( typeof Number != 'number' )
+			return Number;
+		return Number + 'px';
+	}
+	const RectCss = Rect.map(NumberToPx);
 	Element.style.position = 'absolute';
-	Element.style.left = Left+'px';
-	//Element.style.right = Right+'px';
-	Element.style.top = Top+'px';
-	//Element.style.bottom = Bottom+'px';
-	Element.style.width = Rect[2]+'px';
-	Element.style.height = Rect[3]+'px';
-	//Element.style.border = '1px solid #000';
+	Element.style.left = RectCss[0];
+	Element.style.top = RectCss[1];
+	Element.style.width = RectCss[2];
+	Element.style.height = RectCss[3];
+	//Element.style.border = '1px solid #0f0';
 }
 
 function SetGuiControl_SubElementStyle(Element,LeftPercent=0,RightPercent=100)
