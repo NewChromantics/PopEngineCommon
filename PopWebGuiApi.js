@@ -384,7 +384,8 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 			Parent.appendChild( Child );
 			return Child;
 		}
-		const TitleBar = AddChild( Element, 'PopGuiTitleBar');
+		this.ElementTitleBar = AddChild( Element, 'PopGuiTitleBar');
+		const TitleBar = this.ElementTitleBar;
 		TitleBar.style.pointerEvents = 'none';
 		//AddChild( TitleBar, 'PopGuiTitleIcon', 'X');
 		AddChild( TitleBar, 'PopGuiTitleText', Name );
@@ -406,6 +407,43 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 	{
 		this.ElementParent.style.overflowY = Vertical ? 'scroll' : 'hidden';
 		this.ElementParent.style.overflowX = Horizontal ? 'scroll' : 'hidden';
+	}
+	
+	this.Flash = function(Enable)
+	{
+		const FlashOn = function()
+		{
+			this.ElementTitleBar.style.backgroundColor = '#888';
+		}.bind(this);
+		const FlashOff = function()
+		{
+			//	unset any overriding style colour
+			//	todo: can we do this by setting css class?
+			//	gr: delete doesnt work, undefined doesnt work.
+			this.ElementTitleBar.style.backgroundColor = null;
+		}.bind(this);
+		
+		//	already flashing
+		if ( this.FlashTimer && !Enable )
+		{
+			clearTimeout(this.FlashTimer);
+			this.FlashTimer = null;
+			FlashOff();
+		}
+		else if ( !this.FlashTimer && Enable )
+		{
+			let Flashing = false;
+			function FlashCallback()
+			{
+				this.FlashTimer = setTimeout(FlashCallback.bind(this),500);
+				if ( Flashing )
+					FlashOff();
+				else
+					FlashOn();
+				Flashing = !Flashing;
+			}
+			FlashCallback.call(this);
+		}
 	}
 
 	let Parent = document.body;
