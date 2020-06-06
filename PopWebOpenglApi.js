@@ -282,6 +282,11 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	let GetMousePos = function(MouseEvent)
 	{
 		const Rect = Element.getBoundingClientRect();
+		
+		//	touch event, need to handle multiple touch states
+		if ( MouseEvent.touches )
+			MouseEvent = MouseEvent.touches[0];
+		
 		const ClientX = MouseEvent.pageX || MouseEvent.clientX;
 		const ClientY = MouseEvent.pageY || MouseEvent.clientY;
 		const x = ClientX - Rect.left;
