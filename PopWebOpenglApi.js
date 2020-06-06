@@ -181,18 +181,32 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	//	annoying distinctions
 	let GetButtonFromMouseEventButton = function(MouseButton,AlternativeButton)
 	{
-		//	handle event & button arg
-		if ( typeof MouseButton == "object" )
-		{
-			let MouseEvent = MouseButton;
-			MouseButton = MouseEvent.button;
-			AlternativeButton = (MouseEvent.ctrlKey == true);
-		}
-		
 		//	html/browser definitions
 		const BrowserMouseLeft = 0;
 		const BrowserMouseMiddle = 1;
 		const BrowserMouseRight = 2;
+
+		//	handle event & button arg
+		if ( typeof MouseButton == "object" )
+		{
+			let MouseEvent = MouseButton;
+			
+			//	this needs a fix for touches
+			if ( MouseEvent.touches )
+			{
+				//	have to assume there's always one?
+				const Touches = Array.from( MouseEvent.touches );
+				if ( Touches.length == 0 )
+					throw "Empty touch array, from event?";
+				MouseButton = BrowserMouseLeft;
+				AlternativeButton = false;
+			}
+			else
+			{
+				MouseButton = MouseEvent.button;
+				AlternativeButton = (MouseEvent.ctrlKey == true);
+			}
+		}
 		
 		if ( AlternativeButton )
 		{
@@ -221,7 +235,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		//	gr: ignore back and forward as they're not triggered from mouse down, just use the alt mode
 		//let ButtonMasks = [ 1<<0, 1<<2, 1<<1, 1<<3, 1<<4 ];
 		const ButtonMasks = [ 1<<0, 1<<2, 1<<1 ];
-		const ButtonMask = MouseEvent.buttons;
+		const ButtonMask = MouseEvent.buttons || 0;	//	undefined if touches
 		const AltButton = (MouseEvent.ctrlKey==true);
 		const Buttons = [];
 		
@@ -235,6 +249,32 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 				continue;
 			Buttons.push( ButtonName );
 		}
+		
+		//	mobile
+		if ( MouseEvent.touches )
+		{
+			function GetButtonNameFromTouch(Touch,Index)
+			{
+				switch ( Index )
+				{
+					case 0:	return Pop.SoyMouseButton.Left;
+					case 1:	return Pop.SoyMouseButton.Middle;
+					case 2:	return Pop.SoyMouseButton.Right;
+					case 3:	return Pop.SoyMouseButton.Back;
+					case 4:	return Pop.SoyMouseButton.Forward;
+					default:	return null;
+				}
+			}
+			function PushTouch(Touch,Index)
+			{
+				const ButtonName = GetButtonNameFromTouch( Touch, Index );
+				if ( ButtonName === null )
+					return;
+				Buttons.push( ButtonName );
+			}
+			Array.from(MouseEvent.touches).forEach( PushTouch );
+		}
+		
 		return Buttons;
 	}
 	
@@ -242,8 +282,10 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	let GetMousePos = function(MouseEvent)
 	{
 		const Rect = Element.getBoundingClientRect();
-		const x = MouseEvent.clientX - Rect.left;
-		const y = MouseEvent.clientY - Rect.top;
+		const ClientX = MouseEvent.pageX || MouseEvent.clientX;
+		const ClientY = MouseEvent.pageY || MouseEvent.clientY;
+		const x = ClientX - Rect.left;
+		const y = ClientY - Rect.top;
 		return [x,y];
 	}
 	
@@ -308,9 +350,12 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	Element.addEventListener('wheel', MouseWheel, false );
 	Element.addEventListener('contextmenu', ContextMenu, false );
 	Element.addEventListener('mousedown', MouseDown, false );
-	Element.addEventListener('mousemove', MouseMove, false );
-
 	Element.addEventListener('mouseup', MouseUp, false );
+	
+	Element.addEventListener('touchmove', MouseMove );
+	Element.addEventListener('touchstart', MouseDown, false );	//	touchend
+	//	not currently handling up
+	//this.Element.addEventListener('mouseup', MouseUp, false );
 	//this.Element.addEventListener('mouseleave', OnDisableDraw, false );
 	//this.Element.addEventListener('mouseenter', OnEnableDraw, false );
 	
