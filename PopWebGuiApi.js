@@ -391,15 +391,17 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		this.ElementParent = AddChild( Element, 'PopGuiIconView');
 		//	need to make this absolute as the new static position-base for child controls
 		SetGuiControl_SubElementStyle(this.ElementParent);
-		//	toggle this with enablescrollbars
-		this.ElementParent.style.overflow = 'scroll';
+
+		//	default scrollbars on
+		this.EnableScrollbars(true,true);
 		
 		return Element;
 	}
 	
 	this.EnableScrollbars = function(Horizontal,Vertical)
 	{
-		
+		this.ElementParent.style.overflowY = Vertical ? 'scroll' : 'hidden';
+		this.ElementParent.style.overflowX = Horizontal ? 'scroll' : 'hidden';
 	}
 
 	let Parent = document.body;
