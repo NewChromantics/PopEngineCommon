@@ -1,6 +1,23 @@
 Pop.Gui = {};
 
 
+function IsHtmlString(Value)
+{
+	if ( typeof Value != 'string' )
+		return false;
+	
+	if ( Value.includes('<') )
+		return true;
+	
+	//	contains html symbol
+	//	&gt; &hearts; &#123;
+	const Pattern = new RegExp('&([0-9a-zA-Z#]+);');
+	if ( Value.match(Pattern) )
+		return true;
+
+	return false;
+}
+
 function SetGuiControlStyle(Element,Rect)
 {
 	if ( !Rect )
