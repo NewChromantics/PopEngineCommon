@@ -584,43 +584,71 @@ Pop.Gui.BaseControl = class
 		this.OnDragDropRenameFiles = RenameFilenames;
 		return this.OnDragDropQueue.WaitForNext();
 	}
+	
+	//	todo: generic pop api for this
+	SetStyle(Key,Value)
+	{
+		//	change an attribute
+		this.Element.setAttribute(Key,Value);
+		//	set a css value
+		this.Element.style.setProperty(`${Key}`,Value);
+		//	set a css variable
+		this.Element.style.setProperty(`--${Key}`,Value);
+	}
+	
+	SetRect(Rect)
+	{
+		const Element = this.GetElement();
+		SetGuiControlStyle( Element, Rect );
+	}
 }
 
 
 
-Pop.Gui.Label = function(Parent, Rect)
+Pop.Gui.Label = class extends Pop.Gui.BaseControl
 {
-	this.ValueCache = null;
+	constructor(Parent,Rect)
+	{
+		super(...arguments);
+		this.ValueCache = null;
+
+		this.Element = this.CreateElement(Parent,Rect);
+		this.BindEvents();
+	}
 	
-	this.SetValue = function(Value)
+	GetElement()
+	{
+		return this.Element;
+	}
+	
+	SetValue(Value)
 	{
 		//	avoid DOM changes as much as possible
 		if ( this.ValueCache == Value )
 			return;
 		
 		//	inner html is slow!
-		if ( typeof Value == 'string' && Value.includes('<') )
+		if ( IsHtmlString(Value) )
 			this.Element.innerHTML = Value;
 		else
 			this.Element.innerText = Value;
 		this.ValueCache = Value;
 	}
 
-	this.CreateElement = function(Parent)
+	CreateElement(Parent,Rect)
 	{
 		let Div = GetExistingElement(Parent);
 		if ( Div )
 			return Div;
 		
 		Div = document.createElement('div');
-		SetGuiControlStyle( Div, Rect );
+		if ( Rect )
+			SetGuiControlStyle( Div, Rect );
 		
 		Div.innerText = 'Pop.Gui.Label';
 		Parent.AddChildControl( Parent, Div );
 		return Div;
 	}
-
-	this.Element = this.CreateElement(Parent);
 }
 
 
@@ -641,16 +669,6 @@ Pop.Gui.Button = class extends Pop.Gui.BaseControl
 		this.BindEvents();
 	}
 
-	//	todo: generic pop api for this
-	SetStyle(Key,Value)
-	{
-		//	change an attribute
-		this.Element.setAttribute(Key,Value);
-		//	set a css value
-		this.Element.style.setProperty(`${Key}`,Value);
-		//	set a css variable
-		this.Element.style.setProperty(`--${Key}`,Value);
-	}
 	
 	SetLabel(Value)
 	{
