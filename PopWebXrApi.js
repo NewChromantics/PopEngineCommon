@@ -267,8 +267,11 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 }
 
 
-Pop.Xr.CreateDevice = async function(RenderContext)
+Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 {
+	if ( !OnWaitForCallback )
+		throw `Pop.Xr.CreateDevice requires OnUserCallback callback for 2nd argument`;
+	
 	const SessionMode = await Pop.Xr.GetSupportedSessionMode();
 	if ( SessionMode == false )
 		throw "Browser doesn't support XR.";
@@ -284,7 +287,28 @@ Pop.Xr.CreateDevice = async function(RenderContext)
 	{
 		try
 		{
-			const Session = await PlatformXr.requestSession(SessionMode);
+			//	this will cause a dom exception if there's more than one async queue
+			//	so we create a callback, that a callback can call when the user clicks a button
+			//const Session = await PlatformXr.requestSession(SessionMode);
+			const SessionPromise = Pop.CreatePromise();
+			const Callback = function()
+			{
+				//	gr: could use a generic callback like the audio system does
+				//	this should be called from user interaction, so we start,
+				//	and return that promise
+				try
+				{
+					const RequestSessionPromise = PlatformXr.requestSession(SessionMode);
+					RequestSessionPromise.then( Session => SessionPromise.Resolve(Session) ).catch( e => SessionPromise.Reject(e) );
+				}
+				catch(e)
+				{
+					SessionPromise.Reject(e);
+				}
+			}
+			OnWaitForCallback(Callback);
+			const Session = await SessionPromise;
+			
 			//	gr: isImmersive was deprecated
 			//		we want a local space, maybe not relative to the floor?
 			//		so we can align with other remote spaces a bit more easily
