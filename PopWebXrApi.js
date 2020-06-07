@@ -129,6 +129,7 @@ Pop.Xr.Pose = function(RenderState,Pose)
 	//Pose.orientation is xyzw, quaternion?
 }
 
+
 Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 {
 	this.OnEndPromises = [];
@@ -191,6 +192,48 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		//	don't know what to render?
 		if ( !Pose )
 			return;
+		
+		//	handle inputs
+		//	gr: we're propogating like a mousebutton for integration, but our Openvr api
+		//		has keyframed input structs per-controller/pose
+		const Inputs = Array.from(Frame.session.inputSources);
+		function UpdateInput(Input)
+		{
+			try
+			{
+				if ( !Input.gamepad.connected )
+					return;
+				//	quest:
+				//	Input.gamepad.id = ""
+				//	Input.gamepad.index = -1
+				const InputRayPose = Frame.getPose(Input.targetRaySpace,ReferenceSpace);
+				const Position = [InputRayPose.transform.position.x,InputRayPose.transform.position.y,InputRayPose.transform.position.z];
+				const RotationQuat = InputRayPose.transform.orientation;
+				//	gr: not unique enough yet
+				const InputName = Input.handedness;
+				//	todo: we need to store this for mouse up!
+				let DownCount = 0;
+				function UpdateButton(GamepadButton,ButtonIndex)
+				{
+					const Down = GamepadButton.pressed;
+					DownCount += Down ? 1 : 0;
+					if ( Down )
+						this.OnMouseMove(Position,ButtonIndex,InputName);
+				}
+				if ( Input.gamepad.buttons )
+					Input.gamepad.buttons.forEach(UpdateButton.bind(this));
+				
+				//	if none down, pass a mouse move with no button
+				if ( DownCount == 0 )
+					this.OnMouseMove(Position,Pop.SoyMouseButton.None,InputName);
+				//	todo: mouse up!
+			}
+			catch(e)
+			{
+				Pop.Debug(`Input error ${e}`);
+			}
+		}
+		Inputs.forEach(UpdateInput.bind(this));
 		
 		//	or this.Layer
 		const glLayer = Session.renderState.baseLayer;
@@ -257,7 +300,19 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		else
 			RenderTarget.ClearColour( 0,0,1 );
 	}
-	
+		
+	//	overload this! (also, name it better, currently matching window/touches)
+	this.OnMouseDown = function(xyz,Button,Controller)
+	{
+	}
+	this.OnMouseMove = function(xyz,Button,Controller)
+	{
+		Pop.Debug(`OnXRInput(${[...arguments]})`);
+	}
+	this.OnMouseUp = function(xyz,Button,Controller)
+	{
+	}
+
 	//	bind to device
 	Session.addEventListener('end', this.OnSessionEnded.bind(this) );
 	this.InitLayer( RenderContext );
