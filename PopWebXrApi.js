@@ -44,6 +44,10 @@ Pop.Xr.SupportedSessionMode = null;
 
 Pop.Xr.IsSupported = function()
 {
+	//	in chromium (usually) navigator.xr is only availible under secure connections
+	//	but accessible from localhost. To enable use of this, use chromium
+	//	remote inspctor to portforward $PORT to devmachine:$PORT then
+	//	browse to localhost:$PORT
 	const PlatformXr = navigator.xr;
 	if ( !PlatformXr )
 		return false;
@@ -128,6 +132,7 @@ Pop.Xr.Pose = function(RenderState,Pose)
 Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 {
 	this.OnEndPromises = [];
+	this.Cameras = {};
 	
 	//	I think here we can re-create layers if context dies,
 	//	without recreating device
@@ -164,6 +169,16 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		}
 	}
 	
+	this.GetCamera = function(Name)
+	{
+		if ( !this.Cameras.hasOwnProperty(Name) )
+		{
+			this.Cameras[Name] = new Pop.Camera();
+			this.Cameras[Name].Name = Name;
+		}
+		return this.Cameras[Name];
+	}
+	
 	this.OnFrame = function(TimeMs,Frame)
 	{
 		//Pop.Debug("XR frame",Frame);
@@ -180,27 +195,45 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		//	or this.Layer
 		const glLayer = Session.renderState.baseLayer;
 		
+		function GetCameraName(View)
+		{
+			//	different names from different browsers
+			if (typeof View.eye == 'string')
+				return View.eye.toLowerCase();
+			
+			if (typeof View.eye == 'number')
+			{
+				const EyeNames = ['left', 'right'];
+				return EyeNames[View.eye];
+			}
+
+			Pop.Debug(`Improperly handled View.eye=${View.eye}(${typeof View.eye})`);
+			return View.eye;
+		}
+		
 		const RenderView = function(View)
 		{
 			const ViewPort = glLayer.getViewport(View);
 			//	scene.draw(view.projectionMatrix, view.transform);
 			const RenderTarget = new RenderTargetFrameBufferProxy( glLayer.framebuffer, ViewPort, RenderContext );
-			const Camera = {};//new Pop.Camera();
-			Camera.Transform = View.transform;
+			
+			const CameraName = GetCameraName(View);
+			const Camera = this.GetCamera(CameraName);
+
+			//	update camera
+			//	view has an XRRigidTransform (quest)
+			//	https://developer.mozilla.org/en-US/docs/Web/API/XRRigidTransform
+			Camera.Transform = View.transform;	//	stored for debugging
+			
+			//	write position (w should always be 0
+			Camera.Position = [View.transform.position.x,View.transform.position.y,View.transform.position.z];
+
+			//	transform.matrix is column major
+			//	get rotation but remove the translation (so we use .Position)
+			Camera.Rotation4x4 = Pop.Math.GetMatrixTransposed(View.transform.matrix);
+			Math.SetMatrixTranslation(Camera.Rotation4x4,0,0,0,1);
+			
 			Camera.ProjectionMatrix = View.projectionMatrix;
-			if (typeof View.eye == 'string')
-			{
-				Camera.Name = View.eye;
-			}
-			else if (typeof View.eye == 'number')
-			{
-				const EyeNames = ['Left', 'Right'];
-				Camera.Name = EyeNames[View.eye];
-			}
-			else
-			{
-				Camera.Name = View.eye;
-			}
 			RenderTarget.BindRenderTarget( RenderContext );
 			this.OnRender( RenderTarget, Camera );
 		}
@@ -215,9 +248,9 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 	//	overload this!
 	this.OnRender = function(RenderTarget,Camera)
 	{
-		if ( Camera.Name == 'Left' )
+		if ( Camera.Name == 'left' )
 			RenderTarget.ClearColour( 0,0.5,1 );
-		else if (Camera.Name == 'Right')
+		else if (Camera.Name == 'right')
 			RenderTarget.ClearColour(1, 0, 0);
 		else if (Camera.Name == 'none')
 			RenderTarget.ClearColour(0, 1, 0);
@@ -252,7 +285,13 @@ Pop.Xr.CreateDevice = async function(RenderContext)
 		try
 		{
 			const Session = await PlatformXr.requestSession(SessionMode);
-			const ReferenceSpaceType = Session.isImmersive ? 'local' : 'viewer';
+			//	gr: isImmersive was deprecated
+			//		we want a local space, maybe not relative to the floor?
+			//		so we can align with other remote spaces a bit more easily
+			//	todo: handle unspported space
+			//const ReferenceSpaceType = "local-floor";	not supported on quest
+			const ReferenceSpaceType = "local";
+			//const ReferenceSpaceType = Session.isImmersive ? 'local' : 'viewer';
 			const ReferenceSpace = await Session.requestReferenceSpace(ReferenceSpaceType);
 			const Device = new Pop.Xr.Device( Session, ReferenceSpace, RenderContext );
 			
@@ -262,7 +301,7 @@ Pop.Xr.CreateDevice = async function(RenderContext)
 			//	when device ends, remove it from the list
 			const RemoveDevice = function()
 			{
-				Pop.Xr.Devices.remove( Device )
+				Pop.Xr.Devices = Pop.Xr.Devices.filter( d => d!=Device );
 			}
 			Device.WaitForEnd().then(RemoveDevice).catch(RemoveDevice);
 			
