@@ -427,6 +427,9 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.IsForeground = function () { return Pop.WebApi.IsForeground(); }
 	this.IsMinimised = function () { return Pop.WebApi.IsForeground(); }
 
+	this.IsOpen = true;	//	renderloop stops if false
+	this.NewCanvasElement = null;
+
 	this.Context = null;
 	this.ContextVersion = 0;	//	used to tell if resources are out of date
 	this.RenderTarget = null;
@@ -441,6 +444,24 @@ Pop.Opengl.Window = function(Name,Rect)
 	
 	this.ActiveTexureIndex = 0;
 	this.TextureRenderTargets = [];	//	this is a context asset, so maybe it shouldn't be kept here
+
+	this.Close = function ()
+	{
+		Pop.Debug(`Opengl.Window.Close`);
+
+		//	stop render loop
+		this.IsOpen = false;
+
+		//	destroy render context
+		//	free opengl resources
+
+		//	destroy element if we created it
+		if (this.NewCanvasElement)
+		{
+			this.NewCanvasElement.parent.removeChild(this.NewCanvasElement);
+			this.NewCanvasElement = null;
+		}
+	}
 
 	this.OnResize = function(ResizeEvent)
 	{
@@ -587,7 +608,8 @@ Pop.Opengl.Window = function(Name,Rect)
 		const ParentElement = this.ParentElement;
 		
 		//	create!
-		Element = document.createElement('canvas');
+		this.NewCanvasElement = document.createElement('canvas');
+		Element = this.NewCanvasElement;
 		Element.id = Name;
 		
 		ParentElement.appendChild( Element );
@@ -810,6 +832,9 @@ Pop.Opengl.Window = function(Name,Rect)
 	{
 		let Render = function(Timestamp)
 		{
+			if (!this.IsOpen)
+				return;
+
 			//	try and get the context, if this fails, it may be temporary
 			try
 			{
