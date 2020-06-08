@@ -15,7 +15,9 @@ function OnDomTrigger()
 	DomTriggerPromise.Resolve();
 }
 window.addEventListener('click',OnDomTrigger,true);
+//	gr: Kandisnky AudioManager listened for touchend ... is this significant?
 window.addEventListener('touchstart',OnDomTrigger,true);
+window.addEventListener('touchend',OnDomTrigger,true);
 
 async function WaitForClick()
 {
