@@ -556,15 +556,18 @@ Pop.Xml.Parse = function(Xml)
 
 
 
-Pop.Render = {};
-Pop.Render.PromiseQueue = new WebApi_PromiseQueue();	//	todo: promise queue that only stores the latest (we need a keyframe'd queue!)
-Pop.Render.WaitForFrame = function () { return Pop.Render.PromiseQueue.WaitForNext(); }
+Pop.WebApi.AnimationFramePromiseQueue = new WebApi_PromiseQueue();	//	todo: promise queue that only stores the latest (we need a keyframe'd queue!)
 
-//	gr: need to organise the async stuff with this
-Pop.Render.BrowserStep = function(Time)
+Pop.WebApi.BrowserAnimationStep = function(Time)
 {
-	Pop.Render.PromiseQueue.Push(Time);
+	//	gr: this is going to build up a back log, 
+	//		bring over promisequeue .Clear(), but again we could do with a keyframe'd promise queue
+	Pop.WebApi.AnimationFramePromiseQueue.Push(Time);
 	//Pop.Debug(`BrowserStep(${Time})`);
-	window.requestAnimationFrame(Pop.Render.BrowserStep);
+	window.requestAnimationFrame(Pop.WebApi.BrowserAnimationStep);
 }
-Pop.Render.BrowserStep();
+Pop.WebApi.BrowserAnimationStep();
+
+//	gr: currently web only, but the main API should have something like this
+//	returns frame time
+Pop.WaitForFrame = function () { return Pop.WebApi.AnimationFramePromiseQueue.WaitForNext(); }
