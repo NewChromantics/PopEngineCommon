@@ -195,6 +195,8 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 
 	function OnTexCoord(Values)
 	{
+		//	pad to 3 values (for now) for the OnVertex alignment check
+		Values.length = 3;
 		TexCoords.push( Values );
 	}
 
