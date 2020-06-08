@@ -20,7 +20,12 @@ class WebApi_PromiseQueue
 		const Promise = this.Allocate();
 		return Promise;
 	}
-	
+
+	ClearQueue()
+	{
+		//	delete values, losing data!
+		this.PendingValues = [];
+	}
 	//	allocate a promise, maybe deprecate this for the API WaitForNext() that makes more sense for a caller
 	Allocate()
 	{
@@ -560,8 +565,8 @@ Pop.WebApi.AnimationFramePromiseQueue = new WebApi_PromiseQueue();	//	todo: prom
 
 Pop.WebApi.BrowserAnimationStep = function(Time)
 {
-	//	gr: this is going to build up a back log, 
-	//		bring over promisequeue .Clear(), but again we could do with a keyframe'd promise queue
+	//	clear old frames so we don't get a backlog
+	Pop.WebApi.AnimationFramePromiseQueue.ClearQueue();
 	Pop.WebApi.AnimationFramePromiseQueue.Push(Time);
 	//Pop.Debug(`BrowserStep(${Time})`);
 	window.requestAnimationFrame(Pop.WebApi.BrowserAnimationStep);
