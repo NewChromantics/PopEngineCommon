@@ -261,6 +261,9 @@ Pop.Image = function(Filename)
 	
 	this.GetPixelBuffer = function()
 	{
+		if (!this.Pixels)
+			return this.Pixels;
+
 		if ( this.Pixels.constructor == WebApi_HtmlImageElement )
 			throw `GetPixelBuffer() is Image element, need to read pixels`;
 						  
