@@ -131,8 +131,20 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 		if ( NormalIndex !== undefined )
 			VertexNormals.push( ...Normals[NormalIndex] );
 		if ( TexCoordIndex !== undefined )
-			VertexTexCoords.push( ...TexCoords[TexCoordIndex] );
-		
+		{
+			//	gr: this seems to only occur for texcoords, (find out why!)
+			//		but I have models where we have a valid TexCoordIndex, but not enough texcoords
+			if ( TexCoordIndex < TexCoords.length )
+			{
+				VertexTexCoords.push( ...TexCoords[TexCoordIndex] );
+			}
+			else
+			{
+				Pop.Debug(`Warning OBJ Texcoord Index (${TexCoordIndex}) out of bounds(${TexCoords.length})`);
+				VertexTexCoords.push( undefined,undefined,undefined );
+			}
+		}
+
 		//	check all the arrays align
 		const Lengths =
 		[
