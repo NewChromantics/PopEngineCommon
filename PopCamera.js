@@ -507,8 +507,12 @@ Pop.Camera = function(CopyCamera)
 		const Ray = {};
 		Ray.Start = Math.GetMatrixTranslation( StartMatrix, true );
 		Ray.End = Math.GetMatrixTranslation( EndMatrix, true );
+										
+		//	gr: ray dir is backwards, as seen in raymarching!
+		//		our projection matrix is wrong?
 		Ray.Direction = Math.Normalise3( Math.Subtract3( Ray.End, Ray.Start ) );
-		
+		//Ray.Direction = Math.Normalise3( Math.Subtract3( Ray.Start, Ray.End ) );
+										
 		return Ray;
 	}
 	
