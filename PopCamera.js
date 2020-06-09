@@ -482,6 +482,35 @@ Pop.Camera = function(CopyCamera)
 
 		this.LastPos_PanLocalPos = [x,y,z];
 	}
+										
+	this.GetScreenRay = function(u,v,ScreenRect)
+	{
+		let Aspect = ScreenRect[2] / ScreenRect[3];
+		let x = Math.lerp( -Aspect, Aspect, u );
+		let y = Math.lerp( 1, -1, v );
+		const ViewRect = [-1,-1,1,1];
+		
+		const Camera = this;
+		const RayDistance = 1000;
+		
+		let ScreenToCameraTransform = Camera.GetProjectionMatrix( ViewRect );
+		ScreenToCameraTransform = Math.MatrixInverse4x4( ScreenToCameraTransform );
+		
+		let StartMatrix = Math.CreateTranslationMatrix( x, y, 0.1 );
+		let EndMatrix = Math.CreateTranslationMatrix( x, y, RayDistance );
+		StartMatrix = Math.MatrixMultiply4x4( ScreenToCameraTransform, StartMatrix );
+		EndMatrix = Math.MatrixMultiply4x4( ScreenToCameraTransform, EndMatrix );
+		
+		StartMatrix = Math.MatrixMultiply4x4( Camera.GetLocalToWorldMatrix(), StartMatrix );
+		EndMatrix = Math.MatrixMultiply4x4( Camera.GetLocalToWorldMatrix(), EndMatrix );
+
+		const Ray = {};
+		Ray.Start = Math.GetMatrixTranslation( StartMatrix, true );
+		Ray.End = Math.GetMatrixTranslation( EndMatrix, true );
+		Ray.Direction = Math.Normalise3( Math.Subtract3( Ray.End, Ray.Start ) );
+		
+		return Ray;
+	}
 	
 	//Pop.Debug("initial pitch/yaw/roll/distance",this.GetPitchYawRollDistance());
 }
