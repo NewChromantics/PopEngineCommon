@@ -197,6 +197,7 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 	function OnPosition(Values)
 	{
 		const xyz = Values.map( ParsePositionFloat );
+		xyz[2] = -xyz[2];
 		Positions.push( xyz );
 	}
 	
