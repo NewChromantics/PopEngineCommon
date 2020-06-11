@@ -1127,7 +1127,7 @@ Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
 	
 	//	ray miss
 	if ( tmax < tmin )
-		return;
+		return false;
 	//	from inside?
 	if ( tmax < 0.0 )
 		return false;
