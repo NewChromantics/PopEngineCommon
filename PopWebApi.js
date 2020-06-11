@@ -574,5 +574,20 @@ Pop.WebApi.BrowserAnimationStep = function(Time)
 Pop.WebApi.BrowserAnimationStep();
 
 //	gr: currently web only, but the main API should have something like this
-//	returns frame time
-Pop.WaitForFrame = function () { return Pop.WebApi.AnimationFramePromiseQueue.WaitForNext(); }
+//	returns delta seconds since last frame
+//	we cap the timestep as the gap between frames will be massive when debugging
+//	anything that needs real time can use Pop.GetTimeNowMs()
+Pop.WebApi.LastFrameTime = null;
+Pop.WebApi.MaxTimestep = 1/30;
+Pop.WaitForFrame = async function()
+{
+	//	wait for next frame time
+	const Time = await Pop.WebApi.AnimationFramePromiseQueue.WaitForNext();
+	
+	//	cap timestep as this time will be massive between frames when debugging
+	let Timestep = (Pop.WebApi.LastFrameTime===null) ? 0 : (Time-Pop.WebApi.LastFrameTime);
+	Timestep = Math.min( Pop.WebApi.MaxTimestep, Timestep );
+	Pop.WebApi.LastFrameTime = Time;
+	return Timestep;
+}
+
