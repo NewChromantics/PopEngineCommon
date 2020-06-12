@@ -588,18 +588,24 @@ Pop.Gui.BaseControl = class
 	//	todo: generic pop api for this
 	SetStyle(Key,Value)
 	{
+		const Element = this.GetElement();
 		//	change an attribute
-		this.Element.setAttribute(Key,Value);
+		Element.setAttribute(Key,Value);
 		//	set a css value
-		this.Element.style.setProperty(`${Key}`,Value);
+		Element.style.setProperty(`${Key}`,Value);
 		//	set a css variable
-		this.Element.style.setProperty(`--${Key}`,Value);
+		Element.style.setProperty(`--${Key}`,Value);
 	}
 	
 	SetRect(Rect)
 	{
 		const Element = this.GetElement();
 		SetGuiControlStyle( Element, Rect );
+	}
+	
+	SetVisible(Visible)
+	{
+		this.SetStyle('visibility', Visible ? 'visible' : 'hidden' );
 	}
 }
 
