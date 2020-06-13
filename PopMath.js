@@ -1092,6 +1092,24 @@ Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
 	return true;
 }
 
+
+Math.IsInsideBox3 = function(Position,BoxMin,BoxMax)
+{
+	for ( let dim=0;	dim<3;	dim++ )
+	{
+		const p = Position[dim];
+		const min = BoxMin[dim];
+		const max = BoxMax[dim];
+		if ( p < min )
+			return false;
+		if ( p > max )
+			return false
+	}
+
+	return true;
+}
+
+
 Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
 {
 	let tmin = -Infinity;
