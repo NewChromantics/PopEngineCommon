@@ -1446,3 +1446,141 @@ Pop.Math.GetMatrixTransposed = function(Matrix4x4)
 	return Transposed;
 }
 
+/*
+bool GetPlaneIntersection(TRay Ray,float4 Plane,out vec3 IntersectionPos)
+{
+	//	https://gist.github.com/doxas/e9a3d006c7d19d2a0047
+	float PlaneOffset = Plane.w;
+	float3 PlaneNormal = Plane.xyz;
+	float PlaneDistance = -PlaneOffset;
+	float Denom = dot( Ray.Dir, PlaneNormal);
+	float t = -(dot( Ray.Pos, PlaneNormal) + PlaneDistance) / Denom;
+	
+	//	wrong side, enable for 2 sided
+	bool DoubleSided = false;
+	
+	float Min = 0.01;
+	
+	if ( t <= Min && !DoubleSided )
+		return false;
+	
+	IntersectionPos = GetRayPositionAtTime( Ray, t );
+	return true;
+}
+*/
+Math.GetIntersectionRayTriangle3 = function(RayStart,RayDirection,a,b,c)
+{
+	//	https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
+	//	get plane normal
+	const ab = Math.Subtract3(b,a);
+	const ac = Math.Subtract3(c,a);
+	//	dont need to normalise?
+	const Normal = Math.Cross3(ab,ac);
+	//const Area = Math.Length3(Normal);
+	
+	//	find intersection on plane
+	
+	//	check if ray and plane are parallel	|- so dot=0
+	const kEpsilon = 0.0001;
+	const NormalDotRayDirection = Math.Dot3( Normal, RayDirection );
+	if ( Math.abs(NormalDotRayDirection) < kEpsilon )
+		return false;
+	
+	//	get distance to plane (can use any point)
+	const d = Math.Dot3( Normal, a );
+	
+	//	solve
+	//	intersection = start + (dir*t)
+	//	get plane intersection time
+	const NormalDotRayStart = Math.Dot3( Normal, RayStart);
+	let IntersectionTime = ( NormalDotRayStart + d) / NormalDotRayDirection;
+	IntersectionTime = -IntersectionTime;
+	
+	//	start of ray is behind plane
+	if ( IntersectionTime < 0 )
+	{
+		return false;
+	}
+	
+	//	get the plane intersection pos
+	const IntersectionPosition = Math.Add3( RayStart, Math.Multiply3( RayDirection, [IntersectionTime,IntersectionTime,IntersectionTime] ) );
+	//Pop.Debug(`IntersectionTime=${IntersectionTime}`);
+	//return IntersectionPosition;
+	
+	//	test if point is inside triangle
+	let TotalSign = 0;
+	{
+		const p = IntersectionPosition;
+		const ab = Math.Subtract3( b, a );
+		const pa = Math.Subtract3( p, a );
+		const cross = Math.Cross3( ab, pa );
+		const nc = Math.Dot3( Normal, cross );
+		if ( nc < 0 )
+			return false;
+		TotalSign += nc;
+	}
+	
+	{
+		const p = IntersectionPosition;
+		const bc = Math.Subtract3( c, b );
+		const pb = Math.Subtract3( p, b );
+		const cross = Math.Cross3( bc, pb );
+		const nc = Math.Dot3( Normal, cross );
+		if ( nc < 0 )
+			return false;
+		TotalSign += nc;
+	}
+
+	{
+		const p = IntersectionPosition;
+		const ca = Math.Subtract3( a, c );
+		const pc = Math.Subtract3( p, c );
+		const cross = Math.Cross3( ca, pc );
+		const nc = Math.Dot3( Normal, cross );
+		if ( nc < 0 )
+			return false;
+		TotalSign += nc;
+	}
+	/*	gr: this is always 1...
+	Pop.Debug(`TotalSign=${TotalSign}`);
+	if ( TotalSign > 2 )
+		return false;
+*/
+	return IntersectionPosition;
+}
+
+/*	get SDF distance, merge with above
+Math.DistanceToTriangle3 = function(Position,a,b,c)
+{
+	const p = Position;
+	const ba = Math.Subtract3(b, a);
+	const pa = Math.Subtract3(p, a);
+	const cb = Math.Subtract3(c, b);
+	const pb = Math.Subtract3(p, b);
+	const ac = Math.Subtract3(a, c);
+	const pc = Math.Subtract3(p, c);
+	const nor = Math.cross3( ba, ac );
+
+	//	work out which side of each edge we're on
+	const Sideab = sign(dot(cross(ba,nor),pa));
+	const Sidecb = sign(dot(cross(cb,nor),pb));
+	const Sideac = sign(dot(cross(ac,nor),pc));
+	const TotalSign = Sideab + Sidecb + Sideac;
+	
+	let DistanceSq;
+	
+	if ( TotalSign < 2 )
+	{
+		DistanceSq = min( min(
+				 dot2(ba*clamp(dot(ba,pa)/dot2(ba),0.0,1.0)-pa),
+				 dot2(cb*clamp(dot(cb,pb)/dot2(cb),0.0,1.0)-pb) ),
+			dot2(ac*clamp(dot(ac,pc)/dot2(ac),0.0,1.0)-pc) )
+	}
+	else
+	{
+		DistanceSq = dot(nor,pa)*dot(nor,pa)/dot2(nor) )
+	}
+	
+	return Math.sqrt(DistanceSq);
+}
+*/
