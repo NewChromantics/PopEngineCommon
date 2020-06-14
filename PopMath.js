@@ -1475,31 +1475,47 @@ Math.GetIntersectionRayTriangle3 = function(RayStart,RayDirection,a,b,c)
 	const ab = Math.Subtract3(b,a);
 	const ac = Math.Subtract3(c,a);
 	//	dont need to normalise?
-	const Normal = Math.Cross3(ab,ac);
+	let Normal = Math.Cross3(ab,ac);
 	//const Area = Math.Length3(Normal);
 	
 	//	find intersection on plane
 	
 	//	check if ray and plane are parallel	|- so dot=0
 	const kEpsilon = 0.0001;
-	const NormalDotRayDirection = Math.Dot3( Normal, RayDirection );
+	let NormalDotRayDirection = Math.Dot3( Normal, RayDirection );
 	if ( Math.abs(NormalDotRayDirection) < kEpsilon )
 		return false;
 	
-	//	get distance to plane (can use any point)
-	const d = Math.Dot3( Normal, a );
+	//	if this is positive, triangle is facing away (normal in same direction as our ray)
+	//	we want 2 sided, we don't want to care about winding, so flip
+	/*if ( NormalDotRayDirection > 0 )
+	{
+		Normal = Math.Cross3(ac,ab);
+		NormalDotRayDirection = Math.Dot3( Normal, RayDirection );
+	}*/
+	
+	//	get plane distance (origin to plane, its the length a-0 along the normal)
+	const TrianglePlaneDistance = Math.Dot3( Normal, a );
 	
 	//	solve
 	//	intersection = start + (dir*t)
 	//	get plane intersection time
-	const NormalDotRayStart = Math.Dot3( Normal, RayStart);
-	let IntersectionTime = ( NormalDotRayStart + d) / NormalDotRayDirection;
+	//	RayToPlaneDistance is plane's D for the ray (compared to triangle plane distance)
+	const RayToPlaneDistance = Math.Dot3( Normal, RayStart);
+	
+	//	therefore distance from ray origin to triangle is
+	//	RayToPlaneDistance + TrianglePlaneDistance
+	//	but along the ray, it's relative to the direction compared to the plane normal
+	const DistanceRayToTriangle = RayToPlaneDistance - TrianglePlaneDistance;
+	let IntersectionTime = DistanceRayToTriangle / NormalDotRayDirection;
+
+	//	normal is opposite to ray dir, so NormalDotRayDirection will be negative, so flip it
 	IntersectionTime = -IntersectionTime;
 	
 	//	start of ray is behind plane
 	if ( IntersectionTime < 0 )
 	{
-		return false;
+		//return false;
 	}
 	
 	//	get the plane intersection pos
