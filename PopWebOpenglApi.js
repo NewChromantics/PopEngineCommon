@@ -173,6 +173,44 @@ Pop.Opengl.RefactorFragShader = function(Source)
 	return Source;
 }
 
+//	temp copy of SetGuiControlStyle, reduce dependcy, but we also want the openglwindow to become a basecontrol dervied "view"
+function Pop_Opengl_SetGuiControlStyle(Element,Rect)
+{
+	if ( !Rect )
+		return;
+	
+	//	to allow vw/% etc, we're using w/h now
+	//	also, if you have bottom, but no height,
+	//	you need block display to make that style work
+	
+	function NumberToPx(Number)
+	{
+		if ( typeof Number != 'number' )
+			return Number;
+		return Number + 'px';
+	}
+	const RectCss = Rect.map(NumberToPx);
+	Element.style.position = 'absolute';
+	Element.style.left = RectCss[0];
+	Element.style.top = RectCss[1];
+	Element.style.width = RectCss[2];
+	Element.style.height = RectCss[3];
+	//Element.style.border = '1px solid #0f0';
+}
+
+//	temp copy of SetGuiControlStyle, reduce dependcy, but we also want the openglwindow to become a basecontrol dervied "view"
+function Pop_Opengl_SetGuiControl_SubElementStyle(Element,LeftPercent=0,RightPercent=100)
+{
+	Element.style.display = 'block';
+	//	this makes it overflow, shouldn't be needed?
+	//Element.style.width = (RightPercent-LeftPercent) + '%';
+	Element.style.position = 'absolute';
+	Element.style.left = LeftPercent + '%';
+	Element.style.right = (100-RightPercent) + '%';
+	Element.style.top = '0px';
+	Element.style.bottom = '0px';
+}
+
 
 //	wrapper for a generic element which converts input (touch, mouse etc) into
 //	our mouse functions
@@ -428,7 +466,8 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.IsMinimised = function () { return Pop.WebApi.IsForeground(); }
 
 	this.IsOpen = true;	//	renderloop stops if false
-	this.NewCanvasElement = null;
+	this.NewCanvasElement = null;	//	canvas we created
+	this.CanvasElement = null;		//	cached element pointer
 
 	this.Context = null;
 	this.ContextVersion = 0;	//	used to tell if resources are out of date
@@ -473,7 +512,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		//	resize to original rect
 		const Canvas = this.GetCanvasElement();
 		Pop.Debug("Re-setting canvas size to original rect",JSON.stringify(Rect))
-		this.SetCanvasSize( Canvas, Rect );
+		this.SetCanvasSize();
 		
 		this.RefreshCanvasResolution();
 	}
@@ -487,9 +526,51 @@ Pop.Opengl.Window = function(Name,Rect)
 		return Index;
 	}
 	
-	this.InitCanvasElement = function()
+	this.GetCanvasElement = function()
 	{
+		return this.CanvasElement;
+	}
+	
+	this.CreateCanvasElement = function(Name,Parent,Rect)
+	{
+		//	if element already exists, we need it to be a canvas
+		//	if we're fitting inside a div, then Parent should be the name of a div
+		//	we could want a situation where we want a rect inside a parent? but then
+		//	that should be configured by css?
 		let Element = document.getElementById(Name);
+		if ( Element )
+		{
+			//	https://stackoverflow.com/questions/254302/how-can-i-determine-the-type-of-an-html-element-in-javascript
+			//	apprently nodeName is the best case
+			if ( Element.nodeName != 'CANVAS' )
+				throw `Pop.Opengl.Window ${Name} needs to be a canvas, is ${Element.nodeName}`;
+			return Element;
+		}
+		
+		//	create new canvas
+		this.NewCanvasElement = document.createElement('canvas');
+		Element = this.NewCanvasElement;
+		Element.id = Name;
+		Parent.appendChild( Element );
+		
+		//	double check
+		{
+			let MatchElement = document.getElementById(Name);
+			if ( !MatchElement )
+				throw "Created, but failed to refind new element";
+		}
+
+		return Element;
+	}
+	
+	this.InitCanvasElement = function(Name,Parent,Rect)
+	{
+		const Element = this.CreateCanvasElement(Name,Parent,Rect);
+		
+		if ( Rect == Parent.id )
+			Pop_Opengl_SetGuiControl_SubElementStyle(Element);
+		else
+			Pop_Opengl_SetGuiControlStyle( Element, Rect );
 		
 		//	setup event bindings
 		//	gr: can't bind here as they may change later, so relay (and error if not setup)
@@ -517,6 +598,7 @@ Pop.Opengl.Window = function(Name,Rect)
 
 		//	catch fullscreen state change
 		Element.addEventListener('fullscreenchange', this.OnFullscreenChanged.bind(this) );
+		return Element;
 	}
 	
 	this.GetScreenRect = function()
@@ -550,9 +632,9 @@ Pop.Opengl.Window = function(Name,Rect)
 		Canvas.height = h;
 	}
 	
-	this.SetCanvasSize = function(CanvasElement,Rect=null)
+	this.SetCanvasSize = function()
 	{
-		const ParentElement = CanvasElement.parentElement;
+		const ParentElement = this.CanvasElement.parentElement;
 		
 		//	if null, then fullscreen
 		//	go as fullscreen as possible
@@ -596,36 +678,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		//CanvasElement.height = Rect[3];
 	}
 	
-	this.GetCanvasElement = function()
-	{
-		//	gr: a bit of a clash here, we fill the parent named Rect
-		//		and if there's an element with our name, then we use that
-		//		but it might not be inside the parent...
-		let Element = document.getElementById(Name);
-		if ( Element )
-			return Element;
-		
-		const ParentElement = this.ParentElement;
-		
-		//	create!
-		this.NewCanvasElement = document.createElement('canvas');
-		Element = this.NewCanvasElement;
-		Element.id = Name;
-		
-		ParentElement.appendChild( Element );
-		
-		//	gr: replace this with a CSS size-config here
-		this.SetCanvasSize( Element, Rect );
-
-		//	double check
-		{
-			let MatchElement = document.getElementById(Name);
-			if ( !MatchElement )
-				throw "Created, but failed to refind new element";
-		}
-		
-		return Element;
-	}
+	
 	
 	this.OnLostContext = function(Error)
 	{
@@ -984,14 +1037,31 @@ Pop.Opengl.Window = function(Name,Rect)
 	}
 	
 
-	this.ParentElement = document.body;
+	//	gr: this class needs to re-organise into a "opengl view" to go inside a gui window
+	//		native API also needs to do this
+	//	like Pop.Gui controls;
+	//		if Name==Canvas.id, then it should initialise there
+	//		else if rect is a string (or direct element) we should create a new canvas inside
+	//			that element
+	//		else if rect is a number, we should create a canvas in the body at the specified size
+	//		if name is canvas.id and rect==parent, then we have to ignore the rect
+	let Parent = document.body;
 	if ( typeof Rect == 'string' )
-		this.ParentElement = document.getElementById(Rect);
+	{
+		Parent = document.getElementById(Rect);
+	}
 	else if ( Rect instanceof HTMLElement )
-		this.ParentElement = Rect;
+	{
+		Parent = Rect;
+		Rect = Parent.id;
+	}
 	
+	//	gr: this was context before canvas??
+	this.CanvasElement = this.InitCanvasElement( Name, Parent, Rect );
+	
+	this.SetCanvasSize();
+	this.RefreshCanvasResolution();
 	this.InitialiseContext();
-	this.InitCanvasElement();
 
 	this.RenderLoop();
 }
