@@ -1231,7 +1231,8 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 	
 	this.IsImagesValid = function()
 	{
-		Pop.Debug("IsImagesValid",this);
+		// Pop.Debug("IsImagesValid",this);
+		
 		//	if multiple images, size and format need to be the same
 		const Image0 = this.Images[0];
 		const IsSameAsImage0 = function(Image)
@@ -1764,7 +1765,7 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 	//	backwards compatibility
 	if ( typeof VertexAttributeName == 'string' )
 	{
-		Pop.Debug("[deprecated] Old TriangleBuffer constructor, use a keyed object");
+		Pop.Warn("[deprecated] Old TriangleBuffer constructor, use a keyed object");
 		const Attrib = {};
 		Attrib.Size = VertexSize;
 		Attrib.Data = VertexData;
@@ -1780,7 +1781,7 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexDat
 	{
 		if ( this.BufferContextVersion !== RenderContext.ContextVersion )
 		{
-			Pop.Debug("Buffer context version changed",this.BufferContextVersion,RenderContext.ContextVersion);
+			Pop.Warn("Buffer context version changed",this.BufferContextVersion,RenderContext.ContextVersion);
 			this.CreateBuffer(RenderContext);
 		}
 		return this.Buffer;

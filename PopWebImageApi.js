@@ -544,7 +544,7 @@ Pop.Image = function(Filename)
 	else if ( Array.isArray( Filename ) )
 	{
 		//	initialise size...
-		Pop.Debug("Init image with size", Filename);
+		// Pop.Debug("Init image with size", Filename);
 		const Size = arguments[0];
 		const PixelFormat = arguments[1] || 'RGBA';
 		const Width = Size[0];

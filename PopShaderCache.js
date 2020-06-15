@@ -21,7 +21,7 @@ function GetUniqueHash(Object)
 	
 	UniqueHashCounter++;
 	Object._UniqueHash = HashPrefix + UniqueHashCounter;
-	Pop.Debug("Created new hash for object: " + Object._UniqueHash );
+	// Pop.Debug("Created new hash for object: " + Object._UniqueHash );
 	
 	return Object._UniqueHash;
 }
