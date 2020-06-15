@@ -497,7 +497,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 
 function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 {
-	Pop.Debug("Using deprecated CreateParamsWindow(), switch to new Pop.TParamsWindow");
+	Pop.Warn("Using deprecated CreateParamsWindow(), switch to new Pop.TParamsWindow");
 	const Window = new Pop.ParamsWindow(Params,OnAnyChanged,WindowRect);
 	return Window;
 }
