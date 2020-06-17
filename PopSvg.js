@@ -683,8 +683,9 @@ function ParseSvgPathCommandContours(Commands)
 	return Contours;
 }
 
-Pop.Svg.ParseShapes = function(Contents,OnShape)
+Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 {
+	FixPosition = FixPosition || function(xy,DocumentBounds)	{	return xy;	}
 	let Svg = Pop.Xml.Parse(Contents);
 	//	note: the DOMParser in chrome turns this into a proper svg object, not just a structure
 	Svg = CleanSvg(Svg);
@@ -695,6 +696,18 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	
 	const Meta = Svg.svg;
 	const Bounds = StringToFloats( Svg.ViewBox );
+	
+	function FixPositionArray(Points)
+	{
+		Pop.Debug(`FixPositionArray`);
+		//	modify array of pairs
+		for ( let xy of Points )
+		{
+			let NewXy = FixPosition(xy,Bounds);
+			xy[0] = NewXy[0];
+			xy[1] = NewXy[1];
+		}
+	}
 	
 	function NormaliseSize(Value)
 	{
@@ -815,6 +828,10 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		let y = StringToCoord( Node['cy'] );
 		let r = StringToSize( Node['r'] );
 		
+		const xy = FixPosition([x,y],Bounds);
+		x = xy[0];
+		y = xy[1];
+		
 		Shape.Circle = {};
 		Shape.Circle.x = x;
 		Shape.Circle.y = y;
@@ -836,6 +853,10 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		let y = StringToCoord( Node['cy'] );
 		let rx = StringToSize( Node['rx'] );
 		let ry = StringToSize( Node['ry'] );
+		
+		const xy = FixPosition([x,y],Bounds);
+		x = xy[0];
+		y = xy[1];
 		
 		Shape.Ellipse = {};
 		Shape.Ellipse.x = x;
@@ -867,11 +888,13 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 			{
 				PathShape.Line = {};
 				PathShape.Line.Points = Contour.Points.map( NormaliseSize );
+				FixPositionArray(PathShape.Line.Points);
 			}
 			else
 			{
 				PathShape.Polygon = {};
 				PathShape.Polygon.Points = Contour.Points.map( NormaliseSize );
+				FixPositionArray(PathShape.Polygon.Points);
 			}
 
 			const OutputShape = Object.assign({},Shape);
@@ -892,7 +915,8 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 
 		Shape.Polygon = {};
 		Shape.Polygon.Points = StringToFloat2Coords(Node['points']);
-		
+		FixPositionArray(Shape.Polygon.Points);
+
 		OnShape(Shape);
 	}
 	
@@ -913,7 +937,8 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		Shape.Line.Points = [];
 		Shape.Line.Points.push( [x1,y1] );
 		Shape.Line.Points.push( [x2,y2] );
-		
+		FixPositionArray(Shape.Line.Points);
+
 		OnShape( Shape );
 	}
 	
@@ -927,6 +952,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 
 		Shape.Line = {};
 		Shape.Line.Points = StringToFloat2Coords(Node['points']);
+		FixPositionArray(Shape.Line.Points);
 		
 		OnShape( Shape );
 	}
@@ -943,6 +969,10 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		let y = StringToCoord( Node['y'] ) || 0;
 		let w = StringToSize( Node['width'] );
 		let h = StringToSize( Node['height'] );
+		
+		const xy = FixPosition([x,y],Bounds);
+		x = xy[0];
+		y = xy[1];
 		
 		Shape.Rect = {};
 		Shape.Rect.x = x;
