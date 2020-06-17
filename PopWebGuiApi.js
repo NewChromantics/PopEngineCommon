@@ -779,6 +779,7 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 	{
 		//	call our callback
 		let Value = this.InputElement.valueAsNumber;
+		this.ValueCache = Value;
 		this.OnChanged( Value );
 	}
 	
@@ -787,6 +788,7 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		const ListenToInput = function(InputElement)
 		{
 			InputElement.addEventListener('input', this.OnElementChanged.bind(this) );
+			InputElement.addEventListener('change', this.OnElementChanged.bind(this) );
 		}.bind(this);
 		
 		let Div = GetExistingElement(Parent);
