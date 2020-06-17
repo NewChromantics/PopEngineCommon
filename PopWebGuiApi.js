@@ -788,7 +788,8 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		const ListenToInput = function(InputElement)
 		{
 			InputElement.addEventListener('input', this.OnElementChanged.bind(this) );
-			InputElement.addEventListener('change', this.OnElementChanged.bind(this) );
+			//	this is event is triggered from this.SetValue() so creates a loop
+			//InputElement.addEventListener('change', this.OnElementChanged.bind(this) );
 		}.bind(this);
 		
 		let Div = GetExistingElement(Parent);
