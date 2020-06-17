@@ -107,6 +107,20 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 	Control.OnChanged = OnChanged.bind(this);
 }
 
+//	dummy window we can swap out quickly in code
+//	change this so params window can just be hidden more easily?
+Pop.DummyParamsWindow = function()
+{
+	this.OnParamChanged = function(){};
+	this.OnParamsChanged = function(){};
+	this.AddParam = function(){};
+	this.GetParamMetas = function() {	return {};	};
+	
+	this.WaitForParamsChanged = function ()
+	{
+		return new Promise( function(res,rej){} );
+	}
+}
 
 Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 {
