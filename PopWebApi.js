@@ -230,6 +230,45 @@ Pop.GetTimeNowMs = function()
 	return performance.now();
 }
 
+
+//	gr: if we call fetch() 100 times for the same url, we make 100 requests
+//		quick fix, have a cache of pending fetch() requests
+//	gr: we cannot consume the result (.text or .arrayBuffer) more than once
+//		so inside this caching, we need to do the read too, hence extra funcs
+const FetchCache = {};
+
+async function FetchText(Url)
+{
+	const Fetched = await fetch(Url);
+	const Contents = await Fetched.text();
+	if ( !Fetched.ok )
+		throw `Failed to fetch(${Url}) text; ${Fetched.statusText}`;
+	return Contents;
+}
+
+async function FetchArrayBuffer(Url)
+{
+	const Fetched = await fetch(Url);
+	const Contents = await Fetched.arrayBuffer();
+	if ( !Fetched.ok )
+		throw `Failed to fetch(${Url}) arrayBuffer; ${Fetched.statusText}`;
+	const Contents8 = new Uint8Array(Contents);
+	return Contents8;
+}
+
+async function FetchOnce(Url,FetchFunc)
+{
+	if ( FetchCache.hasOwnProperty(Url) )
+		return FetchCache[Url];
+	
+	//	run the fetch, wait for it to finish, then clear the cache
+	FetchCache[Url] = FetchFunc(Url);
+	const Contents = await FetchCache[Url];
+	delete FetchCache[Url];
+	return Contents;
+}
+
+//	gr: this needs a fix like FetchOnce
 Pop.LoadFileAsImageAsync = async function(Filename)
 {
 	//	return cache if availible, if it failed before, try and load again
@@ -280,12 +319,7 @@ Pop.LoadFileAsStringAsync = async function(Filename)
 		return CacheString;
 	}
 	
-	const Fetched = await fetch(Filename);
-	//Pop.Debug("Fetch created:", Filename, Fetched);
-	const Contents = await Fetched.text();
-	//Pop.Debug("Fetch finished:", Filename, Fetched);
-	if ( !Fetched.ok )
-		throw "Failed to fetch " + Filename + "; " + Fetched.statusText;
+	const Contents = await FetchOnce(Filename,FetchText);
 	Pop.SetFileCache(Filename,Contents);
 	return Contents;
 }
@@ -298,17 +332,9 @@ Pop.LoadFileAsArrayBufferAsync = async function(Filename)
 	if ( Cache !== false )
 		return Cache;
 
-	const Fetched = await fetch(Filename);
-	//Pop.Debug("Fetch created:", Filename, Fetched);
-	const Contents = await Fetched.arrayBuffer();
-	//Pop.Debug("Fetch finished:", Filename, Fetched);
-	
-	//	todo: SetFileCacheError ?
-	if ( !Fetched.ok )
-		throw "Failed to fetch " + Filename + "; " + Fetched.statusText;
-	const Contents8 = new Uint8Array(Contents);
-	Pop.SetFileCache(Filename,Contents8);
-	return Contents8;
+	const Contents = await FetchOnce(Filename,FetchArrayBuffer);
+	Pop.SetFileCache(Filename,Contents);
+	return Contents;
 }
 
 Pop.SetFileCache = function(Filename,Contents)
