@@ -163,8 +163,14 @@ Pop.Audio.WaitForContext = async function()
 	if (Pop.Audio.Context)
 		return Pop.Audio.Context;
 	
-	//	wait for security
+	//	wait for DOM security
 	await WaitForClick();
+	
+	//	gr: this can follow through many times,
+	//		so make sure only the first one causes an alloc
+	if (Pop.Audio.Context)
+		return Pop.Audio.Context;
+
 	//	get func
 	const TAudioContext = window.AudioContext || window.webkitAudioContext;
 	Pop.Audio.Context = new TAudioContext();
