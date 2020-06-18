@@ -460,12 +460,45 @@ Pop.Audio.Sound = class
 		}
 	}
 	
+	//	sample node doesnt have a time, it's just offset
+	//	from the real time we started, so we have to track it
+	GetSampleNodeCurrentTime()
+	{
+		if ( !this.SampleNode )
+			return false;
+		
+		const Now = Pop.GetTimeNowMs();
+		const Offset = Now - this.SampleNodeStartTime;
+		return Offset;
+	}
+	
 	Play(TimeMs=0)
 	{
+		const SampleTimeIsClose = function()
+		{
+			const MaxMsOffset = 100;
+			const CurrentTime = this.GetSampleNodeCurrentTime();
+			if ( CurrentTime === false )
+				return false;
+			const Difference = Math.abs(TimeMs - CurrentTime);
+			if ( Difference < MaxMsOffset )
+				return true;
+			Pop.Debug(`Sample ${this.Name} time is ${TimeMs - CurrentTime}ms out`);
+			return false;
+		}.bind(this);
+		
+		//	dont queue up redundant plays
+		if ( SampleTimeIsClose() )
+			return;
+		
 		const QueueTime = Pop.GetTimeNowMs();
 		//Pop.Debug(`Queue play(${Name}) at ${Pop.GetTimeNow}
 		async function DoPlay(Context)
 		{
+			//	only start if our time is off, multiple starts may have buffered up
+			if ( SampleTimeIsClose() )
+				return;
+
 			this.CreateSamplerNodes(Context);
 			this.CreateReverbNodes(Context);
 
@@ -473,6 +506,7 @@ Pop.Audio.Sound = class
 			const DelaySecs = 0;
 			const OffsetSecs = TimeMs / 1000;
 			this.SampleNode.start(DelaySecs,OffsetSecs);
+			this.SampleNodeStartTime = Pop.GetTimeNowMs() - TimeMs;
 			
 			//	debug
 			const JobDelay = Pop.GetTimeNowMs() - QueueTime;
