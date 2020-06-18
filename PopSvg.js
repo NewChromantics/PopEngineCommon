@@ -763,6 +763,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 		Modifyx = Modifyx || function(x){return x;};
 		
 		let Floats = String.split(' ');
+		Floats = Floats.filter( f => f.length > 0 );
 		Floats = Floats.map( parseFloat );
 		if ( Floats.some( isNaN ) )
 			throw "String (" + String + ") failed to turn to floats: " + Floats;
