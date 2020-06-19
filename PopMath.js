@@ -1601,6 +1601,13 @@ Math.DistanceToTriangle3 = function(Position,a,b,c)
 }
 */
 
+Math.GetDistanceToCircle = function(xy,CirclePosRadius)
+{
+	const Distance = Math.Distance2(xy,CirclePosRadius);
+	const Radius = CirclePosRadius[2];
+	return Distance - Radius;
+}
+
 Math.GetTimeAlongLine2 = function(Position,Start,End)
 {
 	//	direction or End-in-localspace
