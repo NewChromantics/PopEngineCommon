@@ -140,7 +140,7 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 			}
 			else
 			{
-				Pop.Debug(`Warning OBJ Texcoord Index (${TexCoordIndex}) out of bounds(${TexCoords.length})`);
+				//Pop.Debug(`Warning OBJ Texcoord Index (${TexCoordIndex}) out of bounds(${TexCoords.length})`);
 				VertexTexCoords.push( undefined,undefined,undefined );
 			}
 		}
