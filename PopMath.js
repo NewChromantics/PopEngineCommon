@@ -1214,7 +1214,7 @@ Math.GetBox3Overlap = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
 }
 
 
-Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
+Math.GetIntersectionTimeRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
 {
 	let tmin = -Infinity;
 	let tmax = Infinity;
@@ -1240,27 +1240,53 @@ Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
 		return false;
 	}
 	
-	//	ray inside box... maybe change this return so its the exit intersection?
+	//	ray starts inside box... maybe change this return so its the exit intersection?
 	if ( tmin < 0 )
 	{
 		//return RayStart;
 		return false;
 	}
 	
+	
 	//	ray miss
 	if ( tmax < tmin )
 		return false;
-	//	from inside?
+	//	from inside? or is this behind
 	if ( tmax < 0.0 )
 		return false;
 	
-	let Intersection = Math.Multiply3( RayDirection, [tmin,tmin,tmin] );
+	return tmin;
+}
+
+Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
+{
+	const IntersectionTime = Math.GetIntersectionTimeRayBox3( RayStart, RayDirection, BoxMin, BoxMax );
+	if ( IntersectionTime === false )
+		return false;
+	
+	let Intersection = Math.Multiply3( RayDirection, [IntersectionTime,IntersectionTime,IntersectionTime] );
 	Intersection = Math.Add3( RayStart, Intersection );
 	
 	return Intersection;
 }
 
 
+Math.GetIntersectionLineBox3 = function(Start,End,BoxMin,BoxMax)
+{
+	const Direction = Math.Subtract3( End, Start );
+	
+	const IntersectionTime = Math.GetIntersectionTimeRayBox3( Start, Direction, BoxMin, BoxMax );
+	if ( IntersectionTime === false )
+		return false;
+
+	if ( IntersectionTime > 1 )
+		return false;
+
+	let Intersection = Math.Multiply3( Direction, [IntersectionTime,IntersectionTime,IntersectionTime] );
+	Intersection = Math.Add3( Start, Intersection );
+	
+	return Intersection;
+}
 
 //	returns signed distance, so if negative, point is behind plane.
 Math.GetDistanceToPlane = function(Plane4,Position3)
