@@ -1154,7 +1154,8 @@ Math.IsBox3InsideBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
 	return true;
 }
 
-Math.IsBox3OverlappingBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+//	get the AND of 2 box3s
+Math.GetOverlappedBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
 {
 	//	get the overlapping area as a box
 	//	min = maximum min
@@ -1165,13 +1166,51 @@ Math.IsBox3OverlappingBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
 	{
 		OverlapMin[Dim] = Math.max( BoxMinA[Dim], BoxMinB[Dim] );
 		OverlapMax[Dim] = Math.min( BoxMaxA[Dim], BoxMaxB[Dim] );
+		
+		//	if min > max the boxes aren't overlapping
+		//	doesnt matter which we snap to? but only do one or the box will flip
+		const Min = Math.min( OverlapMin[Dim], OverlapMax[Dim] );
+		//const Max = Math.max( OverlapMin[Dim], OverlapMax[Dim] );
+		OverlapMin[Dim] = Min;
+		//OverlapMax[Dim] = Max;
 	}
 	
+	const Box = {};
+	Box.Min = OverlapMin;
+	Box.Max = OverlapMax;
+	return Box;
+}
+
+
+Math.IsBox3OverlappingBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+{
+	const OverlapBox = Math.GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
+	
 	//	get overlapping amount
-	const OverlapArea = Math.GetBox3Area(OverlapMin,OverlapMax);
+	const OverlapArea = Math.GetBox3Area(OverlapBox.Min,OverlapBox.Max);
 	if ( OverlapArea > 0 )
 		return true;
 	return false;
+}
+
+Math.GetBox3Overlap = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+{
+	const AreaA = Math.GetBox3Area( BoxMinA, BoxMaxA );
+	const AreaB = Math.GetBox3Area( BoxMinB, BoxMaxB );
+	const OverlapBox = Math.GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
+	const OverlapArea = Math.GetBox3Area(OverlapBox.Min,OverlapBox.Max);
+
+	if ( OverlapArea > AreaA || OverlapArea > AreaB )
+	{
+		const OverlapBox2 = Math.GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
+		throw `Math error, Overlap is bigger than boxes`;
+	}
+	
+	if ( AreaB == 0 )
+		return 0;
+
+	const OverlapNormal = OverlapArea / AreaB;
+	return OverlapNormal;
 }
 
 
