@@ -98,7 +98,7 @@ function CleanSvg(DomSvg)
 	
 	function GetDefaultStyle()
 	{
-		Pop.Debug("GetDefaultStyle");
+		// Pop.Debug("GetDefaultStyle");
 		//	defaults;
 		//	https://www.w3.org/TR/SVG/painting.html#StrokeWidthProperty
 		const SvgDefaults = {};
@@ -133,7 +133,7 @@ function CleanSvg(DomSvg)
 			
 			//	overwrite new values
 			Object.assign( CurrentStyle, Style );
-			Pop.Debug(`Merged style ${SelectorName};`,CurrentStyle);
+			// Pop.Debug(`Merged style ${SelectorName};`,CurrentStyle);
 			CssMap[SelectorName] = CurrentStyle;
 		}
 		//Pop.Debug('SelectorNames',SelectorNames,"Style",Style);
@@ -167,7 +167,7 @@ function CleanSvg(DomSvg)
 		//	Node.sheet not on safari, so use 3rd party
 		//	3rd party parser
 		const CssRules = ParseCss(CssText);
-		Pop.Debug('css',JSON.stringify(CssRules));
+		// Pop.Debug('css',JSON.stringify(CssRules));
 		CssRules.forEach( ParseCssjsStyle );
 
 		/*
@@ -229,7 +229,7 @@ function CleanSvg(DomSvg)
 	}
 	Array.from(DomSvg.children).forEach(PushRootChild);
 	
-	Pop.Debug("CSS selectors", Object.keys(CssMap) );
+	// Pop.Debug("CSS selectors", Object.keys(CssMap) );
 	
 	return Svg;
 }
@@ -422,7 +422,7 @@ function ProcessPathCommands(Commands)
 	
 	function ProcessArc(RadiusX,RadiusY,Rotation,Arc,Sweep,EndX,EndY)
 	{
-		Pop.Debug('ProcessArc');
+		// Pop.Debug('ProcessArc');
 		//	for now grab points
 		const PointCount = 10;
 
@@ -625,8 +625,8 @@ function ProcessPathCommands(Commands)
 				case 't':	Call(ProcessQuadraticReflectionRelative,2);	break;
 				default:	throw `Unhandled path command ${Cmd}`;
 			}
-			if ( Args.length > 0 )
-				Pop.Debug(`Multiple iteration of path command ${Cmd}`);
+
+			// if ( Args.length > 0 ) Pop.Warn(`Multiple iteration of path command ${Cmd}`);
 		}
 		while(Args.length > 0);
 	}
@@ -653,7 +653,7 @@ function ParseSvgPathCommandContours(Commands)
 		//	find all floats
 		const Matches = [...String.matchAll(IsNumber)];
 		let Floats = Matches.map( m => m[0] );
-		Pop.Debug(`Floats: ${String}`,Matches);
+		// Pop.Debug(`Floats: ${String}`,Matches);
 		
 		Floats = Floats.map( parseFloat );
 		if ( Floats.some( isNaN ) )
@@ -672,29 +672,42 @@ function ParseSvgPathCommandContours(Commands)
 	}
 	
 	//	split into commands & coords
-	Pop.Debug(`ParseSvgPathCommands(${Commands})`);
+	// Pop.Debug(`ParseSvgPathCommands(${Commands})`);
 	const Matches = Commands.split(IsCommandPattern);
 	const MatchesNotEmpty = Matches.filter( s => s.length );
 	const MatchesWithFloats = MatchesNotEmpty.map(ConvertIfNumbers);
 	//const Matches = [...Commands.matchAll( Pattern )];
-	Pop.Debug(MatchesWithFloats);
+	// Pop.Debug(MatchesWithFloats);
 	
 	const Contours = ProcessPathCommands(MatchesWithFloats);
 	return Contours;
 }
 
-Pop.Svg.ParseShapes = function(Contents,OnShape)
+Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 {
+	FixPosition = FixPosition || function(xy,DocumentBounds)	{	return xy;	}
 	let Svg = Pop.Xml.Parse(Contents);
 	//	note: the DOMParser in chrome turns this into a proper svg object, not just a structure
 	Svg = CleanSvg(Svg);
-	Pop.Debug( JSON.stringify(Svg) );
+	// Pop.Debug( JSON.stringify(Svg) );
 	
 	//	name for each shape is group/group/name
 	const PathSeperator = '/';
 	
 	const Meta = Svg.svg;
 	const Bounds = StringToFloats( Svg.ViewBox );
+	
+	function FixPositionArray(Points)
+	{
+		Pop.Debug(`FixPositionArray`);
+		//	modify array of pairs
+		for ( let xy of Points )
+		{
+			let NewXy = FixPosition(xy,Bounds);
+			xy[0] = NewXy[0];
+			xy[1] = NewXy[1];
+		}
+	}
 	
 	function NormaliseSize(Value)
 	{
@@ -750,6 +763,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		Modifyx = Modifyx || function(x){return x;};
 		
 		let Floats = String.split(' ');
+		Floats = Floats.filter( f => f.length > 0 );
 		Floats = Floats.map( parseFloat );
 		if ( Floats.some( isNaN ) )
 			throw "String (" + String + ") failed to turn to floats: " + Floats;
@@ -815,6 +829,10 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		let y = StringToCoord( Node['cy'] );
 		let r = StringToSize( Node['r'] );
 		
+		const xy = FixPosition([x,y],Bounds);
+		x = xy[0];
+		y = xy[1];
+		
 		Shape.Circle = {};
 		Shape.Circle.x = x;
 		Shape.Circle.y = y;
@@ -837,6 +855,10 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		let rx = StringToSize( Node['rx'] );
 		let ry = StringToSize( Node['ry'] );
 		
+		const xy = FixPosition([x,y],Bounds);
+		x = xy[0];
+		y = xy[1];
+		
 		Shape.Ellipse = {};
 		Shape.Ellipse.x = x;
 		Shape.Ellipse.y = y;
@@ -848,7 +870,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	
 	function ParsePath(Node,ChildIndex,Path)
 	{
-		Pop.Debug(`ParsePath(${Node.id})`);
+		// Pop.Debug(`ParsePath(${Node.id})`);
 		const Shape = {};
 		Shape.Style = Node.Style;
 		Shape.Name = Node.id;
@@ -862,16 +884,18 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		{
 			//	is it a line or a poly
 			let PathShape = {};
-			Pop.Debug("Countour",Contour);
+			// Pop.Debug("Countour",Contour);
 			if ( Shape.Style.fill == "none" )
 			{
 				PathShape.Line = {};
 				PathShape.Line.Points = Contour.Points.map( NormaliseSize );
+				FixPositionArray(PathShape.Line.Points);
 			}
 			else
 			{
 				PathShape.Polygon = {};
 				PathShape.Polygon.Points = Contour.Points.map( NormaliseSize );
+				FixPositionArray(PathShape.Polygon.Points);
 			}
 
 			const OutputShape = Object.assign({},Shape);
@@ -892,7 +916,8 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 
 		Shape.Polygon = {};
 		Shape.Polygon.Points = StringToFloat2Coords(Node['points']);
-		
+		FixPositionArray(Shape.Polygon.Points);
+
 		OnShape(Shape);
 	}
 	
@@ -913,7 +938,8 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		Shape.Line.Points = [];
 		Shape.Line.Points.push( [x1,y1] );
 		Shape.Line.Points.push( [x2,y2] );
-		
+		FixPositionArray(Shape.Line.Points);
+
 		OnShape( Shape );
 	}
 	
@@ -927,6 +953,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 
 		Shape.Line = {};
 		Shape.Line.Points = StringToFloat2Coords(Node['points']);
+		FixPositionArray(Shape.Line.Points);
 		
 		OnShape( Shape );
 	}
@@ -943,6 +970,10 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		let y = StringToCoord( Node['y'] ) || 0;
 		let w = StringToSize( Node['width'] );
 		let h = StringToSize( Node['height'] );
+		
+		const xy = FixPosition([x,y],Bounds);
+		x = xy[0];
+		y = xy[1];
 		
 		Shape.Rect = {};
 		Shape.Rect.x = x;

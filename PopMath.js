@@ -1665,3 +1665,44 @@ Math.DistanceToTriangle3 = function(Position,a,b,c)
 	return Math.sqrt(DistanceSq);
 }
 */
+
+Math.GetDistanceToCircle = function(xy,CirclePosRadius)
+{
+	const Distance = Math.Distance2(xy,CirclePosRadius);
+	const Radius = CirclePosRadius[2];
+	return Distance - Radius;
+}
+
+Math.GetTimeAlongLine2 = function(Position,Start,End)
+{
+	//	direction or End-in-localspace
+	const Direction = Math.Subtract2( End, Start );
+	const DirectionLength = Math.Length2( Direction );
+	const LocalPosition = Math.Subtract2( Position, Start );
+	if ( DirectionLength == 0 )
+		return 0;
+	const Projection = Math.Dot2( LocalPosition, Direction) / (DirectionLength*DirectionLength);
+	return Projection;
+}
+
+Math.GetNearestPointOnLine2 = function(Position,Start,End)
+{
+	let Projection = Math.GetTimeAlongLine2( Position, Start, End );
+	
+	//	clamp to line
+	//	past start
+	Projection = Math.max( 0.0, Projection );
+	//	past end
+	Projection = Math.min( 1.0, Projection );
+	
+	const Near = Math.Lerp2( Start, End, Projection );
+	return Near;
+}
+
+Math.GetDistanceToLine2 = function(Position,Start,End)
+{
+	//	todo: LineButt & LineSquare versions
+	const Near = Math.GetNearestPointOnLine2(Position,Start,End);
+	const Distance = Math.Distance2(Position,Near);
+	return Distance;
+}

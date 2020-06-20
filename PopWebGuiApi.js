@@ -354,6 +354,7 @@ function SetGuiControl_Draggable(Element)
 Pop.Gui.Window = function(Name,Rect,Resizable)
 {
 	//	child controls should be added to this
+	//	todo: rename to ChildContainer
 	this.ElementParent = null;
 
 	//	gr: element may not be assigned yet, maybe rework construction of controls
@@ -368,13 +369,14 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		return this.ElementParent;
 	}
 	
-	this.CreateElement = function(Parent)
+	this.CreateElement = function(Name,Parent,Rect)
 	{
 		let Element = document.createElement('div');
 		if ( Rect == Parent.id )
 			SetGuiControl_SubElementStyle(Element);
 		else
 			SetGuiControlStyle( Element, Rect );
+		
 		//Element.innerText = 'Pop.Gui.Window';
 		Element.style.zIndex = $HighestZ;
 		//Element.style.overflow = 'scroll';	//	inner div handles scrolling
@@ -465,8 +467,16 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 
 	let Parent = document.body;
 	if ( typeof Rect == 'string' )
+	{
 		Parent = document.getElementById(Rect);
-	this.Element = this.CreateElement(Parent);
+	}
+	else if ( Rect instanceof HTMLElement )
+	{
+		Parent = Rect;
+		Rect = Parent.id;
+	}
+	
+	this.Element = this.CreateElement( Name, Parent, Rect );
 }
 
 function GetExistingElement(Name)
@@ -769,6 +779,7 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 	{
 		//	call our callback
 		let Value = this.InputElement.valueAsNumber;
+		this.ValueCache = Value;
 		this.OnChanged( Value );
 	}
 	
@@ -777,6 +788,8 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		const ListenToInput = function(InputElement)
 		{
 			InputElement.addEventListener('input', this.OnElementChanged.bind(this) );
+			//	this is event is triggered from this.SetValue() so creates a loop
+			//InputElement.addEventListener('change', this.OnElementChanged.bind(this) );
 		}.bind(this);
 		
 		let Div = GetExistingElement(Parent);
