@@ -568,6 +568,18 @@ Math.GetCircleArea = function(Radius)
 	return Math.PI * (Radius*Radius);
 }
 
+Math.GetBox3Area = function(BoxMin,BoxMax)
+{
+	const Size =
+	[
+	 BoxMax[0] - BoxMin[0],
+	 BoxMax[1] - BoxMin[1],
+	 BoxMax[2] - BoxMin[2],
+	];
+	const Area = Size[0] * Size[1] * Size[2];
+	return Area;
+}
+
 //	overlap area is the overlap as a fraction of the biggest rect
 function GetOverlapArea(Recta,Rectb)
 {
@@ -1042,7 +1054,21 @@ Math.GetFrustumPlanes = function(ProjectionMatrix4x4,Normalised=true)
 	return Planes;
 }
 
-
+Math.GetBox3Corners = function(BoxMin,BoxMax)
+{
+	const BoxCorners =
+	[
+	 [BoxMin[0], BoxMin[1], BoxMin[2] ],
+	 [BoxMax[0], BoxMin[1], BoxMin[2] ],
+	 [BoxMin[0], BoxMax[1], BoxMin[2] ],
+	 [BoxMax[0], BoxMax[1], BoxMin[2] ],
+	 [BoxMin[0], BoxMin[1], BoxMax[2] ],
+	 [BoxMax[0], BoxMin[1], BoxMax[2] ],
+	 [BoxMin[0], BoxMax[1], BoxMax[2] ],
+	 [BoxMax[0], BoxMax[1], BoxMax[2] ],
+	 ];
+	return BoxCorners;
+}
 
 Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
 {
@@ -1092,8 +1118,7 @@ Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
 	return true;
 }
 
-
-Math.IsInsideBox3 = function(Position,BoxMin,BoxMax)
+Math.IsPositionInsideBox3 = function(Position,BoxMin,BoxMax)
 {
 	for ( let dim=0;	dim<3;	dim++ )
 	{
@@ -1105,8 +1130,48 @@ Math.IsInsideBox3 = function(Position,BoxMin,BoxMax)
 		if ( p > max )
 			return false
 	}
-
+	
 	return true;
+}
+
+Math.IsInsideBox3 = function(Position,BoxMin,BoxMax)
+{
+	Pop.Warning(`Math.IsInsideBox3 Deprecated; use Math.IsPositionInsideBox3`);
+	return Math.IsPositionInsideBox3(...arguments);
+}
+
+
+//	is this box wholly inside another box
+Math.IsBox3InsideBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+{
+	const CornersA = Math.GetBox3Corners(BoxMinA,BoxMaxA);
+	for ( let Pos of CornersA )
+	{
+		const Inside = Math.IsPositionInsideBox3( Pos, BoxMinB, BoxMaxB );
+		if ( !Inside )
+			return false;
+	}
+	return true;
+}
+
+Math.IsBox3OverlappingBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+{
+	//	get the overlapping area as a box
+	//	min = maximum min
+	//	max = minimum max
+	const OverlapMin = [];
+	const OverlapMax = [];
+	for ( let Dim=0;	Dim<3;	Dim++ )
+	{
+		OverlapMin[Dim] = Math.max( BoxMinA[Dim], BoxMinB[Dim] );
+		OverlapMax[Dim] = Math.min( BoxMaxA[Dim], BoxMaxB[Dim] );
+	}
+	
+	//	get overlapping amount
+	const OverlapArea = Math.GetBox3Area(OverlapMin,OverlapMax);
+	if ( OverlapArea > 0 )
+		return true;
+	return false;
 }
 
 
