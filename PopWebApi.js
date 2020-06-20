@@ -172,6 +172,7 @@ Pop._AssetCache = [];
 //	simple aliases
 Pop.Debug = console.log;
 Pop.Warn = console.warn;
+Pop.Warning = console.warn;
 
 Pop.GetPlatform = function()
 {
