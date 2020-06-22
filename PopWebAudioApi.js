@@ -128,7 +128,22 @@ Pop.Audio.SimpleSound = class
 			await Action.call(this);
 		}
 	}
-	
+
+	PushAction(Lambda)
+	{
+		//	prevent massive queues;
+		//	play() should do something more intelligent like a dirty desired time and a thread wake
+
+		//	this queue is not being flushed (Update async thread not being called when tab in the background?)
+		//	but the web-animation async call IS, which results in a massive unflushed queue...
+		if (this.ActionQueue.length > 10)
+		{
+			Pop.Warning(`WebAudio action queue has reached ${this.ActionQueue.length}, discarding`);
+			this.ActionQueue.ClearQueue();
+		}
+		this.ActionQueue.Push(Lambda);
+	}
+
 	Play(TimeMs)
 	{
 		const QueueTime = Pop.GetTimeNowMs();
@@ -141,7 +156,7 @@ Pop.Audio.SimpleSound = class
 			if ( Delay > 5 )
 				Pop.Debug(`Play(${TimeMs.toFixed(2)}) delay ${this.Name} ${Delay.toFixed(2)}ms`);
 		}
-		this.ActionQueue.Push(DoPlay);
+		this.PushAction(DoPlay);
 	}
 
 	Stop()
@@ -150,7 +165,7 @@ Pop.Audio.SimpleSound = class
 		{
 			this.Sound.pause();
 		}
-		this.ActionQueue.Push(DoStop);
+		this.PushAction(DoStop);
 	}
 }
 
