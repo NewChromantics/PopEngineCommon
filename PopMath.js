@@ -1731,6 +1731,31 @@ Math.DistanceToTriangle3 = function(Position,a,b,c)
 }
 */
 
+Math.GetDistanceToRect = function(xy,Rect)
+{
+	function sdBox(p,b)
+	{
+		//	b = "radius"
+		//	vec2 d = abs(p)-b;
+		let dx = Math.abs(p[0]) - b[0];
+		let dy = Math.abs(p[1]) - b[1];
+		
+		//	return length(max(d,0.0)) + min(max(d.x,d.y),0.0);
+		const max_d_0 = [ Math.max(dx,0), Math.max(dy,0) ];
+		const length_max_d_0 = Math.Length2(max_d_0);
+		const minmax_dx_0 = Math.min( Math.max(dx,dy), 0 );
+
+		return length_max_d_0 + minmax_dx_0;
+	}
+	
+	const HalfWidth = Rect[2]/2;
+	const HalfHeight = Rect[3]/2;
+	
+	const px = xy[0] - (Rect[0]+HalfWidth);
+	const py = xy[1] - (Rect[1]+HalfHeight);
+	return sdBox( [px,py], [HalfWidth,HalfHeight] );
+}
+
 Math.GetDistanceToCircle = function(xy,CirclePosRadius)
 {
 	const Distance = Math.Distance2(xy,CirclePosRadius);
