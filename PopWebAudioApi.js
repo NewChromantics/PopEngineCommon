@@ -498,7 +498,7 @@ Pop.Audio.Sound = class
 			const Difference = Math.abs(TimeMs - CurrentTime);
 			if ( Difference < MaxMsOffset )
 				return true;
-			Pop.Debug(`Sample ${this.Name} time is ${TimeMs - CurrentTime}ms out`);
+			// Pop.Debug(`Sample ${this.Name} time is ${TimeMs - CurrentTime}ms out`);
 			return false;
 		}.bind(this);
 		
@@ -525,8 +525,7 @@ Pop.Audio.Sound = class
 			
 			//	debug
 			const JobDelay = Pop.GetTimeNowMs() - QueueTime;
-			if ( JobDelay > 5 )
-				Pop.Debug(`Play delay ${this.Name} ${JobDelay.toFixed(2)}ms`);
+			// if ( JobDelay > 5 ) Pop.Debug(`Play delay ${this.Name} ${JobDelay.toFixed(2)}ms`);
 		}
 		this.ActionQueue.Push(DoPlay);
 	}
@@ -685,7 +684,7 @@ Pop.Audio.FakeMidiInput = class
 			return false;
 		}
 
-		Pop.Debug(`OnKeyDown`);
+		// Pop.Debug(`OnKeyDown`);
 		const Note = this.GetNoteFromKey(KeyEvent.key);
 		if (!Note)
 			return;

@@ -172,6 +172,7 @@ Pop._AssetCache = [];
 //	simple aliases
 Pop.Debug = console.log;
 Pop.Warn = console.warn;
+Pop.Warning = console.warn;
 
 Pop.GetPlatform = function()
 {
@@ -341,7 +342,7 @@ Pop.SetFileCache = function(Filename,Contents)
 {
 	if ( Pop._AssetCache.hasOwnProperty(Filename) )
 	{
-		Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
+		// Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
 	}
 	Pop._AssetCache[Filename] = Contents;
 }

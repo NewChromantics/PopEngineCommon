@@ -568,6 +568,18 @@ Math.GetCircleArea = function(Radius)
 	return Math.PI * (Radius*Radius);
 }
 
+Math.GetBox3Area = function(BoxMin,BoxMax)
+{
+	const Size =
+	[
+	 BoxMax[0] - BoxMin[0],
+	 BoxMax[1] - BoxMin[1],
+	 BoxMax[2] - BoxMin[2],
+	];
+	const Area = Size[0] * Size[1] * Size[2];
+	return Area;
+}
+
 //	overlap area is the overlap as a fraction of the biggest rect
 function GetOverlapArea(Recta,Rectb)
 {
@@ -1042,7 +1054,21 @@ Math.GetFrustumPlanes = function(ProjectionMatrix4x4,Normalised=true)
 	return Planes;
 }
 
-
+Math.GetBox3Corners = function(BoxMin,BoxMax)
+{
+	const BoxCorners =
+	[
+	 [BoxMin[0], BoxMin[1], BoxMin[2] ],
+	 [BoxMax[0], BoxMin[1], BoxMin[2] ],
+	 [BoxMin[0], BoxMax[1], BoxMin[2] ],
+	 [BoxMax[0], BoxMax[1], BoxMin[2] ],
+	 [BoxMin[0], BoxMin[1], BoxMax[2] ],
+	 [BoxMax[0], BoxMin[1], BoxMax[2] ],
+	 [BoxMin[0], BoxMax[1], BoxMax[2] ],
+	 [BoxMax[0], BoxMax[1], BoxMax[2] ],
+	 ];
+	return BoxCorners;
+}
 
 Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
 {
@@ -1092,8 +1118,7 @@ Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
 	return true;
 }
 
-
-Math.IsInsideBox3 = function(Position,BoxMin,BoxMax)
+Math.IsPositionInsideBox3 = function(Position,BoxMin,BoxMax)
 {
 	for ( let dim=0;	dim<3;	dim++ )
 	{
@@ -1105,12 +1130,91 @@ Math.IsInsideBox3 = function(Position,BoxMin,BoxMax)
 		if ( p > max )
 			return false
 	}
-
+	
 	return true;
 }
 
+Math.IsInsideBox3 = function(Position,BoxMin,BoxMax)
+{
+	Pop.Warning(`Math.IsInsideBox3 Deprecated; use Math.IsPositionInsideBox3`);
+	return Math.IsPositionInsideBox3(...arguments);
+}
 
-Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
+
+//	is this box wholly inside another box
+Math.IsBox3InsideBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+{
+	const CornersA = Math.GetBox3Corners(BoxMinA,BoxMaxA);
+	for ( let Pos of CornersA )
+	{
+		const Inside = Math.IsPositionInsideBox3( Pos, BoxMinB, BoxMaxB );
+		if ( !Inside )
+			return false;
+	}
+	return true;
+}
+
+//	get the AND of 2 box3s
+Math.GetOverlappedBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+{
+	//	get the overlapping area as a box
+	//	min = maximum min
+	//	max = minimum max
+	const OverlapMin = [];
+	const OverlapMax = [];
+	for ( let Dim=0;	Dim<3;	Dim++ )
+	{
+		OverlapMin[Dim] = Math.max( BoxMinA[Dim], BoxMinB[Dim] );
+		OverlapMax[Dim] = Math.min( BoxMaxA[Dim], BoxMaxB[Dim] );
+		
+		//	if min > max the boxes aren't overlapping
+		//	doesnt matter which we snap to? but only do one or the box will flip
+		const Min = Math.min( OverlapMin[Dim], OverlapMax[Dim] );
+		//const Max = Math.max( OverlapMin[Dim], OverlapMax[Dim] );
+		OverlapMin[Dim] = Min;
+		//OverlapMax[Dim] = Max;
+	}
+	
+	const Box = {};
+	Box.Min = OverlapMin;
+	Box.Max = OverlapMax;
+	return Box;
+}
+
+
+Math.IsBox3OverlappingBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+{
+	const OverlapBox = Math.GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
+	
+	//	get overlapping amount
+	const OverlapArea = Math.GetBox3Area(OverlapBox.Min,OverlapBox.Max);
+	if ( OverlapArea > 0 )
+		return true;
+	return false;
+}
+
+Math.GetBox3Overlap = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+{
+	const AreaA = Math.GetBox3Area( BoxMinA, BoxMaxA );
+	const AreaB = Math.GetBox3Area( BoxMinB, BoxMaxB );
+	const OverlapBox = Math.GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
+	const OverlapArea = Math.GetBox3Area(OverlapBox.Min,OverlapBox.Max);
+
+	if ( OverlapArea > AreaA || OverlapArea > AreaB )
+	{
+		const OverlapBox2 = Math.GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
+		throw `Math error, Overlap is bigger than boxes`;
+	}
+	
+	if ( AreaB == 0 )
+		return 0;
+
+	const OverlapNormal = OverlapArea / AreaB;
+	return OverlapNormal;
+}
+
+
+Math.GetIntersectionTimeRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
 {
 	let tmin = -Infinity;
 	let tmax = Infinity;
@@ -1136,27 +1240,53 @@ Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
 		return false;
 	}
 	
-	//	ray inside box... maybe change this return so its the exit intersection?
+	//	ray starts inside box... maybe change this return so its the exit intersection?
 	if ( tmin < 0 )
 	{
 		//return RayStart;
 		return false;
 	}
 	
+	
 	//	ray miss
 	if ( tmax < tmin )
 		return false;
-	//	from inside?
+	//	from inside? or is this behind
 	if ( tmax < 0.0 )
 		return false;
 	
-	let Intersection = Math.Multiply3( RayDirection, [tmin,tmin,tmin] );
+	return tmin;
+}
+
+Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
+{
+	const IntersectionTime = Math.GetIntersectionTimeRayBox3( RayStart, RayDirection, BoxMin, BoxMax );
+	if ( IntersectionTime === false )
+		return false;
+	
+	let Intersection = Math.Multiply3( RayDirection, [IntersectionTime,IntersectionTime,IntersectionTime] );
 	Intersection = Math.Add3( RayStart, Intersection );
 	
 	return Intersection;
 }
 
 
+Math.GetIntersectionLineBox3 = function(Start,End,BoxMin,BoxMax)
+{
+	const Direction = Math.Subtract3( End, Start );
+	
+	const IntersectionTime = Math.GetIntersectionTimeRayBox3( Start, Direction, BoxMin, BoxMax );
+	if ( IntersectionTime === false )
+		return false;
+
+	if ( IntersectionTime > 1 )
+		return false;
+
+	let Intersection = Math.Multiply3( Direction, [IntersectionTime,IntersectionTime,IntersectionTime] );
+	Intersection = Math.Add3( Start, Intersection );
+	
+	return Intersection;
+}
 
 //	returns signed distance, so if negative, point is behind plane.
 Math.GetDistanceToPlane = function(Plane4,Position3)
