@@ -321,7 +321,7 @@ Pop.Midi.Parse = function (FileContents)
 				case Pop.Midi.MidiEvents.ChannelPressure:	PushChannelPressure(Channel,TimeMs,Pop8());	break;
 				case Pop.Midi.MidiEvents.PitchBendChange:	PushPitchBendChange(Channel,TimeMs,Pop14());	break;
 				default:
-					Pop.Debug(`Midi event: ${MidiEventName} Channel[${Channel}] Next=${Next8}`);
+					// Pop.Debug(`Midi event: ${MidiEventName} Channel[${Channel}] Next=${Next8}`);
 					throw `Undhandled Midi event ${MidiEventName}`;
 			}
 		}
@@ -340,11 +340,11 @@ Pop.Midi.Parse = function (FileContents)
 			{
 				const Length0 = Pop8();
 				//const Length0 = 0;
-				Pop.Debug(`EndOfTrack length=${Length0}==0`);
+				// Pop.Debug(`EndOfTrack length=${Length0}==0`);
 				return;
 			}
 			const Length = PopVariableLengthValue();
-			Pop.Debug(`Meta event #${Event2.toString(16)} x${Length}`);
+			// Pop.Debug(`Meta event #${Event2.toString(16)} x${Length}`);
 			const EventData = PopData(Length);
 		}
 
@@ -415,12 +415,12 @@ Pop.Midi.Parse = function (FileContents)
 		}
 
 		
-		Pop.Debug(`Midi: ${JSON.stringify(Midi)}`);
+		// Pop.Debug(`Midi: ${JSON.stringify(Midi)}`);
 	}
 
 	function EnumAtom(Fourcc,Data)
 	{
-		Pop.Debug(`Atom ${Fourcc} x${Data.length}; ${Data}`);
+		// Pop.Debug(`Atom ${Fourcc} x${Data.length}; ${Data}`);
 		switch (Fourcc)
 		{
 			case 'MThd': return Parse_Mthd(Data);
