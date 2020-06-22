@@ -341,7 +341,7 @@ Pop.SetFileCache = function(Filename,Contents)
 {
 	if ( Pop._AssetCache.hasOwnProperty(Filename) )
 	{
-		Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
+		// Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
 	}
 	Pop._AssetCache[Filename] = Contents;
 }
