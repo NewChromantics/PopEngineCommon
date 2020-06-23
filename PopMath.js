@@ -125,11 +125,24 @@ Math.SinCos = function(Degrees)
 	return [Sin,Cos];
 }
 
-
-Math.clamp = function(min, max,Value)
+//	note: glsl clamp() is clamp(value,min,max)
+Math.clamp = function(min,max,Value)
 {
 	return Math.min( Math.max(Value, min), max);
 }
+Math.Clamp = Math.clamp;
+
+//	note: glsl clamp() is clamp(value,min,max)
+Math.clamp2 = function(Min,Max,Value)
+{
+	if ( !Array.isArray(Min) )	Min = [Min,Min];
+	if ( !Array.isArray(Max) )	Max = [Max,Max];
+	const x = Math.clamp( Min[0], Max[0], Value[0] );
+	const y = Math.clamp( Min[1], Max[1], Value[0] );
+	return [x,y];
+}
+Math.Clamp2 = Math.clamp2;
+
 
 Math.range = function(Min,Max,Value)
 {
@@ -256,6 +269,11 @@ Math.Add3 = function(a,b)
 	return [ a[0]+b[0], a[1]+b[1], a[2]+b[2] ];
 }
 
+Math.Multiply2 = function(a,b)
+{
+	return [ a[0]*b[0], a[1]*b[1] ];
+}
+
 Math.Multiply3 = function(a,b)
 {
 	return [ a[0]*b[0], a[1]*b[1], a[2]*b[2] ];
@@ -298,6 +316,32 @@ Math.Rotate2 = function(xy,AngleDegrees)
 	const y = (sin * xy[0]) + (cos * xy[1]);
 	return [x,y];
 }
+
+//	this acts like glsl; returns min per-component
+//	min2( [1,100], [2,99] ) = [1,99]
+Math.min2 = function(a,b,c,d,etc)
+{
+	const xs = [...arguments].map( n => n[0] );
+	const ys = [...arguments].map( n => n[1] );
+	const x = Math.min( ...xs );
+	const y = Math.min( ...ys );
+	return [x,y];
+}
+Math.Min2 = Math.min2;
+
+//	this acts like glsl; returns max per-component
+Math.max2 = function(a,b,c,d,etc)
+{
+	const xs = [...arguments].map( n => n[0] );
+	const ys = [...arguments].map( n => n[1] );
+	const x = Math.max( ...xs );
+	const y = Math.max( ...ys );
+	return [x,y];
+}
+Math.Max2 = Math.max2;
+
+
+
 
 //	how many angles to turn A to B
 Math.GetAngleDiffDegrees = function(a,b)
@@ -1796,3 +1840,134 @@ Math.GetDistanceToLine2 = function(Position,Start,End)
 	const Distance = Math.Distance2(Position,Near);
 	return Distance;
 }
+
+
+//	Corners is an array of [x,y] arrays
+//	gr: dont need a Center but current use pre-calcs it anyway
+Math.GetDistanceToPolygon2 = function(Position,Corners,Center)
+{
+	const uv = Position;
+	
+	function sign(p1,p2,p3)
+	{
+		const p1_x = p1[0];
+		const p1_y = p1[1];
+		const p2_x = p2[0];
+		const p2_y = p2[1];
+		const p3_x = p3[0];
+		const p3_y = p3[1];
+		return (p1_x - p3_x) * (p2_y - p3_y) - (p2_x - p3_x) * (p1_y - p3_y);
+	}
+	
+	//	glsl sign
+	//	sign returns -1.0 if 𝑥<0.0, 0.0 if 𝑥=0.0 and 1.0 if 𝑥>0.0.
+	function sign(f)
+	{
+		if ( f == 0 )	return 0;
+		if ( f < 0 )	return -1;
+		return 1;
+	}
+	
+	//	note GLSL and Math.clamp are different orders!
+	function clamp2(Value,Min,Max)
+	{
+		return Math.Clamp2(Min,Max,Value);
+	}
+	function clamp(Value,Min,Max)
+	{
+		return Math.Clamp(Min,Max,Value);
+	}
+	
+	//	float sdSegment( in vec2 p, in vec2 a, in vec2 b )
+	function sdSegment(p,a,b)
+	{
+		const pa = Math.Subtract2(p,a);
+		const ba = Math.Subtract2(b,a);
+		const h = clamp2( Math.Dot2(pa,ba)/Math.Dot2(ba,ba), 0.0, 1.0 );
+		const baScaled = Math.Multiply2( ba, [h,h] );
+		return Math.Distance2( pa, baScaled );
+	}
+	
+	function sdTriangle(p,p0,p1,p2 )
+	{
+		//	get edges/deltas
+		const e0 = Math.Subtract2(p1,p0);
+		const e1 = Math.Subtract2(p2,p1);
+		const e2 = Math.Subtract2(p0,p2);
+		const v0 = Math.Subtract2(p ,p0);
+		const v1 = Math.Subtract2(p ,p1);
+		const v2 = Math.Subtract2(p ,p2);
+		const e0_x = e0[0];
+		const e0_y = e0[1];
+		const e1_x = e1[0];
+		const e1_y = e1[1];
+		const e2_x = e2[0];
+		const e2_y = e2[1];
+		
+		const e0_LocalScale = clamp( Math.Dot2(v0,e0)/Math.Dot2(e0,e0), 0.0, 1.0 );
+		const e1_LocalScale = clamp( Math.Dot2(v1,e1)/Math.Dot2(e1,e1), 0.0, 1.0 );
+		const e2_LocalScale = clamp( Math.Dot2(v2,e2)/Math.Dot2(e2,e2), 0.0, 1.0 );
+		const pq0 = Math.Subtract2(v0,Math.Multiply2(e0,[e0_LocalScale,e0_LocalScale]));
+		const pq1 = Math.Subtract2(v1,Math.Multiply2(e1,[e1_LocalScale,e1_LocalScale]));
+		const pq2 = Math.Subtract2(v2,Math.Multiply2(e2,[e2_LocalScale,e2_LocalScale]));
+		const s = sign( e0_x*e2_y - e0_y*e2_x );
+		
+		const pq0_lengthsq = Math.Dot2(pq0,pq0);
+		const pq1_lengthsq = Math.Dot2(pq1,pq1);
+		const pq2_lengthsq = Math.Dot2(pq2,pq2);
+		
+		const v0_x = v0[0];
+		const v0_y = v0[1];
+		const v1_x = v1[0];
+		const v1_y = v1[1];
+		const v2_x = v2[0];
+		const v2_y = v2[1];
+		
+		const pq0_signeddistance2 = [pq0_lengthsq, s*(v0_x*e0_y-v0_y*e0_x)];
+		const pq1_signeddistance2 = [pq1_lengthsq, s*(v1_x*e1_y-v1_y*e1_x)];
+		const pq2_signeddistance2 = [pq2_lengthsq, s*(v2_x*e2_y-v2_y*e2_x)];
+		
+		const d = Math.min2( pq0_signeddistance2, pq1_signeddistance2, pq2_signeddistance2 );
+		return -Math.sqrt(d[0]) * sign(d[1]);
+	}
+	
+	//	get center as 3rd corner of triangle
+	//const Center = GetCenterPosition();
+	if ( !Center )
+		throw `GetDistanceToPolygon2() todo: calc the center, make it optional`;
+	
+	let MinDistance = 999.0;
+	for ( let i=0;	i<Corners.length-1;	i++ )
+	{
+		const a = Corners[i+0];
+		const b = Corners[i+1];
+		
+		//	get distance to outer edge
+		let EdgeDistance = sdSegment(uv,a,b);
+		
+		//	then workout if inside or not
+		let InsideDistance = sdTriangle( uv, a, b, Center );
+		
+		let Distance;
+		if ( InsideDistance < 0.0 )
+		{
+			//	the inside is per triangle, so we'll get triangle distances rather than a polygon distance
+			//Distance = InsideDistance;
+			Distance = -EdgeDistance;
+		}
+		else
+		{
+			Distance = EdgeDistance;
+		}
+		
+		//	we need the LARGEST inner size
+		//	gr: this hasn't helped... something wrong with sdSegment distances?
+		if ( MinDistance < 0.0 && Distance < 0.0 )
+			MinDistance = Math.max( MinDistance, Distance );
+		else
+			MinDistance = Math.min( Distance, MinDistance );
+	}
+	
+	return MinDistance;
+}
+
