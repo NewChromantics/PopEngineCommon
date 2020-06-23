@@ -699,7 +699,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 	
 	function FixPositionArray(Points)
 	{
-		Pop.Debug(`FixPositionArray`);
+		// Pop.Debug(`FixPositionArray`);
 		//	modify array of pairs
 		for ( let xy of Points )
 		{

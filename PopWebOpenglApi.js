@@ -412,7 +412,7 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 {
 	function GetKeyFromKeyEventButton(KeyEvent)
 	{
-		Pop.Debug("KeyEvent",KeyEvent);
+		// Pop.Debug("KeyEvent",KeyEvent);
 		return KeyEvent.key;
 	}
 	
@@ -453,12 +453,12 @@ Pop.Opengl.Window = function(Name,Rect)
 {
 	//	things to overload
 	//this.OnRender = function(RenderTarget){};
-	this.OnMouseDown = function(x,y,Button)					{	Pop.Debug('OnMouseDown',...arguments);	};
-	this.OnMouseMove = function(x,y,Button)					{	/*Pop.Debug("OnMouseMove",...arguments);*/	};
-	this.OnMouseUp = function(x,y,Button)					{	Pop.Debug('OnMouseUp',...arguments);	};
-	this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	Pop.Debug('OnMouseScroll',...arguments);	};
-	this.OnKeyDown = function(Key)							{	Pop.Debug('OnKeyDown',...arguments);	};
-	this.OnKeyUp = function(Key)							{	Pop.Debug('OnKeyUp',...arguments);	};
+	this.OnMouseDown = function(x,y,Button)					{	/*Pop.Debug('OnMouseDown',...arguments);*/		};
+	this.OnMouseMove = function(x,y,Button)					{	/*Pop.Debug("OnMouseMove",...arguments);*/		};
+	this.OnMouseUp = function(x,y,Button)					{	/*Pop.Debug('OnMouseUp',...arguments);*/		};
+	this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	/*Pop.Debug('OnMouseScroll',...arguments);*/	};
+	this.OnKeyDown = function(Key)							{	/*Pop.Debug('OnKeyDown',...arguments);*/		};
+	this.OnKeyUp = function(Key)							{	/*Pop.Debug('OnKeyUp',...arguments);*/			};
 
 	//	treat minimised and foreground as the same on web;
 	//	todo: foreground state for multiple windows on one page
