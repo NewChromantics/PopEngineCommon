@@ -683,7 +683,7 @@ function ParseSvgPathCommandContours(Commands)
 	return Contours;
 }
 
-Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
+Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null,ForcePathsAsLines=false)
 {
 	FixPosition = FixPosition || function(xy,DocumentBounds)	{	return xy;	}
 	let Svg = Pop.Xml.Parse(Contents);
@@ -877,33 +877,50 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 		Shape.Path = Path + PathSeperator;
 		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
 
-		//	get all shapes from the path and output them
+		if (ForcePathsAsLines)
+		{
+			function PushShape(Contour)
+			{
+				//	is it a line or a poly
+				let PathShape = {};
+				// Pop.Debug("Countour",Contour);
+				if (Shape.Style.fill == "none")
+				{
+					PathShape.Line = {};
+					PathShape.Line.Points = Contour.Points.map(NormaliseSize);
+					FixPositionArray(PathShape.Line.Points);
+				}
+				else
+				{
+					PathShape.Polygon = {};
+					PathShape.Polygon.Points = Contour.Points.map(NormaliseSize);
+					FixPositionArray(PathShape.Polygon.Points);
+				}
+
+				const OutputShape = Object.assign({},Shape);
+				Object.assign(OutputShape,PathShape);
+
+				OnShape(OutputShape);
+			}
+			PathContours.forEach(PushShape);
+			return;
+		}
+		
+		//	get all contours from the path and output them as a sequence of edges
+		//	todo: detect if the path is just a sequence of linear lines and convert to lines/polygons if so (and if not concave)
 		const PathContours = ParseSvgPathCommandContours(Node['d']);
 
-		function PushShape(Contour)
+		//	process all positions
+		for (let Contour of PathContours)
 		{
-			//	is it a line or a poly
-			let PathShape = {};
-			// Pop.Debug("Countour",Contour);
-			if ( Shape.Style.fill == "none" )
-			{
-				PathShape.Line = {};
-				PathShape.Line.Points = Contour.Points.map( NormaliseSize );
-				FixPositionArray(PathShape.Line.Points);
-			}
-			else
-			{
-				PathShape.Polygon = {};
-				PathShape.Polygon.Points = Contour.Points.map( NormaliseSize );
-				FixPositionArray(PathShape.Polygon.Points);
-			}
-
-			const OutputShape = Object.assign({},Shape);
-			Object.assign( OutputShape, PathShape );
-			
-			OnShape( OutputShape );
+			//Contour.map(NormaliseSize)
 		}
-		PathContours.forEach( PushShape );
+
+		Pop.Debug(`PathContours`,PathContours);
+		Shape.Path.Edges = PathContours;
+		OnShape(OutputShape);
+		return;
+		
 	}
 	
 	function ParsePolygon(Node,ChildIndex,Path)
