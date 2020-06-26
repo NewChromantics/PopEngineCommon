@@ -504,14 +504,14 @@ Pop.Opengl.Window = function(Name,Rect)
 
 	this.OnResize = function(ResizeEvent)
 	{
-		Pop.Debug("OnResize",JSON.stringify(ResizeEvent));
+		// Pop.Debug("OnResize",JSON.stringify(ResizeEvent));
 		
 		//	invalidate cache
 		this.ScreenRectCache = null;
 	
 		//	resize to original rect
 		const Canvas = this.GetCanvasElement();
-		Pop.Debug("Re-setting canvas size to original rect",JSON.stringify(Rect))
+		// Pop.Debug("Re-setting canvas size to original rect",JSON.stringify(Rect))
 		this.SetCanvasSize();
 		
 		this.RefreshCanvasResolution();
@@ -757,7 +757,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		//	enable float textures on GLES1
 		//	https://developer.mozilla.org/en-US/docs/Web/API/OES_texture_float
 		
-		Pop.Debug("Supported Extensions", gl.getSupportedExtensions() );
+		// Pop.Debug("Supported Extensions", gl.getSupportedExtensions() );
 
 		const InitFloatTexture = function(Context)
 		{
