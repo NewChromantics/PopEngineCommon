@@ -515,7 +515,7 @@ Math.ScaleRect = function(ChildRect,ParentRect)
 	return [l,t,w,h];
 }
 
-function AccumulateRects(RectA,RectB)
+Math.AccumulateRects = function(RectA,RectB)
 {
 	let ra = RectA[0] + RectA[2];
 	let rb = RectB[0] + RectB[2];

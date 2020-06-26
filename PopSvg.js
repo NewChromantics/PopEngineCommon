@@ -365,7 +365,7 @@ function GetPointOnArc(p0, rx, ry, xAxisRotation, largeArcFlag, sweepFlag, p1, t
 	return point;
 }
 
-function ProcessPathCommands(Commands)
+function ProcessPathCommands(Commands,ProcessPosition)
 {
 	let Shapes = [];
 	
@@ -378,10 +378,12 @@ function ProcessPathCommands(Commands)
 	function NewShape()
 	{
 		//	flush old shape
-		if ( CurrentLine.length )
+		if ( CurrentLine.length > 1 )
 		{
 			const NewShape = {};
-			NewShape.Points = CurrentLine.slice();
+			NewShape.Line = {};
+			NewShape.Line.Points = CurrentLine.slice();
+			NewShape.Line.Points = NewShape.Line.Points.map(ProcessPosition);
 			Shapes.push(NewShape);
 		}
 		CurrentLine = [];
@@ -457,14 +459,30 @@ function ProcessPathCommands(Commands)
 		const End = [EndX,EndY];
 		const PointCount = 10;
 		
+		//	end previous line
+		ProcessLine(...Start);
+		NewShape();
+
+		//	accumulate lines for backup rendering
+		const Shape = {};
+		Shape.Bezier = {};
+		Shape.Bezier.Start = ProcessPosition(Start);
+		Shape.Bezier.End = ProcessPosition(End);
+		Shape.Bezier.ControlPoints = [ProcessPosition(Control0),ProcessPosition(Control1)];
+
+		Shape.LinearPoints = [];
 		for ( let t=0;	t<=1;	t+=1/PointCount)
 		{
 			//const Pos = Math.GetCatmullPosition(Prev,Start,End,Next,t);
 			//const Pos = Math.GetCatmullPosition( Start,Control0,Control1,End,t);
 			const Pos = Math.GetBezier4Position( Start,Control0,Control1,End,t);
-			ProcessLine( ...Pos );
+			Shape.LinearPoints.push( Pos );
 		}
 		
+		Shapes.push(Shape);
+
+		//	ready for next shape
+		SetPos(...End);
 		LastBezierControl1Point = Control1.slice();
 	}
 	
@@ -636,7 +654,7 @@ function ProcessPathCommands(Commands)
 	return Shapes;
 }
 
-function ParseSvgPathCommandContours(Commands)
+function ParseSvgPathCommandContours(Commands,ProcessPosition)
 {
 	//	https://css-tricks.com/svg-path-syntax-illustrated-guide/
 	
@@ -679,7 +697,7 @@ function ParseSvgPathCommandContours(Commands)
 	//const Matches = [...Commands.matchAll( Pattern )];
 	// Pop.Debug(MatchesWithFloats);
 	
-	const Contours = ProcessPathCommands(MatchesWithFloats);
+	const Contours = ProcessPathCommands(MatchesWithFloats,ProcessPosition);
 	return Contours;
 }
 
@@ -877,6 +895,18 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null,ForcePathsAsLin
 		Shape.Path = Path + PathSeperator;
 		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
 
+		function ProcessPositon(xy)
+		{
+			xy = xy.slice();
+			NormaliseSize(xy);
+			const Fixedxy = FixPosition(xy,Bounds);
+			return Fixedxy;
+		}
+		
+		//	get all contours from the path and output them as a sequence of edges
+		//	todo: detect if the path is just a sequence of linear lines and convert to lines/polygons if so (and if not concave)
+		const PathContours = ParseSvgPathCommandContours(Node['d'],ProcessPositon);
+		
 		if (ForcePathsAsLines)
 		{
 			function PushShape(Contour)
@@ -887,13 +917,13 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null,ForcePathsAsLin
 				if (Shape.Style.fill == "none")
 				{
 					PathShape.Line = {};
-					PathShape.Line.Points = Contour.Points.map(NormaliseSize);
+					PathShape.Line.Points = Contour.Points;
 					FixPositionArray(PathShape.Line.Points);
 				}
 				else
 				{
 					PathShape.Polygon = {};
-					PathShape.Polygon.Points = Contour.Points.map(NormaliseSize);
+					PathShape.Polygon.Points = Contour.Points;
 					FixPositionArray(PathShape.Polygon.Points);
 				}
 
@@ -906,21 +936,11 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null,ForcePathsAsLin
 			return;
 		}
 		
-		//	get all contours from the path and output them as a sequence of edges
-		//	todo: detect if the path is just a sequence of linear lines and convert to lines/polygons if so (and if not concave)
-		const PathContours = ParseSvgPathCommandContours(Node['d']);
-
-		//	process all positions
-		for (let Contour of PathContours)
-		{
-			//Contour.map(NormaliseSize)
-		}
 
 		Pop.Debug(`PathContours`,PathContours);
-		Shape.Path.Edges = PathContours;
-		OnShape(OutputShape);
+		Shape.Edges = PathContours;
+		OnShape(Shape);
 		return;
-		
 	}
 	
 	function ParsePolygon(Node,ChildIndex,Path)
