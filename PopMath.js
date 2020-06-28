@@ -1883,7 +1883,8 @@ Math.GetDistanceToPolygon2 = function(Position,Corners,Center)
 	{
 		const pa = Math.Subtract2(p,a);
 		const ba = Math.Subtract2(b,a);
-		const h = clamp( Math.Dot2(pa,ba)/Math.Dot2(ba,ba), 0.0, 1.0 );
+		const delta = Math.Dot2(ba,ba);
+		const h = (delta == 0) ? 0 : clamp( Math.Dot2(pa,ba)/delta, 0.0, 1.0 );
 		const baScaled = Math.Multiply2( ba, [h,h] );
 		return Math.Distance2( pa, baScaled );
 	}
