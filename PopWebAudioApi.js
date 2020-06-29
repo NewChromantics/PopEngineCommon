@@ -218,11 +218,19 @@ Pop.Audio.Sound = class
 		this.SampleVelocity = 1;	//	gain
 		this.ReverbVolume = 1;	//	wetness/gain
 
+		this.KnownDurationMs = null;
 		this.Name = Name;
 		this.ActionQueue = new Pop.PromiseQueue();
 		this.Update().then(Pop.Debug).catch(Pop.Debug);
 		
 		this.SetSample(WaveData);
+	}
+	
+	GetDurationMs()
+	{
+		if ( this.KnownDurationMs == null )
+			throw `Pop.Audio.Sound ${this.Name} has [currently] unknown duration`;
+		return this.KnownDurationMs;
 	}
 	
 	IsSignificantVolumeChange(Old,New)
@@ -330,6 +338,8 @@ Pop.Audio.Sound = class
 		const DataCopy = WaveData.slice();
 		Context.decodeAudioData( DataCopy.buffer, DecodeAudioPromise.Resolve, DecodeAudioPromise.Reject );
 		const SampleBuffer = await DecodeAudioPromise;
+		this.KnownDurationMs = SampleBuffer.duration * 1000;
+		//Pop.Debug(`Audio ${this.Name} duration: ${this.KnownDurationMs}ms`);
 		return SampleBuffer;
 	}
 	
