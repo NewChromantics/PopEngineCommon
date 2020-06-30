@@ -171,6 +171,12 @@ Pop.WebApi.TFileCache = class
 	constructor()
 	{
 		this.Cache = {};	//	[Filename] = Contents
+		this.OnFilesChanged = new WebApi_PromiseQueue();
+	}
+
+	async WaitForFileChange()
+	{
+		return this.OnFilesChanged.WaitForNext();
 	}
 
 	SetError(Filename,Error)
@@ -186,6 +192,7 @@ Pop.WebApi.TFileCache = class
 			// Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
 		}
 		this.Cache[Filename] = Contents;
+		this.OnFilesChanged.Push(Filename);
 	}
 
 	Get(Filename)
