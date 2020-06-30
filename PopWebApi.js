@@ -165,9 +165,74 @@ window.addEventListener('blur',function () { Pop.WebApi.SetIsForeground(false); 
 window.addEventListener('visibilitychange',function () { Pop.WebApi.SetIsForeground(document.hidden); });
 
 
+//	this will become generic and not webapi specific
+Pop.WebApi.TFileCache = class
+{
+	constructor()
+	{
+		this.Cache = {};	//	[Filename] = Contents
+	}
+
+	SetError(Filename,Error)
+	{
+		Pop.Debug(`Error loading file ${Filename}: ${Error}`);
+		this.Set(Filename,false);
+	}
+
+	Set(Filename,Contents)
+	{
+		if (this.Cache.hasOwnProperty(Filename))
+		{
+			// Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
+		}
+		this.Cache[Filename] = Contents;
+	}
+
+	Get(Filename)
+	{
+		if (!this.Cache.hasOwnProperty(Filename))
+		{
+			throw `${Filename} has not been cached with Pop.AsyncCacheAsset()`;
+		}
+
+		//	false is a file that failed to load
+		//	todo: store an error!
+		const Asset = this.Cache[Filename];
+		if (Asset === false)
+			throw `${Filename} failed to load`;
+
+		return this.Cache[Filename];
+	}
+
+	//	non-throwing function which returns false if the file load has errored
+	GetOrFalse(Filename)
+	{
+		if (!this.Cache.hasOwnProperty(Filename))
+			return false;
+
+		//	if this has failed to load, it will also be false
+		const Asset = this.Cache[Filename];
+		return Asset;
+	}
+
+	IsCached(Filename)
+	{
+		return this.GetOrFalse(Filename) !== false;
+	}
+}
+
+
+
+
 //	file cache, not asset cache!
 //	rework this system so we have an async version on desktop too
-Pop._AssetCache = [];
+Pop.WebApi.FileCache = new Pop.WebApi.TFileCache();
+
+//	old bindings
+Pop.GetCachedAsset = Pop.WebApi.FileCache.Get.bind(Pop.WebApi.FileCache);
+Pop.GetCachedAssetOrFalse = Pop.WebApi.FileCache.GetOrFalse.bind(Pop.WebApi.FileCache);
+Pop.SetFileCache = Pop.WebApi.FileCache.Set.bind(Pop.WebApi.FileCache);
+Pop.SetFileCacheError = Pop.WebApi.FileCache.SetError.bind(Pop.WebApi.FileCache);
 
 //	simple aliases
 Pop.Debug = console.log;
@@ -273,7 +338,7 @@ async function FetchOnce(Url,FetchFunc)
 Pop.LoadFileAsImageAsync = async function(Filename)
 {
 	//	return cache if availible, if it failed before, try and load again
-	const Cache = Pop.GetCachedAssetOrFalse(Filename);
+	const Cache = Pop.WebApi.FileCache.GetOrFalse(Filename);
 	if ( Cache !== false )
 		return Cache;
 	
@@ -338,20 +403,6 @@ Pop.LoadFileAsArrayBufferAsync = async function(Filename)
 	return Contents;
 }
 
-Pop.SetFileCache = function(Filename,Contents)
-{
-	if ( Pop._AssetCache.hasOwnProperty(Filename) )
-	{
-		// Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
-	}
-	Pop._AssetCache[Filename] = Contents;
-}
-
-Pop.SetFileCacheError = function(Filename,Error)
-{
-	Pop.Debug("Error loading file",Filename,e);
-	Pop.SetFileCache(Filename,false);
-}
 
 
 Pop.AsyncCacheAssetAsString = async function(Filename)
@@ -374,7 +425,8 @@ Pop.AsyncCacheAssetAsArrayBuffer = async function(Filename)
 
 Pop.LoadFileAsString = function(Filename)
 {
-	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
+	//	synchronous functions on web will fail
+	if (!Pop.WebApi.FileCache.IsCached(Filename))
 	{
 		throw "Cannot synchronously load " + Filename + ", needs to be precached first with [async] Pop.AsyncCacheAsset()";
 	}
@@ -399,7 +451,8 @@ Pop.LoadFileAsString = function(Filename)
 
 Pop.LoadFileAsImage = function(Filename)
 {
-	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
+	//	synchronous functions on web will fail
+	if (!Pop.WebApi.FileCache.IsCached(Filename))
 	{
 		throw "Cannot synchronously load " + Filename + ", needs to be precached first with [async] Pop.AsyncCacheAsset()";
 	}
@@ -410,7 +463,8 @@ Pop.LoadFileAsImage = function(Filename)
 
 Pop.LoadFileAsArrayBuffer = function(Filename)
 {
-	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
+	//	synchronous functions on web will fail
+	if (!Pop.WebApi.FileCache.IsCached(Filename))
 	{
 		throw "Cannot synchronously load " + Filename + ", needs to be precached first with [async] Pop.AsyncCacheAsset()";
 	}
@@ -421,7 +475,7 @@ Pop.LoadFileAsArrayBuffer = function(Filename)
 	return Contents;
 }
 
-
+//	on web, this call causes a Save As... dialog to appear to save the contents
 Pop.WriteStringToFile = function(Filename,Contents)
 {
 	//	on web (chrome?)
@@ -493,41 +547,13 @@ Pop.LoadFilePromptAsStringAsync = async function (Filename)
 	return Contents;
 }
 
+//	on web, this is a "can I synchronously load file" check
+//	we may need to alter this to allow currently-downloading files
+//	which haven't yet been cached, but not those that have started 
+//	a fetch() but currently have no knowledge of sucess or not
 Pop.FileExists = function(Filename)
 {
-	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
-		return false;
-	
-	//	null is a file that failed to load
-	const Asset = Pop._AssetCache[Filename];
-	if ( Asset === false )
-		return false;
-	
-	return true;
-}
-
-Pop.GetCachedAsset = function(Filename)
-{
-	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
-	{
-		throw Filename + " has not been cached with Pop.AsyncCacheAsset()";
-	}
-	
-	//	null is a file that failed to load
-	const Asset = Pop._AssetCache[Filename];
-	if ( Asset === false )
-		throw Filename + " failed to load";
-		
-	return Pop._AssetCache[Filename];
-}
-
-Pop.GetCachedAssetOrFalse = function(Filename)
-{
-	if ( !Pop._AssetCache.hasOwnProperty(Filename) )
-		return false;
-
-	const Asset = Pop._AssetCache[Filename];
-	return Asset;
+	return Pop.WebApi.FileCache.IsCached(Filename);
 }
 
 Pop.CompileAndRun = function(Source,Filename)
