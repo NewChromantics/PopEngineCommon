@@ -1090,3 +1090,50 @@ Pop.Gui.ImageMap = class extends Pop.Gui.BaseControl
 	}
 }
 
+
+
+
+Pop.Gui.Table = class extends Pop.Gui.BaseControl
+{
+	constructor(Parent,Rect)
+	{
+		super(...arguments);
+		this.TableElement = this.CreateElement(Parent,Rect);
+		this.InitStyle();
+		this.BindEvents();
+	}
+
+	GetElement()
+	{
+		return this.TableElement;
+	}
+
+	SetValue(Value)
+	{
+		throw `todo: allow an array of rows[array of columns] for Pop.Gui.Table and reject any other value`;
+	}
+
+	CreateElement(Parent,Rect)
+	{
+		let Div = GetExistingElement(Rect);
+		if (Div)
+		{
+			//	gr: we currently style according to a table
+			if (Div.nodeName != 'TABLE')
+				throw `Pop.Gui.Table parent ${Parent} isn't a table, is ${Div.nodeName}`;
+			return Div;
+		}
+
+		Div = document.createElement('table');
+		if (Rect)
+			SetGuiControlStyle(Div,Rect);
+
+		Parent.AddChildControl(Parent,Div);
+		return Div;
+	}
+
+	//	force styling for table
+	InitStyle()
+	{		
+	}
+}
