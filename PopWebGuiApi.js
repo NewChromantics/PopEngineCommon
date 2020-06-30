@@ -493,6 +493,70 @@ function GetExistingElement(Name)
 
 
 
+function GetButtonFromMouseEventButton(MouseButton,AlternativeButton)
+{
+	//	html/browser definitions
+	const BrowserMouseLeft = 0;
+	const BrowserMouseMiddle = 1;
+	const BrowserMouseRight = 2;
+	
+	//	handle event & button arg
+	if ( typeof MouseButton == "object" )
+	{
+		let MouseEvent = MouseButton;
+		
+		//	this needs a fix for touches
+		if ( MouseEvent.touches )
+		{
+			//	have to assume there's always one?
+			const Touches = Array.from( MouseEvent.touches );
+			if ( Touches.length == 0 )
+				throw "Empty touch array, from event?";
+			MouseButton = BrowserMouseLeft;
+			AlternativeButton = false;
+		}
+		else
+		{
+			MouseButton = MouseEvent.button;
+			AlternativeButton = (MouseEvent.ctrlKey == true);
+		}
+	}
+	
+	if ( AlternativeButton )
+	{
+		switch ( MouseButton )
+		{
+			case BrowserMouseLeft:	return Pop.SoyMouseButton.Back;
+			case BrowserMouseRight:	return Pop.SoyMouseButton.Forward;
+		}
+	}
+	
+	switch ( MouseButton )
+	{
+		case BrowserMouseLeft:		return Pop.SoyMouseButton.Left;
+		case BrowserMouseMiddle:	return Pop.SoyMouseButton.Middle;
+		case BrowserMouseRight:		return Pop.SoyMouseButton.Right;
+	}
+	throw "Unhandled MouseEvent.button (" + MouseButton + ")";
+}
+
+//	gr: should api revert to uv?
+function GetMousePos(MouseEvent,Element)
+{
+	const Rect = Element.getBoundingClientRect();
+	
+	//	touch event, need to handle multiple touch states
+	if ( MouseEvent.touches )
+		MouseEvent = MouseEvent.touches[0];
+	
+	const ClientX = MouseEvent.pageX || MouseEvent.clientX;
+	const ClientY = MouseEvent.pageY || MouseEvent.clientY;
+	const x = ClientX - Rect.left;
+	const y = ClientY - Rect.top;
+	return [x,y];
+}
+
+
 //	finally doing proper inheritance for gui
 Pop.Gui.BaseControl = class
 {
@@ -512,6 +576,27 @@ Pop.Gui.BaseControl = class
 		const Element = this.GetElement();
 		Element.addEventListener('drop',this.OnDragDrop.bind(this));
 		Element.addEventListener('dragover',this.OnTryDragDropEvent.bind(this));
+		
+		//	need to move all these from Opengl window
+		Element.addEventListener('wheel', this.OnMouseWheelEvent.bind(this), false );
+	}
+	
+	OnMouseWheelEvent(MouseEvent)
+	{
+		//	if no overload/assigned event, ignore the event
+		if ( !this.OnMouseScroll )
+			return;
+		
+		const Element = this.GetElement();
+		const Pos = GetMousePos(MouseEvent,Element);
+		const Button = GetButtonFromMouseEventButton(MouseEvent);
+		
+		//	gr: maybe change scale based on
+		//WheelEvent.deltaMode = DOM_DELTA_PIXEL, DOM_DELTA_LINE, DOM_DELTA_PAGE
+		const DeltaScale = 0.01;
+		const WheelDelta = [ MouseEvent.deltaX * DeltaScale, MouseEvent.deltaY * DeltaScale, MouseEvent.deltaZ * DeltaScale ];
+		this.OnMouseScroll( Pos[0], Pos[1], Button, WheelDelta );
+		MouseEvent.preventDefault();
 	}
 
 	GetDragDropFilenames(Files)
