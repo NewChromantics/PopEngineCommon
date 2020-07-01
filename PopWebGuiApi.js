@@ -1101,6 +1101,7 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 		this.TableElement = this.CreateElement(Parent,Rect);
 		this.InitStyle();
 		this.BindEvents();
+		this.KnownKeys = [];
 	}
 
 	GetElement()
@@ -1108,10 +1109,77 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 		return this.TableElement;
 	}
 
-	SetValue(Value)
+	SetValue(Rows)
 	{
-		throw `todo: allow an array of rows[array of columns] for Pop.Gui.Table and reject any other value`;
+		//	check is an array of keyd values
+		if (!Array.isArray(Rows) )
+			throw `Pop.Gui.Table.SetValue(${Rows}) expecting an array of keyed objects`;
+
+		//	merge new keys
+		if (Rows.length > 0)
+		{
+			const NewKeys = Object.keys(Rows[0]);
+			this.KnownKeys = Array.from(new Set(this.KnownKeys.concat(NewKeys)));
+		}
+
+		this.UpdateTableDimensions(this.KnownKeys,Rows.length);
+
+		//	set all cells
+		const SetRowCells = function (RowValues,RowIndex)
+		{
+			for (let [Key,Value] of Object.entries(RowValues))
+			{
+				const ColumnIndex = this.KnownKeys.indexOf(Key);
+				this.SetTableCell(ColumnIndex,RowIndex,Value);
+			}
+		}
+		Rows.forEach(SetRowCells.bind(this));
 	}
+
+	SetTableCell(Column,Row,Value)
+	{
+		const Table = this.GetElement();
+		const Body = Table.tBodies[0];
+		//const Header = Table.createTHead();
+		Body.rows[Row].cells[Column].innerText = Value;
+	}
+
+	UpdateTableRow(Row,ColumnValues)
+	{
+		while (Row.cells.length < ColumnValues.length)
+			Row.insertCell(0);
+		while (Row.cells.length > ColumnValues.length)
+			Row.deleteCell(0);
+		function SetCell(Value,Index)
+		{
+			Row.cells[Index].innerText = Value;
+		}
+		ColumnValues.forEach(SetCell);
+	}
+
+	UpdateTableDimensions(Columns,RowCount)
+	{
+		const Table = this.GetElement();
+		const Body = Table.tBodies[0];
+		const Header = Table.createTHead();
+
+		//	update header cells
+		this.UpdateTableRow(Header.rows[0],Columns);
+		
+		//	append then delete rows
+		while (Body.rows.length < RowCount)
+			Body.insertRow(Body.rows.length - 1);
+		//	todo: work out row diff and try and and cull the correct one
+		while (Body.rows.length > RowCount)
+			Body.deleteRow(0);
+
+		//	make sure all rows are correct size
+		for (let r = 0;r < RowCount;r++)
+		{
+			this.UpdateTableRow(Body.rows[r],Columns);
+		}
+	}
+
 
 	CreateElement(Parent,Rect)
 	{
@@ -1121,10 +1189,11 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 			//	gr: we currently style according to a table
 			if (Div.nodeName != 'TABLE')
 				throw `Pop.Gui.Table parent ${Parent} isn't a table, is ${Div.nodeName}`;
+
 			return Div;
 		}
 
-		Div = document.createElement('table');
+		Div = document.createElement('TABLE');
 		if (Rect)
 			SetGuiControlStyle(Div,Rect);
 
@@ -1134,6 +1203,14 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 
 	//	force styling for table
 	InitStyle()
-	{		
+	{
+		const Table = this.GetElement();
+
+		//	make sure we have distinct bodys and headers
+		Table.createTHead();
+		if (!Table.tHead.rows.length)
+			Table.tHead.insertRow(0);
+		if (!Table.tBodies.length)
+			Table.createTBody();
 	}
 }
