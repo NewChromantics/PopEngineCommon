@@ -38,7 +38,7 @@ Pop.Audio.ContextJobQueueProcessor = async function ()
 		await Job(Context);
 	}
 }
-Pop.Audio.ContextJobQueueProcessor().then(Pop.Debug).catch(Pop.Debug);
+Pop.Audio.ContextJobQueueProcessor().then(Pop.Debug).catch(Pop.Warning);
 
 Pop.Audio.GetUniform = function (Name)
 {
@@ -107,7 +107,7 @@ Pop.Audio.SimpleSound = class
 		//	load
 		this.Sound = new Audio(Data64);
 		this.ActionQueue = new Pop.PromiseQueue();
-		this.Update().then(Pop.Debug).catch(Pop.Debug);
+		this.Update().then(Pop.Debug).catch(Pop.Warning);
 	}
 
 	async Update()
@@ -221,7 +221,7 @@ Pop.Audio.Sound = class
 		this.KnownDurationMs = null;
 		this.Name = Name;
 		this.ActionQueue = new Pop.PromiseQueue();
-		this.Update().then(Pop.Debug).catch(Pop.Debug);
+		this.Update().then(Pop.Debug).catch(Pop.Warning);
 		
 		this.SetSample(WaveData);
 	}

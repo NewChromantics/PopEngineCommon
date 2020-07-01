@@ -546,7 +546,7 @@ function RunParamsWebsocketServer(Port,OnJsonRecieved)
 			await Pop.Yield(1000);
 		}
 	}
-	Loop().then(Pop.Debug).catch(Pop.Debug);
+	Loop().then(Pop.Debug).catch(Pop.Warning);
 
 	const Output = {};
 	Output.SendJson = function (Object)
@@ -611,7 +611,7 @@ function RunParamsHttpServer(Params,ParamsWindow,Port=80)
 			SendNewParams(Params);
 		}
 	}
-	ParamsWindowWaitForChangeLoop().then(Pop.Debug).catch(Pop.Debug);
+	ParamsWindowWaitForChangeLoop().then(Pop.Debug).catch(Pop.Warning);
 
 	function GetParamMetas()
 	{
