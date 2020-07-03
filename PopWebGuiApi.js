@@ -969,6 +969,9 @@ Pop.Gui.TextBox = function(Parent,Rect)
 	this.Label = '';
 	this.InputElement = null;
 	this.LabelElement = null;
+
+	//	overwrite/overload this
+	this.OnChanged = function (NewValue) { };
 	
 	this.GetValue = function()
 	{
