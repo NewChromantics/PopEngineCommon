@@ -74,33 +74,64 @@ Math.HueToColour = function(Hue,Alpha=1)
 	//	same as NormalToRedGreenBluePurple
 	if ( Normal < 1/6 )
 	{
+		//	red to yellow
 		Normal = Math.Range( 0/6, 1/6, Normal );
 		return [1, Normal, 0, Alpha];
 	}
 	else if ( Normal < 2/6 )
 	{
+		//	yellow to green
 		Normal = Math.Range( 1/6, 2/6, Normal );
 		return [1-Normal, 1, 0, Alpha];
 	}
 	else if ( Normal < 3/6 )
 	{
+		//	green to cyan
 		Normal = Math.Range( 2/6, 3/6, Normal );
 		return [0, 1, Normal, Alpha];
 	}
 	else if ( Normal < 4/6 )
 	{
+		//	cyan to blue
 		Normal = Math.Range( 3/6, 4/6, Normal );
 		return [0, 1-Normal, 1, Alpha];
 	}
 	else if ( Normal < 5/6 )
 	{
+		//	blue to pink
 		Normal = Math.Range( 4/6, 5/6, Normal );
 		return [Normal, 0, 1, Alpha];
 	}
 	else //if ( Normal < 5/6 )
 	{
+		//	pink to red
 		Normal = Math.Range( 5/6, 6/6, Normal );
 		return [1, 0, 1-Normal, Alpha];
+	}
+}
+
+
+
+Math.NormalToRedGreen = function(Normal,Alpha=1)
+{
+	if ( Normal === null )
+		return [0,0,0,Alpha];
+	
+	if ( Normal < 1/2 )
+	{
+		//	red to yellow
+		Normal = Math.Range( 0/2, 1/2, Normal );
+		return [1, Normal, 0, Alpha];
+	}
+	else if ( Normal <= 1/2 )
+	{
+		//	yellow to green
+		Normal = Math.Range( 1/2, 2/2, Normal );
+		return [1-Normal, 1, 0, Alpha];
+	}
+	else
+	{
+		return [0, 0, 1, Alpha];
 	}
 }
 
