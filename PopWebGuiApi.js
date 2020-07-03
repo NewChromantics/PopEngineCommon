@@ -1132,6 +1132,15 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 
 	SetValue(Rows)
 	{
+		function SpecialKey(Key)
+		{
+			return Key == 'Style';
+		}
+		function NotSpecialKey(Key)
+		{
+			return !SpecialKey(Key);
+		}
+
 		//	check is an array of keyd values
 		if (!Array.isArray(Rows) )
 			throw `Pop.Gui.Table.SetValue(${Rows}) expecting an array of keyed objects`;
@@ -1141,6 +1150,7 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 		{
 			const NewKeys = Object.keys(Rows[0]);
 			this.KnownKeys = Array.from(new Set(this.KnownKeys.concat(NewKeys)));
+			this.KnownKeys = this.KnownKeys.filter(NotSpecialKey);
 		}
 
 		this.UpdateTableDimensions(this.KnownKeys,Rows.length);
@@ -1148,21 +1158,26 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 		//	set all cells
 		const SetRowCells = function (RowValues,RowIndex)
 		{
+			const Style = RowValues.Style;
 			for (let [Key,Value] of Object.entries(RowValues))
 			{
 				const ColumnIndex = this.KnownKeys.indexOf(Key);
-				this.SetTableCell(ColumnIndex,RowIndex,Value);
+				//	column/key probably filtered out
+				if (ColumnIndex == -1)
+					continue;
+				this.SetTableCell(ColumnIndex,RowIndex,Value,Style);
 			}
 		}
 		Rows.forEach(SetRowCells.bind(this));
 	}
 
-	SetTableCell(Column,Row,Value)
+	SetTableCell(Column,Row,Value,Style)
 	{
 		const Table = this.GetElement();
 		const Body = Table.tBodies[0];
 		//const Header = Table.createTHead();
 		Body.rows[Row].cells[Column].innerText = Value;
+		Body.rows[Row].cells[Column].style = Style;
 	}
 
 	UpdateTableRow(Row,ColumnValues)
