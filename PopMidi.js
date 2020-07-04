@@ -135,8 +135,9 @@ function Slice16(Array,Start)
 
 Pop.Midi.Track = class
 {
-	constructor()
+	constructor(Filename)
 	{
+		this.Filename = Filename;
 		this.Notes = [];
 	}
 
@@ -151,7 +152,7 @@ Pop.Midi.Track = class
 				continue;
 			return NoteMeta;
 		}
-		throw `No last note (${Note},${Channel}) found`;
+		throw `"${this.Filename}" | No last note (${Note},${Channel}) found`;
 	}
 
 	PushNoteOn(Channel,TimeMs,Note,Velocity)
@@ -165,18 +166,20 @@ Pop.Midi.Track = class
 		Meta.StartTimeMs = TimeMs;
 		Meta.EndTimeMs = null;
 		Meta.Velocity = Velocity;
-		//Pop.Debug(`Note on: ${JSON.stringify(Meta)}`);
+		// Pop.Debug(`"${this.Filename}" | Note on: ${JSON.stringify(Meta)}`);
 		this.Notes.push(Meta);
 	}
 
 	PushNoteOff(Channel,TimeMs,Note,Velocity)
 	{
 		Note = Pop.Midi.GetNoteName(Note);
-		//Pop.Debug(`Note off @${TimeMs}: ${Note} vel=${Velocity}`);
+		// Pop.Debug(`"${this.Filename}" | Note off @${TimeMs}: ${Note} vel=${Velocity}`);
 		//	get the last matching note and end it
 		const Meta = this.GetLastNote(Note,Channel);
 		Meta.EndTimeMs = TimeMs;
 		Meta.EndVelocity = Velocity;
+		const DurationMs = Math.round(Math.round(Meta.EndTimeMs - Meta.StartTimeMs) * 100) / 100 / 1000;
+		// Pop.Debug(`"${this.Filename}" | Note off: ${JSON.stringify({ ...Meta, DurationMs })}`);
 	}
 
 	GetDuration()
@@ -191,7 +194,7 @@ Pop.Midi.Track = class
 	}
 }
 
-Pop.Midi.Parse = function (FileContents)
+Pop.Midi.Parse = function (FileContents, Filename)
 {
 	function BpmToTempo(Bpm)
 	{
@@ -205,13 +208,13 @@ Pop.Midi.Parse = function (FileContents)
 	Midi.Tracks = null;
 	Midi.Format = null;
 	Midi.DurationMs = 0;
-	Midi.TempoMicroSecs = BpmToTempo(110);	//	120bpm = default tempo
+	Midi.TempoMicroSecs = BpmToTempo(120);	//	120bpm = default tempo
 	
 	function Parse_MTrk(Data)
 	{
 		//	add to next undefined track
 		const NextTrack = Midi.Tracks.indexOf(null);
-		const NewTrack = new Pop.Midi.Track();
+		const NewTrack = new Pop.Midi.Track(Filename);
 		Midi.Tracks[NextTrack] = NewTrack;
 		
 		function GetLastNote(Note,Channel)
@@ -258,7 +261,7 @@ Pop.Midi.Parse = function (FileContents)
 				const v7 = v8 & (~0x80);
 				//const Continuation = v8 & 0x01;
 				//const v7 = v8 & (~0x01);
-				Value <<= 8;
+				Value <<= 7;
 				Value |= v7;
 				if (!Continuation)
 					break;
@@ -374,7 +377,7 @@ Pop.Midi.Parse = function (FileContents)
 			TimeTicks += TicksSinceLast;
 			const TimeMs = Midi.TicksToMs(TimeTicks);
 			const Event = Pop8();
-			//Pop.Debug(`Event=${Event} Time=${TimeMs}(+${TicksSinceLast} ticks) DataPos ${DataPosition}/${Data.length}`);
+			// Pop.Debug(`Event=${Event} Time=${TimeMs}(+${TicksSinceLast} ticks) DataPos ${DataPosition}/${Data.length}`);
 			ParseEvent(Event,TimeMs);
 		}
 

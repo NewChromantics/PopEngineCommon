@@ -10,8 +10,8 @@ Pop.AssetServer = class
 		this.FileMonitor = new Pop.FileMonitor();
 		this.ChangedQueue = new Pop.PromiseQueue();	//	queue of filename (or filenames) everytime a file changes
 
-		this.WebsocketLoop().then(Pop.Debug).catch(Pop.Debug);
-		this.FileWatchLoop().then(Pop.Debug).catch(Pop.Debug);
+		this.WebsocketLoop().then(Pop.Debug).catch(Pop.Warning);
+		this.FileWatchLoop().then(Pop.Debug).catch(Pop.Warning);
 	}
 	
 	FilterFilename(Filename)
@@ -167,7 +167,7 @@ Pop.AssetServer = class
 						SendToPeers(ChangedMeta);
 					}
 				}
-				SendLoop.bind(this)().then(Pop.Debug).catch(Pop.Debug);
+				SendLoop.bind(this)().then(Pop.Debug).catch(Pop.Warning);
 
 				while (Socket)
 				{

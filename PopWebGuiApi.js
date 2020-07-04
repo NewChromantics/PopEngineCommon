@@ -185,11 +185,20 @@ function SetGuiControl_Draggable(Element)
 {
 	let AllowInteraction = function(Event)
 	{
-		//	gr: if we prevent too events (or dont preventdefault)
+		//	gr: if we prevent top events (or dont preventdefault)
 		//		then quick movements can fall onto window, and we're not currently
 		//		handling when we move without starting with mousedown
-		if ( Event.target != Element )
-			return false;
+		if (Event.target != Element)
+		{
+			//	gr: hack, to make a child invisible for mouse move/down/up
+			//	find a proper fix for this, but can't seem to get it right
+			//	as we're AddListener(Capture=true) it gets here first before child
+			//	but we want to let children do their thing (eg, scroll bar)
+			//	without registering it as a drag
+			if (Event.target.AllowDraggable !== true )
+				return false;
+			//Pop.Debug(`Dragging from child via AllowDraggable`);
+		}
 		//if ( Event.target.tagName.toUpperCase() == 'INPUT' )
 		//	return false;
 		return true;
@@ -247,7 +256,7 @@ function SetGuiControl_Draggable(Element)
 		}
 		else
 		{
-			console.log("revert droppable");
+			//console.log("revert droppable");
 			//	revert the drag
 			if ( Element.OnGrabRevert != null )
 			{
@@ -255,9 +264,10 @@ function SetGuiControl_Draggable(Element)
 			}
 		}
 		Element.OnGrabRevert = null;
-		
-		Element.onmouseup = null;
-		Element.onmousemove = null;
+
+		const CapturePhase = true;
+		Element.removeEventListener('mouseup',OnMouseUp,CapturePhase);
+		Element.removeEventListener('mousemove',OnMouseDrag,CapturePhase);
 		document.onmouseup = null;
 		document.onmousemove = null;
 	};
@@ -290,9 +300,6 @@ function SetGuiControl_Draggable(Element)
 		//	jump to top
 		Element.grabParent = Element.parentNode;
 		SetElementToTop(Element);
-		//	need to make any children go above that though
-		//let ElementCardChildren = GetCardChildren(Element);
-		//ElementCardChildren.forEach( SetElementToTop );
 		
 		Element.grabClientX = e.clientX;
 		Element.grabClientY = e.clientY;
@@ -304,9 +311,10 @@ function SetGuiControl_Draggable(Element)
 		
 		//	convert element to absolute
 		SetElementPosition( Element, Element.startDragX, Element.startDragY );
-		
-		Element.onmouseup = OnMouseUp;
-		Element.onmousemove = OnMouseDrag;
+
+		const CapturePhase = true;
+		Element.addEventListener('mouseup',OnMouseUp,CapturePhase);
+		Element.addEventListener('mousemove',OnMouseDrag,CapturePhase);
 		//	capture document mouse up in case the user drags off-window
 		document.onmouseup = OnMouseUp;
 		//	capture document mouse move for when the user moves the mouse so fast it goes off the element, and we don't get mousemove any more
@@ -315,39 +323,15 @@ function SetGuiControl_Draggable(Element)
 	
 	let OnDetachElement = function(Element)
 	{
-		/*
-		//	can't pickup a mystery card
-		if ( IsCardMystery(Element) )
-			return null;
-		if ( !IsCard(Element) )
-			return null;
-		
-		//	take any non mystery card, but take all those below it too
-		//	gr: maybe the actual detatching needs to be here...
-		let ElementLatterCards = GetCardChildren(DeckElement,Element);
-		let ParentToElement = function(ChildElement)
-		{
-			SetElementParent( ChildElement, Element );
-		};
-		ElementLatterCards.forEach( ParentToElement );
-		*/
 		//	rememeber to put the cards back in order!
 		let Revert = function()
 		{
-			/*
-			SetElementParent( Element, DeckElement );
-			let ElementChildren = GetCardChildren(Element);
-			let ReplaceToDeck = function(ec)
-			{
-				SetElementParent( ec, DeckElement );
-			};
-			ElementChildren.forEach(ReplaceToDeck);
-			 */
 		};
 		return Revert;
 	};
-	
-	Element.onmousedown = OnMouseDown;
+
+	const CapturePhase = true;
+	Element.addEventListener('mousedown',OnMouseDown,CapturePhase);
 	Element.parentNode.OnDetachElement = OnDetachElement;
 }
 
@@ -356,6 +340,9 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 	//	child controls should be added to this
 	//	todo: rename to ChildContainer
 	this.ElementParent = null;
+	this.ElementWindow = null;
+	this.ElementTitleBar = null;
+	this.RestoreHeight = null;		//	if non-null, stores the height we were before minimising
 
 	//	gr: element may not be assigned yet, maybe rework construction of controls
 	this.AddChildControl = function(Child,Element)
@@ -391,25 +378,32 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		}
 		else
 		{
+			//	gr: this should really be the title bar, but would need to move the window element
+			//		so this is just easier
 			SetGuiControl_Draggable( Element );
 		}
 		
 		//	purely for styling
-		let AddChild = function(Parent,ClassName,InnerText='')
+		let AddChild = function(Parent,ClassName,InnerText='',AllowMouseInteraction=true)
 		{
 			let Child = document.createElement('div');
 			Child.className = ClassName;
 			Child.innerText = InnerText;
+			if (!AllowMouseInteraction )
+				Child.style.pointerEvents = 'none';
 			Parent.appendChild( Child );
 			return Child;
 		}
 		this.ElementTitleBar = AddChild( Element, 'PopGuiTitleBar');
 		const TitleBar = this.ElementTitleBar;
-		TitleBar.style.pointerEvents = 'none';
 		//AddChild( TitleBar, 'PopGuiTitleIcon', 'X');
-		AddChild( TitleBar, 'PopGuiTitleText', Name );
+		AddChild(TitleBar,'PopGuiTitleText',Name,false);
+		//	todo: add proper gui button types
 		//AddChild( TitleBar, 'PopGuiButton', '_');
 		//AddChild( TitleBar, 'PopGuiButton', 'X');
+
+		TitleBar.AllowDraggable = true;
+		TitleBar.addEventListener('dblclick',this.OnToggleMinimise.bind(this),true);
 		
 		//	this may need some style to force position
 		this.ElementParent = AddChild( Element, 'PopGuiIconView');
@@ -427,9 +421,15 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		this.ElementParent.style.overflowY = Vertical ? 'scroll' : 'hidden';
 		this.ElementParent.style.overflowX = Horizontal ? 'scroll' : 'hidden';
 	}
-	
+
+	this.IsMinimised = function ()
+	{
+		return (this.RestoreHeight !== null);
+	}
+
 	this.Flash = function(Enable)
 	{
+		//	gr: turn this into an async func!
 		const FlashOn = function()
 		{
 			this.ElementTitleBar.style.backgroundColor = '#888';
@@ -465,6 +465,24 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		}
 	}
 
+	this.OnToggleMinimise = function (DoubleClickEvent)
+	{
+		//Pop.Debug(`OnToggleMinimise`);
+		//	check height of window to see if it's minimised
+		if (!this.IsMinimised())
+		{
+			this.RestoreHeight = this.ElementWindow.style.height;
+			this.ElementWindow.style.height = '18px';
+			this.ElementParent.style.visibility = 'hidden';
+		}
+		else
+		{
+			this.ElementWindow.style.height = this.RestoreHeight;
+			this.RestoreHeight = null;
+			this.ElementParent.style.visibility = 'visible';
+		}
+	}
+
 	let Parent = document.body;
 	if ( typeof Rect == 'string' )
 	{
@@ -476,7 +494,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		Rect = Parent.id;
 	}
 	
-	this.Element = this.CreateElement( Name, Parent, Rect );
+	this.ElementWindow = this.CreateElement( Name, Parent, Rect );
 }
 
 function GetExistingElement(Name)
@@ -1054,6 +1072,9 @@ Pop.Gui.TextBox = function(Parent,Rect)
 	this.Label = '';
 	this.InputElement = null;
 	this.LabelElement = null;
+
+	//	overwrite/overload this
+	this.OnChanged = function (NewValue) { };
 	
 	this.GetValue = function()
 	{
@@ -1175,3 +1196,142 @@ Pop.Gui.ImageMap = class extends Pop.Gui.BaseControl
 	}
 }
 
+
+
+
+Pop.Gui.Table = class extends Pop.Gui.BaseControl
+{
+	constructor(Parent,Rect)
+	{
+		super(...arguments);
+		this.TableElement = this.CreateElement(Parent,Rect);
+		this.InitStyle();
+		this.BindEvents();
+		this.KnownKeys = [];
+	}
+
+	GetElement()
+	{
+		return this.TableElement;
+	}
+
+	SetValue(Rows)
+	{
+		function SpecialKey(Key)
+		{
+			return Key == 'Style';
+		}
+		function NotSpecialKey(Key)
+		{
+			return !SpecialKey(Key);
+		}
+
+		//	check is an array of keyd values
+		if (!Array.isArray(Rows) )
+			throw `Pop.Gui.Table.SetValue(${Rows}) expecting an array of keyed objects`;
+
+		//	merge new keys
+		if (Rows.length > 0)
+		{
+			const NewKeys = Object.keys(Rows[0]);
+			this.KnownKeys = Array.from(new Set(this.KnownKeys.concat(NewKeys)));
+			this.KnownKeys = this.KnownKeys.filter(NotSpecialKey);
+		}
+
+		this.UpdateTableDimensions(this.KnownKeys,Rows.length);
+
+		//	set all cells
+		const SetRowCells = function (RowValues,RowIndex)
+		{
+			const Style = RowValues.Style;
+			for (let [Key,Value] of Object.entries(RowValues))
+			{
+				const ColumnIndex = this.KnownKeys.indexOf(Key);
+				//	column/key probably filtered out
+				if (ColumnIndex == -1)
+					continue;
+				this.SetTableCell(ColumnIndex,RowIndex,Value,Style);
+			}
+		}
+		Rows.forEach(SetRowCells.bind(this));
+	}
+
+	SetTableCell(Column,Row,Value,Style)
+	{
+		const Table = this.GetElement();
+		const Body = Table.tBodies[0];
+		//const Header = Table.createTHead();
+		Body.rows[Row].cells[Column].innerText = Value;
+		Body.rows[Row].cells[Column].style = Style;
+	}
+
+	UpdateTableRow(Row,ColumnValues)
+	{
+		while (Row.cells.length < ColumnValues.length)
+			Row.insertCell(0);
+		while (Row.cells.length > ColumnValues.length)
+			Row.deleteCell(0);
+		function SetCell(Value,Index)
+		{
+			Row.cells[Index].innerText = Value;
+		}
+		ColumnValues.forEach(SetCell);
+	}
+
+	UpdateTableDimensions(Columns,RowCount)
+	{
+		const Table = this.GetElement();
+		const Body = Table.tBodies[0];
+		const Header = Table.createTHead();
+
+		//	update header cells
+		this.UpdateTableRow(Header.rows[0],Columns);
+		
+		//	append then delete rows
+		while (Body.rows.length < RowCount)
+			Body.insertRow(Body.rows.length - 1);
+		//	todo: work out row diff and try and and cull the correct one
+		while (Body.rows.length > RowCount)
+			Body.deleteRow(0);
+
+		//	make sure all rows are correct size
+		for (let r = 0;r < RowCount;r++)
+		{
+			this.UpdateTableRow(Body.rows[r],Columns);
+		}
+	}
+
+
+	CreateElement(Parent,Rect)
+	{
+		let Div = GetExistingElement(Rect);
+		if (Div)
+		{
+			//	gr: we currently style according to a table
+			if (Div.nodeName != 'TABLE')
+				throw `Pop.Gui.Table parent ${Parent} isn't a table, is ${Div.nodeName}`;
+
+			return Div;
+		}
+
+		Div = document.createElement('TABLE');
+		if (Rect)
+			SetGuiControlStyle(Div,Rect);
+
+		Parent.AddChildControl(Parent,Div);
+		return Div;
+	}
+
+	//	force styling for table
+	InitStyle()
+	{
+		const Table = this.GetElement();
+
+		//	make sure we have distinct bodys and headers
+		Table.createTHead();
+		if (!Table.tHead.rows.length)
+			Table.tHead.insertRow(0);
+		if (!Table.tBodies.length)
+			Table.createTBody();
+	}
+}

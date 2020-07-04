@@ -504,14 +504,14 @@ Pop.Opengl.Window = function(Name,Rect)
 
 	this.OnResize = function(ResizeEvent)
 	{
-		Pop.Debug("OnResize",JSON.stringify(ResizeEvent));
+		// Pop.Debug("OnResize",JSON.stringify(ResizeEvent));
 		
 		//	invalidate cache
 		this.ScreenRectCache = null;
 	
 		//	resize to original rect
 		const Canvas = this.GetCanvasElement();
-		Pop.Debug("Re-setting canvas size to original rect",JSON.stringify(Rect))
+		// Pop.Debug("Re-setting canvas size to original rect",JSON.stringify(Rect))
 		this.SetCanvasSize();
 		
 		this.RefreshCanvasResolution();
@@ -757,7 +757,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		//	enable float textures on GLES1
 		//	https://developer.mozilla.org/en-US/docs/Web/API/OES_texture_float
 		
-		Pop.Debug("Supported Extensions", gl.getSupportedExtensions() );
+		// Pop.Debug("Supported Extensions", gl.getSupportedExtensions() );
 
 		const InitFloatTexture = function(Context)
 		{
@@ -1160,24 +1160,10 @@ Pop.Opengl.RenderTarget = function()
 	{
 		const RenderContext = this.GetRenderContext();
 		
-		if ( TriangleCount === undefined )
-		{
-			TriangleCount = Geometry.IndexCount/3;
-		}
-		else
-		{
-			const GeoTriangleCount = Geometry.IndexCount/3;
-			if ( TriangleCount > GeoTriangleCount )
-			{
-				//Pop.Debug("Warning, trying to render " + TriangleCount + " triangles, but geo only has " + GeoTriangleCount + ". Clamping as webgl sometimes will render nothing and give no warning");
-				TriangleCount = GeoTriangleCount;
-			}
-		}
-		
 		//	0 gives a webgl error/warning so skip it
-		if ( TriangleCount <= 0 )
+		if ( TriangleCount === 0 )
 		{
-			Pop.Debug("Triangle count",TriangleCount);
+			//Pop.Debug("Triangle count",TriangleCount);
 			return;
 		}
 		
@@ -1208,7 +1194,14 @@ Pop.Opengl.RenderTarget = function()
 			Pop.Opengl.GeometryBindSkip++;
 		}
 		SetUniforms( Shader, Geometry );
-		
+
+		const GeoTriangleCount = Geometry.IndexCount/3;
+		if ( TriangleCount === undefined )
+			TriangleCount = GeoTriangleCount;
+
+		//	if we try and render more triangles than geometry has, webgl sometimes will render nothing and give no warning
+		TriangleCount = Math.min( TriangleCount, GeoTriangleCount );
+
 		Pop.Opengl.TrianglesDrawn += TriangleCount;
 		Pop.Opengl.BatchesDrawn += 1;
 		gl.drawArrays( Geometry.PrimitiveType, 0, TriangleCount * 3 );
