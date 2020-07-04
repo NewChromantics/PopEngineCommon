@@ -123,7 +123,7 @@ Math.NormalToRedGreen = function(Normal,Alpha=1)
 		Normal = Math.Range( 0/2, 1/2, Normal );
 		return [1, Normal, 0, Alpha];
 	}
-	else if ( Normal <= 1/2 )
+	else if ( Normal <= 2/2 )
 	{
 		//	yellow to green
 		Normal = Math.Range( 1/2, 2/2, Normal );
