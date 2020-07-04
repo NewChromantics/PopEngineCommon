@@ -259,6 +259,13 @@ Pop.Image = function(Filename)
 		return this.PixelsFormat;
 	}
 	
+	this.SetFormat = function(NewFormat)
+	{
+		if ( this.PixelsFormat == NewFormat )
+			return;
+		throw `Todo: Pixel format conversion from ${this.PixelsFormat} to ${NewFormat}`;
+	}
+	
 	this.GetPixelBuffer = function()
 	{
 		if (!this.Pixels)
