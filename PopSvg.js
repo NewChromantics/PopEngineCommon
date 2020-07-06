@@ -1003,8 +1003,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 		}
 		catch(e)
 		{
-			Pop.Debug(`Failed to parse shape ${Node.Type}; ${e}`);
-			console.error(`Failed to parse shape ${Node.Type}; ${e}`);
+			Pop.Warning(`Failed to parse shape ${Node.Type}; ${e}`);
 		}
 	}
 	
