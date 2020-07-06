@@ -168,6 +168,7 @@ window.addEventListener('visibilitychange',function () { Pop.WebApi.SetIsForegro
 //	this will become generic and not webapi specific
 Pop.WebApi.TFileCache = class
 {
+<<<<<<< Updated upstream
 	constructor()
 	{
 		this.Cache = {};	//	[Filename] = Contents
@@ -181,6 +182,15 @@ Pop.WebApi.TFileCache = class
 
 	SetError(Filename,Error)
 	{
+=======
+	constructor()
+	{
+		this.Cache = {};	//	[Filename] = Contents
+	}
+
+	SetError(Filename,Error)
+	{
+>>>>>>> Stashed changes
 		Pop.Debug(`Error loading file ${Filename}: ${Error}`);
 		this.Set(Filename,false);
 	}
@@ -191,12 +201,20 @@ Pop.WebApi.TFileCache = class
 		{
 			// Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
 		}
+<<<<<<< Updated upstream
 		this.Cache[Filename] = Contents;
 		this.OnFilesChanged.Push(Filename);
 	}
 
 	Get(Filename)
 	{
+=======
+		this.Cache[Filename] = Contents;
+	}
+
+	Get(Filename)
+	{
+>>>>>>> Stashed changes
 		if (!this.Cache.hasOwnProperty(Filename))
 		{
 			throw `${Filename} has not been cached with Pop.AsyncCacheAsset()`;
@@ -449,7 +467,7 @@ Pop.LoadFileAsString = function(Filename)
 	{
 		Pop.Debug("Convert "+Filename+" from ", typeof Contents," to string");
 		//	this is super slow!
-		const ContentsString = BytesToString( Contents );
+		const ContentsString = Pop.BytesToString( Contents );
 		return ContentsString;
 	}
 
