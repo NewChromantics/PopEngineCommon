@@ -449,7 +449,7 @@ Pop.LoadFileAsString = function(Filename)
 	{
 		Pop.Debug("Convert "+Filename+" from ", typeof Contents," to string");
 		//	this is super slow!
-		const ContentsString = BytesToString( Contents );
+		const ContentsString = Pop.BytesToString( Contents );
 		return ContentsString;
 	}
 
