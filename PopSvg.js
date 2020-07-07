@@ -365,7 +365,7 @@ function GetPointOnArc(p0, rx, ry, xAxisRotation, largeArcFlag, sweepFlag, p1, t
 	return point;
 }
 
-function ProcessPathCommands(Commands)
+function ProcessPathCommands(Commands, TreePath)
 {
 	let Shapes = [];
 	
@@ -510,10 +510,10 @@ function ProcessPathCommands(Commands)
 	
 	function ProcessBezierReflectionRelative(ControlX1,ControlY1,EndX,EndY)
 	{
-		ControlX1 += InitialPos[0];
-		ControlY1 += InitialPos[1];
-		EndX += InitialPos[0];
-		EndY += InitialPos[1];
+		ControlX1 += CurrentPos[0];
+		ControlY1 += CurrentPos[1];
+		EndX += CurrentPos[0];
+		EndY += CurrentPos[1];
 		ProcessBezierReflection( ControlX1, ControlY1, EndX, EndY );
 	}
 	
@@ -525,10 +525,10 @@ function ProcessPathCommands(Commands)
 	
 	function ProcessQuadraticRelative(ControlX,ControlY,EndX,EndY)
 	{
-		ControlX += InitialPos[0];
-		ControlY += InitialPos[1];
-		EndX += InitialPos[0];
-		EndY += InitialPos[1];
+		ControlX += CurrentPos[0];
+		ControlY += CurrentPos[1];
+		EndX += CurrentPos[0];
+		EndY += CurrentPos[1];
 		ProcessQuadratic( ControlX, ControlY, EndX, EndY );
 	}
 	
@@ -540,8 +540,8 @@ function ProcessPathCommands(Commands)
 	
 	function ProcessQuadraticReflectionRelative(EndX,EndY)
 	{
-		EndX += InitialPos[0];
-		EndY += InitialPos[1];
+		EndX += CurrentPos[0];
+		EndY += CurrentPos[1];
 		ProcessQuadraticReflection( EndX, EndY );
 	}
 	
@@ -554,10 +554,8 @@ function ProcessPathCommands(Commands)
 	
 	function ProcessLineRelative(x,y)
 	{
-		if ( x !== undefined )
-			x += InitialPos[0];
-		if ( y !== undefined )
-			y += InitialPos[1];
+		if ( x !== undefined )	x += CurrentPos[0];
+		if ( y !== undefined )	y += CurrentPos[1];
 		ProcessLine( x, y );
 	}
 	
@@ -591,7 +589,7 @@ function ProcessPathCommands(Commands)
 
 		const Cmd = Commands.shift();
 		//	gr: close path doesn't take params
-		const Args = CmdHasArguments(Cmd) ? Commands.shift() : [];
+		let Args = CmdHasArguments(Cmd) ? Commands.shift() : [];
 		
 		do
 		{
@@ -599,7 +597,7 @@ function ProcessPathCommands(Commands)
 			{
 				Function( ...Args.splice(0,NumberOfArgs) );
 			}
-		
+
 			switch(Cmd)
 			{
 				//	gr: Move shouldn't draw a line?
@@ -632,11 +630,11 @@ function ProcessPathCommands(Commands)
 	}
 	//	terminate last line
 	NewShape();
-	
+
 	return Shapes;
 }
 
-function ParseSvgPathCommandContours(Commands)
+function ParseSvgPathCommandContours(Commands, TreePath)
 {
 	//	https://css-tricks.com/svg-path-syntax-illustrated-guide/
 	
@@ -679,7 +677,7 @@ function ParseSvgPathCommandContours(Commands)
 	//const Matches = [...Commands.matchAll( Pattern )];
 	// Pop.Debug(MatchesWithFloats);
 	
-	const Contours = ProcessPathCommands(MatchesWithFloats);
+	const Contours = ProcessPathCommands(MatchesWithFloats, TreePath);
 	return Contours;
 }
 
@@ -878,7 +876,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
 
 		//	get all shapes from the path and output them
-		const PathContours = ParseSvgPathCommandContours(Node['d']);
+		const PathContours = ParseSvgPathCommandContours(Node['d'], Path);
 
 		function PushShape(Contour)
 		{
