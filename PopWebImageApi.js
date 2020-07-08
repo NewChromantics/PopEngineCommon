@@ -414,7 +414,7 @@ Pop.Image = function(Filename)
 		}
 		
 		
-		if ( this.Pixels instanceof Image )
+		if ( this.Pixels instanceof Image || this.Pixels instanceof HTMLCanvasElement )
 		{
 			//Pop.Debug("Image from Image",this.PixelsFormat);
 			const SourceFormat = gl.RGBA;
@@ -538,7 +538,7 @@ Pop.Image = function(Filename)
 			this.WritePixels( ImageFile.width, ImageFile.height, Image, PixelFormat );
 		}
 	}
-	else if ( Filename && Filename.constructor == WebApi_HtmlImageElement )
+	else if ( Filename && (Filename.constructor == WebApi_HtmlImageElement || Filename.constructor == HTMLCanvasElement) )
 	{
 		const HtmlImage = Filename;
 		//	gr: this conversion should be in WritePixels()
