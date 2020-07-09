@@ -1075,7 +1075,7 @@ Pop.Opengl.RenderTarget = function()
 		throw "Override this on your render target";
 	}
 	
-	this.RenderToRenderTarget = function(TargetTexture,RenderFunction)
+	this.RenderToRenderTarget = function(TargetTexture,RenderFunction,ReadBackFormat,ReadTargetTexture)
 	{
 		const RenderContext = this.GetRenderContext();
 		
@@ -1084,6 +1084,17 @@ Pop.Opengl.RenderTarget = function()
 		RenderTarget.BindRenderTarget( RenderContext );
 		
 		RenderFunction( RenderTarget );
+		
+		if (ReadBackFormat === true)
+		{
+			const gl = RenderContext.GetGlContext();
+			const Width = RenderTarget.GetRenderTargetRect()[2];
+			const Height = RenderTarget.GetRenderTargetRect()[3];
+			const Pixels = new Uint8Array(Width * Height * 4);
+			gl.readPixels(0,0,Width,Height,gl.RGBA,gl.UNSIGNED_BYTE,Pixels);
+			const target = ReadTargetTexture !== undefined ? ReadTargetTexture : TargetTexture
+			target.WritePixels(Width,Height,Pixels,'RGBA');
+		}
 		
 		//	todo: restore previously bound, not this.
 		//	restore rendertarget
