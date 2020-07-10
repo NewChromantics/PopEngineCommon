@@ -189,7 +189,7 @@ Pop.WebApi.TFileCache = class
 	{
 		if (this.Cache.hasOwnProperty(Filename))
 		{
-			// Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
+			Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
 		}
 		this.Cache[Filename] = Contents;
 		this.OnFilesChanged.Push(Filename);
@@ -324,18 +324,37 @@ async function FetchArrayBuffer(Url)
 	const Fetched = await fetch(Url);
 	const Contents = await Fetched.arrayBuffer();
 	if ( !Fetched.ok )
+async function FetchArrayBufferStream(Url)
+{
+	const Fetched = await fetch(Url);
+	if (!Fetched.ok)
 		throw `Failed to fetch(${Url}) arrayBuffer; ${Fetched.statusText}`;
+
+	const Reader = Fetched.body.getReader();
+
+	async function ReaderThread()
+	{
+		Pop.Debug(`Reading fetch stream`);
+		while (true)
+		{
+			const Chunk = await Reader.read();
+			Pop.Debug("chunk=",JSON.stringify(Chunk));
+		}
+	}
+	const Result = await ReaderThread();
+
+	const Contents = await Fetched.arrayBuffer();
 	const Contents8 = new Uint8Array(Contents);
 	return Contents8;
 }
 
-async function FetchOnce(Url,FetchFunc)
+async function FetchOnce(Url,FetchFunc,OnProgress)
 {
 	if ( FetchCache.hasOwnProperty(Url) )
 		return FetchCache[Url];
 	
 	//	run the fetch, wait for it to finish, then clear the cache
-	FetchCache[Url] = FetchFunc(Url);
+	FetchCache[Url] = FetchFunc(Url,OnProgress);
 	const Contents = await FetchCache[Url];
 	delete FetchCache[Url];
 	return Contents;
@@ -411,6 +430,23 @@ Pop.LoadFileAsArrayBufferAsync = async function(Filename)
 }
 
 
+Pop.LoadFileAsArrayBufferStreamAsync = async function (Filename)
+{
+	//	return cache if availible, if it failed before, try and load again
+	const Cache = Pop.GetCachedAssetOrFalse(Filename);
+	if (Cache !== false)
+		return Cache;
+
+	function OnStreamProgress(Contents)
+	{
+		//	keep re-writing a new file
+		Pop.SetFileCache(Filename,Contents);
+	}
+
+	const Contents = await FetchOnce(Filename,FetchArrayBufferStream,OnStreamProgress);
+	Pop.SetFileCache(Filename,Contents);
+	return Contents;
+}
 
 Pop.AsyncCacheAssetAsString = async function(Filename)
 {
