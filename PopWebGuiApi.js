@@ -1271,8 +1271,7 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 			Row.insertCell(0);
 		while (Row.cells.length > ColumnValues.length)
 			Row.deleteCell(0);
-		if ( SetIdToColumnNames )
-		Pop.Debug(`SetIdToColumnNames`);
+		//if ( SetIdToColumnNames )	Pop.Debug(`SetIdToColumnNames`);
 		function SetCell(Value,Index)
 		{
 			Row.cells[Index].innerText = Value;
