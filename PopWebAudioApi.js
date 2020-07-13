@@ -492,7 +492,7 @@ Pop.Audio.Sound = class
 	
 	//	sample node doesnt have a time, it's just offset
 	//	from the real time we started, so we have to track it
-	GetSampleNodeCurrentTime()
+	GetSampleNodeCurrentTimeMs()
 	{
 		if ( !this.SampleNode )
 			return false;
@@ -507,7 +507,7 @@ Pop.Audio.Sound = class
 		const SampleTimeIsClose = function()
 		{
 			const MaxMsOffset = 100;
-			const CurrentTime = this.GetSampleNodeCurrentTime();
+			const CurrentTime = this.GetSampleNodeCurrentTimeMs();
 			if ( CurrentTime === false )
 				return false;
 			const Difference = Math.abs(TimeMs - CurrentTime);
