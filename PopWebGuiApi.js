@@ -575,6 +575,17 @@ function GetMousePos(MouseEvent,Element)
 }
 
 
+
+Pop.Gui.SetStyle = function(Element,Key,Value)
+{
+	//	change an attribute
+	Element.setAttribute(Key,Value);
+	//	set a css value
+	Element.style.setProperty(`${Key}`,Value);
+	//	set a css variable
+	Element.style.setProperty(`--${Key}`,Value);
+}
+
 //	finally doing proper inheritance for gui
 Pop.Gui.BaseControl = class
 {
@@ -698,16 +709,10 @@ Pop.Gui.BaseControl = class
 		return this.OnDragDropQueue.WaitForNext();
 	}
 	
-	//	todo: generic pop api for this
 	SetStyle(Key,Value)
 	{
 		const Element = this.GetElement();
-		//	change an attribute
-		Element.setAttribute(Key,Value);
-		//	set a css value
-		Element.style.setProperty(`${Key}`,Value);
-		//	set a css variable
-		Element.style.setProperty(`--${Key}`,Value);
+		Pop.Gui.SetStyle(Element,Key,Value);
 	}
 	
 	SetRect(Rect)
@@ -1250,19 +1255,33 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 				//	column/key probably filtered out
 				if (ColumnIndex == -1)
 					continue;
-				this.SetTableCell(ColumnIndex,RowIndex,Value,Style);
+				this.SetTableCell(ColumnIndex,RowIndex,Value,Style,Key);
 			}
 		}
 		Rows.forEach(SetRowCells.bind(this));
 	}
 
-	SetTableCell(Column,Row,Value,Style)
+	SetTableCell(Column,Row,Value,Style,ColumnKey)
 	{
 		const Table = this.GetElement();
 		const Body = Table.tBodies[0];
 		//const Header = Table.createTHead();
-		Body.rows[Row].cells[Column].innerText = Value;
-		Body.rows[Row].cells[Column].style = Style;
+		const Element = Body.rows[Row].cells[Column];
+		Element.innerText = (Value===undefined) ? "" : Value;
+		
+		//	style should be a keyed object
+		if ( typeof Style == 'string' )
+		{
+			Pop.Warning(`Deprecated: Style on a table row should be keyed object of attributes; ${ColumnKey}:${Style}`);
+			Element.style = Style;
+		}
+		else if ( Style )
+		{
+			for ( let [StyleName,Value] of Object.entries(Style) )
+			{
+				Pop.Gui.SetStyle(Element,StyleName,Value);
+			}
+		}
 	}
 
 	UpdateTableRow(Row,ColumnValues,SetIdToColumnNames)
