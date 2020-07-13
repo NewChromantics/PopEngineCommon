@@ -221,7 +221,8 @@ Pop.Audio.Sound = class
 		this.KnownDurationMs = null;
 		this.Name = Name;
 		this.ActionQueue = new Pop.PromiseQueue();
-		this.Update().then(Pop.Debug).catch(Pop.Warning);
+		this.Alive = true;	//	help get out of update loop
+		this.Update().catch(Pop.Warning);
 		
 		this.SetSample(WaveData);
 	}
@@ -348,16 +349,21 @@ Pop.Audio.Sound = class
 	{
 		//	load
 		const Context = await Pop.Audio.WaitForContext();
-		
-		//	could decode data here
-		
-		while (true)
+
+		//	run through commands that need a context
+		//	if we're being freed(!alive) process all remaining actions
+		while ( this.Alive || this.ActionQueue.HasPending() )
 		{
 			const Action = await this.ActionQueue.WaitForNext();
 			await Action.call(this,Context);
 		}
 	}
 	
+	DestroyAllNodes(Context)
+	{
+		this.DestroySamplerNodes(Context);
+		this.DestroyReverbNodes(Context);
+	}
 	
 	DestroyReverbNodes(Context)
 	{
@@ -378,7 +384,7 @@ Pop.Audio.Sound = class
 		}
 	}
 	
-	DestroySamplerNodes(Context)
+	DestroySamplerNodes(Context,DestroyGainNode=false)
 	{
 		if ( this.SampleNode )
 		{
@@ -392,15 +398,13 @@ Pop.Audio.Sound = class
 		}
 		
 		//	gr: dont need to keep deleting this
-		/*
-		if ( this.SampleGainNode )
+		if ( this.SampleGainNode && DestroyGainNode )
 		{
 			if ( this.SampleGainNode.stop )
 				this.SampleGainNode.stop();
 			this.SampleGainNode.disconnect();
 			this.SampleGainNode = null;
 		}
-		*/
 	}
 	
 	CreateSamplerNodes(Context)
@@ -521,7 +525,7 @@ Pop.Audio.Sound = class
 		async function DoPlay(Context)
 		{
 			//	only start if our time is off, multiple starts may have buffered up
-			if ( SampleTimeIsClose() )
+			if ( !this.Alive || SampleTimeIsClose() )
 				return;
 
 			this.CreateSamplerNodes(Context);
@@ -542,11 +546,27 @@ Pop.Audio.Sound = class
 	
 	Stop()
 	{
-		async function DoStop()
+		async function DoStop(Context)
 		{
-			this.DestroySamplerNodes();
+			this.DestroySamplerNodes(Context);
 		}
 		this.ActionQueue.Push(DoStop);
+	}
+	
+	Free()
+	{
+		//	stop ASAP & cleanup everything
+		//	gr: can we clear out as many actions as possible?
+		async function Destroy(Context)
+		{
+			this.DestroyAllNodes(Context);
+			//Pop.Debug(`Destroy other sound resources`,this);
+			this.SampleBuffer = null;
+			this.SampleWaveData = null;
+		}
+		//	other immediate cleanup here?
+		this.Alive = false;
+		this.ActionQueue.Push(Destroy);
 	}
 }
 
