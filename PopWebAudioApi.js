@@ -201,6 +201,7 @@ Pop.Audio.Sound = class
 		//	overload this for visualisation
 		this.OnVolumeChanged = function(Volume01){};
 		
+		this.BufferByteSize = WaveData.length;
 		this.SampleBuffer = null;
 		this.ReverbBuffer = null;
 		
