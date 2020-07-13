@@ -226,6 +226,11 @@ Pop.PromiseQueue = class
 		this.FlushPending();
 	}
 	
+	HasPending()
+	{
+		return this.PendingValues.length > 0;
+	}
+	
 	FlushPending()
 	{
 		//	if there are promises and data's waiting, we can flush next
