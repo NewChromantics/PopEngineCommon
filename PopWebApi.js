@@ -57,10 +57,35 @@ class WebApi_PromiseQueue
 		Promises.forEach( HandlePromise );
 	}
 	
+	//	put this value in the queue, if its not already there (todo; option to choose oldest or newest position)
+	PushUnique(Value)
+	{
+		const Args = Array.from(arguments);
+		function IsMatch(PendingValue)
+		{
+			const a = PendingValue;
+			const b = Args;
+			if ( a.length != b.length )	return false;
+			for ( let i=0;	i<a.length;	i++ )
+				if ( a[i] != b[i] )
+					return false;
+			return true;
+		}
+		//	skip adding if existing match
+		if ( this.PendingValues.some(IsMatch) )
+		{
+			Pop.Debug(`Skipping non-unique ${Args}`);
+			return;
+		}
+		this.Push(...Args);
+	}
+	
 	Push(Value)
 	{
 		const Args = Array.from(arguments);
 		this.PendingValues.push( Args );
+		if ( this.PendingValues.length > 100 )
+			Pop.Warning(`This promise queue has ${this.PendingValues.length} pending values and ${this.Promises.length} pending promises`,this);
 		
 		//	now flush, in case there's something waiting for this value
 		if ( this.Promises.length == 0 )
@@ -204,7 +229,7 @@ Pop.WebApi.TFileCache = class
 			Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
 		}
 		this.Cache[Filename] = Contents;
-		this.OnFilesChanged.Push(Filename);
+		this.OnFilesChanged.PushUnique(Filename);
 	}
 
 	Get(Filename)
