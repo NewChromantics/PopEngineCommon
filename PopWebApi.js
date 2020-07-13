@@ -170,7 +170,10 @@ Pop.WebApi.TFileCache = class
 {
 	constructor()
 	{
-		this.Cache = {};	//	[Filename] = Contents
+		//	we keep some meta on the side. eg. known size if we're streaming a file
+		//	Do we leave this, even if we unload a file?
+		this.CacheMeta = {};	//	[Filename] = .Size .OtherThings .LastAccessed?
+		this.Cache = {};		//	[Filename] = Contents
 		this.OnFilesChanged = new WebApi_PromiseQueue();
 	}
 
@@ -179,8 +182,17 @@ Pop.WebApi.TFileCache = class
 		return this.OnFilesChanged.WaitForNext();
 	}
 
+	//	return a mutable meta object
+	GetMeta(Filename)
+	{
+		if ( !this.CacheMeta[Filename] )
+			this.CacheMeta[Filename] = {};
+		return this.CacheMeta[Filename];
+	}
+	
 	SetError(Filename,Error)
 	{
+		this.CacheMeta[Filename].Error = Error;
 		Pop.Debug(`Error loading file ${Filename}: ${Error}`);
 		this.Set(Filename,false);
 	}
@@ -203,11 +215,12 @@ Pop.WebApi.TFileCache = class
 		}
 
 		//	false is a file that failed to load
-		//	todo: store an error!
 		const Asset = this.Cache[Filename];
 		if (Asset === false)
-			throw `${Filename} failed to load`;
-
+		{
+			const Error = this.GetMeta(Filename).Error;
+			throw `${Filename} failed to load: ${Error}`;
+		}
 		return this.Cache[Filename];
 	}
 
@@ -226,6 +239,13 @@ Pop.WebApi.TFileCache = class
 	{
 		return this.GetOrFalse(Filename) !== false;
 	}
+	
+	SetKnownSize(Filename,Size)
+	{
+		//	update meta
+		const Meta = this.GetMeta(Filename);
+		Meta.Size = Size;
+	}
 }
 
 
@@ -238,6 +258,7 @@ Pop.WebApi.FileCache = new Pop.WebApi.TFileCache();
 //	old bindings
 Pop.GetCachedAsset = Pop.WebApi.FileCache.Get.bind(Pop.WebApi.FileCache);
 Pop.GetCachedAssetOrFalse = Pop.WebApi.FileCache.GetOrFalse.bind(Pop.WebApi.FileCache);
+Pop.SetFileKnownSize = Pop.WebApi.FileCache.SetKnownSize.bind(Pop.WebApi.FileCache);
 Pop.SetFileCache = Pop.WebApi.FileCache.Set.bind(Pop.WebApi.FileCache);
 Pop.SetFileCacheError = Pop.WebApi.FileCache.SetError.bind(Pop.WebApi.FileCache);
 
@@ -322,29 +343,63 @@ async function FetchText(Url)
 async function FetchArrayBuffer(Url)
 {
 	const Fetched = await fetch(Url);
-	const Contents = await Fetched.arrayBuffer();
 	if ( !Fetched.ok )
-async function FetchArrayBufferStream(Url)
+		throw `Failed to fetch(${Url}) arrayBuffer; ${Fetched.statusText}`;
+
+	const Contents = await Fetched.arrayBuffer();
+	const Contents8 = new Uint8Array(Contents);
+	return Contents8;
+}
+
+async function FetchArrayBufferStream(Url,OnProgress)
 {
 	const Fetched = await fetch(Url);
 	if (!Fetched.ok)
 		throw `Failed to fetch(${Url}) arrayBuffer; ${Fetched.statusText}`;
 
+	//	gr: do we know full file size here
+	Pop.Debug(`Streaming file; `,Fetched);
+	let KnownSize = parseInt(Fetched.headers.get("content-length"));
+	KnownSize = isNaN(KnownSize) ? -1 : KnownSize;
+	const KnownSizeKb = (KnownSize/1024).toFixed(2);
 	const Reader = Fetched.body.getReader();
 
 	async function ReaderThread()
 	{
-		Pop.Debug(`Reading fetch stream`);
+		Pop.Debug(`Reading fetch stream ${Url}/${KnownSizeKb}kb`);
+		//	gr: we want to report the current contents, so even if merging later is faster, lets keep resizing
+		let TotalContents = new Uint8Array(0);
+		
+		function AppendChunk(Chunk)
+		{
+			if ( !Chunk )
+				return;
+			const NewSize = TotalContents.length + Chunk.length;
+			const NewContents = new Uint8Array(NewSize);
+			NewContents.set( TotalContents, 0 );
+			NewContents.set( Chunk, TotalContents.length );
+			TotalContents = NewContents;
+			OnProgress( TotalContents, KnownSize );
+		}
+		
+		//	should we keep resizing a buffer, or do it once at the end...
+		const Chunks = [];
 		while (true)
 		{
 			const Chunk = await Reader.read();
-			Pop.Debug("chunk=",JSON.stringify(Chunk));
+			const Finished = Chunk.done;
+			const ChunkContents = Chunk.value;
+			//	chunk is undefined on last (finished)read
+			const ChunkSize = ChunkContents ? ChunkContents.length : 0;
+			Pop.Debug(`chunk ${Url} Finished=${Finished} x${ChunkSize}/${KnownSizeKb}`,Chunk);
+			AppendChunk(ChunkContents);
+			if ( Finished )
+				break;
 		}
+		return TotalContents;
 	}
-	const Result = await ReaderThread();
-
-	const Contents = await Fetched.arrayBuffer();
-	const Contents8 = new Uint8Array(Contents);
+	
+	const Contents8 = await ReaderThread();
 	return Contents8;
 }
 
@@ -437,8 +492,11 @@ Pop.LoadFileAsArrayBufferStreamAsync = async function (Filename)
 	if (Cache !== false)
 		return Cache;
 
-	function OnStreamProgress(Contents)
+	function OnStreamProgress(Contents,TotalSize)
 	{
+		//	set meta of known size if we have it, so we can work out %
+		if ( TotalSize )
+			Pop.SetFileKnownSize(Filename,TotalSize);
 		//	keep re-writing a new file
 		Pop.SetFileCache(Filename,Contents);
 	}
