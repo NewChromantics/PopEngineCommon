@@ -1265,15 +1265,19 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 		Body.rows[Row].cells[Column].style = Style;
 	}
 
-	UpdateTableRow(Row,ColumnValues)
+	UpdateTableRow(Row,ColumnValues,SetIdToColumnNames)
 	{
 		while (Row.cells.length < ColumnValues.length)
 			Row.insertCell(0);
 		while (Row.cells.length > ColumnValues.length)
 			Row.deleteCell(0);
+		if ( SetIdToColumnNames )
+		Pop.Debug(`SetIdToColumnNames`);
 		function SetCell(Value,Index)
 		{
 			Row.cells[Index].innerText = Value;
+			if ( SetIdToColumnNames )
+				Row.cells[Index].id = ColumnValues[Index];
 		}
 		ColumnValues.forEach(SetCell);
 	}
@@ -1285,7 +1289,7 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 		const Header = Table.createTHead();
 
 		//	update header cells
-		this.UpdateTableRow(Header.rows[0],Columns);
+		this.UpdateTableRow(Header.rows[0],Columns,true);
 		
 		//	append then delete rows
 		while (Body.rows.length < RowCount)
