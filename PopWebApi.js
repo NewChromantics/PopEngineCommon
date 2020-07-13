@@ -222,8 +222,9 @@ Pop.WebApi.TFileCache = class
 		//	gr: we now return filename & contents, but we dont want to put the
 		//		contents in the promise queue (will stop the unique-test and flood the queue)
 		//		so we wait, grab it here, then return with current contents
-		const File = {};
-		File.Filename = await this.OnFilesChanged.WaitForNext();
+		const Filename = await this.OnFilesChanged.WaitForNext();
+		const File = Object.assign({},this.GetMeta(Filename));
+		File.Filename = Filename;
 		File.Contents = this.Cache[File.Filename];
 		return File;
 	}
