@@ -219,7 +219,13 @@ Pop.WebApi.TFileCache = class
 
 	async WaitForFileChange()
 	{
-		return this.OnFilesChanged.WaitForNext();
+		//	gr: we now return filename & contents, but we dont want to put the
+		//		contents in the promise queue (will stop the unique-test and flood the queue)
+		//		so we wait, grab it here, then return with current contents
+		const File = {};
+		File.Filename = await this.OnFilesChanged.WaitForNext();
+		File.Contents = this.Cache[File.Filename];
+		return File;
 	}
 
 	//	return a mutable meta object
