@@ -1269,6 +1269,11 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 		const Element = Body.rows[Row].cells[Column];
 		Element.innerText = (Value===undefined) ? "" : Value;
 		
+		//	gr: as we're shuffling rows, we currently let old styles hang around
+		//		and they get left set (as they're never unset)
+		//		so clear old style (this still doesn't remove attributes!)
+		Element.style = '';
+		
 		//	style should be a keyed object
 		if ( typeof Style == 'string' )
 		{
