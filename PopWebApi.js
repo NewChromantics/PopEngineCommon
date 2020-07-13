@@ -18,14 +18,19 @@ class WebApi_PromiseQueue
 	async WaitForNext()
 	{
 		const Promise = this.Allocate();
+		
+		//	if we have any pending data, flush now, this will return an already-resolved value
+		this.FlushPending();
+		
 		return Promise;
 	}
-
+	
 	ClearQueue()
 	{
 		//	delete values, losing data!
 		this.PendingValues = [];
 	}
+	
 	//	allocate a promise, maybe deprecate this for the API WaitForNext() that makes more sense for a caller
 	Allocate()
 	{
@@ -47,14 +52,6 @@ class WebApi_PromiseQueue
 		const NewPromise = CreatePromise();
 		this.Promises.push( NewPromise );
 		return NewPromise;
-	}
-	
-	Flush(HandlePromise)
-	{
-		//	pop array incase handling results in more promises, so we avoid infinite loop
-		const Promises = this.Promises.splice(0);
-		//	need to try/catch here otherwise some will be lost
-		Promises.forEach( HandlePromise );
 	}
 	
 	//	put this value in the queue, if its not already there (todo; option to choose oldest or newest position)
@@ -80,25 +77,42 @@ class WebApi_PromiseQueue
 		this.Push(...Args);
 	}
 	
-	Push(Value)
+	Push()
 	{
 		const Args = Array.from(arguments);
-		this.PendingValues.push( Args );
+		const Value = {};
+		Value.ResolveValues = Args;
+		this.PendingValues.push( Value );
+		
 		if ( this.PendingValues.length > 100 )
 			Pop.Warning(`This promise queue has ${this.PendingValues.length} pending values and ${this.Promises.length} pending promises`,this);
 		
-		//	now flush, in case there's something waiting for this value
+		this.FlushPending();
+	}
+	
+	FlushPending()
+	{
+		//	if there are promises and data's waiting, we can flush next
 		if ( this.Promises.length == 0 )
 			return;
+		if ( this.PendingValues.length == 0 )
+			return;
 		
-		//	and flush 0 (FIFO)
+		//	flush 0 (FIFO)
 		//	we pre-pop as we want all listeners to get the same value
 		const Value0 = this.PendingValues.shift();
 		const HandlePromise = function(Promise)
 		{
-			Promise.Resolve( ...Value0 );
+			if ( Value0.RejectionValues )
+				Promise.Reject( ...Value0.RejectionValues );
+			else
+				Promise.Resolve( ...Value0.ResolveValues );
 		}
-		this.Flush( HandlePromise );
+		
+		//	pop array incase handling results in more promises, so we avoid infinite loop
+		const Promises = this.Promises.splice(0);
+		//	need to try/catch here otherwise some will be lost
+		Promises.forEach( HandlePromise );
 	}
 	
 	Resolve()
@@ -109,14 +123,15 @@ class WebApi_PromiseQueue
 	//	reject all the current promises
 	Reject()
 	{
-		const Args = arguments;
-		const HandlePromise = function(Promise)
-		{
-			Promise.Reject( ...Args );
-		}
-		this.Flush( HandlePromise );
+		const Args = Array.from(arguments);
+		const Value = {};
+		Value.RejectionValues = Args;
+		this.PendingValues.push(Value);
+		this.FlushPending();
 	}
 }
+
+
 
 
 

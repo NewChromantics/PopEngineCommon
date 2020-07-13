@@ -140,6 +140,7 @@ Pop.CreatePromise = function()
 
 
 //	a promise queue that manages multiple listeners
+//	gr: this is getting out of sync with the cyclic-fixing-copy in WebApi. Make it seperate!
 Pop.PromiseQueue = class
 {
 	constructor()
@@ -189,12 +190,39 @@ Pop.PromiseQueue = class
 		return NewPromise;
 	}
 	
+	//	put this value in the queue, if its not already there (todo; option to choose oldest or newest position)
+	PushUnique(Value)
+	{
+		const Args = Array.from(arguments);
+		function IsMatch(PendingValue)
+		{
+			const a = PendingValue;
+			const b = Args;
+			if ( a.length != b.length )	return false;
+			for ( let i=0;	i<a.length;	i++ )
+				if ( a[i] != b[i] )
+					return false;
+			return true;
+		}
+		//	skip adding if existing match
+		if ( this.PendingValues.some(IsMatch) )
+		{
+			Pop.Debug(`Skipping non-unique ${Args}`);
+			return;
+		}
+		this.Push(...Args);
+	}
+	
 	Push()
 	{
 		const Args = Array.from(arguments);
 		const Value = {};
 		Value.ResolveValues = Args;
 		this.PendingValues.push( Value );
+		
+		if ( this.PendingValues.length > 100 )
+			Pop.Warning(`This promise queue has ${this.PendingValues.length} pending values and ${this.Promises.length} pending promises`,this);
+		
 		this.FlushPending();
 	}
 	
