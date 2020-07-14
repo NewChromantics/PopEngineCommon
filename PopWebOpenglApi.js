@@ -1461,9 +1461,13 @@ function WindowRenderTarget(Window)
 
 
 
-Pop.Opengl.Shader = function(Context_Deprecated,VertShaderSource,FragShaderSource)
+Pop.Opengl.Shader = function(Name,VertShaderSource,FragShaderSource)
 {
-	let Name = "A shader";
+	if ( typeof Name != 'string' )
+	{
+		Pop.Warning(`Shader constructor first argument is no longer a context`);
+		Name = 'A shader';
+	}
 	this.Name = Name;
 	this.Program = null;
 	this.ProgramContextVersion = null;
