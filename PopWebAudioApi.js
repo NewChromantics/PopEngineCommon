@@ -192,6 +192,7 @@ Pop.Audio.WaitForContext = async function()
 	return Pop.Audio.Context;
 }
 
+Pop.Audio.SoundInstanceCounter = 1000;
 
 //	more complex WebAudio sound
 Pop.Audio.Sound = class
@@ -200,7 +201,8 @@ Pop.Audio.Sound = class
 	{
 		//	overload this for visualisation
 		this.OnVolumeChanged = function(Volume01){};
-		
+
+		//	data
 		this.BufferByteSize = WaveData.length;
 		this.SampleBuffer = null;
 		this.ReverbBuffer = null;
@@ -210,7 +212,6 @@ Pop.Audio.Sound = class
 		//	we only need a reference to the last one in case we need to kill it
 		//	or modify the node tree (params on effects)
 		this.SampleNode = null;
-
 		this.SampleGainNode = null;
 		this.SampleVelocityGainNode = null;
 		this.ReverbGainNode = null;
@@ -219,8 +220,18 @@ Pop.Audio.Sound = class
 		this.SampleVelocity = 1;	//	gain
 		this.ReverbVolume = 1;	//	wetness/gain
 
+		//	meta
 		this.KnownDurationMs = null;
 		this.Name = Name;
+		this.UniqueInstanceNumber = Pop.Audio.SoundInstanceCounter++;
+
+		//	to reduce job queue, when we have a new target time or stop command
+		//	we update this value to non-null and queue a UpdatePlayState
+		//	if it's a time, we want to seek to that time. if it's false, we want to stop
+		//	if it's null the state isn't dirty
+		this.PlayTargetTime = null;
+
+		//	run state
 		this.ActionQueue = new Pop.PromiseQueue();
 		this.Alive = true;	//	help get out of update loop
 		this.Update().catch(Pop.Warning);
@@ -305,9 +316,10 @@ Pop.Audio.Sound = class
 			{
 				this.SampleBuffer = await this.DecodeAudioBuffer(Context,WaveData);
 			}
-			//	now out of date/not dirt
+			//	now out of date/not dirty
 			this.SampleWaveData = null;
-			
+
+			//	restore time/stopped state, but force sampler rebuild
 			//this.DestroySamplerNodes(Context);
 			//Pop.Debug(`SetSample() todo: retrigger sample creation at current time if playing`);
 		}
@@ -355,7 +367,9 @@ Pop.Audio.Sound = class
 		//	if we're being freed(!alive) process all remaining actions
 		while ( this.Alive || this.ActionQueue.HasPending() )
 		{
-			const Action = await this.ActionQueue.WaitForNext();
+			let Action = await this.ActionQueue.WaitForNext();
+			if (Action == 'UpdatePlayTargetTime')
+				Action = this.UpdatePlayTargetTime.bind(this);
 			await Action.call(this,Context);
 		}
 	}
@@ -501,57 +515,64 @@ Pop.Audio.Sound = class
 		const Offset = Now - this.SampleNodeStartTime;
 		return Offset;
 	}
-	
-	Play(TimeMs=0)
+
+	async UpdatePlayTargetTime(Context)
 	{
-		const SampleTimeIsClose = function()
+		if (this.PlayTargetTime === null)
+			return Pop.Warning(`Sound has caused a play/stop but the target value is not dirty`);
+
+		if (this.PlayTargetTime === false)
+		{
+			this.DestroySamplerNodes(Context);
+			this.PlayTargetTime = null;
+			return;
+		}
+
+		//	seek to time
+		const TimeMs = this.PlayTargetTime;
+		this.PlayTargetTime = null;
+
+		//	gr: avoid seek/reconstruction where possible
+		const SampleTimeIsClose = function ()
 		{
 			const MaxMsOffset = 100;
 			const CurrentTime = this.GetSampleNodeCurrentTimeMs();
-			if ( CurrentTime === false )
+			if (CurrentTime === false)
 				return false;
 			const Difference = Math.abs(TimeMs - CurrentTime);
-			if ( Difference < MaxMsOffset )
+			if (Difference < MaxMsOffset)
 				return true;
-			// Pop.Debug(`Sample ${this.Name} time is ${TimeMs - CurrentTime}ms out`);
+			Pop.Debug(`Sample ${this.Name} time is ${TimeMs - CurrentTime}ms out`);
 			return false;
 		}.bind(this);
-		
-		//	dont queue up redundant plays
-		if ( SampleTimeIsClose() )
+
+		if (SampleTimeIsClose())
 			return;
-		
-		const QueueTime = Pop.GetTimeNowMs();
-		//Pop.Debug(`Queue play(${Name}) at ${Pop.GetTimeNow}
-		async function DoPlay(Context)
-		{
-			//	only start if our time is off, multiple starts may have buffered up
-			if ( !this.Alive || SampleTimeIsClose() )
-				return;
 
-			this.CreateSamplerNodes(Context);
-			this.CreateReverbNodes(Context);
+		this.CreateSamplerNodes(Context);
+		this.CreateReverbNodes(Context);
 
-			//	start!
-			const DelaySecs = 0;
-			const OffsetSecs = TimeMs / 1000;
-			this.SampleNode.start(DelaySecs,OffsetSecs);
-			this.SampleNodeStartTime = Pop.GetTimeNowMs() - TimeMs;
-			
-			//	debug
-			const JobDelay = Pop.GetTimeNowMs() - QueueTime;
-			// if ( JobDelay > 5 ) Pop.Debug(`Play delay ${this.Name} ${JobDelay.toFixed(2)}ms`);
-		}
-		this.ActionQueue.Push(DoPlay);
+		//	start!
+		const DelaySecs = 0;
+		const OffsetSecs = TimeMs / 1000;
+		this.SampleNode.start(DelaySecs,OffsetSecs);
+		this.SampleNodeStartTime = Pop.GetTimeNowMs() - TimeMs;
+		Pop.Debug(`Starting audio ${OffsetSecs} secs #${this.UniqueInstanceNumber} ${this.Name}`);
+	}
+	
+	Play(TimeMs=0)
+	{
+		//	gr: could call SampleTimeIsClose() here and avoid this queue entirely
+		//	mark dirty and do new state update (if not already queued)
+		this.PlayTargetTime = TimeMs;
+		this.ActionQueue.PushUnique('UpdatePlayTargetTime');
 	}
 	
 	Stop()
 	{
-		async function DoStop(Context)
-		{
-			this.DestroySamplerNodes(Context);
-		}
-		this.ActionQueue.Push(DoStop);
+		//	mark dirty and cause update of state (if not already queued)
+		this.PlayTargetTime = false;
+		this.ActionQueue.PushUnique('UpdatePlayTargetTime');
 	}
 	
 	Free()
@@ -564,6 +585,7 @@ Pop.Audio.Sound = class
 			//Pop.Debug(`Destroy other sound resources`,this);
 			this.SampleBuffer = null;
 			this.SampleWaveData = null;
+			Pop.Debug(`Free'd sound instance #${this.UniqueInstanceNumber}/${this.Name}`)
 		}
 		//	other immediate cleanup here?
 		this.Alive = false;

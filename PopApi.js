@@ -196,7 +196,13 @@ Pop.PromiseQueue = class
 		const Args = Array.from(arguments);
 		function IsMatch(PendingValue)
 		{
-			const a = PendingValue;
+			//	all arguments are now .PendingValues=[] or .RejectionValues=[]
+			//	we are only comparing PendingValues, lets allow rejections to pile up as
+			//	PushUnique wont be rejections. The Reject() code should have a RejectUnique() if this becomes the case
+			if (!PendingValue.hasOwnProperty('ResolveValues'))
+				return false;
+
+			const a = PendingValue.ResolveValues;
 			const b = Args;
 			if ( a.length != b.length )	return false;
 			for ( let i=0;	i<a.length;	i++ )
@@ -207,7 +213,7 @@ Pop.PromiseQueue = class
 		//	skip adding if existing match
 		if ( this.PendingValues.some(IsMatch) )
 		{
-			Pop.Debug(`Skipping non-unique ${Args}`);
+			//Pop.Debug(`Skipping non-unique ${Args}`);
 			return;
 		}
 		this.Push(...Args);

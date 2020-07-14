@@ -60,7 +60,13 @@ class WebApi_PromiseQueue
 		const Args = Array.from(arguments);
 		function IsMatch(PendingValue)
 		{
-			const a = PendingValue;
+			//	all arguments are now .PendingValues=[] or .RejectionValues=[]
+			//	we are only comparing PendingValues, lets allow rejections to pile up as
+			//	PushUnique wont be rejections. The Reject() code should have a RejectUnique() if this becomes the case
+			if (!PendingValue.hasOwnProperty('ResolveValues'))
+				return false;
+
+			const a = PendingValue.ResolveValues;
 			const b = Args;
 			if ( a.length != b.length )	return false;
 			for ( let i=0;	i<a.length;	i++ )
@@ -76,7 +82,7 @@ class WebApi_PromiseQueue
 		}
 		this.Push(...Args);
 	}
-	
+
 	Push()
 	{
 		const Args = Array.from(arguments);
