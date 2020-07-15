@@ -147,7 +147,7 @@ Pop.Gui.Timeline = class
 		{
 			if ( this.ViewTimeToPx !== null )
 			{
-				const LookBack = (Width-10) / this.ViewTimeToPx;
+				const LookBack = (Width) / this.ViewTimeToPx;
 				this.ViewTimeMin = Times[Times.length-1] - LookBack;
 			}
 		}
@@ -169,8 +169,10 @@ Pop.Gui.Timeline = class
 			Pixels.fill(123);
 			this.ViewImage = new Pop.Image();
 			this.ViewImage.WritePixels( Width, Height, Pixels, Format );
+			Pixels.fill(255);
 		}
 		const Pixels = this.ViewImage.GetPixelBuffer();
+		//	gr: possible speed up, don't clear every time
 		Pixels.fill(255);
 
 		function Write(x,y,Colour)
@@ -193,10 +195,21 @@ Pop.Gui.Timeline = class
 		function TimeIsVisible(Time)
 		{
 			const x = Math.floor(ViewTimeToPx * (Time-this.ViewTimeMin));
-			return x>=0 && x<Width;
+			return x>=0 && x<=Width;
 		}
-		Times = Times.filter(TimeIsVisible.bind(this));
-		
+		const UnclippedTimes = Times;
+		Times = UnclippedTimes.filter(TimeIsVisible.bind(this));
+		//	gr: for cleaner smear render, we want to re-add the 1 time before, and the one after
+		if ( this.SmearData && Times.length )
+		{
+			const FirstIndex = UnclippedTimes.indexOf(Times[0]);
+			const LastIndex = UnclippedTimes.indexOf(Times[Times.length-1]);
+			if ( FirstIndex > 0 )
+				Times.unshift(UnclippedTimes[FirstIndex-1]);
+			if ( LastIndex >= 0 && LastIndex < UnclippedTimes.length-1 )
+				Times.push(UnclippedTimes[LastIndex+1]);
+		}
+
 		//	write all the data
 		for ( let u=0;	u<Uniforms.length;	u++ )
 		{
@@ -204,35 +217,37 @@ Pop.Gui.Timeline = class
 			//let LastValidTime = null;
 			let LastCellData = null;
 			let LastX = null;
-			//for ( let t=TimeMin;	t<TimeMax;	t++ )
 			for ( let ti=0;	ti<Times.length;	ti++)
 			{
 				const t = Times[ti];
 				let sx = Math.floor(ViewTimeToPx * (t-this.ViewTimeMin));
 				const ex = sx+1;
-				if ( ex < 0 )		continue;
-				if ( sx > Width )	break;
 				
 				let Colour = [0,0,0];	//	default colour (never gets used now?)
-				
 				
 				let CellData = null;
 				if ( Data.hasOwnProperty(t) )
 					if ( Data[t].hasOwnProperty(Uniform) )
 						CellData = Data[t][Uniform];
-				
+
 				if ( CellData === null && this.SmearData )
 					CellData = LastCellData;
-				
+	 
 				//	dont draw no-data
 				if ( CellData === null )
+				{
+					//	gr: resetting these, I was expecting to see gaps...
+					LastX = ex;
+					LastCellData = CellData;
 					continue;
+				}
 				
 				if ( Number.isInteger(CellData) )
 					Colour = CellData;
 				else if ( typeof CellData === 'number' ) //	isFloat
 					Colour = Math.floor(CellData);
 				
+				//	gr: would it be faster to have a lambda per-uniform we can get?
 				if ( Data.GetDataColour && CellData !== null )
 				{
 					const DataColour = Data.GetDataColour(Uniforms[u],CellData);
@@ -242,6 +257,8 @@ Pop.Gui.Timeline = class
 				//	if 4th element of colour has been returned, it's the height
 				let Heightf = (Array.isArray(Colour) && Colour.length >= 4) ? Colour[3] : 1.0;
 				let Height = Math.floor(Heightf * this.TrackHeight);
+				//	gr: let height overflow, but always render at least 1 pixel
+				Height = Math.max(1,Height);
 				
 				if ( this.SmearData && LastX )
 					sx = LastX;
