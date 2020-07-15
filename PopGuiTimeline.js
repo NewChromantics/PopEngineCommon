@@ -10,6 +10,7 @@ Pop.Gui.Timeline = class
 		this.ViewTimeMin = null;	//	null until we have data
 		this.ViewTimeToPx = null;		//	zoom	todo: auto once we have 2 times
 		this.TrackLatest = true;
+		this.SmearData = false;
 
 		this.KnownUniforms = [];
 		this.GetData = GetData;
@@ -192,25 +193,36 @@ Pop.Gui.Timeline = class
 		{
 			const Uniform = Uniforms[u];
 			//let LastValidTime = null;
-			//let LastCellData = null;
+			let LastCellData = null;
+			let LastX = null;
 			//for ( let t=TimeMin;	t<TimeMax;	t++ )
 			for ( let ti=0;	ti<Times.length;	ti++)
 			{
 				const t = Times[ti];
 				const y = u;
-				const sx = Math.floor(ViewTimeToPx * (t-this.ViewTimeMin));
+				let sx = Math.floor(ViewTimeToPx * (t-this.ViewTimeMin));
 				const ex = sx+1;
 				if ( ex < 0 )		continue;
 				if ( sx > Width )	break;
-				let Colour = [1,1,1];
+				
+				let Colour = [0,0,0];	//	default colour
 				
 				let CellData = null;
 				if ( Data.hasOwnProperty(t) )
 					if ( Data[t].hasOwnProperty(Uniform) )
 						CellData = Data[t][Uniform];
 				
+				if ( CellData === null && this.SmearData )
+					CellData = LastCellData;
+				
+				//	dont draw no-data
+				if ( CellData === null )
+					continue;
+				
 				if ( Number.isInteger(CellData) )
 					Colour = CellData;
+				else if ( typeof CellData === 'number' ) //	isFloat
+					Colour = Math.floor(CellData);
 				
 				if ( Data.GetDataColour && CellData !== null )
 				{
@@ -218,10 +230,15 @@ Pop.Gui.Timeline = class
 					Colour = (DataColour === undefined) ? Colour : DataColour;
 				}
 				
+				if ( this.SmearData && LastX )
+					sx = LastX;
+				
 				for (let x = sx;x <= ex;x++)
 				{
 					Write(x,y,Colour);
 				}
+				LastCellData = CellData;
+				LastX = ex;
 			}
 		}
 		
