@@ -9,6 +9,7 @@ Pop.Gui.RenderTimelineWindow = class
 	{
 		this.ReportFrequencyMs = 200;
 		this.Window = new Pop.Gui.Window(Name,Rect);
+		this.Window.EnableScrollbars(false,false);
 		this.Timeline = new Pop.Gui.Timeline(this.Window,[0,0,'100%','100%'],this.GetTimelineData.bind(this));
 
 		//	1 pixel for every report
