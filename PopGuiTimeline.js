@@ -1,4 +1,5 @@
-export default class TimelineViewer
+//	depends on Pop.Gui.ImageMap
+Pop.Gui.Timeline = class
 {
 	constructor(Name,Rect,GetData)
 	{
