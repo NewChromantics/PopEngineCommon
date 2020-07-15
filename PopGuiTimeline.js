@@ -8,9 +8,10 @@ Pop.Gui.Timeline = class
 		this.ViewImage = null;
 		
 		this.ViewTimeMin = null;	//	null until we have data
-		this.ViewTimeToPx = null;		//	zoom	todo: auto once we have 2 times
+		this.ViewTimeToPx = null;	//	zoom	todo: auto once we have 2 times
 		this.TrackLatest = true;
 		this.SmearData = false;
+		this.TrackHeight = 1;		//	allow height from GetDataColour to draw graphs
 
 		this.KnownUniforms = [];
 		this.GetData = GetData;
@@ -123,7 +124,7 @@ Pop.Gui.Timeline = class
 		const TimeMin = Times[0];
 		const TimeMax = Times[Times.length-1];
 		const Width = 200;//Math.max(1,TimeMax-TimeMin);
-		const Height = Uniforms.length;
+		const Height = Uniforms.length * this.TrackHeight;
 
 		//	init view on first data
 		if ( this.ViewTimeMin === null )
@@ -199,13 +200,13 @@ Pop.Gui.Timeline = class
 			for ( let ti=0;	ti<Times.length;	ti++)
 			{
 				const t = Times[ti];
-				const y = u;
 				let sx = Math.floor(ViewTimeToPx * (t-this.ViewTimeMin));
 				const ex = sx+1;
 				if ( ex < 0 )		continue;
 				if ( sx > Width )	break;
 				
-				let Colour = [0,0,0];	//	default colour
+				let Colour = [0,0,0];	//	default colour (never gets used now?)
+				
 				
 				let CellData = null;
 				if ( Data.hasOwnProperty(t) )
@@ -230,12 +231,22 @@ Pop.Gui.Timeline = class
 					Colour = (DataColour === undefined) ? Colour : DataColour;
 				}
 				
+				//	if 4th element of colour has been returned, it's the height
+				let Heightf = (Array.isArray(Colour) && Colour.length >= 4) ? Colour[3] : 1.0;
+				let Height = Math.floor(Heightf * this.TrackHeight);
+				
 				if ( this.SmearData && LastX )
 					sx = LastX;
 				
-				for (let x = sx;x <= ex;x++)
+				const ey = (u+1) * this.TrackHeight;
+				const sy = ey - Height;
+
+				for ( let y=sy;	y<ey;	y++ )
 				{
-					Write(x,y,Colour);
+					for (let x = sx;x <= ex;x++)
+					{
+						Write(x,y,Colour);
+					}
 				}
 				LastCellData = CellData;
 				LastX = ex;

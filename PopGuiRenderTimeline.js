@@ -7,13 +7,14 @@ Pop.Gui.RenderTimelineWindow = class
 {
 	constructor(Name,Rect,GetData)
 	{
-		this.ReportFrequencyMs = 100;
+		this.ReportFrequencyMs = 200;
 		this.Window = new Pop.Gui.Window(Name,Rect);
 		this.Timeline = new Pop.Gui.Timeline(this.Window,[0,0,'100%','100%'],this.GetTimelineData.bind(this));
 
 		//	1 pixel for every report
 		this.Timeline.ViewTimeToPx = 1/this.ReportFrequencyMs;
 		this.Timeline.SmearData = true;
+		this.Timeline.TrackHeight = 20;
 
 		this.TimelineData = {};
 		this.TimelineData.GetDataColour = this.GetDataColour.bind(this);
