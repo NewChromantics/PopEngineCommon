@@ -1,5 +1,8 @@
 
+//	gr: I forget what browser this was for! add comments when we know!
 const WebApi_HtmlImageElement = this.hasOwnProperty('HTMLImageElement') ? this['HTMLImageElement'] : null;
+const WebApi_HtmlCanvasElement = this.hasOwnProperty('HTMLCanvasElement') ? this['HTMLCanvasElement'] : null;
+
 
 
 function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
@@ -271,8 +274,17 @@ Pop.Image = function(Filename)
 		if (!this.Pixels)
 			return this.Pixels;
 
-		if ( this.Pixels.constructor == WebApi_HtmlImageElement )
-			throw `GetPixelBuffer() is Image element, need to read pixels`;
+		//	extract pixels from object
+		if ( this.Pixels.constructor == WebApi_HtmlImageElement || this.Pixels.constructor == WebApi_HtmlCanvasElement )
+		{
+			const NewPixels = GetPixelsFromHtmlImageElement(this.Pixels);
+			//	gr: we should replace this.Pixels here, but pixelversion stays the same (texture shouldn't change)
+			//		if this is a problem somewhere, just return the pixel buffer, but note that it's expensive!
+			//		the native api keeps an extra member for different pixel types (eg. this.HtmlPixels for image/canvas,
+			//		like how we have this.Texture & this.Pixels)
+			this.Pixels = NewPixels.Buffer;
+			//throw `GetPixelBuffer() is Canvas element, need to read pixels`;
+		}
 						  
 		return this.Pixels;
 	}
@@ -414,7 +426,7 @@ Pop.Image = function(Filename)
 		}
 		
 		
-		if ( this.Pixels instanceof Image || this.Pixels instanceof HTMLCanvasElement )
+		if ( this.Pixels instanceof Image || this.Pixels instanceof WebApi_HtmlCanvasElement )
 		{
 			//Pop.Debug("Image from Image",this.PixelsFormat);
 			const SourceFormat = gl.RGBA;
@@ -538,7 +550,7 @@ Pop.Image = function(Filename)
 			this.WritePixels( ImageFile.width, ImageFile.height, Image, PixelFormat );
 		}
 	}
-	else if ( Filename && (Filename.constructor == WebApi_HtmlImageElement || Filename.constructor == HTMLCanvasElement) )
+	else if ( Filename && (Filename.constructor == WebApi_HtmlImageElement || Filename.constructor == WebApi_HtmlCanvasElement) )
 	{
 		const HtmlImage = Filename;
 		//	gr: this conversion should be in WritePixels()
