@@ -110,7 +110,7 @@ Pop.Gui.Timeline = class
 		//	get data to draw in view range
 		const Data = Object.assign({},this.GetData());
 		const TimeKeys = Object.keys(Data).map(parseFloat).filter( t => !isNaN(t) );
-		const Times = TimeKeys.sort((a,b)=>a-b);
+		let Times = TimeKeys.sort((a,b)=>a-b);
 		if ( Times.length < 1 )
 		{
 			this.DrawNoData();
@@ -188,6 +188,14 @@ Pop.Gui.Timeline = class
 			Pixels[i+2] = Colour[2] * 255;
 			Pixels[i+3] = 255;
 		}
+		
+		//	filter out times we're not gonna render before we loop
+		function TimeIsVisible(Time)
+		{
+			const x = Math.floor(ViewTimeToPx * (Time-this.ViewTimeMin));
+			return x>=0 && x<Width;
+		}
+		Times = Times.filter(TimeIsVisible.bind(this));
 		
 		//	write all the data
 		for ( let u=0;	u<Uniforms.length;	u++ )
