@@ -7,15 +7,16 @@ Pop.Gui.RenderTimelineWindow = class
 {
 	constructor(Name,Rect,GetData)
 	{
-		this.ReportFrequencyMs = 200;
+		this.ReportFrequencyMs = 300;
 		this.Window = new Pop.Gui.Window(Name,Rect);
 		this.Window.EnableScrollbars(false,false);
+		
 		this.Timeline = new Pop.Gui.Timeline(this.Window,[0,0,'100%','100%'],this.GetTimelineData.bind(this));
 
 		//	1 pixel for every report
-		this.Timeline.ViewTimeToPx = 1/this.ReportFrequencyMs;
+		this.Timeline.ViewTimeToPx = 10/this.ReportFrequencyMs;
 		this.Timeline.SmearData = true;
-		this.Timeline.TrackHeight = 20;
+		this.Timeline.TrackHeight = 30;
 
 		this.TimelineData = {};
 		this.TimelineData.GetDataColour = this.GetDataColour.bind(this);
@@ -57,6 +58,10 @@ Pop.Gui.RenderTimelineWindow = class
 	
 	UpdateCounter(Name,Add)
 	{
+		//	filter counters here
+		if ( Name != 'Renders' )
+			return;
+		
 		if ( !this.Counters.hasOwnProperty(Name) )
 		{
 			this.Counters[Name] = new Pop.FrameCounter(Name,this.ReportFrequencyMs);
