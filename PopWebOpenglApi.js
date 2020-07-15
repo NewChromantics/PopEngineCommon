@@ -1,13 +1,14 @@
 Pop.Opengl = {};
 
 //	counters for debugging
-Pop.Opengl.TrianglesDrawn = 0;
-Pop.Opengl.BatchesDrawn = 0;
-Pop.Opengl.GeometryBindSkip = 0;
-Pop.Opengl.ShaderBindSkip = 0;
-Pop.Opengl.GeometryBinds = 0;
-Pop.Opengl.ShaderBinds = 0;
-
+Pop.Opengl.Stats = {};
+Pop.Opengl.Stats.TrianglesDrawn = 0;
+Pop.Opengl.Stats.BatchesDrawn = 0;
+Pop.Opengl.Stats.GeometryBindSkip = 0;
+Pop.Opengl.Stats.ShaderBindSkip = 0;
+Pop.Opengl.Stats.GeometryBinds = 0;
+Pop.Opengl.Stats.ShaderBinds = 0;
+Pop.Opengl.Stats.Renders = 0;
 
 //	webgl only supports glsl 100!
 Pop.GlslVersion = 100;
@@ -911,6 +912,7 @@ Pop.Opengl.Window = function(Name,Rect)
 			window.requestAnimationFrame( Render.bind(this) );
 
 			this.OnRender( this.RenderTarget );
+			Pop.Opengl.Stats.Renders++;
 		}
 		window.requestAnimationFrame( Render.bind(this) );
 	}
@@ -1186,11 +1188,11 @@ Pop.Opengl.RenderTarget = function()
 			const Program = Shader.GetProgram(RenderContext);
 			gl.useProgram( Program );
 			gl.CurrentBoundShaderHash = GetUniqueHash(Shader);
-			Pop.Opengl.ShaderBinds++;
+			Pop.Opengl.Stats.ShaderBinds++;
 		}
 		else
 		{
-			Pop.Opengl.ShaderBindSkip++;
+			Pop.Opengl.Stats.ShaderBindSkip++;
 		}
 		
 		//	this doesn't make any difference
@@ -1198,11 +1200,11 @@ Pop.Opengl.RenderTarget = function()
 		{
 			Geometry.Bind( RenderContext );
 			gl.CurrentBoundGeometryHash = GetUniqueHash(Geometry);
-			Pop.Opengl.GeometryBinds++;
+			Pop.Opengl.Stats.GeometryBinds++;
 		}
 		else
 		{
-			Pop.Opengl.GeometryBindSkip++;
+			Pop.Opengl.Stats.GeometryBindSkip++;
 		}
 		SetUniforms( Shader, Geometry );
 
@@ -1213,8 +1215,8 @@ Pop.Opengl.RenderTarget = function()
 		//	if we try and render more triangles than geometry has, webgl sometimes will render nothing and give no warning
 		TriangleCount = Math.min( TriangleCount, GeoTriangleCount );
 
-		Pop.Opengl.TrianglesDrawn += TriangleCount;
-		Pop.Opengl.BatchesDrawn += 1;
+		Pop.Opengl.Stats.TrianglesDrawn += TriangleCount;
+		Pop.Opengl.Stats.BatchesDrawn += 1;
 		gl.drawArrays( Geometry.PrimitiveType, 0, TriangleCount * 3 );
 	}
 	
