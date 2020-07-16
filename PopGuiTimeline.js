@@ -114,7 +114,8 @@ Pop.Gui.Timeline = class
 		//		Cannot freeze.
 		//const Data = Object.assign({},this.GetData());
 		const Data = this.GetData();
-		
+
+		//	gr: also slow
 		const TimeKeys = Object.keys(Data).map(parseFloat).filter( t => !isNaN(t) );
 		let Times = TimeKeys.sort((a,b)=>a-b);
 		if ( Times.length < 1 )
