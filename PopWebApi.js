@@ -384,21 +384,39 @@ Pop.GetTimeNowMs = function()
 //		so inside this caching, we need to do the read too, hence extra funcs
 const FetchCache = {};
 
+async function CreateFetch(Url)
+{
+	//	attach a Cancel() function
+	//	gr: work out when not supported
+	const Controller = new AbortController();
+	const Signal = Controller.signal;
+	function Cancel()
+	{
+		Controller.abort();
+	}
+
+	const Params = {};
+	//method: 'get',
+	Params.signal = Signal;
+
+	const Fetched = await fetch(Url,Params);
+	if (!Fetched.ok)
+		throw `Failed to fetch(${Url}) ${Fetched.statusText}`;
+	Fetched.Cancel = Cancel;
+
+	return Fetched;
+}
+
 async function FetchText(Url)
 {
-	const Fetched = await fetch(Url);
+	const Fetched = await CreateFetch(Url);
 	const Contents = await Fetched.text();
-	if ( !Fetched.ok )
-		throw `Failed to fetch(${Url}) text; ${Fetched.statusText}`;
 	return Contents;
 }
 
 async function FetchArrayBuffer(Url)
 {
-	const Fetched = await fetch(Url);
-	if ( !Fetched.ok )
-		throw `Failed to fetch(${Url}) arrayBuffer; ${Fetched.statusText}`;
-
+	const Fetched = await CreateFetch(Url);
 	const Contents = await Fetched.arrayBuffer();
 	const Contents8 = new Uint8Array(Contents);
 	return Contents8;
@@ -406,9 +424,7 @@ async function FetchArrayBuffer(Url)
 
 async function FetchArrayBufferStream(Url,OnProgress)
 {
-	const Fetched = await fetch(Url);
-	if (!Fetched.ok)
-		throw `Failed to fetch(${Url}) arrayBuffer; ${Fetched.statusText}`;
+	const Fetched = await CreateFetch(Url);
 
 	//	gr: do we know full file size here
 	Pop.Debug(`Streaming file; `,Fetched);
@@ -439,6 +455,17 @@ async function FetchArrayBufferStream(Url,OnProgress)
 		const Chunks = [];
 		while (true)
 		{
+			/*
+			//	gr: testing to see if we can pause the fetch by not read()ing
+			if (TotalContents.length > 1024 * 500)
+			{
+				Pop.Debug(`Stopping stream ${Filename} at ${TotalContents.length / 1024}kb`);
+				//	both of these stop network streaming
+				Reader.cancel();
+				Fetched.Cancel();
+				return TotalContents;
+			}
+			*/
 			const Chunk = await Reader.read();
 			const Finished = Chunk.done;
 			const ChunkContents = Chunk.value;
