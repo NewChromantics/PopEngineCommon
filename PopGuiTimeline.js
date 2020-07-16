@@ -88,6 +88,8 @@ Pop.Gui.Timeline = class
 	
 	UpdateUniforms(Data)
 	{
+		//	gr: this line is slow on massive data objects, maybe ditch and instead just 
+		//		update uniforms as we hit ones we haven't seen.
 		const Times = Object.keys(Data).map(parseFloat).filter( t => !isNaN(t) );
 		if ( !Times.length )
 			return this.KnownUniforms;
@@ -108,7 +110,11 @@ Pop.Gui.Timeline = class
 	{
 		//Pop.Debug(`Redraw`);
 		//	get data to draw in view range
-		const Data = Object.assign({},this.GetData());
+		//	gr: when data is massive THIS copy/assign is the slow part, gotta be careful not to modify any members though!
+		//		Cannot freeze.
+		//const Data = Object.assign({},this.GetData());
+		const Data = this.GetData();
+		
 		const TimeKeys = Object.keys(Data).map(parseFloat).filter( t => !isNaN(t) );
 		let Times = TimeKeys.sort((a,b)=>a-b);
 		if ( Times.length < 1 )
