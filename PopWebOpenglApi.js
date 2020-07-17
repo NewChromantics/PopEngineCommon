@@ -450,7 +450,7 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 }
 
 
-Pop.Opengl.Window = function(Name,Rect)
+Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 {
 	//	things to overload
 	//this.OnRender = function(RenderTarget){};
@@ -469,6 +469,7 @@ Pop.Opengl.Window = function(Name,Rect)
 	this.IsOpen = true;	//	renderloop stops if false
 	this.NewCanvasElement = null;	//	canvas we created
 	this.CanvasElement = null;		//	cached element pointer
+	this.CanvasOptions = CanvasOptions || {};
 
 	this.Context = null;
 	this.ContextVersion = 0;	//	used to tell if resources are out of date
@@ -724,14 +725,14 @@ Pop.Opengl.Window = function(Name,Rect)
 		const Canvas = this.GetCanvasElement();
 		//this.RefreshCanvasResolution();
 		this.OnResize();
-		const Options = {};
-		Options.antialias = true;
-		Options.xrCompatible = true;
+		const Options = Object.assign({}, this.CanvasOptions);
+		if (Options.antialias == undefined) Options.antialias = true;
+		if (Options.xrCompatible == undefined) Options.xrCompatible = true;
 		//	default is true. when true, this is causing an rgb blend with white,
 		//	instead of what's behind the canvas, causing a white halo
 		//	https://webglfundamentals.org/webgl/lessons/webgl-and-alpha.html
-		Options.premultipliedAlpha = false;
-		Options.alpha = true;	//	have alpha buffer
+		if (Options.premultipliedAlpha == undefined) Options.premultipliedAlpha = false;
+		if (Options.alpha == undefined) Options.alpha = true;	//	have alpha buffer
 		const Context = Canvas.getContext( ContextMode, Options );
 		
 		if ( !Context )
