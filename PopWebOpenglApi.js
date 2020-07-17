@@ -1560,7 +1560,14 @@ Pop.Opengl.Shader = function(Name,VertShaderSource,FragShaderSource)
 		return CleanString;
 	}
 	
-	this.CompileShader = function(RenderContext,Type,Source)
+	function CleanLineFeeds(TheString)
+	{
+		const Lines = TheString.split(/\r?\n/);
+		const NewLines = Lines.join('\n');
+		return NewLines;
+	}
+	
+	this.CompileShader = function(RenderContext,Type,Source,TypeName)
 	{
 		Source = CleanNonAsciiString(Source);
 		
@@ -1576,6 +1583,8 @@ Pop.Opengl.Shader = function(Name,VertShaderSource,FragShaderSource)
 			throw `glsl source has non-ascii char around ${NonAsciiSubString}`;
 		}
 		
+		Source = CleanLineFeeds(Source);
+		
 		const gl = RenderContext.GetGlContext();
 		const Shader = gl.createShader(Type);
 		gl.shaderSource( Shader, Source );
@@ -1585,7 +1594,7 @@ Pop.Opengl.Shader = function(Name,VertShaderSource,FragShaderSource)
 		if ( !CompileStatus )
 		{
 			let Error = gl.getShaderInfoLog(Shader);
-			throw "Failed to compile " + Type + " shader: " + Error;
+			throw `Failed to compile ${this.Name}(${TypeName}): ${Error}`;
 		}
 		return Shader;
 	}
@@ -1594,8 +1603,8 @@ Pop.Opengl.Shader = function(Name,VertShaderSource,FragShaderSource)
 	{
 		let gl = RenderContext.GetGlContext();
 		
-		const FragShader = this.CompileShader( RenderContext, gl.FRAGMENT_SHADER, this.FragShaderSource );
-		const VertShader = this.CompileShader( RenderContext, gl.VERTEX_SHADER, this.VertShaderSource );
+		const FragShader = this.CompileShader( RenderContext, gl.FRAGMENT_SHADER, this.FragShaderSource, 'Frag' );
+		const VertShader = this.CompileShader( RenderContext, gl.VERTEX_SHADER, this.VertShaderSource, 'Vert' );
 		
 		let Program = gl.createProgram();
 		gl.attachShader( Program, VertShader );
