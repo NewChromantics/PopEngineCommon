@@ -164,7 +164,7 @@ Pop.Opengl.RefactorFragShader = function(Source)
 	if ( Pop.GlslVersion == 100 )
 	{
 		//	in but only at the start of line (well, after the end of prev line)
-		Source = Source.replace(/\nin /gi,'varying ');
+		Source = Source.replace(/\nin /gi,'\nvarying ');
 	}
 	else if ( Pop.GlslVersion >= 300 )
 	{
