@@ -386,6 +386,10 @@ const FetchCache = {};
 
 async function CreateFetch(Url)
 {
+	//	gr: check for not a string?
+	if ( Url === undefined )
+		throw `Trying to fetch() undefined url`;
+		
 	//	attach a Cancel() function
 	//	gr: work out when not supported
 	const Controller = new AbortController();
