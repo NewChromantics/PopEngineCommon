@@ -743,7 +743,33 @@ Pop.Opengl.Window = function(Name,Rect)
 			throw "Created " + ContextMode + " context but is lost";
 		}
 		
-		Pop.Debug("Created new context");
+		const gl = Context;
+		
+		//	debug capabilities
+		const CapabilityNames =
+		[
+			'MAX_VERTEX_UNIFORM_VECTORS',
+			'MAX_RENDERBUFFER_SIZE',
+			'MAX_TEXTURE_SIZE',
+			'MAX_VIEWPORT_DIMS',
+			'MAX_VERTEX_TEXTURE_IMAGE_UNITS',
+			'MAX_TEXTURE_IMAGE_UNITS',
+			'MAX_COMBINED_TEXTURE_IMAGE_UNITS',
+			'MAX_VERTEX_ATTRIBS',
+			'MAX_VARYING_VECTORS',
+			'MAX_VERTEX_UNIFORM_VECTORS',
+			'MAX_FRAGMENT_UNIFORM_VECTORS',
+		];
+		const Capabilities = {};
+		function GetCapability(CapName)
+		{
+			const Key = gl[CapName];	//	parameter key is a number
+			const Value = gl.getParameter(Key);
+			Capabilities[CapName] = Value;
+		}
+		CapabilityNames.forEach(GetCapability);
+		Pop.Debug(`Created new ${ContextMode} context. Capabilities; ${JSON.stringify(Capabilities)}`);
+		
 		
 		//	handle losing context
 		function OnLostWebglContext(Event)
@@ -754,7 +780,7 @@ Pop.Opengl.Window = function(Name,Rect)
 		}
 		Canvas.addEventListener('webglcontextlost', OnLostWebglContext.bind(this), false);
 		
-		const gl = Context;
+		
 		//	enable float textures on GLES1
 		//	https://developer.mozilla.org/en-US/docs/Web/API/OES_texture_float
 		
@@ -1579,7 +1605,9 @@ Pop.Opengl.Shader = function(Name,VertShaderSource,FragShaderSource)
 		let LinkStatus = gl.getProgramParameter( Program, gl.LINK_STATUS );
 		if ( !LinkStatus )
 		{
-			let Error = gl.getProgramInfoLog(Program);
+			//	gr: list cases when no error "" occurs here;
+			//	- too many varyings > MAX_VARYING_VECTORS
+			const Error = gl.getProgramInfoLog(Program);
 			throw "Failed to link " + this.Name + " shaders; " + Error;
 		}
 		return Program;
