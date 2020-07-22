@@ -1891,7 +1891,7 @@ Math.GetDistanceToPolygon2 = function(Position,Corners,Center)
 	}
 	
 	//	glsl sign
-	//	sign returns -1.0 if 𝑥<0.0, 0.0 if 𝑥=0.0 and 1.0 if 𝑥>0.0.
+	//	sign returns -1.0 if x<0.0, 0.0 if x=0.0 and 1.0 if x>0.0.
 	function sign(f)
 	{
 		if ( f == 0 )	return 0;
