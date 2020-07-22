@@ -254,7 +254,7 @@ Pop.WebApi.TFileCache = class
 	{
 		if (this.Cache.hasOwnProperty(Filename))
 		{
-			Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
+			// Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
 		}
 		this.Cache[Filename] = Contents;
 		this.OnFilesChanged.PushUnique(Filename);
@@ -625,7 +625,7 @@ Pop.LoadFileAsString = function(Filename)
 	//	convert array buffer to string
 	if ( Array.isArray( Contents ) || Contents instanceof Uint8Array )
 	{
-		Pop.Debug("Convert "+Filename+" from ", typeof Contents," to string");
+		// Pop.Debug("Convert "+Filename+" from ", typeof Contents," to string");
 		//	this is super slow!
 		const ContentsString = Pop.BytesToString( Contents );
 		return ContentsString;
