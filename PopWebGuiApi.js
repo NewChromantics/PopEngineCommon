@@ -79,6 +79,7 @@ function SetElementPosition(Element,x,y)
 	Element.style.left = ( x) + "px";
 }
 
+//	gr: this should change to a list of always-incrementing z's for our windows
 var $HighestZ = 99;
 function SetElementToTop(Element)
 {
