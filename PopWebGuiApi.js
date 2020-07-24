@@ -1,6 +1,24 @@
 Pop.Gui = {};
 
 
+const PopGuiStorage = window.sessionStorage;
+
+//	should have some general Pop API to use session storage, localstorage, cookies etc crossplatform
+Pop.Gui.ReadSettingJson = function(Key)
+{
+	const Json = PopGuiStorage.getItem(Key);
+	if ( !Json )
+		throw `No setting for ${Key}`;
+	const Object = JSON.parse(Json);
+	return Object;
+}
+
+Pop.Gui.WriteSettingJson = function(Key,Object)
+{
+	const Json = JSON.stringify(Object);
+	PopGuiStorage.setItem(Key,Json);
+}
+
 function IsHtmlString(Value)
 {
 	if ( typeof Value != 'string' )
