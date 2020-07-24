@@ -164,6 +164,42 @@ function GetElementRect(Element)
 
 function SetGuiControl_Draggable(Element)
 {
+	const RectKey = `${Element.id}_WindowRect`;
+	function LoadRect()
+	{
+		//	if an element is draggable, see if we've got a previos position to restore
+		//	todo: make sure previous pos fits on new screen when we restore
+		try
+		{
+			const NewRect = Pop.Gui.ReadSettingJson(RectKey);
+			const x = NewRect.x;
+			const y = NewRect.y;
+			SetElementPosition( Element, x, y );
+		}
+		catch(e)
+		{
+			Pop.Warning(`Failed to restore window position for ${RectKey}`);
+		}
+	}
+
+	function SaveRect()
+	{
+		try
+		{
+			const ElementRect = GetElementRect(Element);
+			if ( !ElementRect )
+				throw `Failed to get element rect (${Element.id}`;
+			const Rect = {};
+			Rect.x = ElementRect.x
+			Rect.y = ElementRect.y;
+			Pop.Gui.WriteSettingJson(RectKey,Rect);
+		}
+		catch(e)
+		{
+			Pop.Warning(`Failed to write window position for ${RectKey}`);
+		}
+	}
+	
 	let AllowInteraction = function(Event)
 	{
 		//	gr: if we prevent top events (or dont preventdefault)
@@ -220,8 +256,10 @@ function SetGuiControl_Draggable(Element)
 	{
 		//if ( !AllowInteraction(e) )
 		//	return;
+		//	update window position one final time & save
 		OnMouseDrag(e);
-		
+		SaveRect();
+												   
 		//	drop!
 		let Droppable = Element.DropMeta;
 		//let Droppable = GetDropCallback(Element);
@@ -234,6 +272,7 @@ function SetGuiControl_Draggable(Element)
 			
 			//	do drop
 			Droppable.callback(Element);
+			SaveRect();
 		}
 		else
 		{
@@ -314,6 +353,8 @@ function SetGuiControl_Draggable(Element)
 	const CapturePhase = true;
 	Element.addEventListener('mousedown',OnMouseDown,CapturePhase);
 	Element.parentNode.OnDetachElement = OnDetachElement;
+
+	LoadRect();
 }
 
 Pop.Gui.Window = function(Name,Rect,Resizable)
