@@ -367,11 +367,34 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 			//	gr: isImmersive was deprecated
 			//		we want a local space, maybe not relative to the floor?
 			//		so we can align with other remote spaces a bit more easily
-			//	todo: handle unspported space
-			//const ReferenceSpaceType = "local-floor";	not supported on quest
-			const ReferenceSpaceType = "local";
-			//const ReferenceSpaceType = Session.isImmersive ? 'local' : 'viewer';
-			const ReferenceSpace = await Session.requestReferenceSpace(ReferenceSpaceType);
+			//	try and get reference space types in an ideal order
+			const ReferenceSpaceTypes =
+			[
+				'bounded-floor',	//	expecting player to not move out of this space. bounds geometry returned, y=0=floor
+				'local-floor',		//	y=0=floor
+				'local',			//	origin = view starting pos
+				'unbounded',		//	gr: where is origin?
+			 	'viewer',
+			];
+			async function GetReferenceSpace()
+			{
+				for ( let ReferenceSpaceType of ReferenceSpaceTypes )
+				{
+					try
+					{
+						const ReferenceSpace = await Session.requestReferenceSpace(ReferenceSpaceType);
+						ReferenceSpace.Type = ReferenceSpaceType;
+						return ReferenceSpace;
+					}
+					catch(e)
+					{
+						Pop.Warning(`XR ReferenceSpace type ${ReferenceSpaceType} not supported.`);
+					}
+				}
+				throw `Failed to find supported XR reference space`;
+			}
+			const ReferenceSpace = await GetReferenceSpace();
+			Pop.Debug(`Got XR ReferenceSpace`,ReferenceSpace);
 			const Device = new Pop.Xr.Device( Session, ReferenceSpace, RenderContext );
 			
 			//	add to our global list (currently only to make sure we have one at a time)
