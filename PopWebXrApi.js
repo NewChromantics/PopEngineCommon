@@ -129,22 +129,56 @@ Pop.Xr.Pose = function(RenderState,Pose)
 	//Pose.orientation is xyzw, quaternion?
 }
 
-
-Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
+function IsReferenceSpaceOriginFloor(ReferenceSpaceType)
 {
-	this.OnEndPromises = [];
-	this.Cameras = {};
+	switch( ReferenceSpaceType )
+	{
+		case 'local-floor':
+			return true;
+			
+		default:
+			return false;
+	}
+}
+
+
+
+Pop.Xr.Device = class
+{
+	constructor(Session,ReferenceSpace,RenderContext)
+	{
+		this.OnEndPromises = [];
+		this.Cameras = {};
+		this.Session = Session;
+		this.ReferenceSpace = ReferenceSpace;
+		this.RenderContext = RenderContext;
+		
+		//	overload this
+		this.OnRender = this.OnRender_Default.bind(this);
+
+		//	overload these! (also, name it better, currently matching window/touches)
+		this.OnMouseDown = this.OnMouseEvent_Default.bind(this);
+		this.OnMouseMove = this.OnMouseEvent_Default.bind(this);
+		this.OnMouseUp = this.OnMouseEvent_Default.bind(this);
+		
+		//	bind to device
+		Session.addEventListener('end', this.OnSessionEnded.bind(this) );
+		this.InitLayer( RenderContext );
+		
+		//	start loop
+		Session.requestAnimationFrame( this.OnFrame.bind(this) );
+	}
 	
 	//	I think here we can re-create layers if context dies,
 	//	without recreating device
-	this.InitLayer = function(RenderContext)
+	InitLayer(RenderContext)
 	{
-		const OpenglContext = RenderContext.GetGlContext();
-		this.Layer = new XRWebGLLayer(Session, OpenglContext);
-		Session.updateRenderState({ baseLayer: this.Layer });
+		const OpenglContext = this.RenderContext.GetGlContext();
+		this.Layer = new XRWebGLLayer(this.Session, OpenglContext);
+		this.Session.updateRenderState({ baseLayer: this.Layer });
 	}
 	
-	this.WaitForEnd = function()
+	WaitForEnd()
 	{
 		let Prom = {};
 		function CreatePromise(Resolve,Reject)
@@ -159,7 +193,7 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		return OnEnd;
 	}
 	
-	this.OnSessionEnded = function()
+	OnSessionEnded()
 	{
 		Pop.Debug("XR session ended");
 		//	notify all promises waiting for us to finish, fifo, remove as we go
@@ -170,7 +204,7 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		}
 	}
 	
-	this.GetCamera = function(Name)
+	GetCamera(Name)
 	{
 		if ( !this.Cameras.hasOwnProperty(Name) )
 		{
@@ -180,18 +214,23 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		return this.Cameras[Name];
 	}
 	
-	this.OnFrame = function(TimeMs,Frame)
+	OnFrame(TimeMs,Frame)
 	{
 		//Pop.Debug("XR frame",Frame);
 		//	request next frame
-		Session.requestAnimationFrame( this.OnFrame.bind(this) );
+		this.Session.requestAnimationFrame( this.OnFrame.bind(this) );
 		
 		//	get pose in right space
-		const Pose = Frame.getViewerPose(ReferenceSpace);
+		const Pose = Frame.getViewerPose(this.ReferenceSpace);
 		
 		//	don't know what to render?
 		if ( !Pose )
+		{
+			Pop.Warning(`XR no pose`,Pose);
 			return;
+		}
+		
+		const IsOriginFloor = IsReferenceSpaceOriginFloor(this.ReferenceSpace.Type);
 		
 		//	handle inputs
 		//	gr: we're propogating like a mousebutton for integration, but our Openvr api
@@ -206,7 +245,7 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 				//	quest:
 				//	Input.gamepad.id = ""
 				//	Input.gamepad.index = -1
-				const InputRayPose = Frame.getPose(Input.targetRaySpace,ReferenceSpace);
+				const InputRayPose = Frame.getPose(Input.targetRaySpace,this.ReferenceSpace);
 				const Position = [InputRayPose.transform.position.x,InputRayPose.transform.position.y,InputRayPose.transform.position.z];
 				const RotationQuat = InputRayPose.transform.orientation;
 				//	gr: not unique enough yet
@@ -236,7 +275,7 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		Inputs.forEach(UpdateInput.bind(this));
 		
 		//	or this.Layer
-		const glLayer = Session.renderState.baseLayer;
+		const glLayer = this.Session.renderState.baseLayer;
 		
 		function GetCameraName(View)
 		{
@@ -258,10 +297,12 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		{
 			const ViewPort = glLayer.getViewport(View);
 			//	scene.draw(view.projectionMatrix, view.transform);
-			const RenderTarget = new RenderTargetFrameBufferProxy( glLayer.framebuffer, ViewPort, RenderContext );
+			const RenderTarget = new RenderTargetFrameBufferProxy( glLayer.framebuffer, ViewPort, this.RenderContext );
 			
 			const CameraName = GetCameraName(View);
 			const Camera = this.GetCamera(CameraName);
+			
+			Camera.IsOriginFloor = IsOriginFloor;
 
 			//	update camera
 			//	view has an XRRigidTransform (quest)
@@ -277,19 +318,19 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 			Math.SetMatrixTranslation(Camera.Rotation4x4,0,0,0,1);
 			
 			Camera.ProjectionMatrix = View.projectionMatrix;
-			RenderTarget.BindRenderTarget( RenderContext );
+			RenderTarget.BindRenderTarget( this.RenderContext );
 			this.OnRender( RenderTarget, Camera );
 		}
 		Pose.views.forEach( RenderView.bind(this) );
 	}
 	
-	this.Destroy = function()
+	Destroy()
 	{
-		Session.end();
+		this.Session.end();
 	}
 
 	//	overload this!
-	this.OnRender = function(RenderTarget,Camera)
+	OnRender_Default(RenderTarget,Camera)
 	{
 		if ( Camera.Name == 'left' )
 			RenderTarget.ClearColour( 0,0.5,1 );
@@ -300,25 +341,11 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		else
 			RenderTarget.ClearColour( 0,0,1 );
 	}
-		
-	//	overload this! (also, name it better, currently matching window/touches)
-	this.OnMouseDown = function(xyz,Button,Controller)
-	{
-	}
-	this.OnMouseMove = function(xyz,Button,Controller)
+	
+	OnMouseEvent_Default(xyz,Button,Controller)
 	{
 		Pop.Debug(`OnXRInput(${[...arguments]})`);
 	}
-	this.OnMouseUp = function(xyz,Button,Controller)
-	{
-	}
-
-	//	bind to device
-	Session.addEventListener('end', this.OnSessionEnded.bind(this) );
-	this.InitLayer( RenderContext );
-
-	//	start loop
-	Session.requestAnimationFrame( this.OnFrame.bind(this) );
 }
 
 
