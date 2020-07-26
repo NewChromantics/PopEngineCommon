@@ -79,6 +79,7 @@ function SetElementPosition(Element,x,y)
 	Element.style.left = ( x) + "px";
 }
 
+//	gr: this should change to a list of always-incrementing z's for our windows
 var $HighestZ = 99;
 function SetElementToTop(Element)
 {
@@ -444,6 +445,12 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		this.ElementParent.style.overflowX = Horizontal ? 'scroll' : 'hidden';
 	}
 
+	this.SetMinimised = function(Minimise=true)
+	{
+		if ( this.IsMinimised() != Minimise )
+		   this.OnToggleMinimise();
+	}
+												   
 	this.IsMinimised = function ()
 	{
 		return (this.RestoreHeight !== null);
