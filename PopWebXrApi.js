@@ -240,20 +240,37 @@ Pop.Xr.Device = class
 		{
 			try
 			{
-				if ( !Input.gamepad.connected )
+				if (Input.hand!==null)
+				{
+					Pop.Debug(`Input has hand! ${JSON.stringify(Input.hand)}`,Input.hand);
+				}
+
+				if (!Input.gamepad)
+					return;
+
+				if (!Input.gamepad.connected)
 					return;
 				//	quest:
 				//	Input.gamepad.id = ""
 				//	Input.gamepad.index = -1
 				const InputRayPose = Frame.getPose(Input.targetRaySpace,this.ReferenceSpace);
+				//	quest hand-tracking has null pose when out of view
+				if (!InputRayPose)
+				{
+					//	gr: should have a un-tracked state/event? at least a mouse up
+					return;
+				}
 				const Position = [InputRayPose.transform.position.x,InputRayPose.transform.position.y,InputRayPose.transform.position.z];
 				const RotationQuat = InputRayPose.transform.orientation;
-				//	gr: not unique enough yet
+
+				//	gr: this input name is not unique enough yet
 				const InputName = Input.handedness;
+
 				//	todo: we need to store this for mouse up!
 				let DownCount = 0;
 				function UpdateButton(GamepadButton,ButtonIndex)
 				{
+					//	gr: we're not doing anything with .touched
 					const Down = GamepadButton.pressed;
 					DownCount += Down ? 1 : 0;
 					if ( Down )
