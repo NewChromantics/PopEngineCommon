@@ -400,8 +400,8 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 					const Options = {};
 					//	gr: this should request for permission for the extra functionality
 					//	https://immersive-web.github.io/webxr/#dictdef-xrsessioninit
-					//Options.requiredFeatures: ['local-floor'];	
-					Options.optionalFeatures: ['local-floor'];	
+					//Options.requiredFeatures = ['local-floor'];	
+					Options.optionalFeatures = ['local-floor'];	
 						
 					const RequestSessionPromise = PlatformXr.requestSession(SessionMode,Options);
 					RequestSessionPromise.then( Session => SessionPromise.Resolve(Session) ).catch( e => SessionPromise.Reject(e) );
