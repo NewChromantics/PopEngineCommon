@@ -705,7 +705,8 @@ Pop.Gui.BaseControl = class
 				const Mime = File.type;
 				Pop.Debug(`Filename ${File.name}->${Filename} mime ${Mime}`);
 				const FileArray = await File.arrayBuffer();
-				Pop._AssetCache[Filename] = new Uint8Array(FileArray);
+				const File8 = new Uint8Array(FileArray);
+				Pop.SetFileCache(Filename,File8);
 				NewFilenames.push(Filename);
 			}
 			//	make a promise for each file
