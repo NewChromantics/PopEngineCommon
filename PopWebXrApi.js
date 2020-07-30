@@ -116,7 +116,7 @@ Pop.Xr.GetSupportedSessionMode = async function()
 Pop.Xr.GetSupportedSessionMode().then( Mode => Pop.Xr.SupportedSessionMode=Mode ).catch( Pop.Debug );
 
 
-
+//	we should be using this, and merge with native pose struct
 Pop.Xr.Pose = function(RenderState,Pose)
 {
 	this.NearDistance = RenderState.depthNear;
@@ -134,6 +134,7 @@ function IsReferenceSpaceOriginFloor(ReferenceSpaceType)
 	switch( ReferenceSpaceType )
 	{
 		case 'local-floor':
+		case 'bounded-floor':
 			return true;
 			
 		default:
@@ -236,53 +237,75 @@ Pop.Xr.Device = class
 		//	gr: we're propogating like a mousebutton for integration, but our Openvr api
 		//		has keyframed input structs per-controller/pose
 		const Inputs = Array.from(Frame.session.inputSources);
+		
+		function UpdateInputNode(InputXrSpace,InputName,Buttons)
+		{
+			//	get the pose
+			const InputPose = InputXrSpace ? Frame.getPose(InputXrSpace,this.ReferenceSpace) : null;
+			//	quest hand-tracking has null pose when out of view
+			if (!InputPose)
+			{
+				//	gr: should have a un-tracked state/event? at least a mouse up for the buttons?
+				return;
+			}
+
+			const Position = [InputPose.transform.position.x,InputPose.transform.position.y,InputPose.transform.position.z];
+			const RotationQuat = InputPose.transform.orientation;
+			
+			//	todo: we need to store this for mouse up!
+			let DownCount = 0;
+			function UpdateButton(GamepadButton,ButtonIndex)
+			{
+				//	gr: when we have the hand "buttons" this .pressed may need to change
+				//		maybe Buttons[] can be states/bools
+				//	gr: we're not doing anything with .touched
+				const Down = GamepadButton.pressed;
+				DownCount += Down ? 1 : 0;
+				if ( Down )
+					this.OnMouseMove(Position,ButtonIndex,InputName);
+			}
+			Buttons.forEach(UpdateButton.bind(this));
+			
+			//	if none down, pass a mouse move with no button
+			if ( DownCount == 0 )
+				this.OnMouseMove(Position,Pop.SoyMouseButton.None,InputName);
+
+			//	todo: mouse up!
+		}
+		
 		function UpdateInput(Input)
 		{
 			try
 			{
-				if (Input.hand!==null)
-				{
-					Pop.Debug(`Input has hand! ${JSON.stringify(Input.hand)}`,Input.hand);
-				}
-
-				if (!Input.gamepad)
-					return;
-
-				if (!Input.gamepad.connected)
-					return;
-				//	quest:
-				//	Input.gamepad.id = ""
-				//	Input.gamepad.index = -1
-				const InputRayPose = Frame.getPose(Input.targetRaySpace,this.ReferenceSpace);
-				//	quest hand-tracking has null pose when out of view
-				if (!InputRayPose)
-				{
-					//	gr: should have a un-tracked state/event? at least a mouse up
-					return;
-				}
-				const Position = [InputRayPose.transform.position.x,InputRayPose.transform.position.y,InputRayPose.transform.position.z];
-				const RotationQuat = InputRayPose.transform.orientation;
-
-				//	gr: this input name is not unique enough yet
+				//	gr: this input name is not unique enough yet!
 				const InputName = Input.handedness;
 
-				//	todo: we need to store this for mouse up!
-				let DownCount = 0;
-				function UpdateButton(GamepadButton,ButtonIndex)
+				//	treat joints as individual 'mouses'
+				if (Input.hand!==null)
 				{
-					//	gr: we're not doing anything with .touched
-					const Down = GamepadButton.pressed;
-					DownCount += Down ? 1 : 0;
-					if ( Down )
-						this.OnMouseMove(Position,ButtonIndex,InputName);
+					//	enum all the joints
+					const JointNames = Object.keys(XRHand);
+					function EnumJoint(JointName)
+					{
+						const Key = XRHand[JointName];	//	XRHand.WRIST = int = key for .hand
+						const PoseSpace = Input.hand[Key];
+						const NodeName = `${InputName}_${JointName}`;
+						const Buttons = [];
+						UpdateInputNode.call(this,PoseSpace,NodeName,Buttons);
+					}
+					JointNames.forEach(EnumJoint.bind(this));
+					//Pop.Debug(`Input has hand! ${JSON.stringify(Input.hand)}`,Input.hand);
 				}
-				if ( Input.gamepad.buttons )
-					Input.gamepad.buttons.forEach(UpdateButton.bind(this));
+
+				//	normal controller
+				if ( Input.gamepad )
+				{
+					if (!Input.gamepad.connected)
+						return;
 				
-				//	if none down, pass a mouse move with no button
-				if ( DownCount == 0 )
-					this.OnMouseMove(Position,Pop.SoyMouseButton.None,InputName);
-				//	todo: mouse up!
+					const Buttons = Input.gamepad.buttons || [];
+					UpdateInputNode.call( this, Input.targetRaySpace, InputName, Buttons );
+				}
 			}
 			catch(e)
 			{
@@ -319,8 +342,18 @@ Pop.Xr.Device = class
 			const CameraName = GetCameraName(View);
 			const Camera = this.GetCamera(CameraName);
 			
+			//	maybe need a better place to propogate this info (along with chaperone/bounds)
+			//	but for now renderer just needs to know (but input doesnt know!)
 			Camera.IsOriginFloor = IsOriginFloor;
 
+			//	use the render params on our camera
+			if ( Frame.session.renderState )
+			{
+				Camera.NearDistance = Frame.session.renderState.depthNear || Camera.NearDistance;
+				Camera.FarDistance = Frame.session.renderState.depthFar || Camera.FarDistance;
+				Camera.FovVertical = Frame.session.renderState.inlineVerticalFieldOfView || Camera.FovVertical;
+			}
+			
 			//	update camera
 			//	view has an XRRigidTransform (quest)
 			//	https://developer.mozilla.org/en-US/docs/Web/API/XRRigidTransform
@@ -398,11 +431,12 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 				try
 				{
 					const Options = {};
-					//	gr: this should request for permission for the extra functionality
+					//	gr: this should/could request for permission for the extra functionality
 					//	https://immersive-web.github.io/webxr/#dictdef-xrsessioninit
-					//Options.requiredFeatures = ['local-floor'];	
-					Options.optionalFeatures = ['local-floor'];	
-						
+					//Options.requiredFeatures = ['local-floor'];
+					//	gr: add all the features!
+					Options.optionalFeatures = ['local-floor','hand-tracking','bounded-floor'];
+					
 					const RequestSessionPromise = PlatformXr.requestSession(SessionMode,Options);
 					RequestSessionPromise.then( Session => SessionPromise.Resolve(Session) ).catch( e => SessionPromise.Reject(e) );
 				}
@@ -445,6 +479,9 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 			}
 			const ReferenceSpace = await GetReferenceSpace();
 			Pop.Debug(`Got XR ReferenceSpace`,ReferenceSpace);
+			if ( ReferenceSpace.boundsGeometry )
+				Pop.Debug(`Got bounding geometry! ${JSON.stringify(ReferenceSpace.boundsGeometry)}`,ReferenceSpace.boundsGeometry);
+			
 			const Device = new Pop.Xr.Device( Session, ReferenceSpace, RenderContext );
 			
 			//	add to our global list (currently only to make sure we have one at a time)
