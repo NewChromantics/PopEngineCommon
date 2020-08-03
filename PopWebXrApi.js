@@ -116,19 +116,6 @@ Pop.Xr.GetSupportedSessionMode = async function()
 Pop.Xr.GetSupportedSessionMode().then( Mode => Pop.Xr.SupportedSessionMode=Mode ).catch( Pop.Debug );
 
 
-//	we should be using this, and merge with native pose struct
-Pop.Xr.Pose = function(RenderState,Pose)
-{
-	this.NearDistance = RenderState.depthNear;
-	this.FarDistance = RenderState.depthFar;
-	this.VerticalFieldOfView = RenderState.inlineVerticalFieldOfView;
-
-	//	gr: dunno if this is camera, projection, or what
-	this.LocalToWorldMatrix = Pose.matrix;
-	this.Position = [Pose.position.x,Pose.position.y,Pose.position.z,Pose.position.w];
-	//Pose.orientation is xyzw, quaternion?
-}
-
 function IsReferenceSpaceOriginFloor(ReferenceSpaceType)
 {
 	switch( ReferenceSpaceType )
