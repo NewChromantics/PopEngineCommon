@@ -344,7 +344,6 @@ Pop.Xr.Device = class
 			{
 				//	gr: this input name is not unique enough yet!
 				const InputName = Input.handedness;
-				UpdatedInputNames.push(InputName);
 
 				//	treat joints as individual inputs as they all have their own pos
 				if (Input.hand!==null)
@@ -357,6 +356,7 @@ Pop.Xr.Device = class
 						const PoseSpace = Input.hand[Key];
 						const NodeName = `${InputName}_${JointName}`;
 						const Buttons = [];
+						UpdatedInputNames.push(NodeName);
 						UpdateInputNode(PoseSpace,NodeName,Buttons);
 					}
 					JointNames.forEach(EnumJoint.bind(this));
@@ -369,6 +369,7 @@ Pop.Xr.Device = class
 					if (!Input.gamepad.connected)
 						return;
 				
+					UpdatedInputNames.push(InputName);
 					const Buttons = Input.gamepad.buttons || [];
 					UpdateInputNode( Input.targetRaySpace, InputName, Buttons );
 				}
