@@ -217,6 +217,24 @@ Pop.Xr.Device = class
 	
 	OnFrame(TimeMs,Frame)
 	{
+		//	gr: need a better fix here.
+		//	https://github.com/immersive-web/webxr/issues/225
+		//		when XR is active, and the 2D window is NOT active
+		//		the window.requestAnimationFrame is not fired, so we
+		//		continue the generic Pop API animation from here
+		//	I imagine there is some situation where both are firing and we're
+		//	getting double the updates... need to figure that out
+		//	gr: problem here? we're rendering before the frame as we queue up an
+		//		update...
+		//	maybe Session.requestAnimationFrame should also trigger Pop.WebApi.BrowserAnimationStep itself?
+		const ProxyWindowAnimation = true;
+		if ( ProxyWindowAnimation )
+		{
+			//	clear old frames so we don't get a backlog
+			Pop.WebApi.AnimationFramePromiseQueue.ClearQueue();
+			Pop.WebApi.AnimationFramePromiseQueue.Push(TimeMs);
+		}
+		
 		//Pop.Debug("XR frame",Frame);
 		//	request next frame
 		this.Session.requestAnimationFrame( this.OnFrame.bind(this) );
