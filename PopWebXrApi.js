@@ -142,7 +142,17 @@ function IsReferenceSpaceOriginFloor(ReferenceSpaceType)
 	}
 }
 
-
+//	this will probably merge with the native input state structs,
+//	but for now we're using it to track input state changes
+class XrInputState
+{
+	constructor()
+	{
+		this.Buttons = [];		//	[Name] = true/false/pressure
+		this.Position = null;	//	[xyz] or false if we lost tracking
+		this.RotationQuaternion = null;
+	}
+}
 
 Pop.Xr.Device = class
 {
@@ -161,6 +171,8 @@ Pop.Xr.Device = class
 		this.OnMouseDown = this.OnMouseEvent_Default.bind(this);
 		this.OnMouseMove = this.OnMouseEvent_Default.bind(this);
 		this.OnMouseUp = this.OnMouseEvent_Default.bind(this);
+		
+		this.InputStates = {};	//	[Name] = XrInputState
 		
 		//	bind to device
 		Session.addEventListener('end', this.OnSessionEnded.bind(this) );
@@ -215,6 +227,67 @@ Pop.Xr.Device = class
 		return this.Cameras[Name];
 	}
 	
+	UpdateInputState(InputName,Pose,Buttons)
+	{
+		//	new state!
+		if ( !this.InputStates.hasOwnProperty(InputName) )
+		{
+			//	new state!
+			this.InputStates[InputName] = new XrInputState();
+			Pop.Debug(`New input! ${InputName}`);
+		}
+		const State = this.InputStates[InputName];
+		
+		//	if no pose, no longer tracking
+		if ( !Pose )
+		{
+			if ( State.Position )
+				Pop.Debug(`${InputName} lost tracking`);
+			State.Position = false;
+		}
+		else
+		{
+			if ( !State.Position )
+				Pop.Debug(`${InputName} now tracking`);
+			
+			const Position = [Pose.transform.position.x,Pose.transform.position.y,Pose.transform.position.z];
+			const RotationQuat = Pose.transform.orientation;
+			State.Position = Position;
+			State.RotationQuaternion = RotationQuat;
+		}
+		
+		//	work out new button states & any changes
+		//	gr: here, if not tracking, we may want to skip any changes
+		const ButtonCount = Math.max(State.Buttons.length,Buttons.length);
+		const NewButtonState = [];
+		let ButtonChangedCount = 0;
+		for ( let b=0;	b<ButtonCount;	b++ )
+		{
+			const FrameButton = Buttons[b];
+			const Old = (b < State.Buttons.length) ? State.Buttons[b] : undefined;
+			const New = FrameButton ? FrameButton.pressed : false;
+			const ButtonName = b;
+			
+			if ( !Old && New )
+			{
+				ButtonChangedCount++;
+				this.OnMouseDown(State.Position,ButtonName,InputName);
+			}
+			else if ( Old && !New )
+			{
+				ButtonChangedCount++;
+				this.OnMouseUp(State.Position,ButtonName,InputName);
+			}
+			NewButtonState.push(New);
+		}
+
+		State.Buttons = NewButtonState;
+		
+		//	if no button changes, we still want to register a controller move with no button
+		if ( ButtonChangedCount == 0 )
+			this.OnMouseMove( State.Position, Pop.SoyMouseButton.None, InputName );
+	}
+	
 	OnFrame(TimeMs,Frame)
 	{
 		//	gr: need a better fix here.
@@ -254,51 +327,26 @@ Pop.Xr.Device = class
 		//	handle inputs
 		//	gr: we're propogating like a mousebutton for integration, but our Openvr api
 		//		has keyframed input structs per-controller/pose
-		const Inputs = Array.from(Frame.session.inputSources);
+		const FrameInputs = Array.from(Frame.session.inputSources);
 		
-		function UpdateInputNode(InputXrSpace,InputName,Buttons)
+		const UpdateInputNode = function(InputXrSpace,InputName,Buttons)
 		{
 			//	get the pose
 			const InputPose = InputXrSpace ? Frame.getPose(InputXrSpace,this.ReferenceSpace) : null;
-			//	quest hand-tracking has null pose when out of view
-			if (!InputPose)
-			{
-				//	gr: should have a un-tracked state/event? at least a mouse up for the buttons?
-				return;
-			}
-
-			const Position = [InputPose.transform.position.x,InputPose.transform.position.y,InputPose.transform.position.z];
-			const RotationQuat = InputPose.transform.orientation;
-			
-			//	todo: we need to store this for mouse up!
-			let DownCount = 0;
-			function UpdateButton(GamepadButton,ButtonIndex)
-			{
-				//	gr: when we have the hand "buttons" this .pressed may need to change
-				//		maybe Buttons[] can be states/bools
-				//	gr: we're not doing anything with .touched
-				const Down = GamepadButton.pressed;
-				DownCount += Down ? 1 : 0;
-				if ( Down )
-					this.OnMouseMove(Position,ButtonIndex,InputName);
-			}
-			Buttons.forEach(UpdateButton.bind(this));
-			
-			//	if none down, pass a mouse move with no button
-			if ( DownCount == 0 )
-				this.OnMouseMove(Position,Pop.SoyMouseButton.None,InputName);
-
-			//	todo: mouse up!
-		}
+			this.UpdateInputState(InputName,InputPose,Buttons);
+		}.bind(this);
 		
+		//	track which inputs we updated, so we can update old inputs that have gone missing
+		const UpdatedInputNames = [];
 		function UpdateInput(Input)
 		{
 			try
 			{
 				//	gr: this input name is not unique enough yet!
 				const InputName = Input.handedness;
+				UpdatedInputNames.push(InputName);
 
-				//	treat joints as individual 'mouses'
+				//	treat joints as individual inputs as they all have their own pos
 				if (Input.hand!==null)
 				{
 					//	enum all the joints
@@ -309,7 +357,7 @@ Pop.Xr.Device = class
 						const PoseSpace = Input.hand[Key];
 						const NodeName = `${InputName}_${JointName}`;
 						const Buttons = [];
-						UpdateInputNode.call(this,PoseSpace,NodeName,Buttons);
+						UpdateInputNode(PoseSpace,NodeName,Buttons);
 					}
 					JointNames.forEach(EnumJoint.bind(this));
 					//Pop.Debug(`Input has hand! ${JSON.stringify(Input.hand)}`,Input.hand);
@@ -322,7 +370,7 @@ Pop.Xr.Device = class
 						return;
 				
 					const Buttons = Input.gamepad.buttons || [];
-					UpdateInputNode.call( this, Input.targetRaySpace, InputName, Buttons );
+					UpdateInputNode( Input.targetRaySpace, InputName, Buttons );
 				}
 			}
 			catch(e)
@@ -330,7 +378,11 @@ Pop.Xr.Device = class
 				Pop.Debug(`Input error ${e}`);
 			}
 		}
-		Inputs.forEach(UpdateInput.bind(this));
+		FrameInputs.forEach(UpdateInput.bind(this));
+		
+		const OldInputNames = Object.keys(this.InputStates);
+		const MissingInputNames = OldInputNames.filter( Name => !UpdatedInputNames.some( uin => uin == Name) );
+		MissingInputNames.forEach( Name => UpdateInputNode(null,Name,[]) );
 		
 		//	or this.Layer
 		const glLayer = this.Session.renderState.baseLayer;
