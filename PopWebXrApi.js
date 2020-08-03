@@ -150,7 +150,7 @@ class XrInputState
 	{
 		this.Buttons = [];		//	[Name] = true/false/pressure
 		this.Position = null;	//	[xyz] or false if we lost tracking
-		this.RotationQuaternion = null;
+		this.Transform = null;	//	for now, saving .position .quaternion .matrix
 	}
 }
 
@@ -244,6 +244,7 @@ Pop.Xr.Device = class
 			if ( State.Position )
 				Pop.Debug(`${InputName} lost tracking`);
 			State.Position = false;
+			State.Transform = false;
 		}
 		else
 		{
@@ -253,7 +254,7 @@ Pop.Xr.Device = class
 			const Position = [Pose.transform.position.x,Pose.transform.position.y,Pose.transform.position.z];
 			const RotationQuat = Pose.transform.orientation;
 			State.Position = Position;
-			State.RotationQuaternion = RotationQuat;
+			State.Transform = Pose.transform;
 		}
 		
 		//	work out new button states & any changes
@@ -272,12 +273,12 @@ Pop.Xr.Device = class
 			if ( !Old && New )
 			{
 				ButtonChangedCount++;
-				this.OnMouseDown(State.Position,ButtonName,InputName);
+				this.OnMouseDown(State.Position,ButtonName,InputName, State.Transform );
 			}
 			else if ( Old && !New )
 			{
 				ButtonChangedCount++;
-				this.OnMouseUp(State.Position,ButtonName,InputName);
+				this.OnMouseUp(State.Position,ButtonName,InputName, State.Transform );
 			}
 			NewButtonState.push(New);
 		}
@@ -286,7 +287,7 @@ Pop.Xr.Device = class
 		
 		//	if no button changes, we still want to register a controller move with no button
 		if ( ButtonChangedCount == 0 )
-			this.OnMouseMove( State.Position, Pop.SoyMouseButton.None, InputName );
+			this.OnMouseMove( State.Position, Pop.SoyMouseButton.None, InputName, State.Transform );
 	}
 	
 	OnFrame(TimeMs,Frame)
@@ -500,7 +501,7 @@ Pop.Xr.Device = class
 			RenderTarget.ClearColour( 0,0,1 );
 	}
 	
-	OnMouseEvent_Default(xyz,Button,Controller)
+	OnMouseEvent_Default(xyz,Button,Controller,Transform)
 	{
 		Pop.Debug(`OnXRInput(${[...arguments]})`);
 	}
