@@ -263,9 +263,10 @@ Pop.Xr.Device = class
 		let ButtonChangedCount = 0;
 		for ( let b=0;	b<ButtonCount;	b++ )
 		{
+			//	currently the button is either a button object(.pressed .touched) or a bool, or nothing
 			const FrameButton = Buttons[b];
 			const Old = (b < State.Buttons.length) ? State.Buttons[b] : undefined;
-			const New = FrameButton ? FrameButton.pressed : false;
+			const New = (FrameButton && FrameButton.pressed) || (FrameButton===true);
 			const ButtonName = b;
 			
 			if ( !Old && New )
@@ -348,6 +349,39 @@ Pop.Xr.Device = class
 				//	treat joints as individual inputs as they all have their own pos
 				if (Input.hand!==null)
 				{
+					const ThumbToJointMaxDistance = 0.03;
+					//	for hands, if a finger tip touches the thumb tip, its a button press
+					const ThumbKey = XRHand.THUMB_PHALANX_TIP;
+					const FingerKeys =
+					[
+					 XRHand.INDEX_PHALANX_TIP,XRHand.MIDDLE_PHALANX_TIP,XRHand.RING_PHALANX_TIP,XRHand.LITTLE_PHALANX_TIP,
+					 XRHand.INDEX_PHALANX_DISTAL,XRHand.MIDDLE_PHALANX_DISTAL,XRHand.RING_PHALANX_DISTAL,XRHand.LITTLE_PHALANX_DISTAL,
+					 XRHand.INDEX_PHALANX_INTERMEDIATE,XRHand.MIDDLE_PHALANX_INTERMEDIATE,XRHand.RING_PHALANX_INTERMEDIATE,XRHand.LITTLE_PHALANX_INTERMEDIATE,
+					 ];
+					const ReferenceSpace = this.ReferenceSpace;
+					
+					//	we're duplicating work here
+					function GetJointPos(Key)
+					{
+						const XrSpace = Input.hand[Key];
+						const Pose = XrSpace ? Frame.getPose(XrSpace,ReferenceSpace) : null;
+						const Position = Pose ? [Pose.transform.position.x,Pose.transform.position.y,Pose.transform.position.z] : null;
+						return Position;
+					}
+					function IsTipCloseToThumb(Key)
+					{
+						if ( !ThumbPos )
+							return false;
+						const FingerPos = GetJointPos(Key);
+						if ( !FingerPos )
+							return false;
+						const Distance = Math.Distance3(ThumbPos,FingerPos);
+						return Distance <= ThumbToJointMaxDistance;
+					}
+					const ThumbPos = GetJointPos(ThumbKey);
+					const FingersNear = FingerKeys.map(IsTipCloseToThumb);
+					
+					
 					//	enum all the joints
 					const JointNames = Object.keys(XRHand);
 					function EnumJoint(JointName)
@@ -356,6 +390,9 @@ Pop.Xr.Device = class
 						const PoseSpace = Input.hand[Key];
 						const NodeName = `${InputName}_${JointName}`;
 						const Buttons = [];
+						const FingerNearThumbIndex = FingerKeys.indexOf(Key);
+						if ( FingerNearThumbIndex != -1 )
+							Buttons.push(FingersNear[FingerNearThumbIndex]);
 						UpdatedInputNames.push(NodeName);
 						UpdateInputNode(PoseSpace,NodeName,Buttons);
 					}
