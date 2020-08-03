@@ -457,13 +457,14 @@ Pop.Xr.Device = class
 			
 			//	write position (w should always be 0
 			Camera.Position = [View.transform.position.x,View.transform.position.y,View.transform.position.z];
-
-			//	transform.matrix is column major
+			
 			//	get rotation but remove the translation (so we use .Position)
-			Camera.Rotation4x4 = Pop.Math.GetMatrixTransposed(View.transform.matrix);
+			//	we also want the inverse for our camera-local purposes
+			Camera.Rotation4x4 = View.transform.inverse.matrix;
 			Math.SetMatrixTranslation(Camera.Rotation4x4,0,0,0,1);
 			
 			Camera.ProjectionMatrix = View.projectionMatrix;
+			
 			RenderTarget.BindRenderTarget( this.RenderContext );
 			this.OnRender( RenderTarget, Camera );
 		}

@@ -226,9 +226,21 @@ Pop.Camera = function(CopyCamera)
 		//	http://ogldev.atspace.co.uk/www/tutorial12/tutorial12.html
 		Matrix[8] = 0;
 		Matrix[9] = 0;
-		Matrix[10] = (-Near-Far) / (Near-Far);
-		Matrix[11] = 1;
-		
+		//	gr: this should now work in both ways, but one of them is mirrored.
+		//		false SHOULD match old engine style... but is directx
+		const ZForwardIsNegative = false;
+		if ( ZForwardIsNegative )
+		{
+			//	opengl
+			Matrix[10] = -(-Near-Far) / (Near-Far);
+			Matrix[11] = -1;
+		}
+		else
+		{
+			//	directx (also, our old setup!)
+			Matrix[10] = (-Near-Far) / (Near-Far);
+			Matrix[11] = 1;
+		}
 		Matrix[12] = 0;
 		Matrix[13] = 0;
 		Matrix[14] = (2*Far*Near) / (Near-Far);
@@ -246,6 +258,15 @@ Pop.Camera = function(CopyCamera)
 		this.Rotation4x4 = Rotation4x4.slice();
 	}
 	
+	this.IsProjectionForwardNegativeZ = function()
+	{
+		const Matrix = this.GetProjectionMatrix([0,0,1,1]);
+		//	gr [10] AND [11] are always negative?
+		//	we should be able to do the math and work out the z multiplication
+		const ZForwardIsNegative = Matrix[11] < 0;
+		return ZForwardIsNegative;
+	}
+	
 	this.GetLocalRotationMatrix = function()
 	{
 		if ( this.Rotation4x4 )
@@ -253,6 +274,14 @@ Pop.Camera = function(CopyCamera)
 		
 		//	allow user to override here with a rotation matrix
 		const Up = this.GetUp();
+		
+		//	gr: this cant be right!?
+		const InvertRotationEye = this.IsProjectionForwardNegativeZ();
+		if ( InvertRotationEye )
+		{
+			const Mtx = Math.CreateLookAtRotationMatrix( this.LookAt, Up, this.Position );
+			return Mtx;
+		}
 		const Mtx = Math.CreateLookAtRotationMatrix( this.Position, Up, this.LookAt );
 		return Mtx;
 	}
@@ -296,6 +325,9 @@ Pop.Camera = function(CopyCamera)
 		const Up = this.GetUp();
 		
 		let Rotation = this.GetLocalRotationMatrix();
+		
+		//	to move from world space to camera space, we should take away the camera origin
+		//	so this should always be -pos
 		let Trans = Math.Subtract3( [0,0,0], this.Position );
 		let Translation = Math.CreateTranslationMatrix( ...Trans );
 		let Matrix = Math.MatrixMultiply4x4( Rotation, Translation );
@@ -343,12 +375,19 @@ Pop.Camera = function(CopyCamera)
 		return this.Up.slice();
 	}
 	
-	this.GetForward = function()
+	this.GetForward = function(Normalised=true)
 	{
-		//	gr: this is backwards, but matches the camera matrix, erk
 		let z = Math.Subtract3( this.LookAt, this.Position );
-		z = Math.Normalise3( z );
+		if ( Normalised )
+			z = Math.Normalise3( z );
 		return z;
+	}
+	
+	this.GetBackward = function(Normalised=true)
+	{
+		const Forward = this.GetForward(Normalised);
+		const Backward = Math.Multiply3(Forward,[-1,-1,-1]);
+		return Backward;
 	}
 	
 	this.GetRight = function()
@@ -374,7 +413,7 @@ Pop.Camera = function(CopyCamera)
 	this.GetPitchYawRollDistance = function()
 	{
 		//	dir from lookat to position (orbit, not first person)
-		let Dir = Math.Subtract3( this.Position, this.LookAt );
+		let Dir = this.GetBackward(false);
 		let Distance = Math.Length3( Dir );
 		//Pop.Debug("Distance = ",Distance,Dir);
 		Dir = Math.Normalise3( Dir );
@@ -427,7 +466,7 @@ Pop.Camera = function(CopyCamera)
 		let Deltaz = this.Last_OrbitPos[2] - z;
 	
 		Deltax *= 0.1;
-		Deltay *= -0.1;
+		Deltay *= 0.1;
 		Deltaz *= 0.1;
 	
 		let NewPitch = this.Start_OrbitPyrd[0] + Deltax;
@@ -464,9 +503,9 @@ Pop.Camera = function(CopyCamera)
 		let Deltax = this.LastPos_PanLocalPos[0] - x;
 		let Deltay = this.LastPos_PanLocalPos[1] - y;
 		let Deltaz = this.LastPos_PanLocalPos[2] - z;
-		Deltax *= 0.01;
+		Deltax *= -0.01;
 		Deltay *= -0.01;
-		Deltaz *= 0.01;
+		Deltaz *= -0.01;
 
 		let Right3 = this.GetRight();
 		Right3 = Math.Multiply3( Right3, [Deltax,Deltax,Deltax] );
