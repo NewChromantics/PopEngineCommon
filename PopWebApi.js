@@ -325,6 +325,36 @@ Pop.GetPlatform = function()
 	return 'Web';
 }
 
+
+//	computer name wants to be some kind of unique, but not-neccessarily unique name
+//	this doesn't really exist, so store & retrieve a random string in the session
+//	storage, so we can at least have unique tabs
+Pop.GetComputerName = function()
+{
+	let Name = window.sessionStorage.getItem('Pop.ComputerName');
+	if ( Name )
+		return Name;
+	
+	function CreateRandomHash(Length=4)
+	{
+		//	generate string of X characters
+		const AnArray = new Array(Length);
+		const Numbers = [...AnArray];
+		//	pick random numbers from a-z (skipping 0-10)
+		const RandNumbers = Numbers.map( x=>Math.floor(Math.random()*26) );
+		const RandAZNumbers = RandNumbers.map(i=>i+10);
+		//	turn into string with base36(10+26)
+		const RandomString = RandAZNumbers.map(x=>x.toString(36)).join('').toUpperCase();
+		//Pop.Debug(`RandomString=${RandomString}`);
+		return RandomString;
+	}
+	
+	//	make one up
+	Name = 'Pop_' + CreateRandomHash();
+	window.sessionStorage.setItem('Pop.ComputerName',Name);
+	return Name;
+}
+
 //	we're interpreting the url as
 //	http://exefilename/exedirectory/?exearguments
 Pop.GetExeFilename = function()
