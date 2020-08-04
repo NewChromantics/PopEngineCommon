@@ -159,14 +159,39 @@ Pop.Xr.Device = class
 		this.OnMouseMove = this.OnMouseEvent_Default.bind(this);
 		this.OnMouseUp = this.OnMouseEvent_Default.bind(this);
 		
+		//	store input state so we can detect button up, tracking lost/regained
 		this.InputStates = {};	//	[Name] = XrInputState
 		
+		this.RealSpaceChangedQueue = new Pop.PromiseQueue();
+		
 		//	bind to device
+		this.ReferenceSpace.onreset = this.OnSpaceChanged.bind(this);
+		this.ReferenceSpace.addEventListener('reset', this.OnSpaceChanged.bind(this) );
 		Session.addEventListener('end', this.OnSessionEnded.bind(this) );
 		this.InitLayer( RenderContext );
 		
+		//	do an initial space update in case its initialised already
+		this.OnSpaceChanged();
+		
 		//	start loop
 		Session.requestAnimationFrame( this.OnFrame.bind(this) );
+	}
+	
+	WaitForNewSpace()
+	{
+		return this.RealSpaceChangedQueue.WaitForNext();
+	}
+	
+	OnSpaceChanged(Event)
+	{
+		//	get new space from reference space
+		//	this also occurs when orientation is reset
+		const Geometry = this.ReferenceSpace.boundsGeometry;
+		Pop.Debug(`OnSpaceChanged`,Event,Geometry);
+		
+		//	only keep the latest data
+		this.RealSpaceChangedQueue.ClearQueue();
+		this.RealSpaceChangedQueue.Push(Geometry);
 	}
 	
 	//	I think here we can re-create layers if context dies,
@@ -576,8 +601,6 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 			}
 			const ReferenceSpace = await GetReferenceSpace();
 			Pop.Debug(`Got XR ReferenceSpace`,ReferenceSpace);
-			if ( ReferenceSpace.boundsGeometry )
-				Pop.Debug(`Got bounding geometry! ${JSON.stringify(ReferenceSpace.boundsGeometry)}`,ReferenceSpace.boundsGeometry);
 			
 			const Device = new Pop.Xr.Device( Session, ReferenceSpace, RenderContext );
 			
