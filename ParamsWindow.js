@@ -145,7 +145,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 
 	this.WaitForParamsChanged = function ()
 	{
-		return this.WaitForParamsChangedPromiseQueue.Allocate();
+		return this.WaitForParamsChangedPromiseQueue.WaitForNext();
 	}
 
 	this.GetParamMetas = function ()
