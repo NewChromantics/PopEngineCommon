@@ -137,7 +137,7 @@ async function PngBytesToPixels(PngBytes)
 	const PngBlob = new Blob( [ PngBytes ], { type: "image/png" } );
 	const ImageUrl = URL.createObjectURL( PngBlob );
 	const Image = await Pop.LoadFileAsImageAsync(ImageUrl);
-	const Pixels = GetPixelsFromHtmlImageElement(Image);
+	const Pixels = GetPixelsFromHtmlImageElement(Image.Pixels);
 /*
 	const Pixels = {};
 	Pixels.Width = 1;
