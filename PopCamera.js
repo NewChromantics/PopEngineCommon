@@ -477,6 +477,77 @@ Pop.Camera = function(CopyCamera)
 		this.SetOrbit( NewPitch, NewYaw, NewRoll, NewDistance );
 	}
 	
+	//	opposite of GetOrbit
+	this.GetLookAtRotation = function()
+	{
+		//	forward instead of backward
+		let Dir = this.GetForward(false);
+		let Distance = Math.Length3( Dir );
+		//Pop.Debug("Distance = ",Distance,Dir);
+		Dir = Math.Normalise3( Dir );
+		
+		let Yaw = Math.RadToDeg( Math.atan2( Dir[0], Dir[2] ) );
+		let Pitch = Math.RadToDeg( Math.asin(-Dir[1]) );
+		let Roll = 0;
+		
+		return [Pitch,Yaw,Roll,Distance];
+	}
+	
+	//	opposite of SetOrbit
+	this.SetLookAtRotation = function(Pitch,Yaw,Roll,Distance)
+	{
+		let Pitchr = Math.radians(Pitch);
+		let Yawr = Math.radians(Yaw);
+		//Pop.Debug("SetOrbit()", ...arguments );
+		//Pop.Debug("Pitch = "+Pitch);
+		
+		let Deltax = Math.sin(Yawr) * Math.cos(Pitchr);
+		let Deltay = -Math.sin(Pitchr);
+		let Deltaz = Math.cos(Yawr) * Math.cos(Pitchr);
+		Deltax *= Distance;
+		Deltay *= Distance;
+		Deltaz *= Distance;
+		
+		//Pop.Debug( "SetOrbit deltas", Deltax, Deltay, Deltaz );
+		this.LookAt[0] = this.Position[0] + Deltax;
+		this.LookAt[1] = this.Position[1] + Deltay;
+		this.LookAt[2] = this.Position[2] + Deltaz;
+	}
+	
+	//	better name! like... RotateLookAt
+	this.OnCameraFirstPersonRotate = function(x,y,z,FirstClick)
+	{
+		//	remap input from xy to yaw, pitch
+		let yxz = [y,x,z];
+		x = yxz[0];
+		y = yxz[1];
+		z = yxz[2];
+		
+		if ( FirstClick || !this.Last_FirstPersonPos )
+		{
+			this.Start_FirstPersonPyrd = this.GetLookAtRotation();
+			//Pop.Debug("this.Start_OrbitPyrd",this.Start_OrbitPyrd);
+			this.Last_FirstPersonPos = [x,y,z];
+		}
+		
+		let Deltax = this.Last_FirstPersonPos[0] - x;
+		let Deltay = this.Last_FirstPersonPos[1] - y;
+		let Deltaz = this.Last_FirstPersonPos[2] - z;
+		
+		Deltax *= 0.1;
+		Deltay *= 0.1;
+		Deltaz *= 0.1;
+		
+		let NewPitch = this.Start_FirstPersonPyrd[0] + Deltax;
+		let NewYaw = this.Start_FirstPersonPyrd[1] + Deltay;
+		let NewRoll = this.Start_FirstPersonPyrd[2] + Deltaz;
+		let NewDistance = this.Start_FirstPersonPyrd[3];
+		
+		this.SetLookAtRotation( NewPitch, NewYaw, NewRoll, NewDistance );
+	}
+	
+
+	
 	this.OnCameraPan = function(x,y,z,FirstClick)
 	{
 		if ( FirstClick )
