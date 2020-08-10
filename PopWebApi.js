@@ -535,7 +535,16 @@ Pop.LoadFileAsImageAsync = async function(Filename)
 	//	return cache if availible, if it failed before, try and load again
 	const Cache = Pop.WebApi.FileCache.GetOrFalse(Filename);
 	if ( Cache !== false )
-		return Cache;
+	{
+		if ( IsObjectInstanceOf(Cache,Pop.Image) )
+			return Cache;
+
+		Pop.Warning(`Converting cache from ${typeof Cache} to Pop.Image...`);
+		const CacheImage = await new Pop.Image();
+		CacheImage.LoadPng(Cache);
+		Pop.SetFileCache(Filename,CacheImage);
+		return CacheImage;
+	}
 	
 	function LoadHtmlImageAsync()
 	{
