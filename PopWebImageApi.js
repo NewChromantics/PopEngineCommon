@@ -137,7 +137,7 @@ async function PngBytesToPixels(PngBytes)
 	const PngBlob = new Blob( [ PngBytes ], { type: "image/png" } );
 	const ImageUrl = URL.createObjectURL( PngBlob );
 	const Image = await Pop.LoadFileAsImageAsync(ImageUrl);
-	const Pixels = GetPixelsFromHtmlImageElement(Image);
+	const Pixels = GetPixelsFromHtmlImageElement(Image.Pixels);
 /*
 	const Pixels = {};
 	Pixels.Width = 1;
@@ -267,6 +267,32 @@ Pop.Image = function(Filename)
 		if ( this.PixelsFormat == NewFormat )
 			return;
 		throw `Todo: Pixel format conversion from ${this.PixelsFormat} to ${NewFormat}`;
+	}
+
+	this.GetPngData = function ()
+	{
+		const Canvas = document.createElement( 'canvas' );
+		const Context = Canvas.getContext( '2d' );
+		const Width = this.GetWidth();
+		const Height = this.GetHeight();
+		Canvas.width = Width;
+		Canvas.height = Height;
+		
+		let Pixels = new Uint8ClampedArray(this.GetPixelBuffer());
+		const Img = new ImageData( Pixels, Width, Height );
+		Context.putImageData(Img, 0, 0);
+		
+		let data = Canvas.toDataURL("image/png")
+		// Remove meta data
+		data = data.slice(22)
+		data = Uint8Array.from(atob(data), c => c.charCodeAt(0))
+		
+		//	destroy canvas (safari suggests its hanging around)
+		Canvas.width = 0;
+		Canvas.height = 0;
+		delete Canvas;
+
+		return data;
 	}
 	
 	this.GetPixelBuffer = function()
