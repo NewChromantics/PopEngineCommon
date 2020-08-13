@@ -26,11 +26,17 @@ export default class PopZip
 
 	async extractFiles()
 	{
+		if( this.archive === null )
+			throw "You need to open the archive before you can extract files"
+
 		return await this.archive.extractFiles();
 	}
 
 	async getFilesArray()
 	{
-		return await this.archive.getFilesArray();
+		if( this.archive === null )
+			throw "You need to open the archive before you can extract files"
+		
+			return await this.archive.getFilesArray();
 	}
 }
