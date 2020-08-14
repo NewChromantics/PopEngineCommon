@@ -5,7 +5,10 @@ Archive.init( {
 	workerUrl: '../node_modules/libarchive.js/dist/worker-bundle.js'
 } );
 
-export default class PopArchive
+//	namespace
+export const PopZip = {};
+
+PopZip.Archive = class
 {
 	constructor( ZipFile )
 	{
@@ -87,3 +90,4 @@ export default class PopArchive
 		return FileArray.find(ExtractedFile => ExtractedFile.file.name === Filename ).file
 	}
 }
+
