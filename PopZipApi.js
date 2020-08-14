@@ -74,7 +74,7 @@ PopZip.Archive = class
 		}
 
 		const FileReaderDataURL = await LoadDataURLFromReaderAsync();
-		const Img = new Pop.Image(FileReaderDataURL);
+		const Img = await Pop.LoadFileAsImageAsync(FileReaderDataURL);
 		return Img;
 
 	}
