@@ -46,7 +46,7 @@ Pop.GetShader = function(RenderContext, FragSource, VertSource, ShaderName='A sh
 	
 	if ( !Pop.Opengl.ShaderCache[ContextKey][SourceKey] )
 	{
-		let Shader = new Pop.Opengl.Shader( ShaderName, VertSource, FragSource );
+		let Shader = new Pop.Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
 		Shader.Counter = Counter++;
 		//Pop.Debug("pre Shader keys: " + Object.keys(Pop.Opengl.ShaderCache[ContextKey]) );
 		Pop.Opengl.ShaderCache[ContextKey][SourceKey] = Shader;
