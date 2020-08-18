@@ -150,7 +150,7 @@ Pop.PromiseQueue = class
 		//	values we've yet to resolve (each is array capturing arguments from push()
 		this.PendingValues = [];
 	}
-	
+
 	async WaitForNext()
 	{
 		const Promise = this.Allocate();
@@ -160,7 +160,17 @@ Pop.PromiseQueue = class
 		
 		return Promise;
 	}
-	
+
+	//	this waits for next resolve, but when it flushes, it returns LAST entry and clears the rest; LIFO (kinda, last in, only out)
+	async WaitForLatest()
+	{
+		const Promise = this.Allocate();
+
+		//	if we have any pending data, flush now, this will return an already-resolved value
+		this.FlushPending(true);
+
+		return Promise;
+	}
 	ClearQueue()
 	{
 		//	delete values, losing data!
@@ -237,7 +247,7 @@ Pop.PromiseQueue = class
 		return this.PendingValues.length > 0;
 	}
 	
-	FlushPending()
+	FlushPending(FlushLatestAndClear=false)
 	{
 		//	if there are promises and data's waiting, we can flush next
 		if ( this.Promises.length == 0 )
@@ -247,7 +257,11 @@ Pop.PromiseQueue = class
 		
 		//	flush 0 (FIFO)
 		//	we pre-pop as we want all listeners to get the same value
-		const Value0 = this.PendingValues.shift();
+		if (FlushLatestAndClear && this.PendingValues.length > 1)
+		{
+			Pop.Warning(`Promise queue FlushLatest dropping ${this.PendingValues.length - 1} elements`);
+		}
+		const Value0 = FlushLatestAndClear ? this.PendingValues.splice(0,this.PendingValues.length).pop() : this.PendingValues.shift();
 		const HandlePromise = function(Promise)
 		{
 			if ( Value0.RejectionValues )
