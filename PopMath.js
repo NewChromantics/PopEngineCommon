@@ -163,6 +163,11 @@ Math.clamp = function(min,max,Value)
 }
 Math.Clamp = Math.clamp;
 
+Math.Clamp01 = function(Value)
+{
+	return Math.Clamp(0,1,Value);
+}
+
 //	note: glsl clamp() is clamp(value,min,max)
 Math.clamp2 = function(Min,Max,Value)
 {

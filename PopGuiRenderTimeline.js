@@ -32,6 +32,12 @@ Pop.Gui.RenderTimelineWindow = class
 		{
 			await Pop.WaitForFrame();
 			
+			if ( this.Window.IsMinimised() )
+			{
+				await Pop.Yield(2000);
+				continue;
+			}
+			
 			//	flush opengl stats
 			const Stats = Pop.Opengl.Stats;
 			for ( const Key in Stats )
@@ -98,6 +104,8 @@ Pop.Gui.RenderTimelineWindow = class
 
 	OnDataChanged()
 	{
+		if ( this.Window.IsMinimised() )
+			return;
 		this.Timeline.OnDataChanged();
 	}
 

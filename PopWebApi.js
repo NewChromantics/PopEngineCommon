@@ -254,7 +254,7 @@ Pop.WebApi.TFileCache = class
 	{
 		if (this.Cache.hasOwnProperty(Filename))
 		{
-			Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
+			// Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
 		}
 		this.Cache[Filename] = Contents;
 		this.OnFilesChanged.PushUnique(Filename);
@@ -323,6 +323,36 @@ Pop.Warning = console.warn;
 Pop.GetPlatform = function()
 {
 	return 'Web';
+}
+
+
+//	computer name wants to be some kind of unique, but not-neccessarily unique name
+//	this doesn't really exist, so store & retrieve a random string in the session
+//	storage, so we can at least have unique tabs
+Pop.GetComputerName = function()
+{
+	let Name = window.sessionStorage.getItem('Pop.ComputerName');
+	if ( Name )
+		return Name;
+	
+	function CreateRandomHash(Length=4)
+	{
+		//	generate string of X characters
+		const AnArray = new Array(Length);
+		const Numbers = [...AnArray];
+		//	pick random numbers from a-z (skipping 0-10)
+		const RandNumbers = Numbers.map( x=>Math.floor(Math.random()*26) );
+		const RandAZNumbers = RandNumbers.map(i=>i+10);
+		//	turn into string with base36(10+26)
+		const RandomString = RandAZNumbers.map(x=>x.toString(36)).join('').toUpperCase();
+		//Pop.Debug(`RandomString=${RandomString}`);
+		return RandomString;
+	}
+	
+	//	make one up
+	Name = 'Pop_' + CreateRandomHash();
+	window.sessionStorage.setItem('Pop.ComputerName',Name);
+	return Name;
 }
 
 //	we're interpreting the url as
@@ -505,7 +535,16 @@ Pop.LoadFileAsImageAsync = async function(Filename)
 	//	return cache if availible, if it failed before, try and load again
 	const Cache = Pop.WebApi.FileCache.GetOrFalse(Filename);
 	if ( Cache !== false )
-		return Cache;
+	{
+		if ( IsObjectInstanceOf(Cache,Pop.Image) )
+			return Cache;
+
+		Pop.Warning(`Converting cache from ${typeof Cache} to Pop.Image...`);
+		const CacheImage = await new Pop.Image();
+		CacheImage.LoadPng(Cache);
+		Pop.SetFileCache(Filename,CacheImage);
+		return CacheImage;
+	}
 	
 	function LoadHtmlImageAsync()
 	{
@@ -625,7 +664,7 @@ Pop.LoadFileAsString = function(Filename)
 	//	convert array buffer to string
 	if ( Array.isArray( Contents ) || Contents instanceof Uint8Array )
 	{
-		Pop.Debug("Convert "+Filename+" from ", typeof Contents," to string");
+		// Pop.Debug("Convert "+Filename+" from ", typeof Contents," to string");
 		//	this is super slow!
 		const ContentsString = Pop.BytesToString( Contents );
 		return ContentsString;

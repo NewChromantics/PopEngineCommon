@@ -1,6 +1,24 @@
 Pop.Gui = {};
 
 
+const PopGuiStorage = window.sessionStorage;
+
+//	should have some general Pop API to use session storage, localstorage, cookies etc crossplatform
+Pop.Gui.ReadSettingJson = function(Key)
+{
+	const Json = PopGuiStorage.getItem(Key);
+	if ( !Json )
+		throw `No setting for ${Key}`;
+	const Object = JSON.parse(Json);
+	return Object;
+}
+
+Pop.Gui.WriteSettingJson = function(Key,Object)
+{
+	const Json = JSON.stringify(Object);
+	PopGuiStorage.setItem(Key,Json);
+}
+
 function IsHtmlString(Value)
 {
 	if ( typeof Value != 'string' )
@@ -61,6 +79,7 @@ function SetElementPosition(Element,x,y)
 	Element.style.left = ( x) + "px";
 }
 
+//	gr: this should change to a list of always-incrementing z's for our windows
 var $HighestZ = 99;
 function SetElementToTop(Element)
 {
@@ -142,47 +161,46 @@ function float2(_x,_y)
 function GetElementRect(Element)
 {
 	return Element.getBoundingClientRect();
-	let absolutePosition = GetElementRect;
-	let el = Element;
-	//	need to cope with scroll, not just getBoundingClientRect :/
-	//	https://stackoverflow.com/a/32623832/355753
-	let
-	found,
-	left = 0,
-	top = 0,
-	width = 0,
-	height = 0,
-	offsetBase = absolutePosition.offsetBase;
-	if (!offsetBase && document.body) {
-		offsetBase = absolutePosition.offsetBase = document.createElement('div');
-		offsetBase.style.cssText = 'position:absolute;left:0;top:0';
-		document.body.appendChild(offsetBase);
-	}
-	if (el && el.ownerDocument === document && 'getBoundingClientRect' in el && offsetBase) {
-		let boundingRect = el.getBoundingClientRect();
-		let baseRect = offsetBase.getBoundingClientRect();
-		found = true;
-		left = boundingRect.left - baseRect.left;
-		top = boundingRect.top - baseRect.top;
-		width = boundingRect.right - boundingRect.left;
-		height = boundingRect.bottom - boundingRect.top;
-	}
-	return {
-	found: found,
-	left: left,
-	top: top,
-	width: width,
-	height: height,
-	right: left + width,
-	bottom: top + height,
-	x: left,
-	y: top,
-	xy: float2(left,top)
-	};
 }
 
 function SetGuiControl_Draggable(Element)
 {
+	const RectKey = `${Element.id}_WindowRect`;
+	function LoadRect()
+	{
+		//	if an element is draggable, see if we've got a previos position to restore
+		//	todo: make sure previous pos fits on new screen when we restore
+		try
+		{
+			const NewRect = Pop.Gui.ReadSettingJson(RectKey);
+			const x = NewRect.x;
+			const y = NewRect.y;
+			SetElementPosition( Element, x, y );
+		}
+		catch(e)
+		{
+			Pop.Warning(`Failed to restore window position for ${RectKey}`);
+		}
+	}
+
+	function SaveRect()
+	{
+		try
+		{
+			const ElementRect = GetElementRect(Element);
+			if ( !ElementRect )
+				throw `Failed to get element rect (${Element.id}`;
+			const Rect = {};
+			Rect.x = ElementRect.x
+			Rect.y = ElementRect.y;
+			Pop.Gui.WriteSettingJson(RectKey,Rect);
+		}
+		catch(e)
+		{
+			Pop.Warning(`Failed to write window position for ${RectKey}`);
+		}
+	}
+	
 	let AllowInteraction = function(Event)
 	{
 		//	gr: if we prevent top events (or dont preventdefault)
@@ -239,8 +257,10 @@ function SetGuiControl_Draggable(Element)
 	{
 		//if ( !AllowInteraction(e) )
 		//	return;
+		//	update window position one final time & save
 		OnMouseDrag(e);
-		
+		SaveRect();
+												   
 		//	drop!
 		let Droppable = Element.DropMeta;
 		//let Droppable = GetDropCallback(Element);
@@ -253,6 +273,7 @@ function SetGuiControl_Draggable(Element)
 			
 			//	do drop
 			Droppable.callback(Element);
+			SaveRect();
 		}
 		else
 		{
@@ -333,6 +354,8 @@ function SetGuiControl_Draggable(Element)
 	const CapturePhase = true;
 	Element.addEventListener('mousedown',OnMouseDown,CapturePhase);
 	Element.parentNode.OnDetachElement = OnDetachElement;
+
+	LoadRect();
 }
 
 Pop.Gui.Window = function(Name,Rect,Resizable)
@@ -422,6 +445,12 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		this.ElementParent.style.overflowX = Horizontal ? 'scroll' : 'hidden';
 	}
 
+	this.SetMinimised = function(Minimise=true)
+	{
+		if ( this.IsMinimised() != Minimise )
+		   this.OnToggleMinimise();
+	}
+												   
 	this.IsMinimised = function ()
 	{
 		return (this.RestoreHeight !== null);
@@ -676,7 +705,8 @@ Pop.Gui.BaseControl = class
 				const Mime = File.type;
 				Pop.Debug(`Filename ${File.name}->${Filename} mime ${Mime}`);
 				const FileArray = await File.arrayBuffer();
-				Pop._AssetCache[Filename] = new Uint8Array(FileArray);
+				const File8 = new Uint8Array(FileArray);
+				Pop.SetFileCache(Filename,File8);
 				NewFilenames.push(Filename);
 			}
 			//	make a promise for each file
