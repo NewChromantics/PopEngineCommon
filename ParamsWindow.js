@@ -125,15 +125,19 @@ Pop.DummyParamsWindow = function()
 Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 {
 	OnAnyChanged = OnAnyChanged || function(){};
-	
-	WindowRect = WindowRect || [800,20,600,300];
+
+	//	if the window rect is a string, then it's for gui/form/div mapping
+	//	but to layout the controls, we still want some value
+	const DefaultWidth = 600;
+	WindowRect = WindowRect || [800,20,DefaultWidth,300];
+	const WindowWidth = !isNaN(WindowRect[2]) ? WindowRect[2] : DefaultWidth;
 	this.ControlTop = 10;
 
 	const LabelLeft = 10;
-	const LabelWidth = WindowRect[2] * 0.3;
+	const LabelWidth = WindowWidth * 0.3;
 	const LabelHeight = 18;
 	const ControlLeft = LabelLeft + LabelWidth + 10;
-	const ControlWidth = WindowRect[2] - ControlLeft - 40;
+	const ControlWidth = WindowWidth - ControlLeft - 40;
 	const ControlHeight = LabelHeight;
 	const ControlSpacing = 10;
 
