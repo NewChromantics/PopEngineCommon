@@ -107,6 +107,29 @@ Pop.Websocket.Client = function(Hostname,Port=80)
 	//	create a socket
 	//	we don't handle reconnecting, assume user is using Pop.Websocket.Connect
 	//	and when connect or message throws, this is discarded and it connects again
+
+	//	parse hostname in case something odd is put in
+	//	native doesnt support this!
+	//	ws://hello:port
+	const Pattern = '^(ws:\/\/|wss:\/\/)?([^:]+)(:([0-9]+))?$';
+	const Parts = Hostname.split(new RegExp(Pattern));
+
+	//	if no match (array of 1==original), just continue as before
+	if (Parts.length > 1)
+	{
+		let [Prefix,Protocol,NewHostname,ColonAndPort,NewPort,Suffic] = Parts;
+		//	this will be undefined if we just have ws://
+		if (NewHostname !== undefined)
+		{
+			const OldHostname = Hostname;
+			//	fill defaults where not present
+			Protocol = Protocol || '';
+			Port = NewPort || Port;
+			Hostname = `${Protocol}${NewHostname}`;
+			Pop.Debug(`Parsed websocket address ${OldHostname} to Hostname=${Hostname} Port=${Port}`);
+		}
+	}
+
 	let ServerAddress = `${Hostname}:${Port}`;
 	if (!ServerAddress.startsWith('ws://') && !ServerAddress.startsWith('wss://'))
 		ServerAddress = 'ws://' + ServerAddress;
