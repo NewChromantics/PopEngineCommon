@@ -571,7 +571,12 @@ function RunParamsWebsocketServer(Port,OnJsonRecieved)
 		if (!CurrentSocket)
 			throw "Not currently connected";
 		const Addresses = CurrentSocket.GetAddress();
-		return "ws://" + Addresses[0].Address;
+		function AddressToUrl(Address)
+		{
+			return `ws://${Address.Address}`;
+		}
+		const Urls = Addresses.map(AddressToUrl);
+		return Urls;
 	}
 
 	return Output;
@@ -628,7 +633,7 @@ function RunParamsHttpServer(Params,ParamsWindow,Port=80)
 
 		if (Filename == "Websocket.json")
 		{
-			Response.Content = Websocket.GetUrl();
+			Response.Content = JSON.stringify(Websocket.GetUrl());
 			Response.StatusCode = 200;
 			return;
 		}
