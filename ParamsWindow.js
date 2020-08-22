@@ -42,6 +42,7 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 
 	let OnChanged = function (Value,IsFinalValue)
 	{
+		Pop.Debug(`Control changed ${Value}`);
 		//	PopEngine returns typed arrays, we want regular arrays in controls
 		//	(until we possibly need a control with a LOT of values)
 		if (isTypedArray(Value))
@@ -107,57 +108,184 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 	Control.OnChanged = OnChanged.bind(this);
 }
 
-//	dummy window we can swap out quickly in code
-//	change this so params window can just be hidden more easily?
-Pop.DummyParamsWindow = function()
+
+class SyncMeta
 {
-	this.OnParamChanged = function(){};
-	this.OnParamsChanged = function(){};
-	this.AddParam = function(){};
-	this.GetParamMetas = function() {	return {};	};
-	
-	this.WaitForParamsChanged = function ()
+	constructor(Name,InitialValue)
 	{
-		return new Promise( function(res,rej){} );
+		//	use this for syncing
+		this.ValueVersion = 0;
+		
+		this.CleanValue = function(v)
+		{
+			return v;
+		}.bind(this);
+		
+		this.GetLabelForValue = function(Value)
+		{
+			return `${Name}: ${Value}`;
+		}.bind(this);
+		
+		this.IsValueSignificantChange = function(Old,New)
+		{
+			return Old != New;
+		}.bind(this);
+		
+		//	TreatAsType
+		this.GetType = function()
+		{
+			return typeof InitialValue;
+		}
 	}
 }
 
-Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
+function SetupBooleanSyncMeta(Meta)
 {
-	OnAnyChanged = OnAnyChanged || function(){};
+	Meta.CleanValue = function (Value) { return Value == true; }
+}
 
-	//	if the window rect is a string, then it's for gui/form/div mapping
-	//	but to layout the controls, we still want some value
-	const DefaultWidth = 600;
-	WindowRect = WindowRect || [800,20,DefaultWidth,300];
-	const WindowWidth = !isNaN(WindowRect[2]) ? WindowRect[2] : DefaultWidth;
-	this.ControlTop = 10;
+function SetupNumberSyncMeta(Meta)
+{
+	Meta.CleanValue = function (Value) { return Number(Value); }
+}
 
-	const LabelLeft = 10;
-	const LabelWidth = WindowWidth * 0.3;
-	const LabelHeight = 18;
-	const ControlLeft = LabelLeft + LabelWidth + 10;
-	const ControlWidth = WindowWidth - ControlLeft - 40;
-	const ControlHeight = LabelHeight;
-	const ControlSpacing = 10;
+function SetupColourSyncMeta(Meta)
+{
+	Meta.GetLabelForValue = function(Value)
+	{
+		let r = Value[0].toFixed(2);
+		let g = Value[1].toFixed(2);
+		let b = Value[2].toFixed(2);
+		return `[${r},${g},${b}]`;
+	}
+	
+	/*
+	const RealGetValue = GetValue;
+	const RealSetValue = SetValue;
+	const RealCleanValue = CleanValue || function (v) { return v };
+	GetValue = function ()
+	{
+		const Colourfff = RealGetValue();
+		const Colour888 = ColourfffToColour888(Colourfff);
+		const String = Colour888ToString(Colour888);
+		return String;
+	}
+	SetValue = function (ControlValue,IsFinalValue)
+	{
+		const Colour888 = StringToColour888(ControlValue);
+		const Colourfff = Colour888ToColourfff(Colour888);
+		RealSetValue(Colourfff,IsFinalValue);
+	}
+	GetLabelForValue = function (ControlValue)
+	{
+		const Colour888 = StringToColour888(ControlValue);
+		const Colourfff = Colour888ToColourfff(Colour888);
+		const rgb = ColourfffToString(Colourfff);
+		return `${Name}: [${rgb}]`;
+	}
+	CleanValue = function (ControlValue)
+	{
+		let Colourfff = StringToColourfff(ControlValue);
+		const Colour888 = ColourfffToColour888(Colourfff);
+		Colourfff = Colour888ToColourfff(Colour888);
+		const String = ColourfffToString(Colourfff);
+		return String;
+	}
+	 */
+}
 
-	this.Window = new Pop.Gui.Window(WindowName,WindowRect,false);
-	this.Window.EnableScrollbars(false,true);
-	this.Handlers = {};
-	this.ParamMetas = {};
-	this.WaitForParamsChangedPromiseQueue = new Pop.PromiseQueue();
+function SetupEnumSyncMeta(Meta)
+{
+	/*
+	 //	todo: dropdown list that's an enum
+	 const IsEnum = (typeof Params[Name] === 'number') && Array.isArray(TreatAsType);
+	 
+	 if (IsEnum)
+	 {
+	 //	todo: get key count and use those
+	 Min = 0;
+	 Max = TreatAsType.length - 1;
+	 CleanValue = Math.floor;
+	 }
+	 
+	 //Pop.Debug("Defaulting param to number, typeof",typeof Params[Name]);
+	 //	no min/max should revert to a string editor?
+	 if (Min === undefined) Min = 0;
+	 if (Max === undefined) Max = 100;
+	 //	non-specific control, slider
+	 //	slider values are all int (16bit) so we need to normalise the value
+	 const TickMin = 0;
+	 const TickMax = (CleanValue === Math.floor) ? (Max - Min) : 1000;
+	 const Notches = (CleanValue === Math.floor) ? (Max - Min) : 10;
+	 Control = new Pop.Gui.Slider(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+	 Control.SetMinMax(TickMin,TickMax,Notches);
+	 
+	 const RealGetValue = GetValue;
+	 const RealSetValue = SetValue;
+	 const RealCleanValue = CleanValue || function (v) { return v };
+	 GetValue = function ()
+	 {
+	 const RealValue = RealGetValue();
+	 const NormValue = Math.Range(Min,Max,RealValue);
+	 const ControlValue = Math.Lerp(TickMin,TickMax,NormValue);
+	 return ControlValue;
+	 }
+	 SetValue = function (ControlValue,IsFinalValue)
+	 {
+	 const NormValue = Math.Range(TickMin,TickMax,ControlValue);
+	 const RealValue = Math.Lerp(Min,Max,NormValue);
+	 //	this should have been cleaned, but maybe needs it agian?
+	 RealSetValue(RealValue,IsFinalValue);
+	 }
+	 GetLabelForValue = function (ControlValue)
+	 {
+	 const NormValue = Math.Range(TickMin,TickMax,ControlValue);
+	 const RealValue = Math.Lerp(Min,Max,NormValue);
+	 let Value = RealCleanValue(RealValue);
+	 if (IsEnum)
+	 {
+	 Pop.Debug("Enum",Value,TreatAsType);
+	 const EnumLabel = TreatAsType[Value];
+	 return Name + ': ' + EnumLabel;
+	 }
+	 return Name + ': ' + Value;
+	 }
+	 CleanValue = function (ControlValue)
+	 {
+	 let NormValue = Math.Range(TickMin,TickMax,ControlValue);
+	 let RealValue = Math.Lerp(Min,Max,NormValue);
+	 let Value = RealCleanValue(RealValue);
+	 NormValue = Math.Range(Min,Max,RealValue);
+	 ControlValue = Math.Lerp(TickMin,TickMax,NormValue);
+	 return ControlValue;
+	 }*/
+}
 
-	this.WaitForParamsChanged = function ()
+//	this is now a Sync-Object class with some value validation/meta
+Pop.SyncObject = class
+{
+	constructor(Params,AutoPopulate=true)
+	{
+		this.Params = Params;
+		this.WaitForParamsChangedPromiseQueue = new Pop.PromiseQueue();
+		this.ParamMetas = {};
+		
+		//	auto create meta!
+		for ( let Name in Params )
+			this.AddParam(Name);
+	}
+	
+	async WaitForChange()
 	{
 		return this.WaitForParamsChangedPromiseQueue.WaitForNext();
 	}
-
-	this.GetParamMetas = function ()
+	
+	GetParamMeta(Name)
 	{
-		return this.ParamMetas;
+		return this.ParamMetas[Name];
 	}
 
-	function GetMetaFromArguments(Arguments)
+	GetMetaFromArguments(Arguments)
 	{
 		//	first is name
 		const Name = Arguments.shift();
@@ -170,66 +298,278 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 		Arguments = Arguments.map(RenameFunc);
 		return Arguments;
 	}
-
+	
+	GetNames()
+	{
+		return Object.keys(this.Params);
+	}
+	
 	//	add new control
 	//	CleanValue = function
 	//	Min can sometimes be a cleanvalue function
 	//		AddParam('Float',Math.floor);
 	//	TreatAsType overrides the control
 	//		AddParam('Port',0,1,Math.floor,'String')
-	this.AddParam = function (Name,Min,Max,CleanValue,TreatAsType)
+	AddParam(Name,Min,Max,CleanValue,TreatAsType)
 	{
-		this.ParamMetas[Name] = GetMetaFromArguments(Array.from(arguments));
+		Pop.Debug(`SyncObject AddParam(${Name})`);
+		//	replace existing meta, but propogate this info so a UI can replace controls
+		const InitialValue = this.Params[Name];
+		const ParamMeta = new SyncMeta(Name,InitialValue);
+		this.ParamMetas[Name] = ParamMeta;
 
-		//	AddParam('x',Math.floor)
-		if (isFunction(Min) && CleanValue === undefined)
-		{
-			CleanValue = Min;
-			Min = undefined;
-		}
-		//	AddParam('x','Button')
-		if (isString(Min) && TreatAsType === undefined)
-		{
-			TreatAsType = Min;
-			Min = undefined;
-		}
-		//	AddParam('x',0,10,'String')
-		if (isString(CleanValue) && TreatAsType === undefined)
-		{
-			TreatAsType = CleanValue;
-			CleanValue = undefined;
-		}
-		//	AddParam('Index',[Enum0,Enum1,Enum2])
-		if (Array.isArray(Min))
-		{
-			TreatAsType = Min;
-			Min = undefined;
-		}
-
-		let GetValue = function ()
-		{
-			return Params[Name];
-		}
+		TreatAsType = ParamMeta.GetType();
+		
+		//	configure meta
+		if ( TreatAsType == 'boolean' )
+			SetupBooleanSyncMeta(ParamMeta);
+		
+		if ( TreatAsType == 'Colour' )
+			SetupColourSyncMeta(ParamMeta);
+		
+		//	todo: parse params and update meta funcs
+		/*
 		let SetValue = function (Value,IsFinalValue)
 		{
 			Params[Name] = Value;
 			OnAnyChanged(Params,Name,Value,IsFinalValue);
 			this.WaitForParamsChangedPromiseQueue.Push([Params,Name,Value,IsFinalValue]);
 		}.bind(this);
-		let IsValueSignificantChange = function (Old,New)
+		*/
+	}
+	
+	SetValue(Name,Value,IsFinalValue=true)
+	{
+		//	gr: do we need to clean etc here?
+		this.Params[Name] = Value;
+		
+		//	chance here to change it to an object
+		const Change = [this.Params,Name,Value,IsFinalValue];
+		this.WaitForParamsChangedPromiseQueue.Push(Change);
+	}
+	
+	//	value has changed externally, propogate
+	OnParamChanged(Name)
+	{
+		Pop.Warning(`SyncObject param changed externally... is this correct?`);
+		
+		const Value = this.Params[Name];
+		const IsFinalValue = false;	//	true?
+		
+		//	chance here to change it to an object
+		const Change = [this.Params,Name,Value,IsFinalValue];
+		this.WaitForParamsChangedPromiseQueue.Push(Change);
+	}
+	
+	OnParamsChanged()
+	{
+		const Keys = this.GetNames();
+		//Pop.Debug("OnParamsChanged",Keys);
+		const UpdateInParams = true;
+		for (const Key of Keys)
 		{
-			return Old != New;
+			try
+			{
+				this.OnParamChanged(Key);
+			}
+			catch (e)
+			{
+				Pop.Warning(`OnParamChanged(${Key}) error ${e}`);
+			}
 		}
-		let GetLabelForValue = undefined;
+	}
+}
 
+//	dummy window we can swap out quickly in code
+//	change this so params window can just be hidden more easily?
+//	gr: deprecated
+Pop.DummyParamsWindow = Pop.ParamsSync;
+
+/*
+Pop.Gui.ColourAsString = class extends Pop.Gui.TextBox
+{
+
+ //	no colour control, create string <-> Colour conversion
+ //	gr: this should be a fake Colour control in Pop.Gui namespace
+ 
+ //	todo: implement a colour swatch in the PopEngine
+ //	todo: swap tickbox for a button when we have one
+ //	gr: lets use a text box for now
+ //	gr: could make 3 text boxes here
+ Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+ const ColourDecimals = 3;
+ function StringToColourfff(String)
+ {
+ let rgb = String.split(',',3);
+ while (rgb.length < 3) rgb.push('0');
+ rgb = rgb.map(parseFloat);
+ return rgb;
+ }
+ function StringToColour888(String)
+ {
+ let rgb = String.split(',',3);
+ while (rgb.length < 3) rgb.push('0');
+ rgb = rgb.map(parseFloat);
+ rgb = rgb.map(Math.floor);
+ return rgb;
+ }
+ function ColourfffToString(Colour)
+ {
+ let r = Colour[0].toFixed(ColourDecimals);
+ let g = Colour[1].toFixed(ColourDecimals);
+ let b = Colour[2].toFixed(ColourDecimals);
+ return `${r},${g},${b}`;
+ }
+ function Colour888ToString(Colour)
+ {
+ //	gr: these should be floored...
+ let r = Colour[0].toFixed(0);
+ let g = Colour[1].toFixed(0);
+ let b = Colour[2].toFixed(0);
+ return `${r},${g},${b}`;
+ }
+ function ColourfffToColour888(Colour)
+ {
+ function fffTo888(f)
+ {
+ return Math.floor(f * 255);
+ }
+ return Colour.map(fffTo888);
+ }
+ function Colour888ToColourfff(Colour)
+ {
+ function _888Tofff(f)
+ {
+ return f / 255;
+ }
+ return Colour.map(_888Tofff);
+ }
+ 
+ const RealGetValue = GetValue;
+ const RealSetValue = SetValue;
+ const RealCleanValue = CleanValue || function (v) { return v };
+ GetValue = function ()
+ {
+ const Colourfff = RealGetValue();
+ const Colour888 = ColourfffToColour888(Colourfff);
+ const String = Colour888ToString(Colour888);
+ return String;
+ }
+ SetValue = function (ControlValue,IsFinalValue)
+ {
+ const Colour888 = StringToColour888(ControlValue);
+ const Colourfff = Colour888ToColourfff(Colour888);
+ RealSetValue(Colourfff,IsFinalValue);
+ }
+ GetLabelForValue = function (ControlValue)
+ {
+ const Colour888 = StringToColour888(ControlValue);
+ const Colourfff = Colour888ToColourfff(Colour888);
+ const rgb = ColourfffToString(Colourfff);
+ return `${Name}: [${rgb}]`;
+ }
+ CleanValue = function (ControlValue)
+ {
+ let Colourfff = StringToColourfff(ControlValue);
+ const Colour888 = ColourfffToColour888(Colourfff);
+ Colourfff = Colour888ToColourfff(Colour888);
+ const String = ColourfffToString(Colourfff);
+ return String;
+ }
+
+}
+ */
+
+//	this is now a control-manager on top of the sync
+Pop.ParamsWindow = class
+{
+	constructor(Params,OnAnyChanged,WindowRect,WindowName="Params")
+	{
+		this.Params = Params;
+		const AutoPopulate = false;
+		this.SyncObject = new Pop.SyncObject(Params,AutoPopulate);
+		this.CreateWindow(WindowRect,WindowName);
+	}
+	
+	CreateWindow(WindowRect,WindowName)
+	{
+		//	if the window rect is a string, then it's for gui/form/div mapping
+		//	but to layout the controls, we still want some value
+		const DefaultWidth = 600;
+		WindowRect = WindowRect || [800,20,DefaultWidth,300];
+		const WindowWidth = !isNaN(WindowRect[2]) ? WindowRect[2] : DefaultWidth;
+
+		//	running layout for controls
+		this.LabelRect = [10,10,WindowWidth * 0.3,18];
+		this.ControlSpacing = 10;
+		const ControlLeft = this.LabelRect[0] + this.LabelRect[2] + this.ControlSpacing;
+		const ControlRight = WindowWidth - this.ControlSpacing;
+		const ControlWidth = ControlRight - ControlLeft;
+		const ControlHeight = this.LabelRect[3];
+		const ControlTop = this.LabelRect[1];
+		this.ControlRect = [ControlLeft,ControlTop,ControlWidth,ControlHeight];
+		
+		this.Window = new Pop.Gui.Window(WindowName,WindowRect,false);
+		this.Window.EnableScrollbars(false,true);
+		
+		//	control handlers
+		this.Handlers = {};
+		
+		//	meta for recreating this window, this naming conflicts with syncobject!
+		this.AddParamMetas = {};
+		
+		this.ParamChangedLoop().catch(Pop.Warning);
+	}
+	
+	GetParamMetas()
+	{
+		//	this should return arguments for each memeber to recreate
+		//	AddParam() call
+		//	which conflicts with the naming in syncobject. Fix this!
+		return this.AddParamMetas;
+	}
+	
+	//	add new control
+	//	CleanValue = function
+	//	Min can sometimes be a cleanvalue function
+	//		AddParam('Float',Math.floor);
+	//	TreatAsType overrides the control
+	//		AddParam('Port',0,1,Math.floor,'String')
+	AddParam(Name,Min,Max,CleanValue,TreatAsType)
+	{
+		this.AddParamMetas[Name] = [Min,Max,CleanValue,TreatAsType];
+		
+		//	add to sync
+		this.SyncObject.AddParam(...arguments);
+		
+		const ParamMeta = this.SyncObject.GetParamMeta(Name);
+		
+		const RealType = typeof this.Params[Name];
+		TreatAsType = ParamMeta.GetType();
+		
+		//	control (handler)'s callbacks
+		let GetValue;
+		//let CleanValue;
+		let GetLabelForValue;
+		let IsValueSignificantChange;
+		let SetValue;
+		
+		//	add control
 		let Window = this.Window;
-		let ControlTop = this.ControlTop;
-		const LabelTop = ControlTop;
-		const LabelControl = new Pop.Gui.Label(Window,[LabelLeft,LabelTop,LabelWidth,LabelHeight]);
-		LabelControl.SetValue(Name);
-		let Control = null;
+		const LabelRect = this.LabelRect.slice();
+		const ControlRect = this.ControlRect.slice();
+		
+		//	move next control pos
+		this.LabelRect[1] += this.LabelRect[3] + this.ControlSpacing;
+		this.ControlRect[1] += this.ControlRect[3] + this.ControlSpacing;
 
-		if (TreatAsType == 'Button' && Pop.Gui.Button !== undefined)
+		let Control = null;
+		let LabelControl = new Pop.Gui.Label(Window,LabelRect);
+		LabelControl.SetValue(Name);
+		
+		
+		/*
+		if ( TreatAsType == 'Button' && Pop.Gui.Button !== undefined)
 		{
 			Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			Control.OnClicked = function ()
@@ -241,130 +581,16 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 			//const Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			//Control.SetLabel(Name);
 		}
-		else if (typeof Params[Name] === 'boolean')
+		else if ( TreatAsType == 'boolean' )
 		{
 			Control = new Pop.Gui.TickBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
-			CleanValue = function (Value) { return Value == true; }
 		}
-		else if (isString(Params[Name]))
+		else if ( RealType == 'number' && TreatAsType == 'String')
 		{
 			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
-		}
-		else if (TreatAsType == 'Colour' && Pop.Gui.Colour === undefined)
-		{
-			//	no colour control, create a button
-			//	todo: implement a colour swatch in the PopEngine
-			//	todo: swap tickbox for a button when we have one
-			//	gr: lets use a text box for now
-			//	gr: could make 3 text boxes here
-			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
-			const ColourDecimals = 3;
-			function StringToColourfff(String)
-			{
-				let rgb = String.split(',',3);
-				while (rgb.length < 3) rgb.push('0');
-				rgb = rgb.map(parseFloat);
-				return rgb;
-			}
-			function StringToColour888(String)
-			{
-				let rgb = String.split(',',3);
-				while (rgb.length < 3) rgb.push('0');
-				rgb = rgb.map(parseFloat);
-				rgb = rgb.map(Math.floor);
-				return rgb;
-			}
-			function ColourfffToString(Colour)
-			{
-				let r = Colour[0].toFixed(ColourDecimals);
-				let g = Colour[1].toFixed(ColourDecimals);
-				let b = Colour[2].toFixed(ColourDecimals);
-				return `${r},${g},${b}`;
-			}
-			function Colour888ToString(Colour)
-			{
-				//	gr: these should be floored...
-				let r = Colour[0].toFixed(0);
-				let g = Colour[1].toFixed(0);
-				let b = Colour[2].toFixed(0);
-				return `${r},${g},${b}`;
-			}
-			function ColourfffToColour888(Colour)
-			{
-				function fffTo888(f)
-				{
-					return Math.floor(f * 255);
-				}
-				return Colour.map(fffTo888);
-			}
-			function Colour888ToColourfff(Colour)
-			{
-				function _888Tofff(f)
-				{
-					return f / 255;
-				}
-				return Colour.map(_888Tofff);
-			}
-
+			
 			const RealGetValue = GetValue;
 			const RealSetValue = SetValue;
-			const RealCleanValue = CleanValue || function (v) { return v };
-			GetValue = function ()
-			{
-				const Colourfff = RealGetValue();
-				const Colour888 = ColourfffToColour888(Colourfff);
-				const String = Colour888ToString(Colour888);
-				return String;
-			}
-			SetValue = function (ControlValue,IsFinalValue)
-			{
-				const Colour888 = StringToColour888(ControlValue);
-				const Colourfff = Colour888ToColourfff(Colour888);
-				RealSetValue(Colourfff,IsFinalValue);
-			}
-			GetLabelForValue = function (ControlValue)
-			{
-				const Colour888 = StringToColour888(ControlValue);
-				const Colourfff = Colour888ToColourfff(Colour888);
-				const rgb = ColourfffToString(Colourfff);
-				return `${Name}: [${rgb}]`;
-			}
-			CleanValue = function (ControlValue)
-			{
-				let Colourfff = StringToColourfff(ControlValue);
-				const Colour888 = ColourfffToColour888(Colourfff);
-				Colourfff = Colour888ToColourfff(Colour888);
-				const String = ColourfffToString(Colourfff);
-				return String;
-			}
-		}
-		else if (TreatAsType == 'Colour' && Pop.Gui.Colour !== undefined)
-		{
-			Control = new Pop.Gui.Colour(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
-			CleanValue = function (Valuefff)
-			{
-				Pop.Debug(`CleanValue(${Valuefff}) for colour`);
-				return Valuefff;
-			}
-			GetLabelForValue = function (Value)
-			{
-				let r = Value[0].toFixed(2);
-				let g = Value[1].toFixed(2);
-				let b = Value[2].toFixed(2);
-				return `[${r},${g},${b}]`;
-			}
-		}
-		else if (typeof Params[Name] === 'number' && TreatAsType == 'String')
-		{
-			//	add a default to-number clean
-			if (!CleanValue)
-				CleanValue = function (v) { return Number(v); };
-
-			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
-
-			const RealGetValue = GetValue;
-			const RealSetValue = SetValue;
-			const RealCleanValue = CleanValue || function (v) { return v };
 			GetValue = function ()
 			{
 				//	control wants a string
@@ -390,125 +616,91 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 				return '' + NumberValue;
 			}
 		}
+		else if ( TreatAsType == 'string' )
+		{
+			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+		}
+		else if (TreatAsType == 'Colour' )
+		{
+			if ( !Pop.Gui.Colour )
+				Pop.Gui.Colour = Pop.Gui.ColourAsString;
+			Control = new Pop.Gui.Colour(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+		}
 		else
 		{
-			//	todo: dropdown list that's an enum
-			const IsEnum = (typeof Params[Name] === 'number') && Array.isArray(TreatAsType);
-
-			if (IsEnum)
-			{
-				//	todo: get key count and use those
-				Min = 0;
-				Max = TreatAsType.length - 1;
-				CleanValue = Math.floor;
-			}
-
-			//Pop.Debug("Defaulting param to number, typeof",typeof Params[Name]);
-			//	no min/max should revert to a string editor?
-			if (Min === undefined) Min = 0;
-			if (Max === undefined) Max = 100;
-			//	non-specific control, slider
-			//	slider values are all int (16bit) so we need to normalise the value
-			const TickMin = 0;
-			const TickMax = (CleanValue === Math.floor) ? (Max - Min) : 1000;
-			const Notches = (CleanValue === Math.floor) ? (Max - Min) : 10;
-			Control = new Pop.Gui.Slider(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
-			Control.SetMinMax(TickMin,TickMax,Notches);
-
-			const RealGetValue = GetValue;
-			const RealSetValue = SetValue;
-			const RealCleanValue = CleanValue || function (v) { return v };
-			GetValue = function ()
-			{
-				const RealValue = RealGetValue();
-				const NormValue = Math.Range(Min,Max,RealValue);
-				const ControlValue = Math.Lerp(TickMin,TickMax,NormValue);
-				return ControlValue;
-			}
-			SetValue = function (ControlValue,IsFinalValue)
-			{
-				const NormValue = Math.Range(TickMin,TickMax,ControlValue);
-				const RealValue = Math.Lerp(Min,Max,NormValue);
-				//	this should have been cleaned, but maybe needs it agian?
-				RealSetValue(RealValue,IsFinalValue);
-			}
-			GetLabelForValue = function (ControlValue)
-			{
-				const NormValue = Math.Range(TickMin,TickMax,ControlValue);
-				const RealValue = Math.Lerp(Min,Max,NormValue);
-				let Value = RealCleanValue(RealValue);
-				if (IsEnum)
-				{
-					Pop.Debug("Enum",Value,TreatAsType);
-					const EnumLabel = TreatAsType[Value];
-					return Name + ': ' + EnumLabel;
-				}
-				return Name + ': ' + Value;
-			}
-			CleanValue = function (ControlValue)
-			{
-				let NormValue = Math.Range(TickMin,TickMax,ControlValue);
-				let RealValue = Math.Lerp(Min,Max,NormValue);
-				let Value = RealCleanValue(RealValue);
-				NormValue = Math.Range(Min,Max,RealValue);
-				ControlValue = Math.Lerp(TickMin,TickMax,NormValue);
-				return ControlValue;
-			}
+			
 		}
+		*/
+		
+		Control = new Pop.Gui.TextBox(Window,ControlRect);
 
-		//	no clean specified
+		//	provide default callbacks
+		//	gr: this should be cleaning?
+		if ( !GetValue )
+			GetValue = function()	{	return this.Params[Name];	}.bind(this);
+			
 		if (!CleanValue)
-		{
-			CleanValue = function (v) { return v; }
-		}
+			CleanValue = ParamMeta.CleanValue;
 
-		//	default label
 		if (!GetLabelForValue)
-		{
-			GetLabelForValue = function (Value)
-			{
-				return Name + ': ' + Value;
-			}
-		}
+			GetLabelForValue = ParamMeta.GetLabelForValue;
 
+		if ( !IsValueSignificantChange )
+			IsValueSignificantChange = ParamMeta.IsValueSignificantChange;
+		
+		if ( !SetValue )
+		{
+			Pop.Debug(`Init SetValue`);
+			SetValue = function(Value,IsFinalValue)
+			{
+				Pop.Debug(`SetValue(${Name}->${Value} Isfinal=${IsFinalValue}))`);
+				this.SyncObject.SetValue(Name,Value,IsFinalValue);
+			}.bind(this);
+		}
+		
 		const Handler = new TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue,SetValue,IsValueSignificantChange);
 		this.Handlers[Name] = Handler;
 		//	init
 		Handler.UpdateDisplay();
-
-		this.ControlTop += ControlHeight;
-		this.ControlTop += ControlSpacing;
-	}.bind(this);
+	}
 	
-	//	changed externally, update display
-	this.OnParamChanged = function (Name)
+	async ParamChangedLoop()
 	{
-		const Handler = this.Handlers[Name];
-		if (!Handler)
-			throw "Tried to change param " + Name + " but no control assigned";
-
-		Handler.UpdateDisplay();
-	}.bind(this);
-
-	//	changed externally
-	this.OnParamsChanged = function ()
-	{
-		const Keys = Object.keys(this.Handlers);
-		//Pop.Debug("OnParamsChanged",Keys);
-		const UpdateInParams = true;
-		for (const Key of Keys)
+		//	update display whenever a param changes from the sync
+		while(this)
 		{
+			let [Params,Name,Value,Final] = await this.SyncObject.WaitForChange();
+			
 			try
 			{
-				this.OnParamChanged(Key);
+				const Handler = this.Handlers[Name];
+				Handler.UpdateDisplay();
 			}
-			catch (e)
+			catch(e)
 			{
-				Pop.Debug("OnParamChanged(" + Key + ") error",e);
+				Pop.Warning(`Error updating display after sync(${Name}) change; ${e}`);
 			}
 		}
-	}.bind(this);
+	}
 	
+	async WaitForParamsChanged()
+	{
+		return this.SyncObject.WaitForChange();
+	}
+	
+	//	changed externally, update display
+	OnParamChanged(Name)
+	{
+		this.SyncObject.OnParamChanged(Name);
+		
+		//	ui update caught by ParamChangedLoop
+	}
+
+	//	changed externally
+	OnParamsChanged()
+	{
+		this.SyncObject.OnParamsChanged();
+	}
 }
 
 
@@ -593,6 +785,7 @@ function RunParamsHttpServer(Params,ParamsWindow,Port=80)
 		//Pop.Debug("Web changed params");
 		try
 		{
+			//	update sync object
 			Object.assign(Params,Json);
 			ParamsWindow.OnParamsChanged(Params);
 		}
