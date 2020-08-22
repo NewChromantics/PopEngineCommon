@@ -713,9 +713,10 @@ function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 }
 
 
-function RunParamsWebsocketServer(Port,OnJsonRecieved)
+function RunParamsWebsocketServer(Ports,OnJsonRecieved)
 {
 	let CurrentSocket = null;
+	let CurrentPortIndex = 0;
 	
 	async function Loop()
 	{
@@ -723,7 +724,8 @@ function RunParamsWebsocketServer(Port,OnJsonRecieved)
 		{
 			try
 			{
-				Pop.Debug()
+				const Port = Ports[CurrentPortIndex%Ports.length];
+				CurrentPortIndex++;
 				const Socket = new Pop.Websocket.Server(Port);
 				CurrentSocket = Socket;
 				while (true)
@@ -778,11 +780,11 @@ function RunParamsWebsocketServer(Port,OnJsonRecieved)
 	return Output;
 }
 
-function RunParamsHttpServer(Params,ParamsWindow,Port=80)
+function RunParamsHttpServer(Params,ParamsWindow,HttpPort=80)
 {
 	function OnJsonRecieved(Json)
 	{
-		//Pop.Debug("Web changed params");
+		//Pop.Debug("Remote change of params");
 		try
 		{
 			//	update sync object
@@ -795,9 +797,10 @@ function RunParamsHttpServer(Params,ParamsWindow,Port=80)
 		}
 	}
 
-	const WebocketPort = Port + 1;
+	//	support multiple ports as chrome seems to block them for a little while after restarting
+	const WebsocketPorts = [HttpPort + 1,HttpPort + 2,HttpPort + 3];
 	//	create websocket server to send & recieve param changes
-	const Websocket = RunParamsWebsocketServer(WebocketPort,OnJsonRecieved);
+	const Websocket = RunParamsWebsocketServer(WebsocketPorts,OnJsonRecieved);
 
 	function SendNewParams(Params)
 	{
@@ -860,7 +863,7 @@ function RunParamsHttpServer(Params,ParamsWindow,Port=80)
 	}
 
 	//	serve HTTP, which delivers a page that creates a params window!
-	const Http = new Pop.Http.Server(Port,HandleVirtualFile);
+	const Http = new Pop.Http.Server(HttpPort,HandleVirtualFile);
 	const Address = Http.GetAddress();
 	Pop.Debug("Http server:",JSON.stringify(Address));
 
