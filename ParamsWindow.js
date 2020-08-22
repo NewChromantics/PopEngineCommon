@@ -287,7 +287,13 @@ Pop.SyncObject = class
 	{
 		return this.ParamMetas[Name];
 	}
-
+	
+	//	this needs to return arguments for AddParam() functions for each key
+	GetParamMetas()
+	{
+		return {};
+	}
+	
 	GetMetaFromArguments(Arguments)
 	{
 		//	first is name
@@ -394,7 +400,7 @@ Pop.SyncObject = class
 //	dummy window we can swap out quickly in code
 //	change this so params window can just be hidden more easily?
 //	gr: deprecated
-Pop.DummyParamsWindow = class extends Pop.ParamsSync
+Pop.DummyParamsWindow = class extends Pop.SyncObject
 {
 	constructor()
 	{
@@ -704,7 +710,7 @@ Pop.ParamsWindow = class
 		}
 	}
 	
-	async WaitForParamsChanged()
+	async WaitForChange()
 	{
 		return this.SyncObject.WaitForChange();
 	}
@@ -749,6 +755,7 @@ function RunParamsWebsocketServer(Ports,OnJsonRecieved)
 				CurrentPortIndex++;
 				const Socket = new Pop.Websocket.Server(Port);
 				CurrentSocket = Socket;
+				Pop.Debug(`Running Params Websocket server on ${JSON.stringify(CurrentSocket.GetAddress())}`);
 				while (true)
 				{
 					const Message = await Socket.WaitForMessage();
@@ -833,7 +840,7 @@ function RunParamsHttpServer(Params,ParamsWindow,HttpPort=80)
 	{
 		while (true)
 		{
-			await ParamsWindow.WaitForParamsChanged();
+			await ParamsWindow.WaitForChange();
 			SendNewParams(Params);
 		}
 	}
