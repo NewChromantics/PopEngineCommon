@@ -267,6 +267,9 @@ Pop.SyncObject = class
 	constructor(Params,AutoPopulate=true)
 	{
 		this.Params = Params;
+		//	init cache
+		this.Cache = JSON.parse(JSON.stringify(this.Params));
+		
 		this.WaitForParamsChangedPromiseQueue = new Pop.PromiseQueue();
 		this.ParamMetas = {};
 		
@@ -312,7 +315,7 @@ Pop.SyncObject = class
 	//		AddParam('Port',0,1,Math.floor,'String')
 	AddParam(Name,Min,Max,CleanValue,TreatAsType)
 	{
-		Pop.Debug(`SyncObject AddParam(${Name})`);
+		//Pop.Debug(`SyncObject AddParam(${Name})`);
 		//	replace existing meta, but propogate this info so a UI can replace controls
 		const InitialValue = this.Params[Name];
 		const ParamMeta = new SyncMeta(Name,InitialValue);
@@ -343,21 +346,29 @@ Pop.SyncObject = class
 		//	gr: do we need to clean etc here?
 		this.Params[Name] = Value;
 		
-		//	chance here to change it to an object
-		const Change = [this.Params,Name,Value,IsFinalValue];
-		this.WaitForParamsChangedPromiseQueue.Push(Change);
+		this.OnParamChanged(Name,IsFinalValue);
 	}
 	
 	//	value has changed externally, propogate
-	OnParamChanged(Name)
+	OnParamChanged(Name,IsFinalValue=true)
 	{
-		Pop.Warning(`SyncObject param changed externally... is this correct?`);
+		//	check for a change against the cache
+		const Meta = this.GetParamMeta(Name);
+		const OldValue = this.Cache[Name];
+		const NewValue = this.Params[Name];
+		const IsDifferent = Meta.IsValueSignificantChange(OldValue,NewValue);
 		
-		const Value = this.Params[Name];
-		const IsFinalValue = false;	//	true?
+		if ( !IsDifferent )
+		{
+			//Pop.Debug(`Param ${Name} not changed, skipping propogation`);
+			return;
+		}
 		
-		//	chance here to change it to an object
-		const Change = [this.Params,Name,Value,IsFinalValue];
+		//	update cache
+		this.Cache[Name] = NewValue;
+		
+		//	chance here to change the output to an object for more verbose callback
+		const Change = [this.Params,Name,NewValue,IsFinalValue];
 		this.WaitForParamsChangedPromiseQueue.Push(Change);
 	}
 	
@@ -383,7 +394,14 @@ Pop.SyncObject = class
 //	dummy window we can swap out quickly in code
 //	change this so params window can just be hidden more easily?
 //	gr: deprecated
-Pop.DummyParamsWindow = Pop.ParamsSync;
+Pop.DummyParamsWindow = class extends Pop.ParamsSync
+{
+	constructor()
+	{
+		Pop.Warning("DummyParamsWindow is now deprecated, just use Pop.ParamsSync");
+		super(...arguments);
+	}
+}
 
 /*
 Pop.Gui.ColourAsString = class extends Pop.Gui.TextBox
@@ -650,10 +668,9 @@ Pop.ParamsWindow = class
 		
 		if ( !SetValue )
 		{
-			Pop.Debug(`Init SetValue`);
 			SetValue = function(Value,IsFinalValue)
 			{
-				Pop.Debug(`SetValue(${Name}->${Value} Isfinal=${IsFinalValue}))`);
+				//Pop.Debug(`SetValue(${Name}->${Value} Isfinal=${IsFinalValue}))`);
 				this.SyncObject.SetValue(Name,Value,IsFinalValue);
 			}.bind(this);
 		}
@@ -670,16 +687,20 @@ Pop.ParamsWindow = class
 		while(this)
 		{
 			let [Params,Name,Value,Final] = await this.SyncObject.WaitForChange();
-			
-			try
-			{
-				const Handler = this.Handlers[Name];
-				Handler.UpdateDisplay();
-			}
-			catch(e)
-			{
-				Pop.Warning(`Error updating display after sync(${Name}) change; ${e}`);
-			}
+			this.UpdateParamUi(Name);
+		}
+	}
+	
+	UpdateParamUi(Name)
+	{
+		try
+		{
+			const Handler = this.Handlers[Name];
+			Handler.UpdateDisplay();
+		}
+		catch(e)
+		{
+			Pop.Warning(`Error updating display after sync(${Name}) change; ${e}; this.Handlers=${Object.keys(this.Handlers)}`);
 		}
 	}
 	
