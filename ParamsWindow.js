@@ -485,8 +485,11 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 	{
 		const Handler = this.Handlers[Name];
 		if (!Handler)
-			throw "Tried to change param " + Name + " but no control assigned";
-
+		{
+			Pop.Warning(`Tried to change param ${Name} but no control assigned`);
+			//throw "Tried to change param " + Name + " but no control assigned";
+			return;
+		}
 		Handler.UpdateDisplay();
 	}.bind(this);
 
