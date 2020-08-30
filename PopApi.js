@@ -171,6 +171,7 @@ Pop.PromiseQueue = class
 
 		return Promise;
 	}
+	
 	ClearQueue()
 	{
 		//	delete values, losing data!
@@ -240,6 +241,11 @@ Pop.PromiseQueue = class
 			Pop.Warning(`This promise queue has ${this.PendingValues.length} pending values and ${this.Promises.length} pending promises`,this);
 		
 		this.FlushPending();
+	}
+	
+	GetQueueSize()
+	{
+		return this.PendingValues.length;
 	}
 	
 	HasPending()
