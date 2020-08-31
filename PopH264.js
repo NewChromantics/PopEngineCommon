@@ -12,6 +12,17 @@ Pop.H264.Slice_CodedPartitionB = 3;
 Pop.H264.Slice_CodedPartitionC = 4;
 Pop.H264.Slice_CodedIDRPicture = 5;
 
+Pop.H264.GetContentName = function(ContentType)
+{
+	const KeyValues = Object.entries(Pop.H264);
+	for ( const [Key, Value] of KeyValues)
+	{
+		if ( Value === ContentType )
+			return Key;
+	}
+	return `Unknown H264 content type ${ContentType}`;
+}
+
 Pop.H264.GetNaluLength = function(Packet)
 {
 	const Data = Packet.slice(0,4);
