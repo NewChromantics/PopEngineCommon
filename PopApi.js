@@ -123,6 +123,36 @@ function IsObjectInstanceOf(This,TypeConstructor)
 	return false;
 }
 
+//	https://stackoverflow.com/a/46999598/355753
+function IsTypedArray(obj)
+{
+	return !!obj && obj.byteLength !== undefined;
+}
+
+Pop.JoinTypedArrays = function(a,b,c,etc)
+{
+	//	gr: need some more rigirous checks here
+	if ( !IsTypedArray(a) )
+		throw `Cannot JoinTypedArrays where 1st not typed array (${a})`;
+
+	const Constructor = a.constructor;
+	const Arrays = Array.from(arguments);
+	const TotalSize = Arrays.reduce( (Accumulator,a) => Accumulator + a.length, 0 );
+
+	const NewArray = new Constructor(TotalSize);
+	let Position = 0;
+	for ( let TheArray of Arrays )
+	{
+		if ( TheArray.constructor != Constructor )
+			throw `Cannot join to typedarrays of different types`;
+	
+		NewArray.set( TheArray, Position );
+		Position += TheArray.length;
+	}
+	return NewArray;
+}
+
+
 //	create a promise function with the Resolve & Reject functions attached so we can call them
 Pop.CreatePromise = function()
 {
