@@ -1,16 +1,17 @@
 
 Pop.H264 = {};
 
-Pop.H264.SPS = 7;
-Pop.H264.PPS = 8;
-Pop.H264.SEI = 6;	//	supplimental enhancement info
-Pop.H264.EOS = 10;	//	endof sequence
-Pop.H264.EOF = 11;	//	end of stream
 Pop.H264.Slice_NonIDRPicture = 1;
 Pop.H264.Slice_CodedPartitionA = 2;
 Pop.H264.Slice_CodedPartitionB = 3;
 Pop.H264.Slice_CodedPartitionC = 4;
 Pop.H264.Slice_CodedIDRPicture = 5;
+Pop.H264.SEI = 6;	//	supplimental enhancement info
+Pop.H264.SPS = 7;
+Pop.H264.PPS = 8;
+Pop.H264.AccessUnitDelimiter = 9;
+Pop.H264.EOS = 10;	//	endof sequence
+Pop.H264.EOF = 11;	//	end of stream
 
 Pop.H264.GetContentName = function(ContentType)
 {
