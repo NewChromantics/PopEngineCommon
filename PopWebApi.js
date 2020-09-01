@@ -220,7 +220,7 @@ Pop.WebApi.TFileCache = class
 		//	Do we leave this, even if we unload a file?
 		this.CacheMeta = {};	//	[Filename] = .Size .OtherThings .LastAccessed?
 		this.Cache = {};		//	[Filename] = Contents
-		this.OnFilesChanged = new WebApi_PromiseQueue();
+		this.OnFilesChanged = new WebApi_PromiseQueue('FileCache.OnFilesChanged');
 	}
 
 	async WaitForFileChange()
