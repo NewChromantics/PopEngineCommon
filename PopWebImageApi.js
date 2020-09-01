@@ -39,6 +39,9 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	
 	switch ( PixelFormat )
 	{
+		case 'Luma':
+		case 'ChromaU':
+		case 'ChromaV':
 		case 'Greyscale':	return [ gl.LUMINANCE,	gl.UNSIGNED_BYTE];
 		case 'RGBA':		return [ gl.RGBA,		gl.UNSIGNED_BYTE];
 		case 'RGB':			return [ gl.RGB,		gl.UNSIGNED_BYTE];

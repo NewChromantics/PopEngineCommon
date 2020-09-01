@@ -1490,12 +1490,14 @@ function WindowRenderTarget(Window)
 
 
 
-Pop.Opengl.Shader = function(Name,VertShaderSource,FragShaderSource)
+Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSource)
 {
-	if ( typeof Name != 'string' )
+	if ( typeof RenderContext == 'string' )
 	{
-		Pop.Warning(`Shader constructor first argument is no longer a context`);
-		Name = 'A shader';
+		Pop.Warning(`Shader constructor first argument is a RenderContext, not a name`);
+		FragShaderSource = VertShaderSource;
+		VertShaderSource = Name;
+		Name = RenderContext;
 	}
 	this.Name = Name;
 	this.Program = null;

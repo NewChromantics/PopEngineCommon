@@ -42,6 +42,16 @@ Pop.Array.MoveElementFromArrayToArray = function(Element,SourceArray,DestArray)
 	DestArray.push( Element );
 }
 
+Pop.Array.IsMatch = function(a,b)
+{
+	if ( a.length !== b.length )
+		return false;
+	for ( let i=0;	i<a.length;	i++ )
+		if ( a[i] !== b[i] )
+			return false;
+	return true;
+}
+
 
 //	maybe better named as BufferToString? but this should be clear its "text vs binary"
 //	this is for ascii, NOT UTF16 (hence bytes, not shorts)
