@@ -183,8 +183,9 @@ Pop.CreatePromise = function()
 //	gr: this is getting out of sync with the cyclic-fixing-copy in WebApi. Make it seperate!
 Pop.PromiseQueue = class
 {
-	constructor()
+	constructor(DebugName='UnnamedPromiseQueue')
 	{
+		this.Name = DebugName;
 		//	pending promises
 		this.Promises = [];
 		//	values we've yet to resolve (each is array capturing arguments from push()
@@ -278,7 +279,7 @@ Pop.PromiseQueue = class
 		this.PendingValues.push( Value );
 		
 		if ( this.PendingValues.length > 100 )
-			Pop.Warning(`This promise queue has ${this.PendingValues.length} pending values and ${this.Promises.length} pending promises`,this);
+			Pop.Warning(`This (${this.Name}) promise queue has ${this.PendingValues.length} pending values and ${this.Promises.length} pending promises`,this);
 		
 		this.FlushPending();
 	}
