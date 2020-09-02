@@ -1,5 +1,8 @@
 //	namespace
-const Pop = {};
+//	gr: safari scopes const & let away from modules,
+//		so if this file is loaded outside a module, Pop isn't availible
+//		to modules in safari. So fully-global/singletons need to be var.
+var Pop = {};
 
 
 
