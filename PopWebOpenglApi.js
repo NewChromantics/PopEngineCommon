@@ -453,7 +453,7 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 {
 	//	things to overload
-	//this.OnRender = function(RenderTarget){};
+	this.OnRender = function(RenderTarget)					{	Pop.Warning(`OnRender not overloaded`);	};
 	this.OnMouseDown = function(x,y,Button)					{	/*Pop.Debug('OnMouseDown',...arguments);*/		};
 	this.OnMouseMove = function(x,y,Button)					{	/*Pop.Debug("OnMouseMove",...arguments);*/		};
 	this.OnMouseUp = function(x,y,Button)					{	/*Pop.Debug('OnMouseUp',...arguments);*/		};
