@@ -473,6 +473,8 @@ async function FetchArrayBufferStream(Url,OnProgress)
 		//	gr: we want to report the current contents, so even if merging later is faster, lets keep resizing
 		let TotalContents = new Uint8Array(0);
 		
+		//	gr: this function is expensive, especially when called often
+		//		we should keep an array of chunks, and merge on demand (or at the end)
 		function AppendChunk(Chunk)
 		{
 			if ( !Chunk )
