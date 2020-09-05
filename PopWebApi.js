@@ -452,6 +452,20 @@ Pop.GetTimeNowMs = function()
 //		so inside this caching, we need to do the read too, hence extra funcs
 const FetchCache = {};
 
+//	AbortController is undefined on firefox browser on hololens2
+class AbortControllerStub
+{
+	constructor()
+	{
+		this.signal = null;
+	}
+
+	abort()
+	{
+	}
+};
+window.AbortController = window.AbortController || AbortControllerStub;
+
 async function CreateFetch(Url)
 {
 	//	gr: check for not a string?
@@ -460,7 +474,7 @@ async function CreateFetch(Url)
 		
 	//	attach a Cancel() function
 	//	gr: work out when not supported
-	const Controller = new AbortController();
+	const Controller = new window.AbortController();
 	const Signal = Controller.signal;
 	function Cancel()
 	{
