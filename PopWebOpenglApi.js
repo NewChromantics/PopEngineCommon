@@ -1016,6 +1016,34 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			throw "New render target didn't re-find";
 		return RenderTarget;
 	}
+	
+	this.ReadPixels = function(Image,ReadBackFormat)
+	{
+		const RenderContext = this;
+		const gl = this.GetGlContext();
+		const RenderTarget = this.GetTextureRenderTarget(Image);
+		RenderTarget.BindRenderTarget( RenderContext );
+		const Pixels = {};
+		Pixels.Width = RenderTarget.GetRenderTargetRect()[2];
+		Pixels.Height = RenderTarget.GetRenderTargetRect()[3];
+		Pixels.Format = ReadBackFormat;
+		if ( ReadBackFormat == 'RGBA' )
+		{
+			Pixels.Channels = 4;
+			Pixels.Data = new Uint8Array(Pixels.Width * Pixels.Height * Pixels.Channels);
+			gl.readPixels(0,0,Pixels.Width,Pixels.Height,gl.RGBA,gl.UNSIGNED_BYTE,Pixels.Data);
+			return Pixels;
+		}
+		else if ( ReadBackFormat == 'Float4' )
+		{
+			Pixels.Channels = 4;
+			Pixels.Data = new Float32Array(Pixels.Width * Pixels.Height * Pixels.Channels);
+			gl.readPixels(0,0,Pixels.Width,Pixels.Height,gl.RGBA,gl.FLOAT,Pixels.Data);
+			return Pixels;
+		}
+		//	this needs to restore bound rendertarget, really
+		//	although any renders should be binding render target explicitly
+	}
 
 	this.IsFullscreenSupported = function()
 	{
@@ -1114,6 +1142,7 @@ Pop.Opengl.RenderTarget = function()
 		
 		RenderFunction( RenderTarget );
 		
+		//	gr: merge this with ReadPixels()
 		if (ReadBackFormat === true)
 		{
 			const gl = RenderContext.GetGlContext();

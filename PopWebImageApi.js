@@ -4,6 +4,22 @@ const WebApi_HtmlImageElement = this.hasOwnProperty('HTMLImageElement') ? this['
 const WebApi_HtmlCanvasElement = this.hasOwnProperty('HTMLCanvasElement') ? this['HTMLCanvasElement'] : null;
 
 
+//	in c++ this is SoyPixelsFormat namespace
+function GetChannelsFromPixelFormat(PixelFormat)
+{
+	switch(PixelFormat)
+	{
+		case 'Greyscale':	return 1;
+		case 'RGBA':		return 4;
+		case 'RGB':			return 3;
+		case 'Float3':		return 3;
+		case 'Float4':		return 4;
+		case 'ChromaU':		return 1;
+		case 'ChromaV':		return 1;
+	}
+	throw `unhandled GetChannelsFromPixelFormat(${PixelFormat})`;
+}
+
 
 function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 {
@@ -263,6 +279,11 @@ Pop.Image = function(Filename)
 	this.GetFormat = function()
 	{
 		return this.PixelsFormat;
+	}
+	
+	this.GetChannels = function()
+	{
+		return GetChannelsFromPixelFormat(this.PixelsFormat);
 	}
 	
 	this.SetFormat = function(NewFormat)
