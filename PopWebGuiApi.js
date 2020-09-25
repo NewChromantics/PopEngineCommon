@@ -1186,10 +1186,6 @@ Pop.Gui.TextBox = class extends Pop.Gui.BaseControl
 		Input.type = 'text';
 		Input.value = 'Pop.Gui.Button value';
 		SetGuiControl_SubElementStyle( Input, 0, 50 );
-		//	oninput = every change
-		//	onchange = on lose focus
-		Input.oninput = this.OnElementChanged.bind(this);
-		Input.onchange = this.OnElementChanged.bind(this);
 		Div.InputElement = Input;
 		Div.appendChild(Input);
 
@@ -1201,7 +1197,17 @@ Pop.Gui.TextBox = class extends Pop.Gui.BaseControl
 		
 		return Div;
 	}
-	
+
+	BindEvents()
+	{
+		super.BindEvents();
+
+		const Input = this.InputElement;
+		//	oninput = every change
+		//	onchange = on lose focus
+		Input.oninput = this.OnElementChanged.bind(this);
+		Input.onchange = this.OnElementChanged.bind(this);
+	}
 }
 
 
