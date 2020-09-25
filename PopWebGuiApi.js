@@ -1101,39 +1101,57 @@ Pop.Gui.Colour = function(Parent,Rect)
 }
 
 
-
-Pop.Gui.TextBox = function(Parent,Rect)
+Pop.Gui.TextBox = class extends Pop.Gui.BaseControl
 {
-	this.Label = '';
-	this.InputElement = null;
-	this.LabelElement = null;
+	constructor(Parent,Rect)
+	{
+		super(...arguments);
 
-	//	overwrite/overload this
-	this.OnChanged = function (NewValue) { };
-	
-	this.GetValue = function()
+		this.Label = '';
+		this.InputElement = null;
+		this.LabelElement = null;
+
+		//	overload
+		this.OnChanged = function (NewValue)
+		{
+			Pop.Debug(`Pop.Gui.TextBox.OnChanged -> ${NewValue}`);
+		}
+
+		this.ContainerElement = this.CreateElement(Parent,Rect);
+		this.InputElement = this.ContainerElement.InputElement;
+		this.LabelElement = this.ContainerElement.LabelElement;
+		this.BindEvents();
+		this.RefreshLabel();
+	}
+
+	GetElement()
+	{
+		return this.ContainerElement;
+	}
+
+	GetValue()
 	{
 		return this.InputElement.value;
 	}
 	
-	this.SetValue = function(Value)
+	SetValue(Value)
 	{
 		this.InputElement.value = Value;
 		this.RefreshLabel();
 	}
 	
-	this.SetLabel = function(Value)
+	SetLabel(Value)
 	{
 		this.Label = Value;
 		this.RefreshLabel();
 	}
 	
-	this.RefreshLabel = function()
+	RefreshLabel()
 	{
 		this.LabelElement.innerText = this.Label;
 	}
 	
-	this.OnElementChanged = function(Event)
+	OnElementChanged(Event)
 	{
 		//	call our callback
 		let Value = this.GetValue();
@@ -1141,37 +1159,49 @@ Pop.Gui.TextBox = function(Parent,Rect)
 		this.OnChanged( Value );
 	}
 	
-	this.CreateElement = function(Parent)
+	CreateElement(Parent,Rect)
 	{
-		let Input = document.createElement('input');
-		this.InputElement = Input;
-		
-		//	gr: what are defaults in pop?
+		//	if it already exists, need to work out if it's an input or container
+		const ExistingElement = GetExistingElement(Parent);
+		if (ExistingElement)
+		{
+			//	existing
+			if (ExistingElement.type == "text")
+			{
+				ExistingElement.InputElement = ExistingElement;
+				ExistingElement.LabelElement = {};//	dummy
+				return ExistingElement;
+			}
+			throw `Handle existing element for label`;
+		}
+
+		const ElementType = 'span';//'input';
+		const Div = document.createElement(ElementType);
+		if (Rect)
+			SetGuiControlStyle(Div,Rect);
+		Parent.AddChildControl(Parent,Div);
+
+		const Input = document.createElement('input');
+		SetGuiControl_SubElementStyle(Input,0,50);
 		Input.type = 'text';
+		Input.value = 'Pop.Gui.Button value';
 		SetGuiControl_SubElementStyle( Input, 0, 50 );
 		//	oninput = every change
 		//	onchange = on lose focus
 		Input.oninput = this.OnElementChanged.bind(this);
 		Input.onchange = this.OnElementChanged.bind(this);
+		Div.InputElement = Input;
+		Div.appendChild(Input);
 
-		let Label = document.createElement('label');
-		this.LabelElement = Label;
+		const Label = document.createElement('label');
 		Label.innerText = 'TextBox';
 		SetGuiControl_SubElementStyle( Label, 50, 100 );
-		
-		
-		let Div = document.createElement('div');
-		SetGuiControlStyle( Div, Rect );
-		
-		Div.appendChild( Input );
+		Div.LabelElement = Label;
 		Div.appendChild( Label );
-		Parent.AddChildControl( this, Div );
 		
 		return Div;
 	}
 	
-	this.Element = this.CreateElement(Parent);
-	this.RefreshLabel();
 }
 
 
