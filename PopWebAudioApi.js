@@ -144,7 +144,7 @@ Pop.Audio.SimpleSound = class
 		this.ActionQueue.Push(Lambda);
 	}
 
-	Play(TimeMs)
+	Play(TimeMs=0)
 	{
 		const QueueTime = Pop.GetTimeNowMs();
 		//Pop.Debug(`Queue play(${Name}) at ${Pop.GetTimeNow}
