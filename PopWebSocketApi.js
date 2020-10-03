@@ -60,10 +60,18 @@ Pop.Websocket.Client = class
 		if (!ServerAddress.startsWith('ws://') && !ServerAddress.startsWith('wss://'))
 			ServerAddress = 'ws://' + ServerAddress;
 		this.Socket = new WebSocket(ServerAddress);
-		this.Socket.onopen = this.OnConnected.bind(this);
 		this.Socket.onerror = this.OnError.bind(this);
 		this.Socket.onclose = this.OnDisconnected.bind(this);
+		this.Socket.binaryType = 'arraybuffer';	//	gr: if this fails, type stays as blob
+		this.Socket.onopen = this.OnConnected.bind(this);
 		this.Socket.onmessage = this.OnMessage.bind(this);
+	}
+	
+	ProcessMessagesAsync()
+	{
+		//	if we have to use blobs, we have to process messages async to keep string & binary messages in order
+		//	gr: note lower case required on chrome!
+		return this.Socket.binaryType != 'arraybuffer';
 	}
 	
 	async WaitForConnect()
@@ -107,9 +115,28 @@ Pop.Websocket.Client = class
 		Packet.Data = Data;
 		Packet.RecieveTime = Pop.GetTimeNowMs();
 
-		//	gr: doing immediate string, and async blob->array buffer means
-		//		one is queued immediately, and one is not, so data gets out of order
-		this.PendingMessageData.Push(Packet);
+		//	look out for packets coming in as blobs when we're not expecting it
+		if ( !this.ProcessMessagesAsync() )
+		{
+			if ( Packet.Data instanceof Blob )
+			{
+				Pop.Warning(`Websocket configured as non-async/non-blob, but we've got a blob packet. Switching to async mode (which introduces processing delay!)`);
+				return this.Socket.binaryType = 'blob_unexpected';
+			}
+		}
+
+		if ( this.ProcessMessagesAsync() )
+		{
+			//	gr: doing immediate string, and async blob->array buffer means
+			//		one is queued immediately, and one is not, so data gets out of order
+			this.PendingMessageData.Push(Packet);
+			return;
+		}
+		
+		if ( Packet.Data instanceof ArrayBuffer )
+			Packet.Data = new Uint8Array(Packet.Data);
+
+		this.OnMessagePromises.Push(Packet);
 	}
 	
 	async ProcessPendingMessageDataThread()
