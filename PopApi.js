@@ -134,9 +134,14 @@ function IsObjectInstanceOf(This,TypeConstructor)
 }
 
 //	https://stackoverflow.com/a/46999598/355753
-function IsTypedArray(obj)
+Pop.IsTypedArray = function(obj)
 {
 	return !!obj && obj.byteLength !== undefined;
+}
+function IsTypedArray(obj)
+{
+	Pop.Warning(`Deprecated: IsTypedArray(); use Pop.IsTypedArray()`);
+	return Pop.IsTypedArray(obj);
 }
 
 Pop.JoinTypedArrays = function(a,b,c,etc)
