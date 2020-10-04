@@ -268,6 +268,26 @@ Pop.WebApi.TFileCache = class
 		{
 			const Meta = this.GetMeta(Filename);
 			Meta.ContentChunks = ContentChunks;
+			
+			//	gr: I really don't want to store this meta as it can go out of date
+			//		but if this is the ONLY place the chunks get updated, it can do for now
+			//		Some systems (filemonitor) call GetMeta(), can't JUST have it in 
+			//		the OnChanged callback
+			if ( Meta.ContentChunks === undefined )
+			{
+				Meta.PendingContentsSize = undefined;	//	not streaming(any more)
+			}
+			else
+			{
+				Meta.PendingContentsSize = 0;
+				Meta.ContentChunks.forEach( Chunk => Meta.PendingContentsSize += Chunk.byteLength );
+			}
+			
+			//	update known size
+			if ( Contents )
+			{
+				Meta.Size = Math.max( Contents.length, Meta.Size||0 );
+			}
 		}
 		
 		this.Cache[Filename] = Contents;
