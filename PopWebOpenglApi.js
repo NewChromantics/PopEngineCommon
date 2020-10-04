@@ -1852,8 +1852,8 @@ Pop.Opengl.TriangleBuffer = class
 		{
 			Pop.Warn("[deprecated] Old TriangleBuffer constructor, use a keyed object");
 			const VertexAttributeName = arguments[1];
-			const VertexSize = arguments[2];
-			const VertexData = arguments[3];
+			const VertexData = arguments[2];
+			const VertexSize = arguments[3];
 			this.TriangleIndexes = arguments[4];
 			const Attrib = {};
 			Attrib.Size = VertexSize;
@@ -1869,7 +1869,7 @@ Pop.Opengl.TriangleBuffer = class
 			if ( typeof Attrib.Size != 'number' )
 				throw `Attrib ${AttribName} size(${Attrib.Size}) not a number`;
 			
-			if ( !Array.isArray(Attrib.Data) )
+			if ( !Array.isArray(Attrib.Data) && !Pop.IsTypedArray(Attrib.Data) )
 				throw `Attrib ${AttribName} data(${typeof Attrib.Data}) not an array`;
 		}
 		Object.keys(this.Attribs).forEach(VerifyAttrib.bind(this));
