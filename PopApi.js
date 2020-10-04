@@ -147,7 +147,7 @@ function IsTypedArray(obj)
 Pop.JoinTypedArrays = function(a,b,c,etc)
 {
 	//	gr: need some more rigirous checks here
-	if ( !IsTypedArray(a) )
+	if ( !Pop.IsTypedArray(a) )
 		throw `Cannot JoinTypedArrays where 1st not typed array (${a})`;
 
 	const Constructor = a.constructor;
