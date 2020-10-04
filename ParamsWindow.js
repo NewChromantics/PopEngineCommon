@@ -125,15 +125,19 @@ Pop.DummyParamsWindow = function()
 Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 {
 	OnAnyChanged = OnAnyChanged || function(){};
-	
-	WindowRect = WindowRect || [800,20,600,300];
+
+	//	if the window rect is a string, then it's for gui/form/div mapping
+	//	but to layout the controls, we still want some value
+	const DefaultWidth = 600;
+	WindowRect = WindowRect || [800,20,DefaultWidth,300];
+	const WindowWidth = !isNaN(WindowRect[2]) ? WindowRect[2] : DefaultWidth;
 	this.ControlTop = 10;
 
 	const LabelLeft = 10;
-	const LabelWidth = WindowRect[2] * 0.3;
+	const LabelWidth = WindowWidth * 0.3;
 	const LabelHeight = 18;
 	const ControlLeft = LabelLeft + LabelWidth + 10;
-	const ControlWidth = WindowRect[2] - ControlLeft - 40;
+	const ControlWidth = WindowWidth - ControlLeft - 40;
 	const ControlHeight = LabelHeight;
 	const ControlSpacing = 10;
 
@@ -145,7 +149,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 
 	this.WaitForParamsChanged = function ()
 	{
-		return this.WaitForParamsChangedPromiseQueue.Allocate();
+		return this.WaitForParamsChangedPromiseQueue.WaitForNext();
 	}
 
 	this.GetParamMetas = function ()
@@ -481,8 +485,11 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 	{
 		const Handler = this.Handlers[Name];
 		if (!Handler)
-			throw "Tried to change param " + Name + " but no control assigned";
-
+		{
+			Pop.Warning(`Tried to change param ${Name} but no control assigned`);
+			//throw "Tried to change param " + Name + " but no control assigned";
+			return;
+		}
 		Handler.UpdateDisplay();
 	}.bind(this);
 
@@ -571,7 +578,12 @@ function RunParamsWebsocketServer(Port,OnJsonRecieved)
 		if (!CurrentSocket)
 			throw "Not currently connected";
 		const Addresses = CurrentSocket.GetAddress();
-		return "ws://" + Addresses[0].Address;
+		function AddressToUrl(Address)
+		{
+			return `ws://${Address.Address}`;
+		}
+		const Urls = Addresses.map(AddressToUrl);
+		return Urls;
 	}
 
 	return Output;
@@ -628,7 +640,7 @@ function RunParamsHttpServer(Params,ParamsWindow,Port=80)
 
 		if (Filename == "Websocket.json")
 		{
-			Response.Content = Websocket.GetUrl();
+			Response.Content = JSON.stringify(Websocket.GetUrl());
 			Response.StatusCode = 200;
 			return;
 		}

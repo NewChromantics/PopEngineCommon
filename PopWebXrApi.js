@@ -116,35 +116,94 @@ Pop.Xr.GetSupportedSessionMode = async function()
 Pop.Xr.GetSupportedSessionMode().then( Mode => Pop.Xr.SupportedSessionMode=Mode ).catch( Pop.Debug );
 
 
-
-Pop.Xr.Pose = function(RenderState,Pose)
+function IsReferenceSpaceOriginFloor(ReferenceSpaceType)
 {
-	this.NearDistance = RenderState.depthNear;
-	this.FarDistance = RenderState.depthFar;
-	this.VerticalFieldOfView = RenderState.inlineVerticalFieldOfView;
-
-	//	gr: dunno if this is camera, projection, or what
-	this.LocalToWorldMatrix = Pose.matrix;
-	this.Position = [Pose.position.x,Pose.position.y,Pose.position.z,Pose.position.w];
-	//Pose.orientation is xyzw, quaternion?
+	switch( ReferenceSpaceType )
+	{
+		case 'local-floor':
+		case 'bounded-floor':
+			return true;
+			
+		default:
+			return false;
+	}
 }
 
-
-Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
+//	this will probably merge with the native input state structs,
+//	but for now we're using it to track input state changes
+class XrInputState
 {
-	this.OnEndPromises = [];
-	this.Cameras = {};
+	constructor()
+	{
+		this.Buttons = [];		//	[Name] = true/false/pressure
+		this.Position = null;	//	[xyz] or false if we lost tracking
+		this.Transform = null;	//	for now, saving .position .quaternion .matrix
+	}
+}
+
+Pop.Xr.Device = class
+{
+	constructor(Session,ReferenceSpace,RenderContext)
+	{
+		this.OnEndPromises = [];
+		this.Cameras = {};
+		this.Session = Session;
+		this.ReferenceSpace = ReferenceSpace;
+		this.RenderContext = RenderContext;
+		
+		//	overload this
+		this.OnRender = this.OnRender_Default.bind(this);
+
+		//	overload these! (also, name it better, currently matching window/touches)
+		this.OnMouseDown = this.OnMouseEvent_Default.bind(this);
+		this.OnMouseMove = this.OnMouseEvent_Default.bind(this);
+		this.OnMouseUp = this.OnMouseEvent_Default.bind(this);
+		
+		//	store input state so we can detect button up, tracking lost/regained
+		this.InputStates = {};	//	[Name] = XrInputState
+		
+		this.RealSpaceChangedQueue = new Pop.PromiseQueue();
+		
+		//	bind to device
+		this.ReferenceSpace.onreset = this.OnSpaceChanged.bind(this);
+		this.ReferenceSpace.addEventListener('reset', this.OnSpaceChanged.bind(this) );
+		Session.addEventListener('end', this.OnSessionEnded.bind(this) );
+		this.InitLayer( RenderContext );
+		
+		//	do an initial space update in case its initialised already
+		this.OnSpaceChanged();
+		
+		//	start loop
+		Session.requestAnimationFrame( this.OnFrame.bind(this) );
+	}
+	
+	WaitForNewSpace()
+	{
+		return this.RealSpaceChangedQueue.WaitForNext();
+	}
+	
+	OnSpaceChanged(Event)
+	{
+		//	get new space from reference space
+		//	this also occurs when orientation is reset
+		const Geometry = this.ReferenceSpace.boundsGeometry;
+		Pop.Debug(`OnSpaceChanged`,Event,Geometry);
+		
+		//	only keep the latest data
+		this.RealSpaceChangedQueue.ClearQueue();
+		this.RealSpaceChangedQueue.Push(Geometry);
+	}
 	
 	//	I think here we can re-create layers if context dies,
 	//	without recreating device
-	this.InitLayer = function(RenderContext)
+	InitLayer(RenderContext)
 	{
-		const OpenglContext = RenderContext.GetGlContext();
-		this.Layer = new XRWebGLLayer(Session, OpenglContext);
-		Session.updateRenderState({ baseLayer: this.Layer });
+		const OpenglContext = this.RenderContext.GetGlContext();
+		this.Layer = new XRWebGLLayer(this.Session, OpenglContext);
+		this.Session.updateRenderState({ baseLayer: this.Layer });
 	}
 	
-	this.WaitForEnd = function()
+	WaitForEnd()
 	{
 		let Prom = {};
 		function CreatePromise(Resolve,Reject)
@@ -159,7 +218,7 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		return OnEnd;
 	}
 	
-	this.OnSessionEnded = function()
+	OnSessionEnded()
 	{
 		Pop.Debug("XR session ended");
 		//	notify all promises waiting for us to finish, fifo, remove as we go
@@ -170,7 +229,7 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		}
 	}
 	
-	this.GetCamera = function(Name)
+	GetCamera(Name)
 	{
 		if ( !this.Cameras.hasOwnProperty(Name) )
 		{
@@ -180,63 +239,204 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		return this.Cameras[Name];
 	}
 	
-	this.OnFrame = function(TimeMs,Frame)
+	UpdateInputState(InputName,Pose,Buttons)
 	{
+		//	new state!
+		if ( !this.InputStates.hasOwnProperty(InputName) )
+		{
+			//	new state!
+			this.InputStates[InputName] = new XrInputState();
+			Pop.Debug(`New input! ${InputName}`);
+		}
+		const State = this.InputStates[InputName];
+		
+		//	if no pose, no longer tracking
+		if ( !Pose )
+		{
+			if ( State.Position )
+				Pop.Debug(`${InputName} lost tracking`);
+			State.Position = false;
+			State.Transform = false;
+		}
+		else
+		{
+			if ( !State.Position )
+				Pop.Debug(`${InputName} now tracking`);
+			
+			const Position = [Pose.transform.position.x,Pose.transform.position.y,Pose.transform.position.z];
+			const RotationQuat = Pose.transform.orientation;
+			State.Position = Position;
+			State.Transform = Pose.transform;
+		}
+		
+		//	work out new button states & any changes
+		//	gr: here, if not tracking, we may want to skip any changes
+		const ButtonCount = Math.max(State.Buttons.length,Buttons.length);
+		const NewButtonState = [];
+		let ButtonChangedCount = 0;
+		for ( let b=0;	b<ButtonCount;	b++ )
+		{
+			//	currently the button is either a button object(.pressed .touched) or a bool, or nothing
+			const FrameButton = Buttons[b];
+			const Old = (b < State.Buttons.length) ? State.Buttons[b] : undefined;
+			const New = (FrameButton && FrameButton.pressed) || (FrameButton===true);
+			const ButtonName = b;
+			
+			if ( !Old && New )
+			{
+				ButtonChangedCount++;
+				this.OnMouseDown(State.Position,ButtonName,InputName, State.Transform );
+			}
+			else if ( Old && !New )
+			{
+				ButtonChangedCount++;
+				this.OnMouseUp(State.Position,ButtonName,InputName, State.Transform );
+			}
+			NewButtonState.push(New);
+		}
+
+		State.Buttons = NewButtonState;
+		
+		//	if no button changes, we still want to register a controller move with no button
+		if ( ButtonChangedCount == 0 )
+			this.OnMouseMove( State.Position, Pop.SoyMouseButton.None, InputName, State.Transform );
+	}
+	
+	OnFrame(TimeMs,Frame)
+	{
+		//	gr: need a better fix here.
+		//	https://github.com/immersive-web/webxr/issues/225
+		//		when XR is active, and the 2D window is NOT active
+		//		the window.requestAnimationFrame is not fired, so we
+		//		continue the generic Pop API animation from here
+		//	I imagine there is some situation where both are firing and we're
+		//	getting double the updates... need to figure that out
+		//	gr: problem here? we're rendering before the frame as we queue up an
+		//		update...
+		//	maybe Session.requestAnimationFrame should also trigger Pop.WebApi.BrowserAnimationStep itself?
+		const ProxyWindowAnimation = true;
+		if ( ProxyWindowAnimation )
+		{
+			//	clear old frames so we don't get a backlog
+			Pop.WebApi.AnimationFramePromiseQueue.ClearQueue();
+			Pop.WebApi.AnimationFramePromiseQueue.Push(TimeMs);
+		}
+		
 		//Pop.Debug("XR frame",Frame);
 		//	request next frame
-		Session.requestAnimationFrame( this.OnFrame.bind(this) );
+		this.Session.requestAnimationFrame( this.OnFrame.bind(this) );
 		
 		//	get pose in right space
-		const Pose = Frame.getViewerPose(ReferenceSpace);
+		const Pose = Frame.getViewerPose(this.ReferenceSpace);
 		
 		//	don't know what to render?
 		if ( !Pose )
+		{
+			Pop.Warning(`XR no pose`,Pose);
 			return;
+		}
+		
+		const IsOriginFloor = IsReferenceSpaceOriginFloor(this.ReferenceSpace.Type);
 		
 		//	handle inputs
 		//	gr: we're propogating like a mousebutton for integration, but our Openvr api
 		//		has keyframed input structs per-controller/pose
-		const Inputs = Array.from(Frame.session.inputSources);
+		const FrameInputs = Array.from(Frame.session.inputSources);
+		
+		const UpdateInputNode = function(InputXrSpace,InputName,Buttons)
+		{
+			//	get the pose
+			const InputPose = InputXrSpace ? Frame.getPose(InputXrSpace,this.ReferenceSpace) : null;
+			this.UpdateInputState(InputName,InputPose,Buttons);
+		}.bind(this);
+		
+		//	track which inputs we updated, so we can update old inputs that have gone missing
+		const UpdatedInputNames = [];
 		function UpdateInput(Input)
 		{
 			try
 			{
-				if ( !Input.gamepad.connected )
-					return;
-				//	quest:
-				//	Input.gamepad.id = ""
-				//	Input.gamepad.index = -1
-				const InputRayPose = Frame.getPose(Input.targetRaySpace,ReferenceSpace);
-				const Position = [InputRayPose.transform.position.x,InputRayPose.transform.position.y,InputRayPose.transform.position.z];
-				const RotationQuat = InputRayPose.transform.orientation;
-				//	gr: not unique enough yet
+				//	gr: this input name is not unique enough yet!
 				const InputName = Input.handedness;
-				//	todo: we need to store this for mouse up!
-				let DownCount = 0;
-				function UpdateButton(GamepadButton,ButtonIndex)
+
+				//	treat joints as individual inputs as they all have their own pos
+				if (Input.hand!==null)
 				{
-					const Down = GamepadButton.pressed;
-					DownCount += Down ? 1 : 0;
-					if ( Down )
-						this.OnMouseMove(Position,ButtonIndex,InputName);
+					const ThumbToJointMaxDistance = 0.03;
+					//	for hands, if a finger tip touches the thumb tip, its a button press
+					const ThumbKey = XRHand.THUMB_PHALANX_TIP;
+					const FingerKeys =
+					[
+					 XRHand.INDEX_PHALANX_TIP,XRHand.MIDDLE_PHALANX_TIP,XRHand.RING_PHALANX_TIP,XRHand.LITTLE_PHALANX_TIP,
+					 XRHand.INDEX_PHALANX_DISTAL,XRHand.MIDDLE_PHALANX_DISTAL,XRHand.RING_PHALANX_DISTAL,XRHand.LITTLE_PHALANX_DISTAL,
+					 XRHand.INDEX_PHALANX_INTERMEDIATE,XRHand.MIDDLE_PHALANX_INTERMEDIATE,XRHand.RING_PHALANX_INTERMEDIATE,XRHand.LITTLE_PHALANX_INTERMEDIATE,
+					 ];
+					const ReferenceSpace = this.ReferenceSpace;
+					
+					//	we're duplicating work here
+					function GetJointPos(Key)
+					{
+						const XrSpace = Input.hand[Key];
+						const Pose = XrSpace ? Frame.getPose(XrSpace,ReferenceSpace) : null;
+						const Position = Pose ? [Pose.transform.position.x,Pose.transform.position.y,Pose.transform.position.z] : null;
+						return Position;
+					}
+					function IsTipCloseToThumb(Key)
+					{
+						if ( !ThumbPos )
+							return false;
+						const FingerPos = GetJointPos(Key);
+						if ( !FingerPos )
+							return false;
+						const Distance = Math.Distance3(ThumbPos,FingerPos);
+						return Distance <= ThumbToJointMaxDistance;
+					}
+					const ThumbPos = GetJointPos(ThumbKey);
+					const FingersNear = FingerKeys.map(IsTipCloseToThumb);
+					
+					
+					//	enum all the joints
+					const JointNames = Object.keys(XRHand);
+					function EnumJoint(JointName)
+					{
+						const Key = XRHand[JointName];	//	XRHand.WRIST = int = key for .hand
+						const PoseSpace = Input.hand[Key];
+						const NodeName = `${InputName}_${JointName}`;
+						const Buttons = [];
+						const FingerNearThumbIndex = FingerKeys.indexOf(Key);
+						if ( FingerNearThumbIndex != -1 )
+							Buttons.push(FingersNear[FingerNearThumbIndex]);
+						UpdatedInputNames.push(NodeName);
+						UpdateInputNode(PoseSpace,NodeName,Buttons);
+					}
+					JointNames.forEach(EnumJoint.bind(this));
+					//Pop.Debug(`Input has hand! ${JSON.stringify(Input.hand)}`,Input.hand);
 				}
-				if ( Input.gamepad.buttons )
-					Input.gamepad.buttons.forEach(UpdateButton.bind(this));
+
+				//	normal controller
+				if ( Input.gamepad )
+				{
+					if (!Input.gamepad.connected)
+						return;
 				
-				//	if none down, pass a mouse move with no button
-				if ( DownCount == 0 )
-					this.OnMouseMove(Position,Pop.SoyMouseButton.None,InputName);
-				//	todo: mouse up!
+					UpdatedInputNames.push(InputName);
+					const Buttons = Input.gamepad.buttons || [];
+					UpdateInputNode( Input.targetRaySpace, InputName, Buttons );
+				}
 			}
 			catch(e)
 			{
 				Pop.Debug(`Input error ${e}`);
 			}
 		}
-		Inputs.forEach(UpdateInput.bind(this));
+		FrameInputs.forEach(UpdateInput.bind(this));
+		
+		const OldInputNames = Object.keys(this.InputStates);
+		const MissingInputNames = OldInputNames.filter( Name => !UpdatedInputNames.some( uin => uin == Name) );
+		MissingInputNames.forEach( Name => UpdateInputNode(null,Name,[]) );
 		
 		//	or this.Layer
-		const glLayer = Session.renderState.baseLayer;
+		const glLayer = this.Session.renderState.baseLayer;
 		
 		function GetCameraName(View)
 		{
@@ -258,11 +458,23 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		{
 			const ViewPort = glLayer.getViewport(View);
 			//	scene.draw(view.projectionMatrix, view.transform);
-			const RenderTarget = new RenderTargetFrameBufferProxy( glLayer.framebuffer, ViewPort, RenderContext );
+			const RenderTarget = new RenderTargetFrameBufferProxy( glLayer.framebuffer, ViewPort, this.RenderContext );
 			
 			const CameraName = GetCameraName(View);
 			const Camera = this.GetCamera(CameraName);
+			
+			//	maybe need a better place to propogate this info (along with chaperone/bounds)
+			//	but for now renderer just needs to know (but input doesnt know!)
+			Camera.IsOriginFloor = IsOriginFloor;
 
+			//	use the render params on our camera
+			if ( Frame.session.renderState )
+			{
+				Camera.NearDistance = Frame.session.renderState.depthNear || Camera.NearDistance;
+				Camera.FarDistance = Frame.session.renderState.depthFar || Camera.FarDistance;
+				Camera.FovVertical = Frame.session.renderState.inlineVerticalFieldOfView || Camera.FovVertical;
+			}
+			
 			//	update camera
 			//	view has an XRRigidTransform (quest)
 			//	https://developer.mozilla.org/en-US/docs/Web/API/XRRigidTransform
@@ -270,26 +482,27 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 			
 			//	write position (w should always be 0
 			Camera.Position = [View.transform.position.x,View.transform.position.y,View.transform.position.z];
-
-			//	transform.matrix is column major
+			
 			//	get rotation but remove the translation (so we use .Position)
-			Camera.Rotation4x4 = Pop.Math.GetMatrixTransposed(View.transform.matrix);
+			//	we also want the inverse for our camera-local purposes
+			Camera.Rotation4x4 = View.transform.inverse.matrix;
 			Math.SetMatrixTranslation(Camera.Rotation4x4,0,0,0,1);
 			
 			Camera.ProjectionMatrix = View.projectionMatrix;
-			RenderTarget.BindRenderTarget( RenderContext );
+			
+			RenderTarget.BindRenderTarget( this.RenderContext );
 			this.OnRender( RenderTarget, Camera );
 		}
 		Pose.views.forEach( RenderView.bind(this) );
 	}
 	
-	this.Destroy = function()
+	Destroy()
 	{
-		Session.end();
+		this.Session.end();
 	}
 
 	//	overload this!
-	this.OnRender = function(RenderTarget,Camera)
+	OnRender_Default(RenderTarget,Camera)
 	{
 		if ( Camera.Name == 'left' )
 			RenderTarget.ClearColour( 0,0.5,1 );
@@ -300,25 +513,11 @@ Pop.Xr.Device = function(Session,ReferenceSpace,RenderContext)
 		else
 			RenderTarget.ClearColour( 0,0,1 );
 	}
-		
-	//	overload this! (also, name it better, currently matching window/touches)
-	this.OnMouseDown = function(xyz,Button,Controller)
-	{
-	}
-	this.OnMouseMove = function(xyz,Button,Controller)
+	
+	OnMouseEvent_Default(xyz,Button,Controller,Transform)
 	{
 		Pop.Debug(`OnXRInput(${[...arguments]})`);
 	}
-	this.OnMouseUp = function(xyz,Button,Controller)
-	{
-	}
-
-	//	bind to device
-	Session.addEventListener('end', this.OnSessionEnded.bind(this) );
-	this.InitLayer( RenderContext );
-
-	//	start loop
-	Session.requestAnimationFrame( this.OnFrame.bind(this) );
 }
 
 
@@ -353,7 +552,14 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 				//	and return that promise
 				try
 				{
-					const RequestSessionPromise = PlatformXr.requestSession(SessionMode);
+					const Options = {};
+					//	gr: this should/could request for permission for the extra functionality
+					//	https://immersive-web.github.io/webxr/#dictdef-xrsessioninit
+					//Options.requiredFeatures = ['local-floor'];
+					//	gr: add all the features!
+					Options.optionalFeatures = ['local-floor','hand-tracking','bounded-floor'];
+					
+					const RequestSessionPromise = PlatformXr.requestSession(SessionMode,Options);
 					RequestSessionPromise.then( Session => SessionPromise.Resolve(Session) ).catch( e => SessionPromise.Reject(e) );
 				}
 				catch(e)
@@ -367,11 +573,35 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 			//	gr: isImmersive was deprecated
 			//		we want a local space, maybe not relative to the floor?
 			//		so we can align with other remote spaces a bit more easily
-			//	todo: handle unspported space
-			//const ReferenceSpaceType = "local-floor";	not supported on quest
-			const ReferenceSpaceType = "local";
-			//const ReferenceSpaceType = Session.isImmersive ? 'local' : 'viewer';
-			const ReferenceSpace = await Session.requestReferenceSpace(ReferenceSpaceType);
+			//	try and get reference space types in an ideal order
+			const ReferenceSpaceTypes =
+			[
+				'bounded-floor',	//	expecting player to not move out of this space. bounds geometry returned, y=0=floor
+				'local-floor',		//	y=0=floor
+				'local',			//	origin = view starting pos
+				'unbounded',		//	gr: where is origin?
+			 	'viewer',
+			];
+			async function GetReferenceSpace()
+			{
+				for ( let ReferenceSpaceType of ReferenceSpaceTypes )
+				{
+					try
+					{
+						const ReferenceSpace = await Session.requestReferenceSpace(ReferenceSpaceType);
+						ReferenceSpace.Type = ReferenceSpaceType;
+						return ReferenceSpace;
+					}
+					catch(e)
+					{
+						Pop.Warning(`XR ReferenceSpace type ${ReferenceSpaceType} not supported.`);
+					}
+				}
+				throw `Failed to find supported XR reference space`;
+			}
+			const ReferenceSpace = await GetReferenceSpace();
+			Pop.Debug(`Got XR ReferenceSpace`,ReferenceSpace);
+			
 			const Device = new Pop.Xr.Device( Session, ReferenceSpace, RenderContext );
 			
 			//	add to our global list (currently only to make sure we have one at a time)

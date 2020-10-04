@@ -42,6 +42,16 @@ Pop.Array.MoveElementFromArrayToArray = function(Element,SourceArray,DestArray)
 	DestArray.push( Element );
 }
 
+Pop.Array.IsMatch = function(a,b)
+{
+	if ( a.length !== b.length )
+		return false;
+	for ( let i=0;	i<a.length;	i++ )
+		if ( a[i] !== b[i] )
+			return false;
+	return true;
+}
+
 
 //	maybe better named as BufferToString? but this should be clear its "text vs binary"
 //	this is for ascii, NOT UTF16 (hence bytes, not shorts)
@@ -123,6 +133,36 @@ function IsObjectInstanceOf(This,TypeConstructor)
 	return false;
 }
 
+//	https://stackoverflow.com/a/46999598/355753
+function IsTypedArray(obj)
+{
+	return !!obj && obj.byteLength !== undefined;
+}
+
+Pop.JoinTypedArrays = function(a,b,c,etc)
+{
+	//	gr: need some more rigirous checks here
+	if ( !IsTypedArray(a) )
+		throw `Cannot JoinTypedArrays where 1st not typed array (${a})`;
+
+	const Constructor = a.constructor;
+	const Arrays = Array.from(arguments);
+	const TotalSize = Arrays.reduce( (Accumulator,a) => Accumulator + a.length, 0 );
+
+	const NewArray = new Constructor(TotalSize);
+	let Position = 0;
+	for ( let TheArray of Arrays )
+	{
+		if ( TheArray.constructor != Constructor )
+			throw `Cannot join to typedarrays of different types`;
+	
+		NewArray.set( TheArray, Position );
+		Position += TheArray.length;
+	}
+	return NewArray;
+}
+
+
 //	create a promise function with the Resolve & Reject functions attached so we can call them
 Pop.CreatePromise = function()
 {
@@ -143,14 +183,15 @@ Pop.CreatePromise = function()
 //	gr: this is getting out of sync with the cyclic-fixing-copy in WebApi. Make it seperate!
 Pop.PromiseQueue = class
 {
-	constructor()
+	constructor(DebugName='UnnamedPromiseQueue')
 	{
+		this.Name = DebugName;
 		//	pending promises
 		this.Promises = [];
 		//	values we've yet to resolve (each is array capturing arguments from push()
 		this.PendingValues = [];
 	}
-	
+
 	async WaitForNext()
 	{
 		const Promise = this.Allocate();
@@ -158,6 +199,17 @@ Pop.PromiseQueue = class
 		//	if we have any pending data, flush now, this will return an already-resolved value
 		this.FlushPending();
 		
+		return Promise;
+	}
+
+	//	this waits for next resolve, but when it flushes, it returns LAST entry and clears the rest; LIFO (kinda, last in, only out)
+	async WaitForLatest()
+	{
+		const Promise = this.Allocate();
+
+		//	if we have any pending data, flush now, this will return an already-resolved value
+		this.FlushPending(true);
+
 		return Promise;
 	}
 	
@@ -227,9 +279,14 @@ Pop.PromiseQueue = class
 		this.PendingValues.push( Value );
 		
 		if ( this.PendingValues.length > 100 )
-			Pop.Warning(`This promise queue has ${this.PendingValues.length} pending values and ${this.Promises.length} pending promises`,this);
+			Pop.Warning(`This (${this.Name}) promise queue has ${this.PendingValues.length} pending values and ${this.Promises.length} pending promises`,this);
 		
 		this.FlushPending();
+	}
+	
+	GetQueueSize()
+	{
+		return this.PendingValues.length;
 	}
 	
 	HasPending()
@@ -237,7 +294,7 @@ Pop.PromiseQueue = class
 		return this.PendingValues.length > 0;
 	}
 	
-	FlushPending()
+	FlushPending(FlushLatestAndClear=false)
 	{
 		//	if there are promises and data's waiting, we can flush next
 		if ( this.Promises.length == 0 )
@@ -247,7 +304,11 @@ Pop.PromiseQueue = class
 		
 		//	flush 0 (FIFO)
 		//	we pre-pop as we want all listeners to get the same value
-		const Value0 = this.PendingValues.shift();
+		if (FlushLatestAndClear && this.PendingValues.length > 1)
+		{
+			Pop.Warning(`Promise queue FlushLatest dropping ${this.PendingValues.length - 1} elements`);
+		}
+		const Value0 = FlushLatestAndClear ? this.PendingValues.splice(0,this.PendingValues.length).pop() : this.PendingValues.shift();
 		const HandlePromise = function(Promise)
 		{
 			if ( Value0.RejectionValues )

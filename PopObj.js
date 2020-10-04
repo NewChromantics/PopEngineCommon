@@ -168,6 +168,8 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 		//	split the face into triangles
 		if ( Face.length < 3 )
 			throw "OBJ face has less than 3 points";
+		
+		//	quad
 		if ( Face.length == 4 )
 		{
 			//	we don't have to recurse, but for now...
@@ -179,8 +181,14 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 			OnFace( t1.map( i => Face[i] ) );
 			return;
 		}
+
+		//	tri strip?
 		if ( Face.length != 3 )
-			throw "OBJ face with " + Face.length + " != 3 points";
+		{
+			Pop.Warning(`Skipping OBJ face with ${Face.length} points`);
+			//throw `OBJ face with ${Face.length} != 3 points`;
+			return;
+		}
 		
 		//	flush each vertex
 		const FaceVertexIndexes = [];
