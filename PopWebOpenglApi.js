@@ -1833,27 +1833,42 @@ function GetOpenglElementType(OpenglContext,Elements)
 	throw "GetOpenglElementType unhandled type; " + Elements.prototype.constructor;
 }
 
-Pop.Opengl.TriangleBuffer = function(RenderContext,VertexAttributeName,VertexData,VertexSize,TriangleIndexes)
+
+//	attributes are keyed objects for each semantic
+//	Attrib['Position'].Size = 3
+//	Attrib['Position'].Data = <float32Array(size*vertcount)>
+Pop.Opengl.TriangleBuffer = function(RenderContext,Attribs,TriangleIndexes)
 {
 	this.BufferContextVersion = null;
 	this.Buffer = null;
 	this.Vao = null;
 	
-	let Attribs = {};
-	
 	//	backwards compatibility
-	if ( typeof VertexAttributeName == 'string' )
+	if ( typeof Attribs == 'string' )
 	{
 		Pop.Warn("[deprecated] Old TriangleBuffer constructor, use a keyed object");
+		const VertexAttributeName = arguments[1];
+		const VertexSize = arguments[2];
+		const VertexData = arguments[3];
+		TriangleIndexes = arguments[4];
 		const Attrib = {};
 		Attrib.Size = VertexSize;
 		Attrib.Data = VertexData;
+		Attribs = {};
 		Attribs[VertexAttributeName] = Attrib;
 	}
-	else
+	
+	//	verify input
+	function VerifyAttrib(AttribName)
 	{
-		Attribs = VertexAttributeName;
+		const Attrib = Attribs[AttribName];
+		if ( typeof Attrib.Size != 'number' )
+			throw `Attrib ${AttribName} size(${Attrib.Size}) not a number`;
+		
+		if ( !Array.isArray(Attrib.Data) )
+			throw `Attrib ${AttribName} data(${typeof Attrib.Data}) not an array`;
 	}
+	Object.keys(Attribs).forEach(VerifyAttrib);
 	
 	
 	this.GetBuffer = function(RenderContext)
