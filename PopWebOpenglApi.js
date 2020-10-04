@@ -1837,41 +1837,45 @@ function GetOpenglElementType(OpenglContext,Elements)
 //	attributes are keyed objects for each semantic
 //	Attrib['Position'].Size = 3
 //	Attrib['Position'].Data = <float32Array(size*vertcount)>
-Pop.Opengl.TriangleBuffer = function(RenderContext,Attribs,TriangleIndexes)
+Pop.Opengl.TriangleBuffer = class
 {
-	this.BufferContextVersion = null;
-	this.Buffer = null;
-	this.Vao = null;
-	
-	//	backwards compatibility
-	if ( typeof Attribs == 'string' )
+	constructor(RenderContext,Attribs,TriangleIndexes)
 	{
-		Pop.Warn("[deprecated] Old TriangleBuffer constructor, use a keyed object");
-		const VertexAttributeName = arguments[1];
-		const VertexSize = arguments[2];
-		const VertexData = arguments[3];
-		TriangleIndexes = arguments[4];
-		const Attrib = {};
-		Attrib.Size = VertexSize;
-		Attrib.Data = VertexData;
-		Attribs = {};
-		Attribs[VertexAttributeName] = Attrib;
-	}
-	
-	//	verify input
-	function VerifyAttrib(AttribName)
-	{
-		const Attrib = Attribs[AttribName];
-		if ( typeof Attrib.Size != 'number' )
-			throw `Attrib ${AttribName} size(${Attrib.Size}) not a number`;
+		this.BufferContextVersion = null;
+		this.Buffer = null;
+		this.Vao = null;
+		this.TriangleIndexes = TriangleIndexes;
+		this.Attribs = Attribs;
 		
-		if ( !Array.isArray(Attrib.Data) )
-			throw `Attrib ${AttribName} data(${typeof Attrib.Data}) not an array`;
+		//	backwards compatibility
+		if ( typeof Attribs == 'string' )
+		{
+			Pop.Warn("[deprecated] Old TriangleBuffer constructor, use a keyed object");
+			const VertexAttributeName = arguments[1];
+			const VertexSize = arguments[2];
+			const VertexData = arguments[3];
+			this.TriangleIndexes = arguments[4];
+			const Attrib = {};
+			Attrib.Size = VertexSize;
+			Attrib.Data = VertexData;
+			this.Attribs = {};
+			this.Attribs[VertexAttributeName] = Attrib;
+		}
+	
+		//	verify input
+		function VerifyAttrib(AttribName)
+		{
+			const Attrib = this.Attribs[AttribName];
+			if ( typeof Attrib.Size != 'number' )
+				throw `Attrib ${AttribName} size(${Attrib.Size}) not a number`;
+			
+			if ( !Array.isArray(Attrib.Data) )
+				throw `Attrib ${AttribName} data(${typeof Attrib.Data}) not an array`;
+		}
+		Object.keys(this.Attribs).forEach(VerifyAttrib.bind(this));
 	}
-	Object.keys(Attribs).forEach(VerifyAttrib);
 	
-	
-	this.GetBuffer = function(RenderContext)
+	GetBuffer(RenderContext)
 	{
 		if ( this.BufferContextVersion !== RenderContext.ContextVersion )
 		{
@@ -1881,17 +1885,17 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,Attribs,TriangleIndexes)
 		return this.Buffer;
 	}
 	
-	this.DeleteBuffer = function(RenderContext)
+	DeleteBuffer(RenderContext)
 	{
 		RenderContext.OnDeletedGeometry( this );
 	}
 	
-	this.DeleteVao = function()
+	DeleteVao()
 	{
 		this.Vao = null;
 	}
 	
-	this.GetVao = function(RenderContext,Shader)
+	GetVao(RenderContext,Shader)
 	{
 		if ( this.BufferContextVersion !== RenderContext.ContextVersion )
 		{
@@ -1921,17 +1925,18 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,Attribs,TriangleIndexes)
 	}
 			
 	
-	this.CreateBuffer = function(RenderContext)
+	CreateBuffer(RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
 		
+		const Attribs = this.Attribs;
 		this.Buffer = gl.createBuffer();
 		this.BufferContextVersion = RenderContext.ContextVersion;
 		
 		this.PrimitiveType = gl.TRIANGLES;
-		if ( TriangleIndexes )
+		if ( this.TriangleIndexes )
 		{
-			this.IndexCount = TriangleIndexes.length;
+			this.IndexCount = this.TriangleIndexes.length;
 		}
 		else
 		{
@@ -2022,7 +2027,7 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,Attribs,TriangleIndexes)
 	
 	
 	
-	this.BindVertexPointers = function(RenderContext,Shader)
+	BindVertexPointers(RenderContext,Shader)
 	{
 		const gl = RenderContext.GetGlContext();
 		
@@ -2050,7 +2055,7 @@ Pop.Opengl.TriangleBuffer = function(RenderContext,Attribs,TriangleIndexes)
 		this.Attributes.forEach( InitAttribute );
 	}
 	
-	this.Bind = function(RenderContext,Shader)
+	Bind(RenderContext,Shader)
 	{
 		const Vao = AllowVao ? this.GetVao( RenderContext, Shader ) : null;
 		const gl = RenderContext.GetGlContext();
