@@ -584,6 +584,8 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		this.CanvasKeyHandler = new TElementKeyHandler( Element, OnKeyDown, OnKeyUp );
 
 		//	catch window resize
+		//	gr: replace with specific dom watcher
+		//	https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver
 		window.addEventListener('resize',this.OnResize.bind(this));
 		
 		//	https://medium.com/@susiekim9/how-to-compensate-for-the-ios-viewport-unit-bug-46e78d54af0d
