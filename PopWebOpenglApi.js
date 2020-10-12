@@ -513,9 +513,6 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 	
 		//	resize to original rect
 		const Canvas = this.GetCanvasElement();
-		// Pop.Debug("Re-setting canvas size to original rect",JSON.stringify(Rect))
-		this.SetCanvasSize();
-		
 		this.RefreshCanvasResolution();
 	}
 	
@@ -619,28 +616,18 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		return this.ScreenRectCache.slice();
 	}
 	
-	this.RefreshCanvasResolution = function()
-	{
-		const Canvas = this.GetCanvasElement();
-		
-		//	get element size
-		const BoundingElement = Canvas.parentElement;
-		const Rect = BoundingElement.getBoundingClientRect();
-		const w = Rect.width;
-		const h = Rect.height;
-		
-		//	re-set resolution to match
-		Canvas.width = w;
-		Canvas.height = h;
-	}
 	
-	this.SetCanvasSize = function()
+	this.GetCanvasDomRect = function(Element)
 	{
-		const ParentElement = this.CanvasElement.parentElement;
+		//	first see if WE have our own rect
+		const SelfRect = Element.getBoundingClientRect();
+		if ( SelfRect.height )
+		{
+			return [SelfRect.x,SelfRect.y,SelfRect.width,SelfRect.height];
+		}
 		
-		//	if null, then fullscreen
-		//	go as fullscreen as possible
-		if ( !Rect )
+		const ParentElement = Element.parentElement;
+		if ( ParentElement )
 		{
 			//	try and go as big as parent
 			//	values may be zero, so then go for window (erk!)
@@ -656,31 +643,27 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 				Height = WindowInnerSize[1];
 			Rect = [0,0,Width,Height];
 			Pop.Debug("SetCanvasSize defaulting to ",Rect,"ParentSize=" + ParentSize,"ParentInnerSize=" + ParentInnerSize,"WindowInnerSize=" + WindowInnerSize);
+			return Rect;
 		}
 		
-		let Left = Rect[0];
-		let Top = Rect[1];
-		let Width = Rect[2];
-		let Height = Rect[3];
-			/*
-		CanvasElement.style.display = 'block';
-		CanvasElement.style.position = 'absolute';
-		//Element.style.border = '1px solid #f00';
-			
-		CanvasElement.style.left = Left+'px';
-		CanvasElement.style.top = Top+'px';
-		//Element.style.right = Right+'px';
-		//Element.style.bottom = Bottom+'px';
-		CanvasElement.style.width = Width+'px';
-		CanvasElement.style.height = Height+'px';
-		//Element.style.width = '100%';
-		//Element.style.height = '500px';
-		*/
-		//CanvasElement.width = Rect[2];
-		//CanvasElement.height = Rect[3];
+		throw `Don't know how to get canvas size`;
 	}
-	
-	
+		
+	this.RefreshCanvasResolution = function()
+	{
+		const Canvas = this.GetCanvasElement();
+
+		//	gr: this function now should always just get the rect via dom, 
+		//		if it can't get it from itself, from it's parent
+		//	GetScreenRect should be using canvas w/h, so this must always be called before
+		const Rect = this.GetCanvasDomRect(Canvas);
+		const w = Rect[2];
+		const h = Rect[3];
+		
+		//	re-set resolution to match
+		Canvas.width = w;
+		Canvas.height = h;
+	}
 	
 	this.OnLostContext = function(Error)
 	{
@@ -1116,7 +1099,6 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 	//	gr: this was context before canvas??
 	this.CanvasElement = this.InitCanvasElement( Name, Parent, Rect );
 	
-	this.SetCanvasSize();
 	this.RefreshCanvasResolution();
 	this.InitialiseContext();
 
