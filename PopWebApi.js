@@ -80,7 +80,7 @@ class WebApi_PromiseQueue
 		//	skip adding if existing match
 		if ( this.PendingValues.some(IsMatch) )
 		{
-			Pop.Debug(`Skipping non-unique ${Args}`);
+			//Pop.Debug(`Skipping non-unique ${Args}`);
 			return;
 		}
 		this.Push(...Args);
@@ -579,7 +579,7 @@ async function FetchArrayBufferStream(Url,OnProgress)
 			const ChunkContents = Chunk.value;
 			//	chunk is undefined on last (finished)read
 			const ChunkSize = ChunkContents ? ChunkContents.length : 0;
-			Pop.Debug(`chunk ${Url} Finished=${Finished} x${ChunkSize}/${KnownSizeKb}`,Chunk);
+			//Pop.Debug(`chunk ${Url} Finished=${Finished} x${ChunkSize}/${KnownSizeKb}`,Chunk);
 			AppendChunk(ChunkContents);
 			if ( Finished )
 				break;
