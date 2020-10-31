@@ -115,6 +115,8 @@ Pop.DummyParamsWindow = function()
 	this.OnParamsChanged = function(){};
 	this.AddParam = function(){};
 	this.GetParamMetas = function() {	return {};	};
+	this.Window = {};
+	this.Window.SetMinimised = function(){};
 	
 	this.WaitForParamsChanged = function ()
 	{
