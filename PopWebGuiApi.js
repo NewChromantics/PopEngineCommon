@@ -877,7 +877,7 @@ Pop.Gui.Button = class extends Pop.Gui.BaseControl
 			return Div;
 		
 		//	gr: hard to style buttons/inputs, no benefit afaik, but somehow we shoulld make this an option
-		const ElementType = 'span';//'input';
+		const ElementType = 'input';
 		Div = document.createElement(ElementType);
 		if ( Rect )
 			SetGuiControlStyle( Div, Rect );
