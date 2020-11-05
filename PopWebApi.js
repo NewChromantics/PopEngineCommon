@@ -779,22 +779,35 @@ Pop.LoadFileAsArrayBuffer = function(Filename)
 }
 
 //	on web, this call causes a Save As... dialog to appear to save the contents
-Pop.WriteStringToFile = function(Filename,Contents)
+Pop.WriteToFile = function(Filename,Contents,Append=false)
 {
+	if ( Append )
+		throw `WriteToFile cannot append on web`;
+		
+	let MimePrefix;
+	if ( typeof Contents == 'string' )
+	{
+		MimePrefix = "text/plain;charset=utf-8";
+	}
+	else
+	{
+		//'application/json'
+	}
+		
+		
 	//	on web (chrome?)
 	//		folder/folder/file.txt
 	//	turns in folder_folder_file.txt, so clip the name
 	const DownloadFilename = Filename.split('/').slice(-1)[0];
 
 	//	gr: "not a sequence" error means the contents need to be an array
-	const ContentsBlob = new Blob([Contents],
-		{
-			type: "text/plain;charset=utf-8"
-		}
-	);
+	const Options = {};
+	if ( MimePrefix )
+		Options.type = MimePrefix;
+	const ContentsBlob = new Blob([Contents],Options);
 
 	const DataUrl = URL.createObjectURL(ContentsBlob);
-	Pop.Debug(`WriteFile blob url: `)
+	Pop.Debug(`WriteFile blob url: ${DataUrl}`);
 
 	//	make a temp element to invoke the download
 	const a = window.document.createElement('a');
@@ -808,16 +821,23 @@ Pop.WriteStringToFile = function(Filename,Contents)
 	{
 		a.href = DataUrl;
 		a.download = DownloadFilename;
+		//	gr: trying to get callback when this was succesfull or failed
+		//a.ping = "data:text/html,<script>alert('hi');</script>";
+		//a.onerror = function(e){	Pop.Debug(`link error ${e}`);	}
 		document.body.appendChild(a);
-		a.click();
+		a.click();	//	returns nothing
 		Cleanup();
 	}
 	catch (e)
 	{
 		Cleanup();
 		throw e;
-	}		
+	}	
 }
+
+Pop.WriteStringToFile = Pop.WriteToFile;
+
+
 
 Pop.LoadFilePromptAsStringAsync = async function (Filename)
 {
