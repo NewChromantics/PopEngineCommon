@@ -306,7 +306,13 @@ Pop.Image = function(Filename)
 		const Img = new ImageData(Pixels,Width,Height);
 		Context.putImageData(Img,0,0);
 
-		let data = Canvas.toDataURL("image/png");
+		const data = Canvas.toDataURL("image/png");
+
+		//	destroy canvas (safari suggests its hanging around)
+		Canvas.width = 0;
+		Canvas.height = 0;
+		delete Canvas;
+
 		return data;
 	}
 
@@ -317,11 +323,6 @@ Pop.Image = function(Filename)
 		data = data.slice(22)
 		data = Uint8Array.from(atob(data), c => c.charCodeAt(0))
 		
-		//	destroy canvas (safari suggests its hanging around)
-		Canvas.width = 0;
-		Canvas.height = 0;
-		delete Canvas;
-
 		return data;
 	}
 	
