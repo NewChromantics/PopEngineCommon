@@ -217,8 +217,49 @@ function Pop_Opengl_SetGuiControl_SubElementStyle(Element,LeftPercent=0,RightPer
 //	our mouse functions
 function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseScroll)
 {
+	//	touchend doesn't tell us what touches were released;
+	//	so call this function to keep track of them
+	let LastTouches = [];
+	function UpdateTouches(MouseEvent)
+	{
+		function TouchIdentifierPresent(Identifier,TouchArray)
+		{
+			const Match = TouchArray.find( t => t.identifier == Identifier );
+			return Match!=null;
+		}
+	
+		//	not a touch device
+		if ( !MouseEvent.touches )
+			return;
+		
+		//	turn touches into array
+		const NewTouches = Array.from( MouseEvent.touches );
+		
+		//	find changes
+		const RemovedTouches = LastTouches.filter( t => !TouchIdentifierPresent(t.identifier,NewTouches) );
+		const AddedTouches = NewTouches.filter( t => !TouchIdentifierPresent(t.identifier,LastTouches) );
+		MouseEvent.Touches = NewTouches;
+		MouseEvent.RemovedTouches = RemovedTouches;
+		MouseEvent.AddedTouches = AddedTouches;
+		LastTouches = NewTouches;
+	}
+	
+	//	gr: is identifier unique, or an index? is it persistent?
+	function GetButtonNameFromTouch(Touch)
+	{
+		switch ( Touch.identifier )
+		{
+			case 0:	return Pop.SoyMouseButton.Left;
+			case 1:	return Pop.SoyMouseButton.Middle;
+			case 2:	return Pop.SoyMouseButton.Right;
+			case 3:	return Pop.SoyMouseButton.Back;
+			case 4:	return Pop.SoyMouseButton.Forward;
+			default:	return null;
+		}
+	}
+
 	//	annoying distinctions
-	let GetButtonFromMouseEventButton = function(MouseButton,AlternativeButton)
+	let GetButtonFromMouseEventButton = function(MouseButton,AlternativeButton,TouchArray)
 	{
 		//	html/browser definitions
 		const BrowserMouseLeft = 0;
@@ -230,15 +271,17 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		{
 			let MouseEvent = MouseButton;
 			
-			//	this needs a fix for touches
-			if ( MouseEvent.touches )
+			//	gr: still needs re-working for touches
+			//	look at specific touch list
+			if ( TouchArray )
 			{
 				//	have to assume there's always one?
-				const Touches = Array.from( MouseEvent.touches );
-				if ( Touches.length == 0 )
-					throw "Empty touch array, from event?";
-				MouseButton = BrowserMouseLeft;
-				AlternativeButton = false;
+				return GetButtonNameFromTouch(TouchArray[0]);
+			}
+			//	this needs a fix for touches
+			else if ( MouseEvent.Touches )
+			{
+				return GetButtonNameFromTouch(MouseEvent.Touches[0]);
 			}
 			else
 			{
@@ -265,7 +308,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		throw "Unhandled MouseEvent.button (" + MouseButton + ")";
 	}
 	
-	let GetButtonsFromMouseEventButtons = function(MouseEvent)
+	let GetButtonsFromMouseEventButtons = function(MouseEvent,TouchArray)
 	{
 		//	note: button bits don't match mousebutton!
 		//	https://www.w3schools.com/jsref/event_buttons.asp
@@ -290,41 +333,31 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		}
 		
 		//	mobile
-		if ( MouseEvent.touches )
+		if ( MouseEvent.Touches )
 		{
-			function GetButtonNameFromTouch(Touch,Index)
-			{
-				switch ( Index )
-				{
-					case 0:	return Pop.SoyMouseButton.Left;
-					case 1:	return Pop.SoyMouseButton.Middle;
-					case 2:	return Pop.SoyMouseButton.Right;
-					case 3:	return Pop.SoyMouseButton.Back;
-					case 4:	return Pop.SoyMouseButton.Forward;
-					default:	return null;
-				}
-			}
 			function PushTouch(Touch,Index)
 			{
-				const ButtonName = GetButtonNameFromTouch( Touch, Index );
+				const ButtonName = GetButtonNameFromTouch( Touch );
 				if ( ButtonName === null )
 					return;
 				Buttons.push( ButtonName );
 			}
-			Array.from(MouseEvent.touches).forEach( PushTouch );
+			MouseEvent.Touches.forEach( PushTouch );
 		}
 		
 		return Buttons;
 	}
 	
 	//	gr: should api revert to uv?
-	let GetMousePos = function(MouseEvent)
+	let GetMousePos = function(MouseEvent,TouchArray)
 	{
 		const Rect = Element.getBoundingClientRect();
 		
 		//	touch event, need to handle multiple touch states
-		if ( MouseEvent.touches )
-			MouseEvent = MouseEvent.touches[0];
+		if ( TouchArray )
+			MouseEvent = TouchArray[0];
+		else if ( MouseEvent.Touches )
+			MouseEvent = MouseEvent.Touches[0];
 		
 		const ClientX = MouseEvent.pageX || MouseEvent.clientX;
 		const ClientY = MouseEvent.pageY || MouseEvent.clientY;
@@ -335,6 +368,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	
 	let MouseMove = function(MouseEvent)
 	{
+		UpdateTouches(MouseEvent);
 		const Pos = GetMousePos(MouseEvent);
 		const Buttons = GetButtonsFromMouseEventButtons( MouseEvent );
 		if ( Buttons.length == 0 )
@@ -354,6 +388,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	
 	let MouseDown = function(MouseEvent)
 	{
+		UpdateTouches(MouseEvent);
 		const Pos = GetMousePos(MouseEvent);
 		const Button = GetButtonFromMouseEventButton(MouseEvent);
 		OnMouseDown( Pos[0], Pos[1], Button );
@@ -362,14 +397,17 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	
 	let MouseUp = function(MouseEvent)
 	{
-		const Pos = GetMousePos(MouseEvent);
-		const Button = GetButtonFromMouseEventButton(MouseEvent);
+		UpdateTouches(MouseEvent);
+		//	todo: trigger multiple buttons (for multiple touches)
+		const Pos = GetMousePos(MouseEvent,MouseEvent.RemovedTouches);
+		const Button = GetButtonFromMouseEventButton(MouseEvent,null,MouseEvent.RemovedTouches);
 		OnMouseUp( Pos[0], Pos[1], Button );
 		MouseEvent.preventDefault();
 	}
 	
 	let MouseWheel = function(MouseEvent)
 	{
+		UpdateTouches(MouseEvent);
 		const Pos = GetMousePos(MouseEvent);
 		const Button = GetButtonFromMouseEventButton(MouseEvent);
 		
@@ -397,7 +435,9 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	Element.addEventListener('mouseup', MouseUp, false );
 	
 	Element.addEventListener('touchmove', MouseMove );
-	Element.addEventListener('touchstart', MouseDown, false );	//	touchend
+	Element.addEventListener('touchstart', MouseDown, false );
+	Element.addEventListener('touchend', MouseUp, false );
+	Element.addEventListener('touchcancel', MouseUp, false );
 	//	not currently handling up
 	//this.Element.addEventListener('mouseup', MouseUp, false );
 	//this.Element.addEventListener('mouseleave', OnDisableDraw, false );
