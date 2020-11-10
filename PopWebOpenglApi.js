@@ -220,6 +220,8 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	//	touchend doesn't tell us what touches were released;
 	//	so call this function to keep track of them
 	let LastTouches = [];
+	let RegisteredTouchButtons = {};	//	[Identifier] = TouchIndexWhenActivated = ButtonIndex
+	
 	function UpdateTouches(MouseEvent)
 	{
 		function TouchIdentifierPresent(Identifier,TouchArray)
@@ -235,6 +237,16 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		//	turn touches into array
 		const NewTouches = Array.from( MouseEvent.touches );
 		
+		//	update identifier button index
+		function UpdateIdentifierButton(Touch,Index)
+		{
+			const ButtonIndex = Index;
+			if ( !RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
+				Pop.Debug(`New touch ${Touch.identifier} = Button ${ButtonIndex}`);
+			RegisteredTouchButtons[Touch.identifier] = ButtonIndex;
+		}
+		NewTouches.forEach(UpdateIdentifierButton);
+		
 		//	find changes
 		const RemovedTouches = LastTouches.filter( t => !TouchIdentifierPresent(t.identifier,NewTouches) );
 		const AddedTouches = NewTouches.filter( t => !TouchIdentifierPresent(t.identifier,LastTouches) );
@@ -247,14 +259,24 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	//	gr: is identifier unique, or an index? is it persistent?
 	function GetButtonNameFromTouch(Touch)
 	{
-		switch ( Touch.identifier )
+		function GetButtonIndexFromTouch(Touch)
+		{
+			if ( !RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
+			{
+				Pop.Warning(`Touch ${Touch.identifier} has no registered button. Returning 0`);
+				return 0;
+			}
+			return RegisteredTouchButtons[Touch.identifier];
+		}
+		const ButtonIndex = GetButtonIndexFromTouch(Touch);
+		switch ( ButtonIndex )
 		{
 			case 0:	return Pop.SoyMouseButton.Left;
 			case 1:	return Pop.SoyMouseButton.Middle;
 			case 2:	return Pop.SoyMouseButton.Right;
 			case 3:	return Pop.SoyMouseButton.Back;
 			case 4:	return Pop.SoyMouseButton.Forward;
-			default:	return null;
+			default:	return Pop.SoyMouseButton.Left;
 		}
 	}
 
@@ -368,6 +390,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	
 	let MouseMove = function(MouseEvent)
 	{
+		Pop.Debug(`MouseMove`);
 		UpdateTouches(MouseEvent);
 		const Pos = GetMousePos(MouseEvent);
 		const Buttons = GetButtonsFromMouseEventButtons( MouseEvent );
@@ -388,6 +411,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	
 	let MouseDown = function(MouseEvent)
 	{
+		Pop.Debug(`MouseDown`);
 		UpdateTouches(MouseEvent);
 		const Pos = GetMousePos(MouseEvent);
 		const Button = GetButtonFromMouseEventButton(MouseEvent);
@@ -397,6 +421,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	
 	let MouseUp = function(MouseEvent)
 	{
+		Pop.Debug(`MouseUp`);
 		UpdateTouches(MouseEvent);
 		//	todo: trigger multiple buttons (for multiple touches)
 		const Pos = GetMousePos(MouseEvent,MouseEvent.RemovedTouches);
