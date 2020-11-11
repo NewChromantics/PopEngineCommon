@@ -1,7 +1,7 @@
 Pop.Audio = {};
 
 
-const DomTriggerPromise = Pop.CreatePromise();
+let DomTriggerPromise = Pop.CreatePromise();
 function OnDomTrigger()
 {
 	/*
@@ -22,6 +22,12 @@ window.addEventListener('touchend',OnDomTrigger,true);
 async function WaitForClick()
 {
 	await DomTriggerPromise;
+}
+
+async function ResetWaitForClick()
+{
+	DomTriggerPromise = Pop.CreatePromise();
+	return await WaitForClick();
 }
 
 
