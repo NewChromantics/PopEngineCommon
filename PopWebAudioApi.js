@@ -24,6 +24,30 @@ async function WaitForClick()
 	await DomTriggerPromise;
 }
 
+
+//	gr: I dont like double negatives, but matching Audio.muted
+//	https://www.w3schools.com/TAGs/av_prop_muted.asp
+Pop.Audio._GlobalMuted = false;
+Pop.WebApi.MutedChangePromises = new WebApi_PromiseQueue();
+
+Pop.Audio.SetMuted = function(Muted)
+{
+	Pop.Audio._GlobalMuted = Muted;
+	Pop.WebApi.MutedChangePromises.Push(Muted);
+}
+
+Pop.Audio.IsMuted = function()
+{
+	const Background = !Pop.WebApi.IsForeground();
+	const Muted = Background || Pop.Audio._GlobalMuted;
+	return Muted;
+}
+
+Pop.Audio.WaitForMutedChange = async function()
+{
+	return Pop.WebApi.MutedChangePromises.WaitForNext();
+}
+
 /*
 //	we need to associate these per context really...
 Pop.Audio.Uniforms = {};
@@ -106,8 +130,48 @@ Pop.Audio.SimpleSound = class
 		Pop.Debug('Converting to base64');
 		//	load
 		this.Sound = new Audio(Data64);
+		
+		//	null if not paused
+		this.ResumeTimeMs = null;
+		
 		this.ActionQueue = new Pop.PromiseQueue();
+		this.GlobalUpdateCheckThread().then(Pop.Debug).catch(Pop.Warning);
 		this.Update().then(Pop.Debug).catch(Pop.Warning);
+	}
+	
+	async GlobalUpdateCheckThread()
+	{
+		const OnMutedChange = function(Muted)
+		{
+			/*
+			if ( Foreground )
+			{
+				if ( this.ResumeTimeMs !== null )
+				{
+					Pop.Debug(`SimpleSound(${this.Name}) resume ${this.ResumeTimeMs}`);
+					this.Play(this.ResumeTimeMs);
+					this.ResumeTimeMs = null;
+				}
+			}
+			else 
+			{
+		 		this.Pause();
+			}
+			*/
+			this.Sound.muted = Muted;
+		}.bind(this);
+	
+		//	do an initial state in case we start a sound when we expect it silent
+		while(this.Sound)
+		{
+			const Muted = Pop.Audio.IsMuted();	//	checks foreground & state
+			Pop.Debug(`SimpleSound(${this.Name}) Muted=${Muted}`);
+			OnMutedChange(Muted);
+
+			const OnForeground = Pop.WebApi.WaitForForegroundChange();
+			const OnMuted = Pop.Audio.WaitForMutedChange();
+			await Promise.race([OnForeground,OnMuted]);
+		}
 	}
 
 	async Update()
@@ -157,6 +221,22 @@ Pop.Audio.SimpleSound = class
 				Pop.Debug(`Play(${TimeMs.toFixed(2)}) delay ${this.Name} ${Delay.toFixed(2)}ms`);
 		}
 		this.PushAction(DoPlay);
+		this.ResumeTimeMs = null;	//	unset any pause time
+	}
+	
+	Pause()
+	{
+		if ( this.Sound )
+		{
+			this.ResumeTimeMs = this.Sound.currentTime * 1000;
+			Pop.Debug(`SimpleSound(${this.Name}) pause at ${this.ResumeTimeMs}`);
+		}
+		Pop.Debug(`SimpleSound(${this.Name}) pausing`);
+		async function DoPause()
+		{
+			this.Sound.pause();
+		}
+		this.PushAction(DoPause);
 	}
 
 	Stop()
@@ -165,6 +245,8 @@ Pop.Audio.SimpleSound = class
 		{
 			this.Sound.pause();
 		}
+		//	dont allow resume
+		this.ResumeTimeMs = null;
 		this.PushAction(DoStop);
 	}
 }
