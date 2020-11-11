@@ -390,12 +390,13 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	
 	let MouseMove = function(MouseEvent)
 	{
-		Pop.Debug(`MouseMove`);
+		//Pop.Debug(`MouseMove`);
 		UpdateTouches(MouseEvent);
 		const Pos = GetMousePos(MouseEvent);
 		const Buttons = GetButtonsFromMouseEventButtons( MouseEvent );
 		if ( Buttons.length == 0 )
 		{
+			Pop.Debug(`MouseMove ${Pos} 0 buttons ${Buttons}`);
 			MouseEvent.preventDefault();
 			OnMouseMove( Pos[0], Pos[1], Pop.SoyMouseButton.None );
 			return;
@@ -405,27 +406,28 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		//	later, we might want one for each button, but to avoid
 		//	slow performance stuff now lets just do one
 		//	gr: maybe API should change to an array
+		Pop.Debug(`MouseMove ${Pos} 0 buttons ${Buttons}`);
 		OnMouseMove( Pos[0], Pos[1], Buttons[0] );
 		MouseEvent.preventDefault();
 	}
 	
 	let MouseDown = function(MouseEvent)
 	{
-		Pop.Debug(`MouseDown`);
 		UpdateTouches(MouseEvent);
 		const Pos = GetMousePos(MouseEvent);
 		const Button = GetButtonFromMouseEventButton(MouseEvent);
+		Pop.Debug(`MouseDown ${Pos} ${Button}`);
 		OnMouseDown( Pos[0], Pos[1], Button );
 		MouseEvent.preventDefault();
 	}
 	
 	let MouseUp = function(MouseEvent)
 	{
-		Pop.Debug(`MouseUp`);
 		UpdateTouches(MouseEvent);
 		//	todo: trigger multiple buttons (for multiple touches)
 		const Pos = GetMousePos(MouseEvent,MouseEvent.RemovedTouches);
 		const Button = GetButtonFromMouseEventButton(MouseEvent,null,MouseEvent.RemovedTouches);
+		Pop.Debug(`MouseUp ${Pos} ${Button}`);
 		OnMouseUp( Pos[0], Pos[1], Button );
 		MouseEvent.preventDefault();
 	}
