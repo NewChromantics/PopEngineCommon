@@ -189,16 +189,18 @@ Pop.WebApi.IsForeground = function ()
 	//	normal:				!hidden visible foreground
 	//	click non-page:		!hidden visible !foreground
 	//	minimised:			hidden !visible foreground
-	return Pop.WebApi.ForegroundState;
+	let State = Pop.WebApi.ForegroundState;
+	State = State && !Pop.WebApi.IsMinimised();
+	return State;
 }
 
 Pop.WebApi.SetIsForeground = function (IsForeground)
 {
-	//Pop.Debug("Foreground changed from ",Pop.WebApi.ForegroundState,"to",IsForeground);
+	Pop.Debug("Foreground changed from ",Pop.WebApi.ForegroundState,"to",IsForeground);
 	if (IsForeground!==undefined)
 		Pop.WebApi.ForegroundState = IsForeground;
 
-	const Foreground = Pop.WebApi.IsForeground() && !Pop.WebApi.IsMinimised();
+	const Foreground = Pop.WebApi.IsForeground();
 	Pop.WebApi.ForegroundChangePromises.Push(Foreground);
 }
 
@@ -211,7 +213,7 @@ Pop.WebApi.WaitForForegroundChange = async function ()
 //	todo: call a func here in case we expand to have some async change promise queues
 window.addEventListener('focus',function () { Pop.WebApi.SetIsForeground(true); });
 window.addEventListener('blur',function () { Pop.WebApi.SetIsForeground(false); });
-window.addEventListener('visibilitychange',function () { Pop.WebApi.SetIsForeground(document.hidden); });
+window.addEventListener('visibilitychange',function () { Pop.WebApi.SetIsForeground(!document.hidden); });
 
 
 //	this will become generic and not webapi specific
