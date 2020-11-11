@@ -137,8 +137,7 @@ Pop.Audio.SimpleSound = class
 		//	load
 		this.Sound = new Audio(Data64);
 		
-		//	null if not paused
-		this.ResumeTimeMs = null;
+		this.Started = false;
 		
 		this.ActionQueue = new Pop.PromiseQueue();
 		this.GlobalUpdateCheckThread().then(Pop.Debug).catch(Pop.Warning);
@@ -149,21 +148,6 @@ Pop.Audio.SimpleSound = class
 	{
 		const OnMutedChange = function(Muted)
 		{
-			/*
-			if ( Foreground )
-			{
-				if ( this.ResumeTimeMs !== null )
-				{
-					Pop.Debug(`SimpleSound(${this.Name}) resume ${this.ResumeTimeMs}`);
-					this.Play(this.ResumeTimeMs);
-					this.ResumeTimeMs = null;
-				}
-			}
-			else 
-			{
-		 		this.Pause();
-			}
-			*/
 			this.Sound.muted = Muted;
 		}.bind(this);
 	
@@ -192,10 +176,23 @@ Pop.Audio.SimpleSound = class
 		//	immediately pause
 		this.Sound.pause();
 
-		while (this.Sound)
+		while (this.Sound || this.ActionQueue.HasPending() )
 		{
-			const Action = await this.ActionQueue.WaitForNext();
-			await Action.call(this);
+			let Action = await this.ActionQueue.WaitForNext();
+			if (Action == 'UpdatePlayTargetTime')
+				Action = this.UpdatePlayTargetTime.bind(this);
+
+			try
+			{
+				await Action.call(this);
+			}
+			catch(e)
+			{
+				Pop.Warning(`Sound exception ${e}, resetting wait for click`);
+				await ResetWaitForClick();
+				Pop.Debug(`Re-calling action after sound exception`);
+				await Action.call(this);
+			}
 		}
 	}
 
@@ -214,46 +211,68 @@ Pop.Audio.SimpleSound = class
 		this.ActionQueue.Push(Lambda);
 	}
 
-	Play(TimeMs=0)
+		
+	async UpdatePlayTargetTime(Context)
 	{
-		const QueueTime = Pop.GetTimeNowMs();
-		//Pop.Debug(`Queue play(${Name}) at ${Pop.GetTimeNow}
-		async function DoPlay()
+		if (this.PlayTargetTime === null)
+			return Pop.Warning(`Sound has caused a play/stop but the target value is not dirty`);
+
+		if (this.PlayTargetTime === false)
 		{
-			this.Sound.currentTime = TimeMs / 1000;
-			await this.Sound.play();
-			const Delay = Pop.GetTimeNowMs() - QueueTime;
-			if ( Delay > 5 )
-				Pop.Debug(`Play(${TimeMs.toFixed(2)}) delay ${this.Name} ${Delay.toFixed(2)}ms`);
+			this.Sound.pause();
+			this.PlayTargetTime = null;
+			return;
 		}
-		this.PushAction(DoPlay);
-		this.ResumeTimeMs = null;	//	unset any pause time
+
+		const TimeMs = this.PlayTargetTime;
+		this.PlayTargetTime = null;
+
+		//	gr: avoid seek/reconstruction where possible
+		const SampleTimeIsClose = function ()
+		{
+			const MaxMsOffset = 200;
+			const CurrentTime = this.GetSampleNodeCurrentTimeMs();
+			if (CurrentTime === false)
+				return false;
+			const Difference = Math.abs(TimeMs - CurrentTime);
+			if (Difference < MaxMsOffset)
+				return true;
+			Pop.Debug(`Sample ${this.Name} time is ${TimeMs - CurrentTime}ms out`);
+			return false;
+		}.bind(this);
+
+		if (SampleTimeIsClose())
+			return;
+
+		//	seek to time
+		this.Sound.currentTime = TimeMs / 1000;
+		await this.Sound.play();
+		this.Started = true;
 	}
 	
-	Pause()
+	
+	Play(TimeMs=0)
 	{
-		if ( this.Sound )
-		{
-			this.ResumeTimeMs = this.Sound.currentTime * 1000;
-			Pop.Debug(`SimpleSound(${this.Name}) pause at ${this.ResumeTimeMs}`);
-		}
-		Pop.Debug(`SimpleSound(${this.Name}) pausing`);
-		async function DoPause()
-		{
-			this.Sound.pause();
-		}
-		this.PushAction(DoPause);
+		//	gr: could call SampleTimeIsClose() here and avoid this queue entirely
+		//	mark dirty and do new state update (if not already queued)
+		this.PlayTargetTime = TimeMs;
+		this.ActionQueue.PushUnique('UpdatePlayTargetTime');
 	}
-
+	
 	Stop()
 	{
-		async function DoStop()
-		{
-			this.Sound.pause();
-		}
-		//	dont allow resume
-		this.ResumeTimeMs = null;
-		this.PushAction(DoStop);
+		//	mark dirty and cause update of state (if not already queued)
+		this.PlayTargetTime = false;
+		this.ActionQueue.PushUnique('UpdatePlayTargetTime');
+	}
+	
+	GetSampleNodeCurrentTimeMs()
+	{
+		if ( !this.Sound )
+			return false;
+		if ( !this.Started )
+			return false;
+		return this.Sound.currentTime * 1000;
 	}
 }
 
