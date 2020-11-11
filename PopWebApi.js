@@ -196,11 +196,12 @@ Pop.WebApi.IsForeground = function ()
 
 Pop.WebApi.SetIsForeground = function (IsForeground)
 {
-	Pop.Debug("Foreground changed from ",Pop.WebApi.ForegroundState,"to",IsForeground);
+	Pop.Debug(`Foreground changed from ,${Pop.WebApi.ForegroundState} to ${IsForeground}. Document.hidden=${document.hidden}`);
 	if (IsForeground!==undefined)
 		Pop.WebApi.ForegroundState = IsForeground;
 
 	const Foreground = Pop.WebApi.IsForeground();
+	Pop.Debug(`IsForeground state = ${Pop.WebApi.IsForeground()}`);
 	Pop.WebApi.ForegroundChangePromises.Push(Foreground);
 }
 
