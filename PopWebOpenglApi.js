@@ -24,6 +24,7 @@ Pop.Opengl.CanRenderToFloat = undefined;
 //	allow turning off float support
 Pop.Opengl.AllowFloatTextures = !Pop.GetExeArguments().DisableFloatTextures;
 
+Pop.DebugMouseEvent = function(){};	//	Pop.Debug;
 
 Pop.Opengl.GetString = function(Context,Enum)
 {
@@ -242,7 +243,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		{
 			const ButtonIndex = Index;
 			if ( !RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
-				Pop.Debug(`New touch ${Touch.identifier} = Button ${ButtonIndex}`);
+				Pop.DebugMouseEvent(`New touch ${Touch.identifier} = Button ${ButtonIndex}`);
 			RegisteredTouchButtons[Touch.identifier] = ButtonIndex;
 		}
 		NewTouches.forEach(UpdateIdentifierButton);
@@ -390,13 +391,13 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	
 	let MouseMove = function(MouseEvent)
 	{
-		//Pop.Debug(`MouseMove`);
+		Pop.DebugMouseEvent(`MouseMove`);
 		UpdateTouches(MouseEvent);
 		const Pos = GetMousePos(MouseEvent);
 		const Buttons = GetButtonsFromMouseEventButtons( MouseEvent );
 		if ( Buttons.length == 0 )
 		{
-			Pop.Debug(`MouseMove ${Pos} 0 buttons ${Buttons}`);
+			Pop.DebugMouseEvent(`MouseMove ${Pos} 0 buttons ${Buttons}`);
 			MouseEvent.preventDefault();
 			OnMouseMove( Pos[0], Pos[1], Pop.SoyMouseButton.None );
 			return;
@@ -406,7 +407,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		//	later, we might want one for each button, but to avoid
 		//	slow performance stuff now lets just do one
 		//	gr: maybe API should change to an array
-		Pop.Debug(`MouseMove ${Pos} 0 buttons ${Buttons}`);
+		Pop.DebugMouseEvent(`MouseMove ${Pos} 0 buttons ${Buttons}`);
 		OnMouseMove( Pos[0], Pos[1], Buttons[0] );
 		MouseEvent.preventDefault();
 	}
@@ -416,7 +417,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		UpdateTouches(MouseEvent);
 		const Pos = GetMousePos(MouseEvent);
 		const Button = GetButtonFromMouseEventButton(MouseEvent);
-		Pop.Debug(`MouseDown ${Pos} ${Button}`);
+		Pop.DebugMouseEvent(`MouseDown ${Pos} ${Button}`);
 		OnMouseDown( Pos[0], Pos[1], Button );
 		MouseEvent.preventDefault();
 	}
@@ -427,7 +428,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		//	todo: trigger multiple buttons (for multiple touches)
 		const Pos = GetMousePos(MouseEvent,MouseEvent.RemovedTouches);
 		const Button = GetButtonFromMouseEventButton(MouseEvent,null,MouseEvent.RemovedTouches);
-		Pop.Debug(`MouseUp ${Pos} ${Button}`);
+		Pop.DebugMouseEvent(`MouseUp ${Pos} ${Button}`);
 		OnMouseUp( Pos[0], Pos[1], Button );
 		MouseEvent.preventDefault();
 	}
@@ -480,7 +481,7 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 {
 	function GetKeyFromKeyEventButton(KeyEvent)
 	{
-		// Pop.Debug("KeyEvent",KeyEvent);
+		// Pop.DebugMouseEvent("KeyEvent",KeyEvent);
 		return KeyEvent.key;
 	}
 	
@@ -489,7 +490,7 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 		//	if an input element has focus, ignore event
 		if ( KeyEvent.srcElement instanceof HTMLInputElement )
 		{
-			Pop.Debug("Ignoring OnKeyDown as input has focus",KeyEvent);
+			Pop.DebugMouseEvent("Ignoring OnKeyDown as input has focus",KeyEvent);
 			return false;
 		}
 		//Pop.Debug("OnKey down",KeyEvent);
@@ -521,12 +522,12 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 {
 	//	things to overload
 	this.OnRender = function(RenderTarget)					{	Pop.Warning(`OnRender not overloaded`);	};
-	this.OnMouseDown = function(x,y,Button)					{	/*Pop.Debug('OnMouseDown',...arguments);*/		};
-	this.OnMouseMove = function(x,y,Button)					{	/*Pop.Debug("OnMouseMove",...arguments);*/		};
-	this.OnMouseUp = function(x,y,Button)					{	/*Pop.Debug('OnMouseUp',...arguments);*/		};
-	this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	/*Pop.Debug('OnMouseScroll',...arguments);*/	};
-	this.OnKeyDown = function(Key)							{	/*Pop.Debug('OnKeyDown',...arguments);*/		};
-	this.OnKeyUp = function(Key)							{	/*Pop.Debug('OnKeyUp',...arguments);*/			};
+	this.OnMouseDown = function(x,y,Button)					{	Pop.DebugMouseEvent('OnMouseDown',...arguments);		};
+	this.OnMouseMove = function(x,y,Button)					{	Pop.DebugMouseEvent("OnMouseMove",...arguments);		};
+	this.OnMouseUp = function(x,y,Button)					{	Pop.DebugMouseEvent('OnMouseUp',...arguments);		};
+	this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	Pop.DebugMouseEvent('OnMouseScroll',...arguments);	};
+	this.OnKeyDown = function(Key)							{	Pop.DebugMouseEvent('OnKeyDown',...arguments);		};
+	this.OnKeyUp = function(Key)							{	Pop.DebugMouseEvent('OnKeyUp',...arguments);			};
 
 	//	treat minimised and foreground as the same on web;
 	//	todo: foreground state for multiple windows on one page
@@ -573,7 +574,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 
 	this.OnResize = function(ResizeEvent)
 	{
-		// Pop.Debug("OnResize",JSON.stringify(ResizeEvent));
+		Pop.Debug("OnResize",JSON.stringify(ResizeEvent));
 		
 		//	invalidate cache
 		this.ScreenRectCache = null;
