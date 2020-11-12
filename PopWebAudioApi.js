@@ -312,7 +312,6 @@ Pop.Audio.SimpleSound = class
 		this.Started = false;
 		
 		this.ActionQueue = new Pop.PromiseQueue();
-		this.GlobalUpdateCheckThread().then(Pop.Debug).catch(Pop.Warning);
 		this.Update().then(Pop.Debug).catch(Pop.Warning);
 	}
 	
@@ -339,6 +338,8 @@ Pop.Audio.SimpleSound = class
 	async Update()
 	{
 		this.Sound = await AllocAudio(this.SoundDataUrl,this.Name);
+		
+		this.GlobalUpdateCheckThread().then(Pop.Debug).catch(Pop.Warning);
 
 		//	immediately pause
 		this.Sound.pause();
