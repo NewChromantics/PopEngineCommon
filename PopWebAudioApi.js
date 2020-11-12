@@ -131,7 +131,9 @@ async function AllocAudio(SourceUrl,DebugName)
 		function OnSecurity()
 		{
 			//	call play as soon as security clicks and return promise
-			return Sound.play();
+			const PlayPromise = Sound.play();
+			PlayPromise.catch(Pop.Warning);
+			return PlayPromise;
 		}
 		await WaitForSecurityItem(OnSecurity,DebugName);
 		
@@ -152,7 +154,7 @@ async function AllocAudio(SourceUrl,DebugName)
 
 
 let DomTriggerPromise = Pop.CreatePromise();
-function OnDomTrigger()
+function OnDomTrigger(Event)
 {
 	//	synchronously resovle all securty items
 	//	cut out of list so we can re-add if they fail without getting stuck in a loop
