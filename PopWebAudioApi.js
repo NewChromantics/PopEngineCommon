@@ -444,8 +444,15 @@ Pop.Audio.SimpleSound = class
 	Free()
 	{
 		this.Stop();
-		FreeAudio(this.Sound);
-		this.Sound = null;
+		if ( this.Sound )
+		{
+			FreeAudio(this.Sound);
+			this.Sound = null;
+		}
+		else
+		{
+			Pop.Warning(`Free(${this.Name}) but already null`);
+		}
 	}
 	
 	GetSampleNodeCurrentTimeMs()
