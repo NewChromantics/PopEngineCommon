@@ -463,6 +463,19 @@ Pop.Audio.SimpleSound = class
 			return false;
 		return this.Sound.currentTime * 1000;
 	}
+	
+	GetDurationMs()
+	{
+		if ( !this.Sound )
+			throw `Pop.Audio.SimpleSound ${this.Name} unknown duration (not loaded)`;
+		const DurationSecs = this.Sound.duration;
+		if ( isNaN(DurationSecs) )
+			throw `Pop.Audio.SimpleSound ${this.Name} unknown duration (not known)`;
+		
+		const DurationMs = Math.floor(DurationSecs * 1000);
+		return DurationMs;
+	}
+	
 }
 
 
