@@ -399,30 +399,67 @@ Pop.Audio.SimpleSound = class
 		if ( !this.Sound )
 			throw `UpdatePlayTargetTime ${this.PlayTargetTime} but sound is null (freed?)`;
 
-		const TimeMs = this.PlayTargetTime;
-		this.PlayTargetTime = null;
-
+		const DelayMs = Pop.GetTimeNowMs() - this.PlayTargetRequestTime;
+		const TimeMs = this.PlayTargetTime + DelayMs;
+		
 		//	gr: avoid seek/reconstruction where possible
 		const SampleTimeIsClose = function ()
 		{
-			const MaxMsOffset = 2000;
+			const MaxMsOffset = 200;
 			const CurrentTime = this.GetSampleNodeCurrentTimeMs();
 			if (CurrentTime === false)
 				return false;
 			const Difference = Math.abs(TimeMs - CurrentTime);
 			if (Difference < MaxMsOffset)
 				return true;
-			Pop.Debug(`Sample ${this.Name} time is ${TimeMs - CurrentTime}ms out`);
+			Pop.Debug(`Sample ${this.Name} time is ${TimeMs - CurrentTime}ms out (target=${TimeMs} delay was ${DelayMs})`);
 			return false;
 		}.bind(this);
 
 		if (SampleTimeIsClose())
+		{
+			this.PlayTargetTime = null;
 			return;
+		}
 
-		//	seek to time
-		this.Sound.currentTime = TimeMs / 1000;
-		await this.Sound.play();
+		const TimeSecs = TimeMs / 1000;
+
+		//	gr: spotted special case
+		//		we're paused if the sound has gone past the end
+		//		if we're trying to see past that time, dont!
+		//		chrome on pixel3
+		if ( this.Sound.ended )
+		{
+			if ( TimeSecs >= this.Sound.currentTime )
+			{
+				Pop.Debug(`Skipped seek(${TimeSecs}) as sound has ended ${this.Sound.currentTime}`);
+				this.PlayTargetTime = null;
+				return;
+			}
+		}
+		
+
+
+		if ( this.Sound.paused )
+		{
+			Pop.Debug(`Seeking from ${this.Sound.currentTime} to ${TimeSecs} with play()`);
+			try
+			{
+				//	gr: this play() isn't needed if the sound has ended, it re-seeks
+				//	if we step through, it actually plays twice when we seek again below.
+				//	pause, seek, play? if thats a problem?
+				this.Sound.currentTime = TimeSecs;
+				await this.Sound.play();
+			}
+			catch(e)
+			{
+				Pop.Warning(`Seeking required play(), exception; ${e}`);
+			}
+		}		
+		Pop.Debug(`Seeking from ${this.Sound.currentTime} to ${TimeSecs} ${this.Name}`);
+		this.Sound.currentTime = TimeSecs;
 		this.Started = true;
+		this.PlayTargetTime = null;
 	}
 	
 	
@@ -431,6 +468,7 @@ Pop.Audio.SimpleSound = class
 		//	gr: could call SampleTimeIsClose() here and avoid this queue entirely
 		//	mark dirty and do new state update (if not already queued)
 		this.PlayTargetTime = TimeMs;
+		this.PlayTargetRequestTime = Pop.GetTimeNowMs();
 		this.ActionQueue.PushUnique('UpdatePlayTargetTime');
 	}
 	
