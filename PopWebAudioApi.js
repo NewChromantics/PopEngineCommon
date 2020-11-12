@@ -93,7 +93,7 @@ function FreeAudio(Sound)
 //	resolves when we have an audio that is ready to be played and manipulated
 async function AllocAudio(SourceUrl,DebugName)
 {
-	function PrepareSound(Sound)
+	async function PrepareSound(Sound)
 	{
 		function OnError(Error)
 		{
@@ -104,7 +104,16 @@ async function AllocAudio(SourceUrl,DebugName)
 		Sound.muted = true;
 		Sound.src = SourceUrl;
 		Sound.load();	//	apply src change
-		Sound.play().catch(OnError);
+		//Sound.play().catch(OnError);
+		try
+		{
+			//	for restarting sound from pool, as this has already play()'d from event callback, it should be okay
+			await Sound.play();
+		}
+		catch(e)
+		{
+			OnError(e);
+		}
 		//	gr: mute, then play() should re-seek?
 		Sound.muted = false;
 	}
@@ -115,7 +124,7 @@ async function AllocAudio(SourceUrl,DebugName)
 		const Sound = ReadyAudioPool.shift();
 		UsedAudioPool.push(Sound);
 		
-		PrepareSound(Sound);
+		await PrepareSound(Sound);
 		
 		return Sound;
 	}
@@ -137,7 +146,7 @@ async function AllocAudio(SourceUrl,DebugName)
 		}
 		await WaitForSecurityItem(OnSecurity,DebugName);
 		
-		PrepareSound(Sound);
+		await PrepareSound(Sound);
 
 		return Sound;
 	}
@@ -342,9 +351,6 @@ Pop.Audio.SimpleSound = class
 		this.Sound = await AllocAudio(this.SoundDataUrl,this.Name);
 		
 		this.GlobalUpdateCheckThread().then(Pop.Debug).catch(Pop.Warning);
-
-		//	immediately pause
-		this.Sound.pause();
 
 		while (this.Sound || this.ActionQueue.HasPending() )
 		{
