@@ -1,9 +1,175 @@
 Pop.Audio = {};
 
 
+
+
+
+//	gr: back to a sound pool system
+//	gr: all this is designed for SimpleSound
+//		this, I think, just needs audio context initialising at the right time for complex sounds 
+
+const PendingAudioPool = [];
+const ReadyAudioPool = [];
+const UsedAudioPool = [];
+
+class TSecurityItem
+{
+	constructor(OnSecurityResolve,DebugName)
+	{
+		this.DebugName = DebugName;
+		this.OnSecurityResolve = OnSecurityResolve;
+		this.ResolvingPromise = null;
+		this.SecurityResolved = Pop.CreatePromise();
+	}
+	
+	OnError(Error)
+	{
+		Pop.Debug(`Exception resolving security item ${this.DebugName}; ${Error}`);
+		//	the call to the thing to MAKE the promise failed, so put in a failing one
+		if ( !this.SecurityResolved )
+			this.SecurityResolved = Pop.CreatePromise();
+		this.SecurityResolved.Reject(Error);
+	}
+	
+	Resolve(Event)
+	{
+		try
+		{
+			Pop.Debug(`Resolving security item ${this.DebugName}`);
+			this.ResolvingPromise = this.OnSecurityResolve();
+			const OnError = this.OnError.bind(this);
+			
+			const OnResolved = function(Value)
+			{
+				Pop.Debug(`Security -> Resolve, Resolved ${Value} (${this.DebugName})`);
+				this.SecurityResolved.Resolve(Value); 
+			}.bind(this);
+			
+			this.ResolvingPromise.then(OnResolved).catch(OnError);
+		}
+		catch(e)
+		{
+			this.OnError(e);
+		}
+	}
+	
+	async WaitForResolved()
+	{
+		return this.SecurityResolved;
+	}
+}
+
+const PendingSecurityItems = [];
+
+async function WaitForSecurityItem(Callback,DebugName)
+{
+	const Item = new TSecurityItem(Callback,DebugName);
+	PendingSecurityItems.push(Item);
+	await Item.WaitForResolved();
+	return Item;
+}
+
+
+function PreallocAudio(BufferSize)
+{
+	const SilentMp3Url = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU2LjM2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU2LjQxAAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTMu//MUZAYAAAGkAAAAAAAAA0gAAAAAOTku//MUZAkAAAGkAAAAAAAAA0gAAAAANVVV';
+	async function MakePreload(Index)
+	{
+		const NewAudio = await AllocAudio(SilentMp3Url,`PreAlloc#${Index}`);
+		ReadyAudioPool.push(NewAudio);
+	}
+	for ( let i=0;	i<BufferSize;	i++ )
+		MakePreload(i);
+}
+PreallocAudio(10);
+
+function FreeAudio(Sound)
+{
+	Sound.pause();
+	Sound.muted = true;
+	ReadyAudioPool.push(Sound);
+}
+
+//	resolves when we have an audio that is ready to be played and manipulated
+async function AllocAudio(SourceUrl,DebugName)
+{
+	function PrepareSound(Sound)
+	{
+		function OnError(Error)
+		{
+			Pop.Warning(`Audio Prepare ${DebugName} exception; ${Error}`);
+		}
+	
+		//	reconfigure to have correct data, but not playing
+		Sound.muted = true;
+		Sound.src = SourceUrl;
+		Sound.load();	//	apply src change
+		Sound.play().catch(OnError);
+		//	gr: mute, then play() should re-seek?
+		Sound.muted = false;
+	}
+	
+	Pop.Debug(`AllocAudio(${DebugName} readypool: ${ReadyAudioPool.length}`);
+	if ( ReadyAudioPool.length )
+	{
+		const Sound = ReadyAudioPool.shift();
+		UsedAudioPool.push(Sound);
+		
+		PrepareSound(Sound);
+		
+		return Sound;
+	}
+	
+	//	alloc a new audio and put in pending
+	{
+		const Sound = new Audio();
+		const SilentMp3Url = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU2LjM2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU2LjQxAAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTMu//MUZAYAAAGkAAAAAAAAA0gAAAAAOTku//MUZAkAAAGkAAAAAAAAA0gAAAAANVVV';
+		//	gr: need to load something or play() doesn't resolve
+		Sound.src = SilentMp3Url;
+		Sound.muted = true;
+		Sound.load();
+		function OnSecurity()
+		{
+			//	call play as soon as security clicks and return promise
+			return Sound.play();
+		}
+		await WaitForSecurityItem(OnSecurity,DebugName);
+		
+		PrepareSound(Sound);
+
+		return Sound;
+	}
+}
+
+
+
+
+
+
+
+
+
+
+
 let DomTriggerPromise = Pop.CreatePromise();
 function OnDomTrigger()
 {
+	//	synchronously resovle all securty items
+	//	cut out of list so we can re-add if they fail without getting stuck in a loop
+	const SecurityItems = PendingSecurityItems.splice( 0, PendingSecurityItems.length );
+	function Resolve(Item)
+	{
+		try
+		{
+			Item.Resolve();
+		}
+		catch(e)
+		{
+			Pop.Warning(`SecurityResolve failed, ${e}, re-adding`);
+			PendingSecurityItems.push(Item);
+		}
+	}
+	SecurityItems.forEach(Resolve);
 	/*
 	//	on safari, this has to be inside the actual event callback
 	if ( !Pop.Audio.Context )
@@ -132,11 +298,11 @@ Pop.Audio.SimpleSound = class
 						  );
 		
 		//const WaveData64 = btoa(String.fromCharCode.apply(null, WaveData));
-		const Data64 = 'data:audio/mp3;base64,' + WaveData64;
 		Pop.Debug('Converting to base64');
-		//	load
-		this.Sound = new Audio(Data64);
+		const Data64 = 'data:audio/mp3;base64,' + WaveData64;
+		this.SoundDataUrl = Data64;
 		
+		this.Sound = null;
 		this.Started = false;
 		
 		this.ActionQueue = new Pop.PromiseQueue();
@@ -166,12 +332,7 @@ Pop.Audio.SimpleSound = class
 
 	async Update()
 	{
-		//	load
-		//	wait until we can play in browser
-		await WaitForClick();
-		//	gr: having this after click means they all play straight away
-		//		see if we can do something to make sure it's ready to play, but not play()
-		//await this.Sound.play();
+		this.Sound = await AllocAudio(this.SoundDataUrl,this.Name);
 
 		//	immediately pause
 		this.Sound.pause();
@@ -194,6 +355,7 @@ Pop.Audio.SimpleSound = class
 				await Action.call(this);
 			}
 		}
+
 	}
 
 	PushAction(Lambda)
@@ -219,10 +381,14 @@ Pop.Audio.SimpleSound = class
 
 		if (this.PlayTargetTime === false)
 		{
-			this.Sound.pause();
+			if ( this.Sound )
+				this.Sound.pause();
 			this.PlayTargetTime = null;
 			return;
 		}
+
+		if ( !this.Sound )
+			throw `UpdatePlayTargetTime ${this.PlayTargetTime} but sound is null (freed?)`;
 
 		const TimeMs = this.PlayTargetTime;
 		this.PlayTargetTime = null;
@@ -230,7 +396,7 @@ Pop.Audio.SimpleSound = class
 		//	gr: avoid seek/reconstruction where possible
 		const SampleTimeIsClose = function ()
 		{
-			const MaxMsOffset = 200;
+			const MaxMsOffset = 2000;
 			const CurrentTime = this.GetSampleNodeCurrentTimeMs();
 			if (CurrentTime === false)
 				return false;
@@ -264,6 +430,13 @@ Pop.Audio.SimpleSound = class
 		//	mark dirty and cause update of state (if not already queued)
 		this.PlayTargetTime = false;
 		this.ActionQueue.PushUnique('UpdatePlayTargetTime');
+	}
+	
+	Free()
+	{
+		this.Stop();
+		FreeAudio(this.Sound);
+		this.Sound = null;
 	}
 	
 	GetSampleNodeCurrentTimeMs()
