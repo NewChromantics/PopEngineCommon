@@ -180,10 +180,16 @@ function OnDomTrigger()
 
 	DomTriggerPromise.Resolve();
 }
+
 window.addEventListener('click',OnDomTrigger,true);
 //	gr: Kandisnky AudioManager listened for touchend ... is this significant?
-window.addEventListener('touchstart',OnDomTrigger,true);
+//	https://stackoverflow.com/a/15108385/355753
+//	the accepted events are: "click", "touchend", "doubleclick" and "keydown") and call the load()
+//	gr: where is the real citation!
+//window.addEventListener('touchstart',OnDomTrigger,true);
 window.addEventListener('touchend',OnDomTrigger,true);
+window.addEventListener('doubleclick',OnDomTrigger,true);
+window.addEventListener('keydown',OnDomTrigger,true);
 
 async function WaitForClick()
 {
