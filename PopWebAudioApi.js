@@ -81,7 +81,9 @@ function PreallocAudio(BufferSize)
 	for ( let i=0;	i<BufferSize;	i++ )
 		MakePreload(i);
 }
-PreallocAudio(10);
+//	chrome on pixel3 is fine with 100
+//	safari on iphonese seems to choke
+PreallocAudio(20);
 
 function FreeAudio(Sound)
 {
@@ -389,7 +391,7 @@ Pop.Audio.SimpleSound = class
 	}
 
 		
-	async UpdatePlayTargetTime(Context)
+	async UpdatePlayTargetTime(Context,SleepMs=400)
 	{
 		if (this.PlayTargetTime === null)
 			return Pop.Warning(`Sound has caused a play/stop but the target value is not dirty`);
@@ -408,44 +410,75 @@ Pop.Audio.SimpleSound = class
 		const DelayMs = Pop.GetTimeNowMs() - this.PlayTargetRequestTime;
 		const TimeMs = this.PlayTargetTime + DelayMs;
 		
-		//	gr: avoid seek/reconstruction where possible
-		const SampleTimeIsClose = function ()
+		//	if sound is seeking, dont try and change it
+		if ( this.Sound.seeking )
 		{
-			const MaxMsOffset = 200;
+			//Pop.Debug(`${this.Name} seeking, skipping re-skip`);
+			await Pop.Yield(SleepMs);
+			return;
+		}
+		const Duration = this.GetDurationMs();
+		
+		//	gr: avoid seek/reconstruction where possible
+		const SampleTimeIsClose = function (MaxMsOffset)
+		{
 			const CurrentTime = this.GetSampleNodeCurrentTimeMs();
 			if (CurrentTime === false)
 				return false;
 			const Difference = Math.abs(TimeMs - CurrentTime);
 			if (Difference < MaxMsOffset)
 				return true;
-			Pop.Debug(`Sample ${this.Name} time is ${TimeMs - CurrentTime}ms out (target=${TimeMs} delay was ${DelayMs})`);
+			//Pop.Debug(`Sample ${this.Name} time is ${TimeMs - CurrentTime}ms out (target=${TimeMs} delay was ${DelayMs})`);
 			return false;
 		}.bind(this);
 
-		if (SampleTimeIsClose())
+		//	throttle seeking, seeking too much kills safari
+		//	it also seems there is a delay in a seek
 		{
-			this.PlayTargetTime = null;
-			return;
+			const TimeSinceSeek = Pop.GetTimeNowMs() - this.TimeAtLastSeek;
+			if ( TimeSinceSeek < SleepMs )
+			{
+				Pop.Debug(`${TimeSinceSeek} ms since last seek ${this.Name} skipping`);
+				this.PlayTargetTime = null;
+				await Pop.Yield(SleepMs);
+				return;
+			}
 		}
-
-		const TimeSecs = TimeMs / 1000;
-
+				
 		//	gr: spotted special case
 		//		we're paused if the sound has gone past the end
 		//		if we're trying to see past that time, dont!
 		//		chrome on pixel3
 		if ( this.Sound.ended )
 		{
-			if ( TimeSecs >= this.Sound.currentTime )
+			const CurrentMs = this.GetSampleNodeCurrentTimeMs();
+			if ( TimeMs >= CurrentMs )
 			{
-				Pop.Debug(`Skipped seek(${TimeSecs}) as sound has ended ${this.Sound.currentTime}`);
+				//Pop.Debug(`Skipped seek(${TimeMs}) as sound has ended ${this.Sound.currentTime}`);
 				this.PlayTargetTime = null;
+				await Pop.Yield(SleepMs);
 				return;
 			}
 		}
 		
+		//	gr: if the sound has ended, (and we're not seeking past end)
+		//		then we're surely resetting
+		//		if the duration is smaller than MaxMsOffset, then SampleTimeIsClose will skip
+		//		maybe if ended, we don't need this at all?
+		//if ( !this.Sound.ended )
+		{
+			const MaxMsOffset = Math.min( 2000, Duration ? Duration/2 : 9999999 );
+			if (SampleTimeIsClose(MaxMsOffset))
+			{
+				this.PlayTargetTime = null;
+				await Pop.Yield(SleepMs);
+				return;
+			}	
+		}
 
+	
 
+		const TimeSecs = TimeMs / 1000;
 		if ( this.Sound.paused )
 		{
 			Pop.Debug(`Seeking from ${this.Sound.currentTime} to ${TimeSecs} with play()`);
@@ -464,6 +497,7 @@ Pop.Audio.SimpleSound = class
 		}		
 		Pop.Debug(`Seeking from ${this.Sound.currentTime} to ${TimeSecs} ${this.Name}`);
 		this.Sound.currentTime = TimeSecs;
+		this.TimeAtLastSeek = Pop.GetTimeNowMs();
 		this.Started = true;
 		this.PlayTargetTime = null;
 	}
