@@ -209,11 +209,6 @@ async function WaitForClick()
 	await DomTriggerPromise;
 }
 
-async function ResetWaitForClick()
-{
-	DomTriggerPromise = Pop.CreatePromise();
-	return await WaitForClick();
-}
 
 
 //	gr: I dont like double negatives, but matching Audio.muted
@@ -366,13 +361,13 @@ Pop.Audio.SimpleSound = class
 			}
 			catch(e)
 			{
-				Pop.Warning(`Sound exception ${e}, resetting wait for click`);
-				await ResetWaitForClick();
-				Pop.Debug(`Re-calling action after sound exception`);
-				await Action.call(this);
+				Pop.Warning(`Sound exception ${e}, reallocating`);
+				this.Free();
+				this.Sound = await AllocAudio(this.SoundDataUrl,this.Name);
 			}
 		}
 
+		this.Free();
 	}
 
 	PushAction(Lambda)
