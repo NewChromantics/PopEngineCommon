@@ -596,8 +596,44 @@ Math.PointInsideRect = function(xy,Rect)
 	return true;
 }
 
+//	is a outside b
+function RectIsOutside(RectA,RectB)
+{
+	let la = RectA[0];
+	let lb = RectB[0];
+	let ta = RectA[1];
+	let tb = RectB[1];
+	let ra = RectA[0] + RectA[2];
+	let rb = RectB[0] + RectB[2];
+	let ba = RectA[1] + RectA[3];
+	let bb = RectB[1] + RectB[3];
+	
+	//	too far left
+	if ( ra < lb )
+		return true;
+	//	too far right
+	if ( la > rb )
+		return true;
+	//	too high up
+	if ( ba < tb )
+		return true;
+	//	too low
+	if ( ta > bb )
+		return true;
+	//	is overlapping (but maybe not wholly inside!)
+	return false;
+}
+
+
+//	are these rects overlapping each other 
 function RectIsOverlapped(RectA,RectB)
 {
+	if ( RectIsOutside( RectA, RectB ) )
+		return false
+	return true;
+
+	//	gr: the below seems to fail when they're close (and A is still inside B)
+	//		leaving this code here because debugging, it seemed correct, but is wrong. (I still want to know why)
 	let la = RectA[0];
 	let lb = RectB[0];
 	let ta = RectA[1];
