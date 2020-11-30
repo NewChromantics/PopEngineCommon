@@ -68,13 +68,14 @@ async function WaitForSecurityItem(Callback,DebugName)
 	return Item;
 }
 
+const SilentMp3Url = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU2LjM2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU2LjQxAAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTMu//MUZAYAAAGkAAAAAAAAA0gAAAAAOTku//MUZAkAAAGkAAAAAAAAA0gAAAAANVVV';
 
 function PreallocAudio(BufferSize)
 {
-	const SilentMp3Url = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU2LjM2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU2LjQxAAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTMu//MUZAYAAAGkAAAAAAAAA0gAAAAAOTku//MUZAkAAAGkAAAAAAAAA0gAAAAANVVV';
 	async function MakePreload(Index)
 	{
-		const NewAudio = await AllocAudio(SilentMp3Url,`PreAlloc#${Index}`);
+		const AllowNew = true;
+		const NewAudio = await AllocAudio(SilentMp3Url,`PreAlloc#${Index}`,AllowNew);
 		ReadyAudioPool.push(NewAudio);
 	}
 	for ( let i=0;	i<BufferSize;	i++ )
@@ -93,7 +94,7 @@ function FreeAudio(Sound)
 }
 
 //	resolves when we have an audio that is ready to be played and manipulated
-async function AllocAudio(SourceUrl,DebugName)
+async function AllocAudio(SourceUrl,DebugName,AllowNew=false)
 {
 	async function PrepareSound(Sound)
 	{
@@ -132,9 +133,9 @@ async function AllocAudio(SourceUrl,DebugName)
 	}
 	
 	//	alloc a new audio and put in pending
+	if ( AllowNew )
 	{
 		const Sound = new Audio();
-		const SilentMp3Url = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU2LjM2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6v////////////////////////////////8AAAAATGF2YzU2LjQxAAAAAAAAAAAAAAAAJAAAAAAAAAAAASDs90hvAAAAAAAAAAAAAAAAAAAA//MUZAAAAAGkAAAAAAAAA0gAAAAATEFN//MUZAMAAAGkAAAAAAAAA0gAAAAARTMu//MUZAYAAAGkAAAAAAAAA0gAAAAAOTku//MUZAkAAAGkAAAAAAAAA0gAAAAANVVV';
 		//	gr: need to load something or play() doesn't resolve
 		Sound.src = SilentMp3Url;
 		Sound.muted = true;
@@ -152,6 +153,8 @@ async function AllocAudio(SourceUrl,DebugName)
 
 		return Sound;
 	}
+	
+	throw `Exhausted audio pool (try again?)`;
 }
 
 
