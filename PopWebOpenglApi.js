@@ -580,9 +580,24 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		}
 	}
 
+	this.OnOrientationChange = function (ResizeEvent)
+	{
+		const DoResize = function ()
+		{
+			this.OnResize.call(this,ResizeEvent);
+		}.bind(this);
+
+		//	delay as dom doesn't update fast enough
+		setTimeout(DoResize,0);
+		setTimeout(DoResize,50);
+		setTimeout(DoResize,100);
+		setTimeout(DoResize,500);
+		setTimeout(DoResize,1000);
+	}
+
 	this.OnResize = function(ResizeEvent)
 	{
-		Pop.Debug("OnResize",JSON.stringify(ResizeEvent));
+		Pop.Debug(`Pop.Opengl.Window OnResize type=${ResizeEvent ? ResizeEvent.type:'null'}`);
 		
 		//	invalidate cache
 		this.ScreenRectCache = null;
@@ -663,6 +678,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		//	gr: replace with specific dom watcher
 		//	https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver
 		window.addEventListener('resize',this.OnResize.bind(this));
+		window.addEventListener('orientationchange',this.OnOrientationChange.bind(this));
 		
 		//	https://medium.com/@susiekim9/how-to-compensate-for-the-ios-viewport-unit-bug-46e78d54af0d
 		/*	this doesn't help
