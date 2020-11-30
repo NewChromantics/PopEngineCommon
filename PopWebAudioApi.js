@@ -358,10 +358,22 @@ Pop.Audio.SimpleSound = class
 	{
 		if ( this.Sound )
 			return this.Sound;
-			
+		
+		/*
 		const AllocPromise = AllocAudio(this.SoundDataUrl,this.Name);
 		this.Sound = await Promise.race( [AllocPromise, this.FreePromise] );
-		Pop.Debug(`${this.Name} allocated new sound ${this.Sound}`);
+		*/
+		//	gr: now, alloc, if it throws, it'll be caught further up
+		//		if we've already been marked free, it'll get caught lower down
+		this.Sound = await AllocAudio(this.SoundDataUrl,this.Name);
+		Pop.Debug(`${this.Name} allocated new sound ${this.Sound} free=${this.Freeing}`);
+		//	gr: race condition, if in the mean time we've been freed, throw, let that bubble up
+		//		and then the update will loop around
+		if ( this.Freeing )
+		{
+			Pop.Warning(`Whilst waiting for AllocSound, we have been free'd ${this.Name}`);
+			throw `Whilst waiting for AllocSound, we have been free'd ${this.Name}`;
+		}
 		return this.Sound;
 	}
 
@@ -444,6 +456,14 @@ Pop.Audio.SimpleSound = class
 			await this.AllocSound();
 			if ( !this.Sound )
 				throw `UpdatePlayTargetTime null this.Sound`;
+		}
+		
+		//	if sound has been stopped in the mean time, stop
+		if (this.PlayTargetTime === false)
+		{
+			Pop.Debug(`Sound has been stopped between Update and alloc ${this.Name}`);
+			this.ReleaseSound();
+			return;
 		}
 
 		const DelayMs = Pop.GetTimeNowMs() - this.PlayTargetRequestTime;
