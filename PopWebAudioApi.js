@@ -321,6 +321,8 @@ Pop.Audio.SimpleSound = class
 		
 		this.Sound = null;
 		this.Started = false;
+		this.Freeing = false;
+		this.FreePromise = Pop.CreatePromise();
 		
 		this.ActionQueue = new Pop.PromiseQueue();
 		this.Update().then(Pop.Debug).catch(Pop.Warning);
@@ -330,7 +332,8 @@ Pop.Audio.SimpleSound = class
 	{
 		const OnMutedChange = function(Muted)
 		{
-			this.Sound.muted = Muted;
+			if ( this.Sound )
+				this.Sound.muted = Muted;
 		}.bind(this);
 	
 		//	do an initial state in case we start a sound when we expect it silent
@@ -348,28 +351,38 @@ Pop.Audio.SimpleSound = class
 
 	async Update()
 	{
-		this.Sound = await AllocAudio(this.SoundDataUrl,this.Name);
-		
 		this.GlobalUpdateCheckThread().then(Pop.Debug).catch(Pop.Warning);
-
-		while (this.Sound || this.ActionQueue.HasPending() )
+	
+		while ( !this.Freeing )
 		{
-			let Action = await this.ActionQueue.WaitForNext();
-			if (Action == 'UpdatePlayTargetTime')
-				Action = this.UpdatePlayTargetTime.bind(this);
-
 			try
 			{
-				await Action.call(this);
+				const AllocPromise = AllocAudio(this.SoundDataUrl,this.Name);
+				this.Sound = Promise.race( [AllocPromise, this.FreePromise] );
+				if ( !this.Sound )
+				{
+					Pop.Warning(`AllocAudio returned null, assuming freed; free=${this.Freeing}`);
+					break;
+				}
+
+				while ( this.Sound || this.ActionQueue.HasPending() )
+				{
+					let Action = await this.ActionQueue.WaitForNext();
+					//	special action which can be unique-tested
+					if (Action == 'UpdatePlayTargetTime')
+						Action = this.UpdatePlayTargetTime.bind(this);
+
+					await Action.call(this);
+				}
 			}
 			catch(e)
 			{
-				Pop.Warning(`Sound exception ${e}, reallocating`);
-				this.Free();
-				this.Sound = await AllocAudio(this.SoundDataUrl,this.Name);
+				Pop.Warning(`Sound exception ${e}, reallocating ${this.Name}`);
+				this.ReleaseSound();
 			}
 		}
 
+		//	make sure it's freed
 		this.Free();
 	}
 
@@ -491,18 +504,24 @@ Pop.Audio.SimpleSound = class
 				//	if we step through, it actually plays twice when we seek again below.
 				//	pause, seek, play? if thats a problem?
 				this.Sound.currentTime = TimeSecs;
+				//	gr: to avoid race condition, always reset state BEFORE any waits
+				this.PlayTargetTime = null;
 				await this.Sound.play();
 			}
 			catch(e)
 			{
 				Pop.Warning(`Seeking required play(), exception; ${e}`);
 			}
-		}		
+		}
+		else
+		{
+			//	avoid race condition where the await above would have reset a new target (eg stop)
+			this.PlayTargetTime = null;
+		}
 		Pop.Debug(`Seeking from ${this.Sound.currentTime} to ${TimeSecs} ${this.Name}`);
 		this.Sound.currentTime = TimeSecs;
 		this.TimeAtLastSeek = Pop.GetTimeNowMs();
 		this.Started = true;
-		this.PlayTargetTime = null;
 	}
 	
 	
@@ -529,18 +548,24 @@ Pop.Audio.SimpleSound = class
 		this.ActionQueue.PushUnique('UpdatePlayTargetTime');
 	}
 	
-	Free()
+	ReleaseSound()
 	{
 		this.Stop();
 		if ( this.Sound )
 		{
-			FreeAudio(this.Sound);
 			this.Sound = null;
+			FreeAudio(this.Sound);
 		}
 		else
 		{
-			Pop.Warning(`Free(${this.Name}) but already null`);
+			Pop.Warning(`Free/(${this.Name}) but already null`);
 		}
+	}
+	
+	Free()
+	{
+		this.ReleaseSound();
+		this.Freeing = true;
 	}
 	
 	GetSampleNodeCurrentTimeMs()
