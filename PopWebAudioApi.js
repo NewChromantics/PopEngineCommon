@@ -8,7 +8,6 @@ Pop.Audio = {};
 //	gr: all this is designed for SimpleSound
 //		this, I think, just needs audio context initialising at the right time for complex sounds 
 
-const PendingAudioPool = [];
 const ReadyAudioPool = [];
 const UsedAudioPool = [];
 
