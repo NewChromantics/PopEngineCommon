@@ -587,7 +587,6 @@ Pop.Audio.Sound = class
 		//	data
 		this.BufferByteSize = WaveData.length;
 		this.SampleBuffer = null;
-		this.ReverbBuffer = null;
 		
 		//	webaudio says bufferSource's are one-shot and cheap to make
 		//	and kill themselves off.
@@ -595,12 +594,7 @@ Pop.Audio.Sound = class
 		//	or modify the node tree (params on effects)
 		this.SampleNode = null;
 		this.SampleGainNode = null;
-		this.SampleVelocityGainNode = null;
-		this.ReverbGainNode = null;
-		this.ReverbNode = null;
 		this.SampleVolume = 1;	//	gain
-		this.SampleVelocity = 1;	//	gain
-		this.ReverbVolume = 1;	//	wetness/gain
 
 		//	meta
 		this.KnownDurationMs = null;
@@ -636,17 +630,6 @@ Pop.Audio.Sound = class
 		return true;
 	}
 	
-	SetReverbWetness(Gain)
-	{
-		//	we need to change the nodes as little as possible, so have to check for differences
-		if ( !this.IsSignificantVolumeChange(this.ReverbVolume,Gain) )
-			return;
-		
-		this.ReverbVolume = Gain;
-		
-		if ( this.ReverbGainNode )
-			this.ReverbGainNode.gain.value = Gain;
-	}
 	
 	SetVolume(Volume)
 	{
@@ -660,31 +643,6 @@ Pop.Audio.Sound = class
 			this.SampleGainNode.gain.value = Volume;
 	}
 	
-	SetVelocity(Velocity)
-	{
-		//	assume has not been transformed and still 0-127
-		if (!Number.isInteger(Velocity))
-			throw `Pop.Sound.SetVelocity(${Velocity}) is expecting an integer from 0-127`;
-		
-		//Velocity = (Velocity*Velocity) / (127*127);
-		const Velocity01 = Velocity/127;
-		//	velocity is a logarithmic curve, which gives us attenuation
-		//	gain is DB change (also logarithmic) so do we still need to convert attenuation to db change?
-		Velocity = Math.log1p(Velocity01);
-		
-		//	we need to change the nodes as little as possible, so have to check for differences
-		if ( !this.IsSignificantVolumeChange(this.SampleVelocity,Velocity) )
-			return;
-		/*
-		if ( Velocity < 0 || Velocity > 1 )
-			throw `Expecting Velocity(${Velocity}) 0...1`;
-*/
-		this.SampleVelocity = Velocity;
-		Pop.Debug(`New Velocity ${Velocity}`);
-		
-		if ( this.SampleVelocityGainNode )
-			this.SampleVelocityGainNode.gain.value = Velocity;
-	}
 	
 	SetSample(WaveData)
 	{
@@ -708,20 +666,6 @@ Pop.Audio.Sound = class
 		this.ActionQueue.Push(Run);
 	}
 	
-	SetReverb(ReverbData)
-	{
-		async function Run(Context)
-		{
-			//	todo: decode if wavedata rather than AudioBuffer
-			//const AudioBuffer = await this.DecodeAudioBuffer(Context,this.ReverbImpulseResponseWave);
-			const AudioBuffer = ReverbData;
-			this.ReverbBuffer = AudioBuffer;
-			
-			this.DestroyReverbNodes(Context);
-			Pop.Debug(`SetReverb() todo: retrigger sample creation at current time if playing`);
-		}
-		this.ActionQueue.Push(Run);
-	}
 	
 	async DecodeAudioBuffer(Context,WaveData)
 	{
@@ -759,32 +703,13 @@ Pop.Audio.Sound = class
 	DestroyAllNodes(Context)
 	{
 		this.DestroySamplerNodes(Context);
-		this.DestroyReverbNodes(Context);
-	}
-	
-	DestroyReverbNodes(Context)
-	{
-		if ( this.ReverbNode )
-		{
-			if ( this.ReverbNode.stop )
-				this.ReverbNode.stop();
-			this.ReverbNode.disconnect();
-			this.ReverbNode = null;
-		}
-		
-		if ( this.ReverbGainNode )
-		{
-			if ( this.ReverbGainNode.stop )
-				this.ReverbGainNode.stop();
-			this.ReverbGainNode.disconnect();
-			this.ReverbGainNode = null;
-		}
 	}
 	
 	DestroySamplerNodes(Context,DestroyGainNode=false)
 	{
 		if ( this.SampleNode )
 		{
+			Pop.Debug(`Destroy sampler nodes ${this.Name}`);
 			//	this should stop the reverb too as it's linked to this node
 			if ( this.SampleNode.stop )
 				this.SampleNode.stop();
@@ -825,66 +750,17 @@ Pop.Audio.Sound = class
 			this.SampleGainNode.gain.value = this.SampleVolume;
 		}
 		
-		if ( !this.SampleVelocityGainNode )
-		{
-			this.SampleVelocityGainNode = Context.createGain();
-			//	make sure volume is correct
-			//	gr: doing this every time causes a click!
-			this.SampleVelocityGainNode.gain.value = this.SampleVelocity;
-		}
-		
 		//	report for visualisation
-		const Volume = this.SampleGainNode.gain.value * this.SampleVelocityGainNode.gain.value;
+		const Volume = this.SampleGainNode.gain.value;
 		this.OnVolumeChanged(Volume);
 
-		this.SampleNode.connect( this.SampleVelocityGainNode );
-		this.SampleVelocityGainNode.connect( this.SampleGainNode );
+		this.SampleNode.connect( this.SampleGainNode );
 		this.SampleGainNode.connect( Context.destination );
+		
+		Pop.Debug(`CreateSamplerNodes ${this.Name}`);
 	}
 	
 	
-	CreateReverbNodes(Context)
-	{
-		//	recreating these nodes every time causes a click in chrome
-		//this.DestroyReverbNodes(Context);
-		
-		//	no reverb data
-		if ( !this.ReverbBuffer )
-			return;
-		
-		//	create nodes
-		if ( !this.ReverbNode )
-		{
-			this.ReverbNode = Context.createConvolver();
-			this.ReverbNode.loop = true;
-			this.ReverbNode.normalize = true;
-			this.ReverbNode.buffer = this.ReverbBuffer;
-		}
-		
-		//	create gain node if it doesn't exist
-		if ( !this.ReverbGainNode )
-		{
-			this.ReverbGainNode = Context.createGain();
-
-			//	make sure gain is correct
-			this.ReverbGainNode.gain.value = this.ReverbVolume;
-		}
-
-		this.SampleNode.connect( this.ReverbNode );
-		this.ReverbNode.connect(this.ReverbGainNode);
-
-		const ApplySampleGain = true;
-		if (ApplySampleGain)
-		{
-			this.ReverbGainNode.connect(this.SampleVelocityGainNode);
-			this.SampleVelocityGainNode.connect(this.SampleGainNode);
-			this.SampleGainNode.connect(Context.destination);
-		}
-		else
-		{
-			this.ReverbGainNode.connect(Context.destination);
-		}
-	}
 	
 	//	sample node doesnt have a time, it's just offset
 	//	from the real time we started, so we have to track it
@@ -932,7 +808,6 @@ Pop.Audio.Sound = class
 			return;
 
 		this.CreateSamplerNodes(Context);
-		this.CreateReverbNodes(Context);
 
 		//	start!
 		const DelaySecs = 0;
