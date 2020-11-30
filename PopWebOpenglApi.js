@@ -428,8 +428,16 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		//	todo: trigger multiple buttons (for multiple touches)
 		const Pos = GetMousePos(MouseEvent,MouseEvent.RemovedTouches);
 		const Button = GetButtonFromMouseEventButton(MouseEvent,null,MouseEvent.RemovedTouches);
-		Pop.DebugMouseEvent(`MouseUp ${Pos} ${Button}`);
-		OnMouseUp( Pos[0], Pos[1], Button );
+		
+		//	gr: hack for kandinsky, i need to know when touches are (all) released to turn off "hover"
+		//		this will probably change again, as this is probably a common thing
+		//		plus its at this level we should deal with touch+mouse cursor (desktop touchscreen, or ipad+mouse)
+		//		and maybe XR's touching-button, but not pressing-button 
+		const Meta = {};
+		Meta.IsTouch = MouseEvent.touches != false;	//	gr: this will break on screens with a touch screen
+		
+		Pop.DebugMouseEvent(`MouseUp ${Pos} ${Button} ${JSON.stringify(Meta)}`);
+		OnMouseUp( Pos[0], Pos[1], Button, Meta );
 		MouseEvent.preventDefault();
 	}
 	
