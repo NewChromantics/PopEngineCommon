@@ -392,13 +392,15 @@ Pop.Audio.SimpleSound = class
 	async UpdatePlayTargetTime(Context,SleepMs=400)
 	{
 		if (this.PlayTargetTime === null)
-			return Pop.Warning(`Sound has caused a play/stop but the target value is not dirty`);
+			return Pop.Warning(`Sound has caused a play/stop but the target value is not dirty ${this.Name}`);
 
 		if (this.PlayTargetTime === false)
 		{
 			if ( this.Sound )
 			{
-				Pop.Debug(`Sound ${this.Sound.Name} pause (UpdatePlayTargetTime)`);
+				Pop.Debug(`Sound ${this.Name} pause (UpdatePlayTargetTime)`);
+				//	gr: on safari, lots of pause() on a paused sound, I think is causing performance hits...
+				//	if ( !this.Sound.paused )
 				this.Sound.pause();
 			}
 			this.PlayTargetTime = null;
@@ -406,7 +408,7 @@ Pop.Audio.SimpleSound = class
 		}
 
 		if ( !this.Sound )
-			throw `UpdatePlayTargetTime ${this.PlayTargetTime} but sound is null (freed?)`;
+			throw `UpdatePlayTargetTime ${this.PlayTargetTime} but sound is null (freed?) ${this.Name}`;
 
 		const DelayMs = Pop.GetTimeNowMs() - this.PlayTargetRequestTime;
 		const TimeMs = this.PlayTargetTime + DelayMs;
@@ -455,7 +457,7 @@ Pop.Audio.SimpleSound = class
 			const CurrentMs = this.GetSampleNodeCurrentTimeMs();
 			if ( TimeMs >= CurrentMs )
 			{
-				//Pop.Debug(`Skipped seek(${TimeMs}) as sound has ended ${this.Sound.currentTime}`);
+				Pop.Debug(`Skipped seek(${TimeMs}) as sound has ended ${this.Sound.currentTime} ${this.Name}`);
 				this.PlayTargetTime = null;
 				await Pop.Yield(SleepMs);
 				return;
@@ -482,7 +484,7 @@ Pop.Audio.SimpleSound = class
 		const TimeSecs = TimeMs / 1000;
 		if ( this.Sound.paused )
 		{
-			Pop.Debug(`Seeking from ${this.Sound.currentTime} to ${TimeSecs} with play()`);
+			Pop.Debug(`Seeking from ${this.Sound.currentTime} to ${TimeSecs} with play() ${this.Name}`);
 			try
 			{
 				//	gr: this play() isn't needed if the sound has ended, it re-seeks
