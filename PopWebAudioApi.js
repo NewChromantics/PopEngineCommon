@@ -87,10 +87,11 @@ PreallocAudio(20);
 
 function FreeAudio(Sound)
 {
-	Pop.Debug(`Sound ${Sound.Name} pause (FreeAudio)`);
+	Pop.Debug(`Sound pause (FreeAudio)`);
 	Sound.pause();
 	Sound.muted = true;
 	ReadyAudioPool.push(Sound);
+	Pop.Debug(`ReadyAudioPool now ${ReadyAudioPool.length}`);
 }
 
 //	resolves when we have an audio that is ready to be played and manipulated
@@ -170,6 +171,16 @@ async function AllocAudio(SourceUrl,DebugName,AllowNew=false)
 let DomTriggerPromise = Pop.CreatePromise();
 function OnDomTrigger(Event)
 {
+	//	on safari, this has to be inside the actual event callback
+	//	gr: re-added for safari, because of this https://stackoverflow.com/a/54119854/355753
+	//	"I can vouch that simply adding these two lines of code improved audio performance – Brian Risk Jan 9 at 1:18"
+	if ( !Pop.Audio.Context )
+	{
+		const TAudioContext = window.AudioContext || window.webkitAudioContext;
+		Pop.Audio.Context = new TAudioContext();
+	}
+	
+	
 	//	synchronously resovle all securty items
 	//	cut out of list so we can re-add if they fail without getting stuck in a loop
 	const SecurityItems = PendingSecurityItems.splice( 0, PendingSecurityItems.length );
@@ -186,13 +197,7 @@ function OnDomTrigger(Event)
 		}
 	}
 	SecurityItems.forEach(Resolve);
-	/*
-	//	on safari, this has to be inside the actual event callback
-	if ( !Pop.Audio.Context )
-	{
-		const TAudioContext = window.AudioContext || window.webkitAudioContext;
-		Pop.Audio.Context = new TAudioContext();
-	}*/
+
 
 	DomTriggerPromise.Resolve();
 }
@@ -349,6 +354,17 @@ Pop.Audio.SimpleSound = class
 		}
 	}
 
+	async AllocSound()
+	{
+		if ( this.Sound )
+			return this.Sound;
+			
+		const AllocPromise = AllocAudio(this.SoundDataUrl,this.Name);
+		this.Sound = await Promise.race( [AllocPromise, this.FreePromise] );
+		Pop.Debug(`${this.Name} allocated new sound ${this.Sound}`);
+		return this.Sound;
+	}
+
 	async Update()
 	{
 		this.GlobalUpdateCheckThread().then(Pop.Debug).catch(Pop.Warning);
@@ -357,28 +373,28 @@ Pop.Audio.SimpleSound = class
 		{
 			try
 			{
-				const AllocPromise = AllocAudio(this.SoundDataUrl,this.Name);
-				this.Sound = Promise.race( [AllocPromise, this.FreePromise] );
-				if ( !this.Sound )
+				const NextActionPromise = this.ActionQueue.WaitForNext();
+				let Action = await Promise.race( [NextActionPromise, this.FreePromise] );
+				if ( Action == null )
 				{
-					Pop.Warning(`AllocAudio returned null, assuming freed; free=${this.Freeing}`);
-					break;
+					Pop.Warning(`Null action in sound ${this.Name}, should be free this.Freeing=${this.Freeing}`);
+					continue;
 				}
+				
+				//	special action which can be unique-tested
+				if (Action == 'UpdatePlayTargetTime')
+					Action = this.UpdatePlayTargetTime.bind(this);
 
-				while ( this.Sound || this.ActionQueue.HasPending() )
-				{
-					let Action = await this.ActionQueue.WaitForNext();
-					//	special action which can be unique-tested
-					if (Action == 'UpdatePlayTargetTime')
-						Action = this.UpdatePlayTargetTime.bind(this);
-
-					await Action.call(this);
-				}
+				await Action.call(this);
 			}
 			catch(e)
 			{
-				Pop.Warning(`Sound exception ${e}, reallocating ${this.Name}`);
+				const SleepMs = 1000;
+				Pop.Warning(`Sound exception ${e}, reallocating ${this.Name} (wait ${SleepMs}`);
 				this.ReleaseSound();
+				//	gr; constant loop when pool exchausted, so wait.
+				//		maybe allocaudio do wait forever until a new slot if fill
+				await Pop.Yield(SleepMs);
 			}
 		}
 
@@ -416,12 +432,19 @@ Pop.Audio.SimpleSound = class
 				//	if ( !this.Sound.paused )
 				this.Sound.pause();
 			}
-			this.PlayTargetTime = null;
+			//	if paused/stopped, leave as false
+			this.PlayTargetTime = false;
+			this.ReleaseSound();
 			return;
 		}
 
 		if ( !this.Sound )
-			throw `UpdatePlayTargetTime ${this.PlayTargetTime} but sound is null (freed?) ${this.Name}`;
+		{
+			Pop.Debug(`UpdatePlayTargetTime ${this.PlayTargetTime} but sound is null ${this.Name} allocating...`);
+			await this.AllocSound();
+			if ( !this.Sound )
+				throw `UpdatePlayTargetTime null this.Sound`;
+		}
 
 		const DelayMs = Pop.GetTimeNowMs() - this.PlayTargetRequestTime;
 		const TimeMs = this.PlayTargetTime + DelayMs;
@@ -463,7 +486,7 @@ Pop.Audio.SimpleSound = class
 				
 		//	gr: spotted special case
 		//		we're paused if the sound has gone past the end
-		//		if we're trying to see past that time, dont!
+		//		if we're trying to seek past that time, dont!
 		//		chrome on pixel3
 		if ( this.Sound.ended )
 		{
@@ -538,7 +561,7 @@ Pop.Audio.SimpleSound = class
 	{
 		//	gr: avoid work which eventually leads to .Pause() if it's not needed
 		//	gr: false & null, not ! because of time=0.0
-		if ( this.PlayTargetTime === false || this.PlayTargetTime === null )
+		if ( this.PlayTargetTime === false )
 		{
 			//Pop.Debug(`Skipped Stop() dirty queue`);
 			return;
@@ -553,8 +576,8 @@ Pop.Audio.SimpleSound = class
 		this.Stop();
 		if ( this.Sound )
 		{
-			this.Sound = null;
 			FreeAudio(this.Sound);
+			this.Sound = null;
 		}
 		else
 		{
@@ -566,6 +589,7 @@ Pop.Audio.SimpleSound = class
 	{
 		this.ReleaseSound();
 		this.Freeing = true;
+		this.FreePromise.Resolve(null);
 	}
 	
 	GetSampleNodeCurrentTimeMs()
@@ -645,6 +669,7 @@ Pop.Audio.Sound = class
 		//	we update this value to non-null and queue a UpdatePlayState
 		//	if it's a time, we want to seek to that time. if it's false, we want to stop
 		//	if it's null the state isn't dirty
+		//	gr: we now leave this as false if paused/stopped to avert multiple calls
 		this.PlayTargetTime = null;
 
 		//	run state
