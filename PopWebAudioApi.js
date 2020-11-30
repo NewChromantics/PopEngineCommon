@@ -517,6 +517,13 @@ Pop.Audio.SimpleSound = class
 	
 	Stop()
 	{
+		//	gr: avoid work which eventually leads to .Pause() if it's not needed
+		//	gr: false & null, not ! because of time=0.0
+		if ( this.PlayTargetTime === false || this.PlayTargetTime === null )
+		{
+			//Pop.Debug(`Skipped Stop() dirty queue`);
+			return;
+		}
 		//	mark dirty and cause update of state (if not already queued)
 		this.PlayTargetTime = false;
 		this.ActionQueue.PushUnique('UpdatePlayTargetTime');
