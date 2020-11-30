@@ -87,6 +87,7 @@ PreallocAudio(20);
 
 function FreeAudio(Sound)
 {
+	Pop.Debug(`Sound ${Sound.Name} pause (FreeAudio)`);
 	Sound.pause();
 	Sound.muted = true;
 	ReadyAudioPool.push(Sound);
@@ -394,7 +395,10 @@ Pop.Audio.SimpleSound = class
 		if (this.PlayTargetTime === false)
 		{
 			if ( this.Sound )
+			{
+				Pop.Debug(`Sound ${this.Sound.Name} pause (UpdatePlayTargetTime)`);
 				this.Sound.pause();
+			}
 			this.PlayTargetTime = null;
 			return;
 		}
