@@ -312,7 +312,7 @@ Pop.WebApi.TFileCache = class
 		Meta.ContentChunks = null;
 	}
 	
-	Get(Filename)
+	Get(Filename,ResolveChunks=true)
 	{
 		if (!this.Cache.hasOwnProperty(Filename))
 		{
@@ -327,6 +327,19 @@ Pop.WebApi.TFileCache = class
 			throw `${Filename} failed to load: ${Error}`;
 		}
 		
+		//	gr: send back chunks if they haven't been resolved
+		if ( !ResolveChunks )
+		{
+			const Meta = this.GetMeta(Filename);
+			if ( Meta.ContentChunks )
+			{
+				if ( this.Cache[Filename] === false )
+					throw `We have chunks, but cache is false (error), shouldn't hit this combination, something has errored but we still have chunks (still downloading?)`;
+				Pop.Debug(`Skipping chunk resolve of ${Filename} x${Meta.ContentChunks.length} chunks`);
+				return Meta.ContentChunks;
+			}
+		}		
+		
 		//	if there are pending content chunks, we need to join them together
 		//	as it's the first time it's been requested
 		this.ResolveChunks(Filename);
@@ -335,10 +348,23 @@ Pop.WebApi.TFileCache = class
 	}
 
 	//	non-throwing function which returns false if the file load has errored
-	GetOrFalse(Filename)
+	GetOrFalse(Filename,ResolveChunks=true)
 	{
 		if (!this.Cache.hasOwnProperty(Filename))
 			return false;
+		
+		//	gr: send back chunks if they haven't been resolved
+		if ( !ResolveChunks )
+		{
+			const Meta = this.GetMeta(Filename);
+			if ( Meta.ContentChunks )
+			{
+				if ( this.Cache[Filename] === false )
+					throw `We have chunks, but cache is false (error), shouldn't hit this combination, something has errored but we still have chunks (still downloading?)`;
+				Pop.Debug(`Skipping chunk resolve of ${Filename} x${Meta.ContentChunks.length} chunks`);
+				return Meta.ContentChunks;
+			}
+		}		
 		
 		//	if there are pending content chunks, we need to join them together
 		//	as it's the first time it's been requested
@@ -351,7 +377,10 @@ Pop.WebApi.TFileCache = class
 
 	IsCached(Filename)
 	{
-		return this.GetOrFalse(Filename) !== false;
+		//	don't resolve chunks here, skip excess work for a simple "not false" check
+		const ResolveChunks = false;
+		
+		return this.GetOrFalse(Filename,ResolveChunks) !== false;
 	}
 	
 	SetKnownSize(Filename,Size)
@@ -587,12 +616,16 @@ async function FetchArrayBufferStream(Url,OnProgress)
 			if ( Finished )
 				break;
 		}
+		
+		
 		//	do a final join. OnProgress should have done this in the file cache
 		//	so this array may be a bit redundant (and a duplicate!)
 		//	so try and fetch the other one, but for now, keep it here to make sure
 		//	the old way of expecting a complete buffer is here
-		const TotalContents = Pop.JoinTypedArrays(...ContentChunks);
-		return TotalContents;
+		//	gr: we now only auto resolve chunks on request
+		//const TotalContents = Pop.JoinTypedArrays(...ContentChunks);
+		//return TotalContents;
+		return true;
 	}
 	
 	const Contents8 = await ReaderThread();
@@ -690,10 +723,10 @@ Pop.LoadFileAsArrayBufferAsync = async function(Filename)
 }
 
 
-Pop.LoadFileAsArrayBufferStreamAsync = async function (Filename)
+Pop.LoadFileAsArrayBufferStreamAsync = async function (Filename,ResolveChunks=true)
 {
 	//	return cache if availible, if it failed before, try and load again
-	const Cache = Pop.GetCachedAssetOrFalse(Filename);
+	const Cache = Pop.GetCachedAssetOrFalse(Filename,ResolveChunks);
 	if (Cache !== false)
 		return Cache;
 
@@ -707,8 +740,11 @@ Pop.LoadFileAsArrayBufferStreamAsync = async function (Filename)
 	}
 
 	const Contents = await FetchOnce(Filename,FetchArrayBufferStream,OnStreamProgress);
-	Pop.SetFileCache(Filename,Contents);
-	return Contents;
+	if ( Contents !== true )
+		throw `FetchArrayBufferStream() should now return only true, to avoid auto resolving chunks`;
+	//Pop.SetFileCache(Filename,Contents);
+	//return Contents;
+	return Pop.GetCachedAssetOrFalse(Filename,ResolveChunks);
 }
 
 Pop.AsyncCacheAssetAsString = async function(Filename)
@@ -767,7 +803,7 @@ Pop.LoadFileAsImage = function(Filename)
 }
 
 
-Pop.LoadFileAsArrayBuffer = function(Filename)
+Pop.LoadFileAsArrayBuffer = function(Filename,ResolveChunks=true)
 {
 	//	synchronous functions on web will fail
 	if (!Pop.WebApi.FileCache.IsCached(Filename))
@@ -777,7 +813,7 @@ Pop.LoadFileAsArrayBuffer = function(Filename)
 	
 	//	gr: our asset loader currently replaces the contents of this
 	//		with binary, so do the conversion here (as native engine does)
-	const Contents = Pop.GetCachedAsset(Filename);
+	const Contents = Pop.GetCachedAsset(Filename,ResolveChunks);
 	return Contents;
 }
 
