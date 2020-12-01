@@ -79,8 +79,10 @@ function PreallocAudio(BufferSize)
 	async function MakePreload(Index)
 	{
 		const AllowNew = true;
-		const NewAudio = await AllocAudio(SilentMp3Url,`PreAlloc#${Index}`,AllowNew);
+		const ForceAllocNew = true;
+		const NewAudio = await AllocAudio(SilentMp3Url,`PreAlloc#${Index}`,AllowNew,ForceAllocNew);
 		ReadyAudioPool.push(NewAudio);
+		Pop.Debug(`Preallocated, ReadyAudioPool now ${ReadyAudioPool.length}`);
 	}
 	for ( let i=0;	i<BufferSize;	i++ )
 		MakePreload(i);
@@ -96,11 +98,11 @@ function FreeAudio(Sound)
 	Sound.pause();
 	Sound.muted = true;
 	ReadyAudioPool.push(Sound);
-	Pop.Debug(`ReadyAudioPool now ${ReadyAudioPool.length}`);
+	Pop.Debug(`Freed audio; ReadyAudioPool now ${ReadyAudioPool.length}`);
 }
 
 //	resolves when we have an audio that is ready to be played and manipulated
-async function AllocAudio(SourceUrl,DebugName,AllowNew=false)
+async function AllocAudio(SourceUrl,DebugName,AllowNew=false,ForceAllocNew=false)
 {
 	async function PrepareSound(Sound)
 	{
@@ -128,14 +130,18 @@ async function AllocAudio(SourceUrl,DebugName,AllowNew=false)
 	}
 	
 	Pop.Debug(`AllocAudio(${DebugName} readypool: ${ReadyAudioPool.length}`);
-	if ( ReadyAudioPool.length )
+	if ( !ForceAllocNew )
 	{
-		const Sound = ReadyAudioPool.shift();
-		UsedAudioPool.push(Sound);
+		if ( ReadyAudioPool.length )
+		{
+			const Sound = ReadyAudioPool.shift();
+			UsedAudioPool.push(Sound);
+			Pop.Debug(`AllocAudio(${DebugName} popped from pool, readypool now: ${ReadyAudioPool.length}`);
 		
-		await PrepareSound(Sound);
+			await PrepareSound(Sound);
 		
-		return Sound;
+			return Sound;
+		}
 	}
 	
 	//	alloc a new audio and put in pending
