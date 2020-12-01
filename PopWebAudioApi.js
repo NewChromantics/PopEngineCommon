@@ -335,13 +335,17 @@ function byteArrayToString(bytes,MaxChunkSizeMult=1)
 	//	16kb isn't any faster than 8kb. sometimes faster, sometimes slower, but doesnt cause heap crash
 	const CHUNK_SIZE = (8*1024) * MaxChunkSizeMult;
 	if (bytes.length <= CHUNK_SIZE)
-		return String.fromCharCode.apply(null, bytes);
+	{
+		return [String.fromCharCode.apply(null, bytes)];
+	}
 	
-	let str = '';
+	const Parts = [];
 	for (let i = 0; i < bytes.length; i += CHUNK_SIZE)
-		str += String.fromCharCode.apply(null, bytes.slice(i, i+CHUNK_SIZE));
-		
-	return str;
+	{
+		const Chunk = bytes.slice(i, i+CHUNK_SIZE);
+		Parts.push( String.fromCharCode.apply(null, Chunk) );
+	}	
+	return Parts;
 }
 
 function ByteArraysToString(Datas)
@@ -353,7 +357,10 @@ function ByteArraysToString(Datas)
 	
 	//	not array, do normal thing
 	if ( !Array.isArray(Datas) )
-		return byteArrayToString(Datas);
+	{
+		const Parts = byteArrayToString(Datas);
+		return Parts.join('');
+	}
 
 	//	treat each chunk as a 8kb chunk
 	//	hopefully wont error, or if it does, we can find our limit
@@ -363,16 +370,16 @@ function ByteArraysToString(Datas)
 	//	but 8, starts to slow (big array in fromCharCode)
 	//const MultiChunkMax = 8;
 	const MultiChunkMax = 1;	//	gr: anything by 8k aligned seems non optimal
-	let str = '';
+	let Parts = [];
 	for ( let c=0;	c<Datas.length;	c++ )
 	{
 		const DataChunk = Datas[c];
 		Pop.Debug(`Chunk size = ${DataChunk.length} 8kb's=${DataChunk.length/EightKb}`);
 		//	gr: re-use splitting func, but bigger tolerance? find our limit to avoid GC/malloc
-		str += byteArrayToString(DataChunk,MultiChunkMax);
-		//str += String.fromCharCode.apply(null,DataChunk);	
+		const NewParts = byteArrayToString(DataChunk,MultiChunkMax);
+		Parts.push(...NewParts);
 	}
-	return str;
+	return Parts.join('');
 }
 
 
