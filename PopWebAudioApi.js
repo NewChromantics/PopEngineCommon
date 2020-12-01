@@ -420,9 +420,16 @@ Pop.Audio.SimpleSound = class
 			}
 			catch(e)
 			{
-				const SleepMs = 1000;
+				const SleepMs = 500;
 				Pop.Warning(`Sound exception ${e}, reallocating ${this.Name} (wait ${SleepMs}`);
 				this.ReleaseSound();
+				
+				if ( this.PlayTargetTime !== null )
+				{
+					Pop.Warning(`Exception above (${this.Name} PlayTargetTime=${this.PlayTargetTime} so queueing another update before sleep`);
+					this.ActionQueue.PushUnique('UpdatePlayTargetTime');
+				}
+							
 				//	gr; constant loop when pool exchausted, so wait.
 				//		maybe allocaudio do wait forever until a new slot if fill
 				await Pop.Yield(SleepMs);
