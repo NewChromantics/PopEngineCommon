@@ -327,13 +327,10 @@ Pop.Audio.SetUniformValue = function (Name,Value)
 
 
 //	https://www.measurethat.net/Benchmarks/Show/1219/23/arraybuffer-to-base64-string
-function byteArrayToString(bytes,MaxChunkSizeMult=1) 
+function byteArrayToString(bytes) 
 {
-	if ( MaxChunkSizeMult >= 64 )
-		throw `64(${MaxChunkSizeMult}) chunks is too big for chrome`;
-		
 	//	16kb isn't any faster than 8kb. sometimes faster, sometimes slower, but doesnt cause heap crash
-	const CHUNK_SIZE = (8*1024) * MaxChunkSizeMult;
+	const CHUNK_SIZE = (8*1024);
 	if (bytes.length <= CHUNK_SIZE)
 	{
 		return [String.fromCharCode.apply(null, bytes)];
@@ -370,13 +367,13 @@ function ByteArraysToString(Datas)
 	//	but 8, starts to slow (big array in fromCharCode)
 	//const MultiChunkMax = 8;
 	const MultiChunkMax = 1;	//	gr: anything by 8k aligned seems non optimal
-	let Parts = [];
+	const Parts = [];
 	for ( let c=0;	c<Datas.length;	c++ )
 	{
 		const DataChunk = Datas[c];
 		Pop.Debug(`Chunk size = ${DataChunk.length} 8kb's=${DataChunk.length/EightKb}`);
 		//	gr: re-use splitting func, but bigger tolerance? find our limit to avoid GC/malloc
-		const NewParts = byteArrayToString(DataChunk,MultiChunkMax);
+		const NewParts = byteArrayToString(DataChunk);
 		Parts.push(...NewParts);
 	}
 	return Parts.join('');
