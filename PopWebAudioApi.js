@@ -592,6 +592,17 @@ Pop.Audio.SimpleSound = class
 			//	avoid race condition where the await above would have reset a new target (eg stop)
 			this.PlayTargetTime = null;
 		}
+		
+		//	gr: another race condition, whilst waiting for this.Sound.play above,
+		//		the sound could have been paused and freed in the meantime (eg. streaming sound reloaded)
+		//		so this.Sound becomes null.
+		//		Seeking required play can show up, as the freer pauses whilst waiting to play
+		//		maybe this is fixed if the alloc() does the play before anything has a chance to pase it
+		if ( !this.Sound )
+		{
+			throw `Sound ${this.Name} has been freed since initial pause->play()`;
+		}
+		
 		Pop.Debug(`Seeking from ${this.Sound.currentTime} to ${TimeSecs} ${this.Name}`);
 		this.Sound.currentTime = TimeSecs;
 		this.TimeAtLastSeek = Pop.GetTimeNowMs();
