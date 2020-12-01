@@ -119,7 +119,7 @@ async function AllocAudio(SourceUrl,DebugName,AllowNew=false,ForceAllocNew=false
 		try
 		{
 			//	for restarting sound from pool, as this has already play()'d from event callback, it should be okay
-			await Sound.play();
+			//await Sound.play();
 		}
 		catch(e)
 		{
