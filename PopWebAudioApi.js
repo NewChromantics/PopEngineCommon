@@ -446,6 +446,14 @@ Pop.Audio.SimpleSound = class
 		if (this.PlayTargetTime === null)
 			return Pop.Warning(`Sound has caused a play/stop but the target value is not dirty ${this.Name}`);
 
+		//	gr: we need to skip the delay if an async function happened in between
+		//		the delay is to keep in sync, but.... debugging etc makes it jump way too far
+		//		OR even worse, our time is on the silent mp3 and it's already finished, and we think our 1ms delay pushes it past the end
+		//	gr: MUST make this false for sounds that dont need to be in sync (eg. one shots)
+		//		and then can avoid seeks
+		let IncludeDelay = true;
+		IncludeDelay = false;	//	avoid any auto seeks for now
+
 		if (this.PlayTargetTime === false)
 		{
 			if ( this.Sound )
@@ -465,6 +473,7 @@ Pop.Audio.SimpleSound = class
 		{
 			Pop.Debug(`UpdatePlayTargetTime ${this.PlayTargetTime} but sound is null ${this.Name} allocating...`);
 			await this.AllocSound();
+			IncludeDelay = false;
 			if ( !this.Sound )
 				throw `UpdatePlayTargetTime null this.Sound`;
 		}
@@ -478,7 +487,7 @@ Pop.Audio.SimpleSound = class
 		}
 
 		const DelayMs = Pop.GetTimeNowMs() - this.PlayTargetRequestTime;
-		const TimeMs = this.PlayTargetTime + DelayMs;
+		const TimeMs = this.PlayTargetTime + ( IncludeDelay ? DelayMs : 0);
 		
 		//	if sound is seeking, dont try and change it
 		if ( this.Sound.seeking )
