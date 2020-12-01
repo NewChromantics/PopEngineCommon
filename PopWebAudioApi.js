@@ -326,6 +326,52 @@ Pop.Audio.SetUniformValue = function (Name,Value)
 */
 
 
+//	https://www.measurethat.net/Benchmarks/Show/1219/23/arraybuffer-to-base64-string
+function byteArrayToString(bytes) 
+{
+	var CHUNK_SIZE = 8*1024;
+	if (bytes.length <= CHUNK_SIZE)
+		return String.fromCharCode.apply(null, bytes);
+	var str = '';
+	for (var i = 0; i < bytes.length; i += CHUNK_SIZE)
+		str += String.fromCharCode.apply(null, bytes.slice(i, i+CHUNK_SIZE));	
+	return str;
+}
+
+
+
+
+function ArrayBufferToBase64(Data,MimeBase64Prefix)
+{
+	//	catch pre-processed data for future improvements
+	if ( typeof Data == 'string' )
+	{
+		//	already converted
+		if ( Data.startsWith(MimeBase64Prefix) )
+		{
+			Pop.Debug(`Detected existing base64 data`);
+			return Data;
+		}
+		throw `ArrayBufferData is a string, but is not prefixed with expected base64(${MimeBase64Prefix}) is prefixed ${Data.slice(0,20)}`;
+	}		 
+			
+	const StartTime = performance.now()
+
+	//	stack overflow, need to do in chunks with func above
+	//const DataChars = String.fromCharCode.apply(null, Data);
+	//	6-11kb/ms
+	//const DataChars = Data.reduce((NewData, byte) => NewData + String.fromCharCode(byte), '');
+	//	45-85kb/ms
+	const DataChars = byteArrayToString(Data);
+
+	const Base64 = btoa(DataChars);
+
+	const Duration = performance.now() - StartTime;
+	const Kb = Data.length / 1024;
+	Pop.Debug(`Converting x${Kb} bytes to base64 too ${Duration}ms; ${Kb/Duration}kb/ms`);
+	return MimeBase64Prefix + Base64;
+}
+
 //	simply play a sound with HTMLAudio objects, no effects
 Pop.Audio.SimpleSound = class
 {
@@ -334,13 +380,9 @@ Pop.Audio.SimpleSound = class
 		this.Name = Name;
 		
 		//	convert wav to base64
-		const WaveData64 = btoa(
-						  WaveData.reduce((data, byte) => data + String.fromCharCode(byte), '')
-						  );
-		
-		//const WaveData64 = btoa(String.fromCharCode.apply(null, WaveData));
-		Pop.Debug('Converting to base64');
-		const Data64 = 'data:audio/mp3;base64,' + WaveData64;
+		const Mp3Base64Prefix = 'data:audio/mp3;base64,';
+		const WaveData64 = ArrayBufferToBase64(WaveData,Mp3Base64Prefix);
+		const Data64 = WaveData64;
 		this.SoundDataUrl = Data64;
 		
 		this.Sound = null;
