@@ -327,18 +327,53 @@ Pop.Audio.SetUniformValue = function (Name,Value)
 
 
 //	https://www.measurethat.net/Benchmarks/Show/1219/23/arraybuffer-to-base64-string
-function byteArrayToString(bytes) 
+function byteArrayToString(bytes,MaxChunkSizeMult=1) 
 {
-	var CHUNK_SIZE = 8*1024;
+	if ( MaxChunkSizeMult >= 64 )
+		throw `64(${MaxChunkSizeMult}) chunks is too big for chrome`;
+		
+	//	16kb isn't any faster than 8kb. sometimes faster, sometimes slower, but doesnt cause heap crash
+	const CHUNK_SIZE = (8*1024) * MaxChunkSizeMult;
 	if (bytes.length <= CHUNK_SIZE)
 		return String.fromCharCode.apply(null, bytes);
-	var str = '';
-	for (var i = 0; i < bytes.length; i += CHUNK_SIZE)
-		str += String.fromCharCode.apply(null, bytes.slice(i, i+CHUNK_SIZE));	
+	
+	let str = '';
+	for (let i = 0; i < bytes.length; i += CHUNK_SIZE)
+		str += String.fromCharCode.apply(null, bytes.slice(i, i+CHUNK_SIZE));
+		
 	return str;
 }
 
+function ByteArraysToString(Datas)
+{
+	//	due to the streaming & avoiding resolving chunking, we may have data as arrays of intarrays
+	//	ALSO, all the chunks at 8kb aligned, are they ever too big to run?
+	//	byteArrayToString() has a buffer at 8kb, but speed doesnt really vary
+	//	BUT, will it happilly run on our 8kb aligned chunks from the StreamReader() ?
+	
+	//	not array, do normal thing
+	if ( !Array.isArray(Datas) )
+		return byteArrayToString(Datas);
 
+	//	treat each chunk as a 8kb chunk
+	//	hopefully wont error, or if it does, we can find our limit
+	//	this benefit is that hopefully we don't cause mallocs or gc
+	const EightKb = 8 * 1024;
+	//	8 is the most common min-aligned (some smaller non aligned ones... maybe can make the system ignore non aligned when streaming?)
+	//	but 8, starts to slow (big array in fromCharCode)
+	//const MultiChunkMax = 8;
+	const MultiChunkMax = 1;	//	gr: anything by 8k aligned seems non optimal
+	let str = '';
+	for ( let c=0;	c<Datas.length;	c++ )
+	{
+		const DataChunk = Datas[c];
+		Pop.Debug(`Chunk size = ${DataChunk.length} 8kb's=${DataChunk.length/EightKb}`);
+		//	gr: re-use splitting func, but bigger tolerance? find our limit to avoid GC/malloc
+		str += byteArrayToString(DataChunk,MultiChunkMax);
+		//str += String.fromCharCode.apply(null,DataChunk);	
+	}
+	return str;
+}
 
 
 function ArrayBufferToBase64(Data,MimeBase64Prefix)
@@ -362,12 +397,13 @@ function ArrayBufferToBase64(Data,MimeBase64Prefix)
 	//	6-11kb/ms
 	//const DataChars = Data.reduce((NewData, byte) => NewData + String.fromCharCode(byte), '');
 	//	45-85kb/ms
-	const DataChars = byteArrayToString(Data);
+	const DataChars = ByteArraysToString(Data);
 
+	const RealDataLength = DataChars.length;	//	Data.length might be array size, so this will be the true total size
 	const Base64 = btoa(DataChars);
 
 	const Duration = performance.now() - StartTime;
-	const Kb = Data.length / 1024;
+	const Kb = RealDataLength / 1024;
 	Pop.Debug(`Converting x${Kb} bytes to base64 too ${Duration}ms; ${Kb/Duration}kb/ms`);
 	return MimeBase64Prefix + Base64;
 }
