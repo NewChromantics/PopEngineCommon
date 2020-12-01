@@ -496,7 +496,16 @@ Pop.Audio.SimpleSound = class
 			await Pop.Yield(SleepMs);
 			return;
 		}
-		const Duration = this.GetDurationMs();
+		
+		let Duration = false;
+		try
+		{
+			Duration = this.GetDurationMs();
+		}
+		catch(e)
+		{
+			Pop.Warning(`UpdatePlayTargetTime(${this.Name}) Duration exception ${e} (not loaded yet? needs a play? paused=${this.Sound.paused}`);
+		}
 		
 		//	gr: avoid seek/reconstruction where possible
 		const SampleTimeIsClose = function (MaxMsOffset)
@@ -528,6 +537,8 @@ Pop.Audio.SimpleSound = class
 		//		we're paused if the sound has gone past the end
 		//		if we're trying to seek past that time, dont!
 		//		chrome on pixel3
+		//	gr: need to catch when this is the silent mp3 and was just allocated, when this
+		//		will definitely have ended, but thats nothing to do with US trying to play/restart
 		if ( this.Sound.ended )
 		{
 			const CurrentMs = this.GetSampleNodeCurrentTimeMs();
