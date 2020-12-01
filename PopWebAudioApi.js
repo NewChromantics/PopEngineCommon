@@ -84,8 +84,16 @@ function PreallocAudio(BufferSize)
 		ReadyAudioPool.push(NewAudio);
 		Pop.Debug(`Preallocated, ReadyAudioPool now ${ReadyAudioPool.length}`);
 	}
+	
+	function OnPreloadFailed(Error)
+	{
+		Pop.Warning(`Preload has failed ${Error}, what to do now... ReadyAudioPool now ${ReadyAudioPool.length}`);
+	}
+	
 	for ( let i=0;	i<BufferSize;	i++ )
-		MakePreload(i);
+	{
+		MakePreload(i).catch(OnPreloadFailed);
+	}
 }
 //	chrome on pixel3 is fine with 100
 //	safari on iphonese seems to choke
