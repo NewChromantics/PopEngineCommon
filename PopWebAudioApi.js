@@ -997,7 +997,9 @@ Pop.Audio.Sound = class
 		if ( this.SampleNode )
 			return;
 		//	gr: why was i destroying this all the time?
-		//this.DestroySamplerNodes(Context);
+		//	gr: because start() can only be called once!
+		//	this func allocs, so needs to destroy
+		this.DestroySamplerNodes(Context);
 		
 		//	create sample buffer if we need to (ie. out of date)
 		if ( !this.SampleBuffer )
@@ -1124,8 +1126,6 @@ Pop.Audio.Sound = class
 			return;
 		}
 
-		this.CreateSamplerNodes(Context);
-
 		//	gr: https://stackoverflow.com/a/55730826/355753 
 		//		invalid state comes on this.SampleNode.start if seeking past duration
 		if ( TimeMs > Duration )
@@ -1133,7 +1133,11 @@ Pop.Audio.Sound = class
 			Pop.Warning(`Clamped seek time ${TimeMs} as it's past the duration ${Duration} on ${this.Name}/${this.UniqueInstanceNumber}`);
 			TimeMs = Duration;
 		}
-		
+
+		//	gr: cannot call start() more than once, so NEED to destroy old sampler node
+		this.DestroySamplerNodes(Context); 
+		this.CreateSamplerNodes(Context);
+
 
 		//	start!
 		const DelaySecs = 0;
