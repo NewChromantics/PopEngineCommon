@@ -98,7 +98,7 @@ function PreallocAudio(BufferSize)
 //	chrome on pixel3 is fine with 100
 //	safari on iphonese seems to choke
 //	gr: chokes with data:base64 url for silence! works FAR better with a real file
-PreallocAudio(20);
+PreallocAudio(0);
 
 function FreeAudio(Sound)
 {
