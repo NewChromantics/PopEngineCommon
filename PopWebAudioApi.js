@@ -186,7 +186,7 @@ async function AllocAudio(SourceUrl,DebugName,AllowNew=false,ForceAllocNew=false
 
 
 Pop.Audio.AudioContextPromise = Pop.CreatePromise();
-
+Pop.Audio.ContextStateChanged = new Pop.PromiseQueue('Pop.Audio.ContextStateChanged');
 
 let DomTriggerPromise = Pop.CreatePromise();
 function OnDomTrigger(Event)
@@ -198,8 +198,18 @@ function OnDomTrigger(Event)
 	{
 		const TAudioContext = window.AudioContext || window.webkitAudioContext;
 		Pop.Audio.Context = new TAudioContext();
-		const State = Pop.Audio.Context.state;
-		Pop.Debug(`Audio context state ${Pop.Audio.Context.state}`);
+		
+		function OnStateChanged(e)
+		{
+			Pop.Debug(`State changed: ${Pop.Audio.Context.state}`,e);
+			Pop.Audio.ContextStateChanged.Push(Pop.Audio.Context.state);
+		}
+		Pop.Audio.Context.onstatechange = OnStateChanged;
+	}
+	
+	//	always try and resume on click
+	if ( Pop.Audio.Context )
+	{
 		function OnResume()
 		{
 			Pop.Debug(`OnResume Audio context state ${Pop.Audio.Context.state}`);
@@ -209,10 +219,8 @@ function OnDomTrigger(Event)
 		{
 			Pop.Warning(`Context resume error ${e}`);
 		}
-		function OnSuspend(e)
-		{
-			Pop.Warning(`Context suspended ${e}`);
-		}
+
+		Pop.Debug(`Audio context resume() state=${Pop.Audio.Context.state}`);
 		Pop.Audio.Context.resume().then(OnResume).catch(OnError);
 		//Pop.Audio.Context.sspended().then(OnResume).catch(OnError);
 	}
