@@ -901,6 +901,7 @@ Pop.Audio.Sound = class
 			}
 			//	now out of date/not dirty
 			this.SampleWaveData = null;
+			Pop.Debug(`New sample buffer for ${this.Name}/${this.UniqueInstanceNumber} duration=${this.GetDurationMs()}`);
 
 			//	restore time/stopped state, but force sampler rebuild
 			//this.DestroySamplerNodes(Context);
@@ -945,7 +946,7 @@ Pop.Audio.Sound = class
 			}
 			catch(e)
 			{
-				Pop.Warning(`Sound update exception ${e} on ${this.UniqueInstanceNumber}`);
+				Pop.Warning(`Sound update exception ${e} on ${this.UniqueInstanceNumber}. Context State=${Context.state}`);
 				await Pop.Yield(500);
 			}
 		}
@@ -1064,7 +1065,7 @@ Pop.Audio.Sound = class
 
 		//	seek to time
 		const DelayMs = Pop.GetTimeNowMs() - this.PlayTargetRequestTime;
-		const TimeMs = this.PlayTargetTime + ( IncludeDelay ? DelayMs : 0);
+		let TimeMs = this.PlayTargetTime + ( IncludeDelay ? DelayMs : 0);
 		this.PlayTargetTime = null;
 
 		//	gr: avoid seek/reconstruction where possible
@@ -1108,12 +1109,30 @@ Pop.Audio.Sound = class
 			}
 		}
 
+		if ( Duration == 0 )
+		{
+			Pop.Warning(`Seek ${TimeMs} cancelled as Duration ${Duration} is zero ${this.Name}/${this.UniqueInstanceNumber}`);
+			await Pop.Yield(1000);
+			return;
+		}
+
 		this.CreateSamplerNodes(Context);
+
+		//	gr: https://stackoverflow.com/a/55730826/355753 
+		//		invalid state comes on this.SampleNode.start if seeking past duration
+		if ( TimeMs > Duration )
+		{
+			Pop.Warning(`Clamped seek time ${TimeMs} as it's past the duration ${Duration} on ${this.Name}/${this.UniqueInstanceNumber}`);
+			TimeMs = Duration;
+		}
+		
 
 		//	start!
 		const DelaySecs = 0;
-		//const OffsetSecs = TimeMs / 1000;
-		const OffsetSecs = 0;
+		const OffsetSecs = TimeMs / 1000;
+		const CurrentTime = this.GetSampleNodeCurrentTimeMs();
+		
+		Pop.Debug(`SampleNode.Start(${TimeMs}, current=${CurrentTime} Duration=${Duration} ${this.Name}/${this.UniqueInstanceNumber}`);
 		this.SampleNode.start(DelaySecs,OffsetSecs);
 		this.SampleNodeStartTime = Pop.GetTimeNowMs() - TimeMs;
 		Pop.Debug(`Starting audio ${OffsetSecs} secs #${this.UniqueInstanceNumber} ${this.Name}`);
