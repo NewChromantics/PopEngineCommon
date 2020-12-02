@@ -185,6 +185,7 @@ async function AllocAudio(SourceUrl,DebugName,AllowNew=false,ForceAllocNew=false
 
 
 
+Pop.Audio.AudioContextPromise = Pop.CreatePromise();
 
 
 let DomTriggerPromise = Pop.CreatePromise();
@@ -197,6 +198,23 @@ function OnDomTrigger(Event)
 	{
 		const TAudioContext = window.AudioContext || window.webkitAudioContext;
 		Pop.Audio.Context = new TAudioContext();
+		const State = Pop.Audio.Context.state;
+		Pop.Debug(`Audio context state ${Pop.Audio.Context.state}`);
+		function OnResume()
+		{
+			Pop.Debug(`OnResume Audio context state ${Pop.Audio.Context.state}`);
+			Pop.Audio.AudioContextPromise.Resolve(Pop.Audio.Context);
+		}
+		function OnError(e)
+		{
+			Pop.Warning(`Context resume error ${e}`);
+		}
+		function OnSuspend(e)
+		{
+			Pop.Warning(`Context suspended ${e}`);
+		}
+		Pop.Audio.Context.resume().then(OnResume).catch(OnError);
+		//Pop.Audio.Context.sspended().then(OnResume).catch(OnError);
 	}
 	
 	
@@ -429,6 +447,14 @@ Pop.Audio.SimpleSound = class
 		this.Started = false;
 		this.Freeing = false;
 		this.FreePromise = Pop.CreatePromise();
+
+		//	to reduce job queue, when we have a new target time or stop command
+		//	we update this value to non-null and queue a UpdatePlayState
+		//	if it's a time, we want to seek to that time. if it's false, we want to stop
+		//	if it's null the state isn't dirty
+		//	gr: we now leave this as false if paused/stopped to avert multiple calls
+		this.PlayTargetTime = null;
+		this.PlayTargetRequestTime = undefined;
 		
 		this.ActionQueue = new Pop.PromiseQueue();
 		this.Update().then(Pop.Debug).catch(Pop.Warning);
@@ -775,26 +801,12 @@ Pop.Audio.SimpleSound = class
 }
 
 
-//	singleton
-//	gr: could turn this into a single promise that is resolved once and then forever ready
 Pop.Audio.Context = null;
+
+
 Pop.Audio.WaitForContext = async function()
 {
-	if (Pop.Audio.Context)
-		return Pop.Audio.Context;
-	
-	//	wait for DOM security
-	await WaitForClick();
-	
-	//	gr: this can follow through many times,
-	//		so make sure only the first one causes an alloc
-	if (Pop.Audio.Context)
-		return Pop.Audio.Context;
-
-	//	get func
-	const TAudioContext = window.AudioContext || window.webkitAudioContext;
-	Pop.Audio.Context = new TAudioContext();
-	return Pop.Audio.Context;
+	return await Pop.Audio.AudioContextPromise;
 }
 
 Pop.Audio.SoundInstanceCounter = 1000;
@@ -804,6 +816,12 @@ Pop.Audio.Sound = class
 {
 	constructor(WaveData,Name)
 	{
+		if ( Array.isArray(WaveData) )
+		{
+			Pop.Debug(`Joining wave data`);
+			WaveData = Pop.JoinTypedArrays(...WaveData);
+		}
+	
 		//	overload this for visualisation
 		this.OnVolumeChanged = function(Volume01){};
 
@@ -830,7 +848,8 @@ Pop.Audio.Sound = class
 		//	if it's null the state isn't dirty
 		//	gr: we now leave this as false if paused/stopped to avert multiple calls
 		this.PlayTargetTime = null;
-
+		this.PlayTargetRequestTime = undefined;
+		
 		//	run state
 		this.ActionQueue = new Pop.PromiseQueue();
 		this.Alive = true;	//	help get out of update loop
@@ -907,7 +926,7 @@ Pop.Audio.Sound = class
 		return SampleBuffer;
 	}
 	
-	
+	//	todo: update logic to match simplesound
 	async Update()
 	{
 		//	load
@@ -917,11 +936,22 @@ Pop.Audio.Sound = class
 		//	if we're being freed(!alive) process all remaining actions
 		while ( this.Alive || this.ActionQueue.HasPending() )
 		{
-			let Action = await this.ActionQueue.WaitForNext();
-			if (Action == 'UpdatePlayTargetTime')
-				Action = this.UpdatePlayTargetTime.bind(this);
-			await Action.call(this,Context);
+			try
+			{
+				let Action = await this.ActionQueue.WaitForNext();
+				if (Action == 'UpdatePlayTargetTime')
+					Action = this.UpdatePlayTargetTime.bind(this);
+				await Action.call(this,Context);
+			}
+			catch(e)
+			{
+				Pop.Warning(`Sound update exception ${e} on ${this.UniqueInstanceNumber}`);
+				await Pop.Yield(500);
+			}
 		}
+		
+		//	make sure is freed
+		this.Free();
 	}
 	
 	DestroyAllNodes(Context)
@@ -955,11 +985,14 @@ Pop.Audio.Sound = class
 	
 	CreateSamplerNodes(Context)
 	{
-		this.DestroySamplerNodes(Context);
+		if ( this.SampleNode )
+			return;
+		//	gr: why was i destroying this all the time?
+		//this.DestroySamplerNodes(Context);
 		
 		//	create sample buffer if we need to (ie. out of date)
 		if ( !this.SampleBuffer )
-			throw `Sample Buffer is out of date`;
+			throw `Sample Buffer is out of date/not loaded yet`;
 		
 		//	create nodes
 		this.SampleNode = Context.createBufferSource();
@@ -1003,21 +1036,40 @@ Pop.Audio.Sound = class
 		if (this.PlayTargetTime === null)
 			return Pop.Warning(`Sound has caused a play/stop but the target value is not dirty`);
 
+		//	gr: we need to skip the delay if an async function happened in between
+		//		the delay is to keep in sync, but.... debugging etc makes it jump way too far
+		//		OR even worse, our time is on the silent mp3 and it's already finished, and we think our 1ms delay pushes it past the end
+		//	gr: MUST make this false for sounds that dont need to be in sync (eg. one shots)
+		//		and then can avoid seeks
+		let IncludeDelay = true;
+		IncludeDelay = false;	//	avoid any auto seeks for now
+		
 		if (this.PlayTargetTime === false)
 		{
 			this.DestroySamplerNodes(Context);
-			this.PlayTargetTime = null;
+			//	gr: leave as false to allow skipping lots of extra work in stop()
+			this.PlayTargetTime = false;
 			return;
+		}
+		
+		let Duration = false;
+		try
+		{
+			Duration = this.GetDurationMs();
+		}
+		catch(e)
+		{
+			Pop.Warning(`UpdatePlayTargetTime(${this.Name}) Duration exception ${e} (not loaded yet? needs a play? paused=${this.Sound.paused}`);
 		}
 
 		//	seek to time
-		const TimeMs = this.PlayTargetTime;
+		const DelayMs = Pop.GetTimeNowMs() - this.PlayTargetRequestTime;
+		const TimeMs = this.PlayTargetTime + ( IncludeDelay ? DelayMs : 0);
 		this.PlayTargetTime = null;
 
 		//	gr: avoid seek/reconstruction where possible
-		const SampleTimeIsClose = function ()
+		const SampleTimeIsClose = function (MaxMsOffset)
 		{
-			const MaxMsOffset = 100;
 			const CurrentTime = this.GetSampleNodeCurrentTimeMs();
 			if (CurrentTime === false)
 				return false;
@@ -1028,17 +1080,44 @@ Pop.Audio.Sound = class
 			return false;
 		}.bind(this);
 
-		if (SampleTimeIsClose())
-			return;
+		/*	gr: todo
+		//	throttle seeking, seeking too much kills safari
+		//	it also seems there is a delay in a seek
+		{
+			const TimeSinceSeek = Pop.GetTimeNowMs() - this.TimeAtLastSeek;
+			if ( TimeSinceSeek < SleepMs )
+			{
+				Pop.Debug(`${TimeSinceSeek} ms since last seek ${this.Name} skipping`);
+				this.PlayTargetTime = null;
+				await Pop.Yield(SleepMs);
+				return;
+			}
+		}
+		*/
+		//	todo: simple sound checks for .ended here
+
+		//	
+		{
+			const MaxMsOffset = Math.min( 2000, Duration ? Duration/2 : 9999999 );
+			if (SampleTimeIsClose(MaxMsOffset))
+			{
+				//	don't change
+				this.PlayTargetTime = null;
+				//await Pop.Yield(SleepMs);
+				return;
+			}
+		}
 
 		this.CreateSamplerNodes(Context);
 
 		//	start!
 		const DelaySecs = 0;
-		const OffsetSecs = TimeMs / 1000;
+		//const OffsetSecs = TimeMs / 1000;
+		const OffsetSecs = 0;
 		this.SampleNode.start(DelaySecs,OffsetSecs);
 		this.SampleNodeStartTime = Pop.GetTimeNowMs() - TimeMs;
 		Pop.Debug(`Starting audio ${OffsetSecs} secs #${this.UniqueInstanceNumber} ${this.Name}`);
+		this.PlayTargetTime = null;
 	}
 	
 	Play(TimeMs=0)
@@ -1046,11 +1125,19 @@ Pop.Audio.Sound = class
 		//	gr: could call SampleTimeIsClose() here and avoid this queue entirely
 		//	mark dirty and do new state update (if not already queued)
 		this.PlayTargetTime = TimeMs;
+		this.PlayTargetRequestTime = Pop.GetTimeNowMs();
 		this.ActionQueue.PushUnique('UpdatePlayTargetTime');
 	}
 	
 	Stop()
 	{
+		//	gr: avoid work which eventually leads to .Pause() if it's not needed
+		//	gr: false & null, not ! because of time=0.0
+		if ( this.PlayTargetTime === false )
+		{
+			//Pop.Debug(`Skipped Stop() dirty queue`);
+			return;
+		}
 		//	mark dirty and cause update of state (if not already queued)
 		this.PlayTargetTime = false;
 		this.ActionQueue.PushUnique('UpdatePlayTargetTime');
