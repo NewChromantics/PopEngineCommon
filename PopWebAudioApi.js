@@ -846,6 +846,7 @@ Pop.Audio.Sound = class
 		this.SampleVolume = 1;	//	gain
 
 		//	meta
+		this.Looping = false;
 		this.KnownDurationMs = null;
 		this.Name = Name;
 		this.UniqueInstanceNumber = Pop.Audio.SoundInstanceCounter++;
@@ -963,6 +964,16 @@ Pop.Audio.Sound = class
 		this.Free();
 	}
 	
+	SetLooping(Looping=true)
+	{
+		this.Looping = Looping;
+		//	gr: if we change this after start(), do we need to restart?
+		if ( this.SampleNode )
+		{
+			this.SampleNode.loop = this.Looping;
+		}
+	}
+	
 	DestroyAllNodes(Context)
 	{
 		this.DestroySamplerNodes(Context);
@@ -1008,6 +1019,7 @@ Pop.Audio.Sound = class
 		//	create nodes
 		this.SampleNode = Context.createBufferSource();
 		this.SampleNode.buffer = this.SampleBuffer;
+		this.SampleNode.loop = this.Looping;
 		
 		//	create gain node if it doesn't exist
 		if ( !this.SampleGainNode )
