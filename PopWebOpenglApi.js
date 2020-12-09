@@ -280,6 +280,11 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 			default:	return Pop.SoyMouseButton.Left;
 		}
 	}
+	
+	function GetPositionFromTouch(Touch)
+	{
+		return GetMousePos(Touch,null);
+	}
 
 	//	annoying distinctions
 	let GetButtonFromMouseEventButton = function(MouseButton,AlternativeButton,TouchArray)
@@ -389,61 +394,115 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		return [x,y];
 	}
 	
+	function ReportTouches(MouseEvent)
+	{
+		if ( MouseEvent.AddedTouches )
+		{
+			function ReportNewTouch(Touch)
+			{
+				const Button = GetButtonNameFromTouch(Touch);
+				const Position = GetPositionFromTouch(Touch);
+				Pop.DebugMouseEvent(`Touch MouseDown ${Position} button ${Button}`);
+				OnMouseDown(...Position,Button);
+			}
+			MouseEvent.AddedTouches.forEach(ReportNewTouch);
+		}
+		
+		//	update positions
+		if ( MouseEvent.Touches )
+		{
+			function ReportTouchMove(Touch)
+			{
+				const Button = GetButtonNameFromTouch(Touch);
+				const Position = GetPositionFromTouch(Touch);
+				Pop.DebugMouseEvent(`Touch MouseMove ${Position} button ${Button}`);
+				OnMouseMove(...Position,Button);
+			}
+			MouseEvent.Touches.forEach(ReportTouchMove);
+		}
+		
+		if ( MouseEvent.RemovedTouches )
+		{
+			function ReportOldTouch(Touch)
+			{
+				const Button = GetButtonNameFromTouch(Touch);
+				const Position = GetPositionFromTouch(Touch);
+				Pop.DebugMouseEvent(`Touch MouseUp ${Position} button ${Button}`);
+				OnMouseUp(...Position,Button);
+			}
+			MouseEvent.RemovedTouches.forEach(ReportOldTouch);
+		}
+		
+	}
+	
 	let MouseMove = function(MouseEvent)
 	{
 		Pop.DebugMouseEvent(`MouseMove`);
 		UpdateTouches(MouseEvent);
-		const Pos = GetMousePos(MouseEvent);
-		const Buttons = GetButtonsFromMouseEventButtons( MouseEvent );
-		if ( Buttons.length == 0 )
-		{
-			Pop.DebugMouseEvent(`MouseMove ${Pos} 0 buttons ${Buttons}`);
-			MouseEvent.preventDefault();
-			OnMouseMove( Pos[0], Pos[1], Pop.SoyMouseButton.None );
-			return;
-		}
+		ReportTouches(MouseEvent);
 		
-		//	for now, do a callback on the first button we find
-		//	later, we might want one for each button, but to avoid
-		//	slow performance stuff now lets just do one
-		//	gr: maybe API should change to an array
-		Pop.DebugMouseEvent(`MouseMove ${Pos} 0 buttons ${Buttons}`);
-		OnMouseMove( Pos[0], Pos[1], Buttons[0] );
+		if ( !MouseEvent.changedTouches )
+		{
+			const Pos = GetMousePos(MouseEvent);
+			const Buttons = GetButtonsFromMouseEventButtons( MouseEvent );
+			if ( Buttons.length == 0 )
+			{
+				Pop.DebugMouseEvent(`MouseMove ${Pos} 0 buttons ${Buttons}`);
+				MouseEvent.preventDefault();
+				OnMouseMove( Pos[0], Pos[1], Pop.SoyMouseButton.None );
+				return;
+			}
+
+			Pop.DebugMouseEvent(`MouseMove ${Pos} 0 buttons ${Buttons}`);
+			OnMouseMove( Pos[0], Pos[1], Buttons[0] );
+		}
 		MouseEvent.preventDefault();
 	}
 	
 	let MouseDown = function(MouseEvent)
 	{
 		UpdateTouches(MouseEvent);
-		const Pos = GetMousePos(MouseEvent);
-		const Button = GetButtonFromMouseEventButton(MouseEvent);
-		Pop.DebugMouseEvent(`MouseDown ${Pos} ${Button}`);
-		OnMouseDown( Pos[0], Pos[1], Button );
+		ReportTouches(MouseEvent);
+		
+		if ( !MouseEvent.changedTouches )
+		{
+			const Pos = GetMousePos(MouseEvent);
+			const Button = GetButtonFromMouseEventButton(MouseEvent);
+			Pop.DebugMouseEvent(`MouseDown ${Pos} ${Button}`);
+			OnMouseDown( Pos[0], Pos[1], Button );
+		}
 		MouseEvent.preventDefault();
 	}
 	
 	let MouseUp = function(MouseEvent)
 	{
 		UpdateTouches(MouseEvent);
-		//	todo: trigger multiple buttons (for multiple touches)
-		const Pos = GetMousePos(MouseEvent,MouseEvent.RemovedTouches);
-		const Button = GetButtonFromMouseEventButton(MouseEvent,null,MouseEvent.RemovedTouches);
+		ReportTouches(MouseEvent);
 		
-		//	gr: hack for kandinsky, i need to know when touches are (all) released to turn off "hover"
-		//		this will probably change again, as this is probably a common thing
-		//		plus its at this level we should deal with touch+mouse cursor (desktop touchscreen, or ipad+mouse)
-		//		and maybe XR's touching-button, but not pressing-button 
-		const Meta = {};
-		Meta.IsTouch = MouseEvent.touches != false;	//	gr: this will break on screens with a touch screen
+		if ( !MouseEvent.changedTouches )
+		{
+			//	todo: trigger multiple buttons (for multiple touches)
+			const Pos = GetMousePos(MouseEvent,MouseEvent.RemovedTouches);
+			const Button = GetButtonFromMouseEventButton(MouseEvent,null,MouseEvent.RemovedTouches);
 		
-		Pop.DebugMouseEvent(`MouseUp ${Pos} ${Button} ${JSON.stringify(Meta)}`);
-		OnMouseUp( Pos[0], Pos[1], Button, Meta );
+			//	gr: hack for kandinsky, i need to know when touches are (all) released to turn off "hover"
+			//		this will probably change again, as this is probably a common thing
+			//		plus its at this level we should deal with touch+mouse cursor (desktop touchscreen, or ipad+mouse)
+			//		and maybe XR's touching-button, but not pressing-button 
+			const Meta = {};
+			Meta.IsTouch = MouseEvent.touches != undefined;	//	gr: this will break on screens with a touch screen
+		
+			Pop.DebugMouseEvent(`MouseUp ${Pos} ${Button} ${JSON.stringify(Meta)}`);
+			OnMouseUp( Pos[0], Pos[1], Button, Meta );
+		}
 		MouseEvent.preventDefault();
 	}
 	
 	let MouseWheel = function(MouseEvent)
 	{
 		UpdateTouches(MouseEvent);
+		ReportTouches(MouseEvent);
+		
 		const Pos = GetMousePos(MouseEvent);
 		const Button = GetButtonFromMouseEventButton(MouseEvent);
 		
