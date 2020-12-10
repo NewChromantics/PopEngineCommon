@@ -64,18 +64,6 @@ const AllowVao = !Pop.GetExeArguments().DisableVao;
 //	this stops thrashing cpu/system whilst waiting
 const RetryGetContextMs = 1000;
 
-//	need to sort this!, should be in gui
-//	currently named to match c++
-Pop.SoyMouseButton = Pop.SoyMouseButton || {};
-//	matching SoyMouseButton
-Pop.SoyMouseButton.None = -1;	//	todo: in api, change this to undefined
-Pop.SoyMouseButton.Left = 0;
-Pop.SoyMouseButton.Middle = 2;
-Pop.SoyMouseButton.Right = 1;
-Pop.SoyMouseButton.Back = 3;
-Pop.SoyMouseButton.Forward = 4;
-
-
 
 //	need a generic memory heap system in Pop for js side so
 //	we can do generic heap GUIs
@@ -221,6 +209,8 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	//	touchend doesn't tell us what touches were released;
 	//	so call this function to keep track of them
 	let LastTouches = [];
+	//	gr: touch identifier is unique, so not persistent. Whilst this would be better, (returning TouchXXX for button)
+	//		we cannot detect say, double-tap from the same source, so we still need to use the tracked "names" (indexes)
 	let RegisteredTouchButtons = {};	//	[Identifier] = TouchIndexWhenActivated = ButtonIndex
 	
 	function UpdateTouches(MouseEvent)
@@ -257,9 +247,11 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		LastTouches = NewTouches;
 	}
 	
-	//	gr: is identifier unique, or an index? is it persistent?
 	function GetButtonNameFromTouch(Touch)
 	{
+		//	can't use unique identifier (safari) as we need to track buttons between touches
+		//return `Touch${Touch.identifier}`;
+
 		function GetButtonIndexFromTouch(Touch)
 		{
 			if ( !RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
@@ -270,15 +262,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 			return RegisteredTouchButtons[Touch.identifier];
 		}
 		const ButtonIndex = GetButtonIndexFromTouch(Touch);
-		switch ( ButtonIndex )
-		{
-			case 0:	return Pop.SoyMouseButton.Left;
-			case 1:	return Pop.SoyMouseButton.Middle;
-			case 2:	return Pop.SoyMouseButton.Right;
-			case 3:	return Pop.SoyMouseButton.Back;
-			case 4:	return Pop.SoyMouseButton.Forward;
-			default:	return Pop.SoyMouseButton.Left;
-		}
+		return `Touch${ButtonIndex}`;
 	}
 	
 	function GetPositionFromTouch(Touch)
@@ -322,21 +306,22 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		{
 			switch ( MouseButton )
 			{
-				case BrowserMouseLeft:	return Pop.SoyMouseButton.Back;
-				case BrowserMouseRight:	return Pop.SoyMouseButton.Forward;
+				case BrowserMouseLeft:	return 'Back';
+				case BrowserMouseRight:	return 'Forward';
 			}
 		}
 		
+		//	gr: where is back and forward mouse buttons??
 		switch ( MouseButton )
 		{
-			case BrowserMouseLeft:		return Pop.SoyMouseButton.Left;
-			case BrowserMouseMiddle:	return Pop.SoyMouseButton.Middle;
-			case BrowserMouseRight:		return Pop.SoyMouseButton.Right;
+			case BrowserMouseLeft:		return 'Left';
+			case BrowserMouseMiddle:	return 'Middle';
+			case BrowserMouseRight:		return 'Right';
 		}
 		throw "Unhandled MouseEvent.button (" + MouseButton + ")";
 	}
 	
-	let GetButtonsFromMouseEventButtons = function(MouseEvent,TouchArray)
+	let GetButtonsFromMouseEventButtons = function(MouseEvent,IncludeTouches)
 	{
 		//	note: button bits don't match mousebutton!
 		//	https://www.w3schools.com/jsref/event_buttons.asp
@@ -359,9 +344,9 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 				continue;
 			Buttons.push( ButtonName );
 		}
-		
+
 		//	mobile
-		if ( MouseEvent.Touches )
+		if ( IncludeTouches && MouseEvent.Touches )
 		{
 			function PushTouch(Touch,Index)
 			{
@@ -372,7 +357,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 			}
 			MouseEvent.Touches.forEach( PushTouch );
 		}
-		
+
 		return Buttons;
 	}
 	
@@ -437,24 +422,22 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	
 	let MouseMove = function(MouseEvent)
 	{
-		Pop.DebugMouseEvent(`MouseMove`);
 		UpdateTouches(MouseEvent);
 		ReportTouches(MouseEvent);
 		
 		if ( !MouseEvent.changedTouches )
 		{
 			const Pos = GetMousePos(MouseEvent);
-			const Buttons = GetButtonsFromMouseEventButtons( MouseEvent );
+			const Buttons = GetButtonsFromMouseEventButtons( MouseEvent, false );
+			
 			if ( Buttons.length == 0 )
 			{
-				Pop.DebugMouseEvent(`MouseMove ${Pos} 0 buttons ${Buttons}`);
-				MouseEvent.preventDefault();
-				OnMouseMove( Pos[0], Pos[1], Pop.SoyMouseButton.None );
-				return;
+				Pop.DebugMouseEvent(`MouseMove ${Pos} zero buttons ${Buttons}`);
+				Buttons.push(null);
 			}
-
+			
 			//	report each button as its own mouse move
-			Pop.DebugMouseEvent(`MouseMove ${Pos} 0 buttons ${Buttons}`);
+			Pop.DebugMouseEvent(`MouseMove ${Pos} buttons ${Buttons}`);
 			for ( let Button of Buttons )
 				OnMouseMove( Pos[0], Pos[1], Button );
 		}
