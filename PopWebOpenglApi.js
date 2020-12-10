@@ -453,8 +453,10 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 				return;
 			}
 
+			//	report each button as its own mouse move
 			Pop.DebugMouseEvent(`MouseMove ${Pos} 0 buttons ${Buttons}`);
-			OnMouseMove( Pos[0], Pos[1], Buttons[0] );
+			for ( let Button of Buttons )
+				OnMouseMove( Pos[0], Pos[1], Button );
 		}
 		MouseEvent.preventDefault();
 	}
