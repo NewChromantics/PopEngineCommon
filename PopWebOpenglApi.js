@@ -212,6 +212,8 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	//	gr: touch identifier is unique, so not persistent. Whilst this would be better, (returning TouchXXX for button)
 	//		we cannot detect say, double-tap from the same source, so we still need to use the tracked "names" (indexes)
 	let RegisteredTouchButtons = {};	//	[Identifier] = TouchIndexWhenActivated = ButtonIndex
+	let ArchiveRegisteredTouchButtons = {};
+	
 	
 	function UpdateTouches(MouseEvent)
 	{
@@ -228,19 +230,53 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		//	turn touches into array
 		const NewTouches = Array.from( MouseEvent.touches );
 		
-		//	update identifier button index
-		function UpdateIdentifierButton(Touch,Index)
+		function GetNextUnassignedButtonIndex()
 		{
-			const ButtonIndex = Index;
-			if ( !RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
-				Pop.DebugMouseEvent(`New touch ${Touch.identifier} = Button ${ButtonIndex}`);
-			RegisteredTouchButtons[Touch.identifier] = ButtonIndex;
+			//	shouldn't have 1000 touch buttons, loop for safety
+			const UsedButtonIndexes = Object.values(RegisteredTouchButtons);
+			for ( let bi=0;	bi<1000;	bi++ )
+			{
+				const Match = UsedButtonIndexes.find( Value => Value===bi );
+				if ( Match !== undefined )
+					continue;
+				return bi;
+			}
+			throw `Failed to find /1000 a free button index`;
 		}
-		NewTouches.forEach(UpdateIdentifierButton);
 		
+		function UpdateIdentifierButton(Touch)
+		{
+			if ( RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
+				return;
+			
+			const ButtonIndex = GetNextUnassignedButtonIndex();
+			Pop.DebugMouseEvent(`New touch ${Touch.identifier} = Button ${ButtonIndex}`);
+			RegisteredTouchButtons[Touch.identifier] = ButtonIndex;
+			ArchiveRegisteredTouchButtons[Touch.identifier] = ButtonIndex;
+		}
+		function UnregisterTouch(Touch)
+		{
+			//	gr: we cannot unregister, as some things use the identifer later
+			if ( !RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
+			{
+				Pop.DebugMouseEvent(`UnregisterTouch ${Touch.identifier} but not registered`);
+				return;
+			}
+			const Button = RegisteredTouchButtons[Touch.identifier];
+			Pop.DebugMouseEvent(`UnregisterTouch ${Touch.identifier} button was ${Button}`);
+			delete RegisteredTouchButtons[Touch.identifier];
+		}
+
+		//	assign button indexes for new touches
+		NewTouches.forEach(UpdateIdentifierButton);
+	
 		//	find changes
 		const RemovedTouches = LastTouches.filter( t => !TouchIdentifierPresent(t.identifier,NewTouches) );
 		const AddedTouches = NewTouches.filter( t => !TouchIdentifierPresent(t.identifier,LastTouches) );
+		
+		//	removed button assignments for deleted touches
+		RemovedTouches.forEach(UnregisterTouch);		
+		
 		MouseEvent.Touches = NewTouches;
 		MouseEvent.RemovedTouches = RemovedTouches;
 		MouseEvent.AddedTouches = AddedTouches;
@@ -252,14 +288,15 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		//	can't use unique identifier (safari) as we need to track buttons between touches
 		//return `Touch${Touch.identifier}`;
 
+		//	gr: registered = active
 		function GetButtonIndexFromTouch(Touch)
 		{
-			if ( !RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
+			if ( !ArchiveRegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
 			{
 				Pop.Warning(`Touch ${Touch.identifier} has no registered button. Returning 0`);
 				return 0;
 			}
-			return RegisteredTouchButtons[Touch.identifier];
+			return ArchiveRegisteredTouchButtons[Touch.identifier];
 		}
 		const ButtonIndex = GetButtonIndexFromTouch(Touch);
 		return `Touch${ButtonIndex}`;
