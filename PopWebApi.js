@@ -478,7 +478,12 @@ Pop.GetExeArguments = function()
 		if ( typeof Value == 'string' )
 		{
 			const NumberValue = Number(Value);
-			if ( !isNaN(NumberValue) )
+
+			if ( Value === '' )
+				Value = null;
+			else if ( Value == 'null' )
+				Value = null;
+			else if ( !isNaN(NumberValue) )
 				Value = NumberValue;
 			else if ( Value == 'true' )
 				Value = true;
