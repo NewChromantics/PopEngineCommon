@@ -288,6 +288,48 @@ Pop.Audio.WaitForMutedChange = async function()
 }
 
 
+//	gr: we don't have a "mute" with audio context sounds, we can set volume
+//		to zero, but we get clicks changing gain
+//		this approach suspends hardware, but... can we resume without an immediate
+//		DOM click?
+async function AudioContextGlobalMuteThread()
+{
+	const OnMutedChange = function(Muted)
+	{
+		Pop.Debug(`OnMutedChange AudioContextGlobalMuteThread`);
+		//	no context yet
+		if ( !Pop.Audio.Context )
+			return;
+			
+		function OnSuspendError(Error)
+		{
+			Pop.Warning(`Suspend context error ${Error}`);
+		}
+		function OnResumeError(Error)
+		{
+			Pop.Warning(`Resume context error ${Error}`);
+		}
+			
+		if ( Muted )
+			Pop.Audio.Context.suspend().catch(OnSuspendError);
+		else
+			Pop.Audio.Context.resume().catch(OnResumeError);
+
+	}.bind(this);
+	
+	//	do an initial state in case we start a sound when we expect it silent
+	while(true)
+	{
+		const Muted = Pop.Audio.IsMuted();	//	checks foreground & state
+		Pop.Debug(`AudioContextGlobalMuteThread(${this.Name}) Muted=${Muted}`);
+		OnMutedChange(Muted);
+
+		const OnForeground = Pop.WebApi.WaitForForegroundChange();
+		const OnMuted = Pop.Audio.WaitForMutedChange();
+		await Promise.race([OnForeground,OnMuted]);
+	}
+}
+AudioContextGlobalMuteThread().then(Pop.Warning);
 
 
 //	https://www.measurethat.net/Benchmarks/Show/1219/23/arraybuffer-to-base64-string
