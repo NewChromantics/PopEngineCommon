@@ -287,69 +287,7 @@ Pop.Audio.WaitForMutedChange = async function()
 	return Pop.WebApi.MutedChangePromises.WaitForNext();
 }
 
-/*
-//	we need to associate these per context really...
-Pop.Audio.Uniforms = {};
-Pop.Audio.ContextJobQueue = new Pop.PromiseQueue();
 
-Pop.Audio.ContextJobQueueProcessor = async function ()
-{
-	while (true)
-	{
-		const Context = await Pop.Audio.WaitForContext();
-		const Job = await Pop.Audio.ContextJobQueue.WaitForNext();
-		await Job(Context);
-	}
-}
-Pop.Audio.ContextJobQueueProcessor().then(Pop.Debug).catch(Pop.Warning);
-
-Pop.Audio.GetUniform = function (Name)
-{
-	if (!Pop.Audio.Uniforms.hasOwnProperty(Name))
-	{
-		throw `Pop.Audio.Uniforms has no key named ${Name}; ${Object.keys(Pop.Audio.Uniforms)}`;
-	}
-	return Pop.Audio.Uniforms[Name];
-}
-
-Pop.Audio.SetUniform = function (Name,Value)
-{
-	//	todo: call other cases for things like shared buffers
-	Pop.Audio.SetUniformValue(Name,Value);
-}
-
-Pop.Audio.SetUniformValue = function (Name,Value)
-{
-	function SetUniformValue()
-	{
-		//	if the object already exists, update it
-		if (!Pop.Audio.Uniforms.hasOwnProperty(Name))
-			return false;
-		const Uniform = Pop.Audio.Uniforms[Name];
-		//	assuming gain
-		//	todo: tolernace check
-		Uniform.offset = Value;
-	}
-
-	//	update immediately
-	if (SetUniformValue())
-		return;
-
-	//	create job to create & set
-	async function Job(Context)
-	{
-		//	has been created in the mean time
-		if (SetUniformValue())
-			return;
-
-		//	create
-		const Uniform = Context.createConstantSource();
-		Pop.Audio.Uniforms[Name] = Uniform;
-		SetUniformValue();
-	}
-	Pop.Audio.ContextJobQueue.Push(Job);
-}
-*/
 
 
 //	https://www.measurethat.net/Benchmarks/Show/1219/23/arraybuffer-to-base64-string
