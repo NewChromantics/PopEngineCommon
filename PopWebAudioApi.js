@@ -266,19 +266,25 @@ async function WaitForClick()
 
 //	gr: I dont like double negatives, but matching Audio.muted
 //	https://www.w3schools.com/TAGs/av_prop_muted.asp
-Pop.Audio._GlobalMuted = false;
+Pop.Audio._GlobalMutedA = false;
+Pop.Audio._GlobalMutedB = false;
 Pop.WebApi.MutedChangePromises = new WebApi_PromiseQueue();
 
 Pop.Audio.SetMuted = function(Muted)
 {
-	Pop.Audio._GlobalMuted = Muted;
+	Pop.Audio._GlobalMutedA = Muted;
+	Pop.WebApi.MutedChangePromises.Push(Muted);
+}
+Pop.Audio.SetMutedB = function(Muted)
+{
+	Pop.Audio._GlobalMutedB = Muted;
 	Pop.WebApi.MutedChangePromises.Push(Muted);
 }
 
 Pop.Audio.IsMuted = function()
 {
 	const Background = !Pop.WebApi.IsForeground();
-	const Muted = Background || Pop.Audio._GlobalMuted;
+	const Muted = Background || Pop.Audio._GlobalMutedA || Pop.Audio._GlobalMutedB;
 	return Muted;
 }
 
