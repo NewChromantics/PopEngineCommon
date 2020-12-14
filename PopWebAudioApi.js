@@ -329,7 +329,8 @@ async function AudioContextGlobalMuteThread()
 		await Promise.race([OnForeground,OnMuted]);
 	}
 }
-AudioContextGlobalMuteThread().then(Pop.Warning);
+//	gr: on safari, 
+//AudioContextGlobalMuteThread().then(Pop.Warning);
 
 
 //	https://www.measurethat.net/Benchmarks/Show/1219/23/arraybuffer-to-base64-string
@@ -489,6 +490,10 @@ Pop.Audio.SimpleSound = class
 			Pop.Warning(`Whilst waiting for AllocSound, we have been free'd ${this.Name}`);
 			throw `Whilst waiting for AllocSound, we have been free'd ${this.Name}`;
 		}
+		
+		//	initialise sound volume state
+		this.UpdateMutedState();
+		
 		return this.Sound;
 	}
 
@@ -847,6 +852,26 @@ Pop.Audio.Sound = class
 		this.SetSample(WaveData);
 	}
 	
+	UpdateMutedState()
+	{
+		const Muted = Pop.Audio.IsMuted();	//	checks foreground & state
+		Pop.Debug(`Sound(${this.Name}) Muted=${Muted}`);
+		this.SetVolume( Muted ? 0 : 1 );
+	}
+	
+	async GlobalUpdateCheckThread()
+	{	
+		//	do an initial state in case we start a sound when we expect it silent
+		while(this.Alive)
+		{
+			this.UpdateMutedState();
+
+			const OnForeground = Pop.WebApi.WaitForForegroundChange();
+			const OnMuted = Pop.Audio.WaitForMutedChange();
+			await Promise.race([OnForeground,OnMuted]);
+		}
+	}
+	
 	GetDurationMs()
 	{
 		if ( this.KnownDurationMs == null )
@@ -866,8 +891,8 @@ Pop.Audio.Sound = class
 	SetVolume(Volume)
 	{
 		//	we need to change the nodes as little as possible, so have to check for differences
-		if ( !this.IsSignificantVolumeChange(this.SampleVolume,Volume) )
-			return;
+		//if ( !this.IsSignificantVolumeChange(this.SampleVolume,Volume) )
+		//	return;
 		
 		this.SampleVolume = Volume;
 		
@@ -921,6 +946,8 @@ Pop.Audio.Sound = class
 	{
 		//	load
 		const Context = await Pop.Audio.WaitForContext();
+
+		this.GlobalUpdateCheckThread().then(Pop.Debug).catch(Pop.Warning);
 
 		//	run through commands that need a context
 		//	if we're being freed(!alive) process all remaining actions
