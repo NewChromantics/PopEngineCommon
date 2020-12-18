@@ -141,6 +141,22 @@ class XrInputState
 	}
 }
 
+//	return alpha 0 or 1 for AR(alpha blend) or additive mode
+function GetClearAlphaFromBlendMode(BlendMode)
+{
+	//	if undefined or invalid, assume opaque
+	switch(BlendMode)
+	{
+	case 'additive':
+	case 'alpha-blend':
+		return 0;
+	
+	case 'opaque':
+	default:
+		return 1;
+}
+
+
 Pop.Xr.Device = class
 {
 	constructor(Session,ReferenceSpace,RenderContext)
@@ -466,6 +482,9 @@ Pop.Xr.Device = class
 			//	maybe need a better place to propogate this info (along with chaperone/bounds)
 			//	but for now renderer just needs to know (but input doesnt know!)
 			Camera.IsOriginFloor = IsOriginFloor;
+			
+			//	AR (and additive, eg. hololens) need to be transparent
+			Camera.ClearAlpha = GetClearAlphaFromBlendMode(Frame.session.environmentBlendMode);
 
 			//	use the render params on our camera
 			if ( Frame.session.renderState )
