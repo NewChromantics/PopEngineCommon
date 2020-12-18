@@ -85,30 +85,30 @@ Pop.Xr.GetSupportedSessionMode = async function()
 		}
 	}
 	
-	try
-	{
-		const Supported = await PlatformXr.isSessionSupported('immersive-vr');
-		if (!Supported)
-			throw Supported;
-		return 'immersive-vr';
-	}
-	catch(e)
-	{
-		Pop.Debug("Browser doesn't support immersive-vr",e);
-	}
+	//	gr: we may want to enumerate all the modes
+	const SessionTypes = 
+	[
+	'immersive-ar',
+	'immersive-vr',
+	'inline'
+	];
 	
-	try
+	const Errors = [];
+	for ( let SessionType of SessionTypes )
 	{
-		const Supported = await PlatformXr.isSessionSupported('inline');
-		if (!Supported)
-			throw Supported;
-		return 'inline';
+		try
+		{
+			const Supported = await PlatformXr.isSessionSupported(SessionType);
+			if (!Supported)
+				throw `XR SessionType ${SessionType} not supported (${Supported})`;
+			return SessionType;
+		}
+		catch(e)
+		{
+			Pop.Warning(e);
+		}
 	}
-	catch(e)
-	{
-		Pop.Debug("Browser doesn't support inline",e);
-	}
-	
+
 	return false;
 }
 
