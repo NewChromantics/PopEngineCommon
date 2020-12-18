@@ -154,6 +154,7 @@ function GetClearAlphaFromBlendMode(BlendMode)
 	case 'opaque':
 	default:
 		return 1;
+	}
 }
 
 
