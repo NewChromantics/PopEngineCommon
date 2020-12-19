@@ -24,6 +24,7 @@ Pop.Opengl.CanRenderToFloat = undefined;
 //	allow turning off float support
 Pop.Opengl.AllowFloatTextures = !Pop.GetExeArguments().DisableFloatTextures;
 
+Pop.DebugMouseEvent = function(){};	//	Pop.Debug;
 
 Pop.Opengl.GetString = function(Context,Enum)
 {
@@ -62,18 +63,6 @@ const AllowVao = !Pop.GetExeArguments().DisableVao;
 //	if we fail to get a context (eg. lost context) wait this long before restarting the render loop (where it tries again)
 //	this stops thrashing cpu/system whilst waiting
 const RetryGetContextMs = 1000;
-
-//	need to sort this!, should be in gui
-//	currently named to match c++
-Pop.SoyMouseButton = Pop.SoyMouseButton || {};
-//	matching SoyMouseButton
-Pop.SoyMouseButton.None = -1;	//	todo: in api, change this to undefined
-Pop.SoyMouseButton.Left = 0;
-Pop.SoyMouseButton.Middle = 2;
-Pop.SoyMouseButton.Right = 1;
-Pop.SoyMouseButton.Back = 3;
-Pop.SoyMouseButton.Forward = 4;
-
 
 
 //	need a generic memory heap system in Pop for js side so
@@ -217,8 +206,109 @@ function Pop_Opengl_SetGuiControl_SubElementStyle(Element,LeftPercent=0,RightPer
 //	our mouse functions
 function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseScroll)
 {
+	//	touchend doesn't tell us what touches were released;
+	//	so call this function to keep track of them
+	let LastTouches = [];
+	//	gr: touch identifier is unique, so not persistent. Whilst this would be better, (returning TouchXXX for button)
+	//		we cannot detect say, double-tap from the same source, so we still need to use the tracked "names" (indexes)
+	let RegisteredTouchButtons = {};	//	[Identifier] = TouchIndexWhenActivated = ButtonIndex
+	let ArchiveRegisteredTouchButtons = {};
+	
+	
+	function UpdateTouches(MouseEvent)
+	{
+		function TouchIdentifierPresent(Identifier,TouchArray)
+		{
+			const Match = TouchArray.find( t => t.identifier == Identifier );
+			return Match!=null;
+		}
+	
+		//	not a touch device
+		if ( !MouseEvent.touches )
+			return;
+		
+		//	turn touches into array
+		const NewTouches = Array.from( MouseEvent.touches );
+		
+		function GetNextUnassignedButtonIndex()
+		{
+			//	shouldn't have 1000 touch buttons, loop for safety
+			const UsedButtonIndexes = Object.values(RegisteredTouchButtons);
+			for ( let bi=0;	bi<1000;	bi++ )
+			{
+				const Match = UsedButtonIndexes.find( Value => Value===bi );
+				if ( Match !== undefined )
+					continue;
+				return bi;
+			}
+			throw `Failed to find /1000 a free button index`;
+		}
+		
+		function UpdateIdentifierButton(Touch)
+		{
+			if ( RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
+				return;
+			
+			const ButtonIndex = GetNextUnassignedButtonIndex();
+			Pop.DebugMouseEvent(`New touch ${Touch.identifier} = Button ${ButtonIndex}`);
+			RegisteredTouchButtons[Touch.identifier] = ButtonIndex;
+			ArchiveRegisteredTouchButtons[Touch.identifier] = ButtonIndex;
+		}
+		function UnregisterTouch(Touch)
+		{
+			//	gr: we cannot unregister, as some things use the identifer later
+			if ( !RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
+			{
+				Pop.DebugMouseEvent(`UnregisterTouch ${Touch.identifier} but not registered`);
+				return;
+			}
+			const Button = RegisteredTouchButtons[Touch.identifier];
+			Pop.DebugMouseEvent(`UnregisterTouch ${Touch.identifier} button was ${Button}`);
+			delete RegisteredTouchButtons[Touch.identifier];
+		}
+
+		//	assign button indexes for new touches
+		NewTouches.forEach(UpdateIdentifierButton);
+	
+		//	find changes
+		const RemovedTouches = LastTouches.filter( t => !TouchIdentifierPresent(t.identifier,NewTouches) );
+		const AddedTouches = NewTouches.filter( t => !TouchIdentifierPresent(t.identifier,LastTouches) );
+		
+		//	removed button assignments for deleted touches
+		RemovedTouches.forEach(UnregisterTouch);		
+		
+		MouseEvent.Touches = NewTouches;
+		MouseEvent.RemovedTouches = RemovedTouches;
+		MouseEvent.AddedTouches = AddedTouches;
+		LastTouches = NewTouches;
+	}
+	
+	function GetButtonNameFromTouch(Touch)
+	{
+		//	can't use unique identifier (safari) as we need to track buttons between touches
+		//return `Touch${Touch.identifier}`;
+
+		//	gr: registered = active
+		function GetButtonIndexFromTouch(Touch)
+		{
+			if ( !ArchiveRegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
+			{
+				Pop.Warning(`Touch ${Touch.identifier} has no registered button. Returning 0`);
+				return 0;
+			}
+			return ArchiveRegisteredTouchButtons[Touch.identifier];
+		}
+		const ButtonIndex = GetButtonIndexFromTouch(Touch);
+		return `Touch${ButtonIndex}`;
+	}
+	
+	function GetPositionFromTouch(Touch)
+	{
+		return GetMousePos(Touch,null);
+	}
+
 	//	annoying distinctions
-	let GetButtonFromMouseEventButton = function(MouseButton,AlternativeButton)
+	let GetButtonFromMouseEventButton = function(MouseButton,AlternativeButton,TouchArray)
 	{
 		//	html/browser definitions
 		const BrowserMouseLeft = 0;
@@ -230,15 +320,17 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		{
 			let MouseEvent = MouseButton;
 			
-			//	this needs a fix for touches
-			if ( MouseEvent.touches )
+			//	gr: still needs re-working for touches
+			//	look at specific touch list
+			if ( TouchArray )
 			{
 				//	have to assume there's always one?
-				const Touches = Array.from( MouseEvent.touches );
-				if ( Touches.length == 0 )
-					throw "Empty touch array, from event?";
-				MouseButton = BrowserMouseLeft;
-				AlternativeButton = false;
+				return GetButtonNameFromTouch(TouchArray[0]);
+			}
+			//	this needs a fix for touches
+			else if ( MouseEvent.Touches )
+			{
+				return GetButtonNameFromTouch(MouseEvent.Touches[0]);
 			}
 			else
 			{
@@ -251,21 +343,22 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		{
 			switch ( MouseButton )
 			{
-				case BrowserMouseLeft:	return Pop.SoyMouseButton.Back;
-				case BrowserMouseRight:	return Pop.SoyMouseButton.Forward;
+				case BrowserMouseLeft:	return 'Back';
+				case BrowserMouseRight:	return 'Forward';
 			}
 		}
 		
+		//	gr: where is back and forward mouse buttons??
 		switch ( MouseButton )
 		{
-			case BrowserMouseLeft:		return Pop.SoyMouseButton.Left;
-			case BrowserMouseMiddle:	return Pop.SoyMouseButton.Middle;
-			case BrowserMouseRight:		return Pop.SoyMouseButton.Right;
+			case BrowserMouseLeft:		return 'Left';
+			case BrowserMouseMiddle:	return 'Middle';
+			case BrowserMouseRight:		return 'Right';
 		}
 		throw "Unhandled MouseEvent.button (" + MouseButton + ")";
 	}
 	
-	let GetButtonsFromMouseEventButtons = function(MouseEvent)
+	let GetButtonsFromMouseEventButtons = function(MouseEvent,IncludeTouches)
 	{
 		//	note: button bits don't match mousebutton!
 		//	https://www.w3schools.com/jsref/event_buttons.asp
@@ -288,43 +381,33 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 				continue;
 			Buttons.push( ButtonName );
 		}
-		
+
 		//	mobile
-		if ( MouseEvent.touches )
+		if ( IncludeTouches && MouseEvent.Touches )
 		{
-			function GetButtonNameFromTouch(Touch,Index)
-			{
-				switch ( Index )
-				{
-					case 0:	return Pop.SoyMouseButton.Left;
-					case 1:	return Pop.SoyMouseButton.Middle;
-					case 2:	return Pop.SoyMouseButton.Right;
-					case 3:	return Pop.SoyMouseButton.Back;
-					case 4:	return Pop.SoyMouseButton.Forward;
-					default:	return null;
-				}
-			}
 			function PushTouch(Touch,Index)
 			{
-				const ButtonName = GetButtonNameFromTouch( Touch, Index );
+				const ButtonName = GetButtonNameFromTouch( Touch );
 				if ( ButtonName === null )
 					return;
 				Buttons.push( ButtonName );
 			}
-			Array.from(MouseEvent.touches).forEach( PushTouch );
+			MouseEvent.Touches.forEach( PushTouch );
 		}
-		
+
 		return Buttons;
 	}
 	
 	//	gr: should api revert to uv?
-	let GetMousePos = function(MouseEvent)
+	let GetMousePos = function(MouseEvent,TouchArray)
 	{
 		const Rect = Element.getBoundingClientRect();
 		
 		//	touch event, need to handle multiple touch states
-		if ( MouseEvent.touches )
-			MouseEvent = MouseEvent.touches[0];
+		if ( TouchArray )
+			MouseEvent = TouchArray[0];
+		else if ( MouseEvent.Touches )
+			MouseEvent = MouseEvent.Touches[0];
 		
 		const ClientX = MouseEvent.pageX || MouseEvent.clientX;
 		const ClientY = MouseEvent.pageY || MouseEvent.clientY;
@@ -333,43 +416,115 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		return [x,y];
 	}
 	
-	let MouseMove = function(MouseEvent)
+	function ReportTouches(MouseEvent)
 	{
-		const Pos = GetMousePos(MouseEvent);
-		const Buttons = GetButtonsFromMouseEventButtons( MouseEvent );
-		if ( Buttons.length == 0 )
+		if ( MouseEvent.AddedTouches )
 		{
-			MouseEvent.preventDefault();
-			OnMouseMove( Pos[0], Pos[1], Pop.SoyMouseButton.None );
-			return;
+			function ReportNewTouch(Touch)
+			{
+				const Button = GetButtonNameFromTouch(Touch);
+				const Position = GetPositionFromTouch(Touch);
+				Pop.DebugMouseEvent(`Touch MouseDown ${Position} button ${Button}`);
+				OnMouseDown(...Position,Button);
+			}
+			MouseEvent.AddedTouches.forEach(ReportNewTouch);
 		}
 		
-		//	for now, do a callback on the first button we find
-		//	later, we might want one for each button, but to avoid
-		//	slow performance stuff now lets just do one
-		//	gr: maybe API should change to an array
-		OnMouseMove( Pos[0], Pos[1], Buttons[0] );
+		//	update positions
+		if ( MouseEvent.Touches )
+		{
+			function ReportTouchMove(Touch)
+			{
+				const Button = GetButtonNameFromTouch(Touch);
+				const Position = GetPositionFromTouch(Touch);
+				Pop.DebugMouseEvent(`Touch MouseMove ${Position} button ${Button}`);
+				OnMouseMove(...Position,Button);
+			}
+			MouseEvent.Touches.forEach(ReportTouchMove);
+		}
+		
+		if ( MouseEvent.RemovedTouches )
+		{
+			function ReportOldTouch(Touch)
+			{
+				const Button = GetButtonNameFromTouch(Touch);
+				const Position = GetPositionFromTouch(Touch);
+				Pop.DebugMouseEvent(`Touch MouseUp ${Position} button ${Button}`);
+				OnMouseUp(...Position,Button);
+			}
+			MouseEvent.RemovedTouches.forEach(ReportOldTouch);
+		}
+		
+	}
+	
+	let MouseMove = function(MouseEvent)
+	{
+		UpdateTouches(MouseEvent);
+		ReportTouches(MouseEvent);
+		
+		if ( !MouseEvent.changedTouches )
+		{
+			const Pos = GetMousePos(MouseEvent);
+			const Buttons = GetButtonsFromMouseEventButtons( MouseEvent, false );
+			
+			if ( Buttons.length == 0 )
+			{
+				Pop.DebugMouseEvent(`MouseMove ${Pos} zero buttons ${Buttons}`);
+				Buttons.push(null);
+			}
+			
+			//	report each button as its own mouse move
+			Pop.DebugMouseEvent(`MouseMove ${Pos} buttons ${Buttons}`);
+			for ( let Button of Buttons )
+				OnMouseMove( Pos[0], Pos[1], Button );
+		}
 		MouseEvent.preventDefault();
 	}
 	
 	let MouseDown = function(MouseEvent)
 	{
-		const Pos = GetMousePos(MouseEvent);
-		const Button = GetButtonFromMouseEventButton(MouseEvent);
-		OnMouseDown( Pos[0], Pos[1], Button );
+		UpdateTouches(MouseEvent);
+		ReportTouches(MouseEvent);
+		
+		if ( !MouseEvent.changedTouches )
+		{
+			const Pos = GetMousePos(MouseEvent);
+			const Button = GetButtonFromMouseEventButton(MouseEvent);
+			Pop.DebugMouseEvent(`MouseDown ${Pos} ${Button}`);
+			OnMouseDown( Pos[0], Pos[1], Button );
+		}
 		MouseEvent.preventDefault();
 	}
 	
 	let MouseUp = function(MouseEvent)
 	{
-		const Pos = GetMousePos(MouseEvent);
-		const Button = GetButtonFromMouseEventButton(MouseEvent);
-		OnMouseUp( Pos[0], Pos[1], Button );
+		UpdateTouches(MouseEvent);
+		ReportTouches(MouseEvent);
+		
+		if ( !MouseEvent.changedTouches )
+		{
+			//	todo: trigger multiple buttons (for multiple touches)
+			const Pos = GetMousePos(MouseEvent,MouseEvent.RemovedTouches);
+			const Button = GetButtonFromMouseEventButton(MouseEvent,null,MouseEvent.RemovedTouches);
+		
+			//	gr: hack for kandinsky, i need to know when touches are (all) released to turn off "hover"
+			//		this will probably change again, as this is probably a common thing
+			//		plus its at this level we should deal with touch+mouse cursor (desktop touchscreen, or ipad+mouse)
+			//		and maybe XR's touching-button, but not pressing-button 
+			const Meta = {};
+			Meta.IsTouch = MouseEvent.touches != undefined;	//	gr: this will break on screens with a touch screen
+		
+			Pop.DebugMouseEvent(`MouseUp ${Pos} ${Button} ${JSON.stringify(Meta)}`);
+			OnMouseUp( Pos[0], Pos[1], Button, Meta );
+		}
 		MouseEvent.preventDefault();
 	}
 	
 	let MouseWheel = function(MouseEvent)
 	{
+		UpdateTouches(MouseEvent);
+		ReportTouches(MouseEvent);
+		
 		const Pos = GetMousePos(MouseEvent);
 		const Button = GetButtonFromMouseEventButton(MouseEvent);
 		
@@ -397,7 +552,9 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 	Element.addEventListener('mouseup', MouseUp, false );
 	
 	Element.addEventListener('touchmove', MouseMove );
-	Element.addEventListener('touchstart', MouseDown, false );	//	touchend
+	Element.addEventListener('touchstart', MouseDown, false );
+	Element.addEventListener('touchend', MouseUp, false );
+	Element.addEventListener('touchcancel', MouseUp, false );
 	//	not currently handling up
 	//this.Element.addEventListener('mouseup', MouseUp, false );
 	//this.Element.addEventListener('mouseleave', OnDisableDraw, false );
@@ -413,7 +570,7 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 {
 	function GetKeyFromKeyEventButton(KeyEvent)
 	{
-		// Pop.Debug("KeyEvent",KeyEvent);
+		// Pop.DebugMouseEvent("KeyEvent",KeyEvent);
 		return KeyEvent.key;
 	}
 	
@@ -422,7 +579,7 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 		//	if an input element has focus, ignore event
 		if ( KeyEvent.srcElement instanceof HTMLInputElement )
 		{
-			Pop.Debug("Ignoring OnKeyDown as input has focus",KeyEvent);
+			Pop.DebugMouseEvent("Ignoring OnKeyDown as input has focus",KeyEvent);
 			return false;
 		}
 		//Pop.Debug("OnKey down",KeyEvent);
@@ -454,12 +611,12 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 {
 	//	things to overload
 	this.OnRender = function(RenderTarget)					{	Pop.Warning(`OnRender not overloaded`);	};
-	this.OnMouseDown = function(x,y,Button)					{	/*Pop.Debug('OnMouseDown',...arguments);*/		};
-	this.OnMouseMove = function(x,y,Button)					{	/*Pop.Debug("OnMouseMove",...arguments);*/		};
-	this.OnMouseUp = function(x,y,Button)					{	/*Pop.Debug('OnMouseUp',...arguments);*/		};
-	this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	/*Pop.Debug('OnMouseScroll',...arguments);*/	};
-	this.OnKeyDown = function(Key)							{	/*Pop.Debug('OnKeyDown',...arguments);*/		};
-	this.OnKeyUp = function(Key)							{	/*Pop.Debug('OnKeyUp',...arguments);*/			};
+	this.OnMouseDown = function(x,y,Button)					{	Pop.DebugMouseEvent('OnMouseDown',...arguments);		};
+	this.OnMouseMove = function(x,y,Button)					{	Pop.DebugMouseEvent("OnMouseMove",...arguments);		};
+	this.OnMouseUp = function(x,y,Button)					{	Pop.DebugMouseEvent('OnMouseUp',...arguments);		};
+	this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	Pop.DebugMouseEvent('OnMouseScroll',...arguments);	};
+	this.OnKeyDown = function(Key)							{	Pop.DebugMouseEvent('OnKeyDown',...arguments);		};
+	this.OnKeyUp = function(Key)							{	Pop.DebugMouseEvent('OnKeyUp',...arguments);			};
 
 	//	treat minimised and foreground as the same on web;
 	//	todo: foreground state for multiple windows on one page
@@ -504,9 +661,24 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		}
 	}
 
+	this.OnOrientationChange = function (ResizeEvent)
+	{
+		const DoResize = function ()
+		{
+			this.OnResize.call(this,ResizeEvent);
+		}.bind(this);
+
+		//	delay as dom doesn't update fast enough
+		setTimeout(DoResize,0);
+		setTimeout(DoResize,50);
+		setTimeout(DoResize,100);
+		setTimeout(DoResize,500);
+		setTimeout(DoResize,1000);
+	}
+
 	this.OnResize = function(ResizeEvent)
 	{
-		// Pop.Debug("OnResize",JSON.stringify(ResizeEvent));
+		Pop.Debug(`Pop.Opengl.Window OnResize type=${ResizeEvent ? ResizeEvent.type:'null'}`);
 		
 		//	invalidate cache
 		this.ScreenRectCache = null;
@@ -587,6 +759,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		//	gr: replace with specific dom watcher
 		//	https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver
 		window.addEventListener('resize',this.OnResize.bind(this));
+		window.addEventListener('orientationchange',this.OnOrientationChange.bind(this));
 		
 		//	https://medium.com/@susiekim9/how-to-compensate-for-the-ios-viewport-unit-bug-46e78d54af0d
 		/*	this doesn't help
