@@ -1668,6 +1668,13 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 			UniformMeta.SetValues( Values );
 			return;
 		}
+		//	providing MORE values, do a quick slice. Should we warn about this?
+		if ( Values.length >= ExpectedValueCount )
+		{
+			const ValuesCut = Values.slice(0,ExpectedValueCount);
+			UniformMeta.SetValues( ValuesCut );
+			return;
+		}
 		
 		//Pop.Debug("SetUniformArray("+UniformName+") slow path");
 		
