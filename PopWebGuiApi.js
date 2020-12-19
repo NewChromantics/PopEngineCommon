@@ -366,6 +366,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 	this.ElementWindow = null;
 	this.ElementTitleBar = null;
 	this.RestoreHeight = null;		//	if non-null, stores the height we were before minimising
+	this.TitleBarClickLastTime = null;	//	to detect double click 
 
 	//	gr: element may not be assigned yet, maybe rework construction of controls
 	this.AddChildControl = function(Child,Element)
@@ -426,7 +427,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		//AddChild( TitleBar, 'PopGuiButton', 'X');
 
 		TitleBar.AllowDraggable = true;
-		TitleBar.addEventListener('dblclick',this.OnToggleMinimise.bind(this),true);
+		TitleBar.addEventListener('click',this.OnTitleBarClick.bind(this),true);
 		
 		//	this may need some style to force position
 		this.ElementParent = AddChild( Element, 'PopGuiIconView');
@@ -437,6 +438,25 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		this.EnableScrollbars(true,true);
 		
 		return Element;
+	}
+	
+	this.OnTitleBarClick = function(Event)
+	{
+		const DoubleClickMaxTime = 300;
+		
+		//	todo: filter button
+		//	detect double click
+		if ( this.TitleBarClickLastTime !== null )
+		{
+			const TimeSinceClick = Pop.GetTimeNowMs() -  this.TitleBarClickLastTime;
+			if ( TimeSinceClick < DoubleClickMaxTime )
+			{
+				this.OnToggleMinimise();
+				this.TitleBarClickLastTime = null;
+			}
+		}
+		
+		this.TitleBarClickLastTime = Pop.GetTimeNowMs();				
 	}
 	
 	this.EnableScrollbars = function(Horizontal,Vertical)
