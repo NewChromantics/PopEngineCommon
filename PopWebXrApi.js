@@ -41,25 +41,12 @@ Pop.Xr = {};
 Pop.Xr.Devices = [];
 
 Pop.Xr.SupportedSessionMode = null;
+Pop.Xr.PlatformXr = navigator.xr;		//	allow this to be overriden with custom polyfills
 
-Pop.Xr.IsSupported = function()
-{
-	//	in chromium (usually) navigator.xr is only availible under secure connections
-	//	but accessible from localhost. To enable use of this, use chromium
-	//	remote inspctor to portforward $PORT to devmachine:$PORT then
-	//	browse to localhost:$PORT
-	const PlatformXr = navigator.xr;
-	if ( !PlatformXr )
-		return false;
-	
-	//	check session mode support
-	//	this replaces this function with true/fa
-	return Pop.Xr.SupportedSessionMode != false;
-}
 
 Pop.Xr.GetSupportedSessionMode = async function()
 {
-	const PlatformXr = navigator.xr;
+	const PlatformXr = Pop.Xr.PlatformXr || navigator.xr;
 	if ( !PlatformXr )
 		return false;
 	
@@ -113,7 +100,7 @@ Pop.Xr.GetSupportedSessionMode = async function()
 }
 
 //	setup cache of support for synchronous call
-Pop.Xr.GetSupportedSessionMode().then( Mode => Pop.Xr.SupportedSessionMode=Mode ).catch( Pop.Debug );
+//Pop.Xr.GetSupportedSessionMode().then( Mode => Pop.Xr.SupportedSessionMode=Mode ).catch( Pop.Debug );
 
 
 function IsReferenceSpaceOriginFloor(ReferenceSpaceType)
@@ -554,7 +541,7 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 	if ( Pop.Xr.Devices.length )
 		await Pop.Xr.Devices[0].WaitForEnd();
 
-	const PlatformXr = navigator.xr;
+	const PlatformXr = Pop.Xr.PlatformXr;
 
 	//	loop until we get a session
 	while(true)
@@ -614,7 +601,7 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 					}
 					catch(e)
 					{
-						Pop.Warning(`XR ReferenceSpace type ${ReferenceSpaceType} not supported.`);
+						Pop.Warning(`XR ReferenceSpace type ${ReferenceSpaceType} not supported. ${e}`);
 					}
 				}
 				throw `Failed to find supported XR reference space`;
