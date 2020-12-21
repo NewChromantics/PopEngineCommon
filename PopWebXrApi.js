@@ -22,6 +22,8 @@ function RenderTargetFrameBufferProxy(OpenglFrameBuffer,Viewport,RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
 		const FrameBuffer = this.GetFrameBuffer();
+		if ( FrameBuffer === undefined )
+			throw `RenderTargetFrameBufferProxy BindRenderTarget() with ${FrameBuffer}, invalid`;
 	
 		//	todo: make this common code
 		gl.bindFramebuffer( gl.FRAMEBUFFER, FrameBuffer );
@@ -41,8 +43,11 @@ Pop.Xr = {};
 Pop.Xr.Devices = [];
 
 Pop.Xr.SupportedSessionMode = null;
-Pop.Xr.PlatformXr = navigator.xr;		//	allow this to be overriden with custom polyfills
 
+//	allow this to be overriden with custom polyfills
+//	todo: abstract these interfaces so we can have our own XR API along side navigator
+Pop.Xr.PlatformXr = navigator.xr;		
+Pop.Xr.PlatformXRWebGLLayer = XRWebGLLayer;
 
 Pop.Xr.GetSupportedSessionMode = async function()
 {
@@ -203,7 +208,7 @@ Pop.Xr.Device = class
 	InitLayer(RenderContext)
 	{
 		const OpenglContext = this.RenderContext.GetGlContext();
-		this.Layer = new XRWebGLLayer(this.Session, OpenglContext);
+		this.Layer = new Pop.Xr.PlatformXRWebGLLayer(this.Session, OpenglContext);
 		this.Session.updateRenderState({ baseLayer: this.Layer });
 	}
 	
@@ -445,6 +450,7 @@ Pop.Xr.Device = class
 		function GetCameraName(View)
 		{
 			//	different names from different browsers
+			//	webxr spec is expecting 'left', 'right' and 'none' for mono
 			if (typeof View.eye == 'string')
 				return View.eye.toLowerCase();
 			
