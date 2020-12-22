@@ -1675,7 +1675,7 @@ function WindowRenderTarget(Window)
 }
 
 
-
+//	this is being deprected for the class in the module PopEngineOpengl
 Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSource)
 {
 	if ( typeof RenderContext == 'string' )
@@ -2241,6 +2241,11 @@ Pop.Opengl.TriangleBuffer = class
 			//		even if we call gl.enableVertexAttribArray
 			this.BindVertexPointers( RenderContext, Shader );
 		}
+	}
+	
+	GetIndexCount()
+	{
+		return this.IndexCount;
 	}
 }
 
