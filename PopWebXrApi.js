@@ -47,7 +47,7 @@ Pop.Xr.SupportedSessionMode = null;
 //	allow this to be overriden with custom polyfills
 //	todo: abstract these interfaces so we can have our own XR API along side navigator
 Pop.Xr.PlatformXr = navigator.xr;		
-Pop.Xr.PlatformXRWebGLLayer = XRWebGLLayer;
+Pop.Xr.PlatformXRWebGLLayer = (typeof XRWebGLLayer !== 'undefined') ? XRWebGLLayer : null; 
 
 Pop.Xr.GetSupportedSessionMode = async function()
 {
