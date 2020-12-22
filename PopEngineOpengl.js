@@ -29,6 +29,8 @@ export class Shader
 		this.ProgramContextVersion = null;
 		this.Context = null;			//	 need to remove this, currently still here for SetUniformConvinience
 		this.UniformMetaCache = null;	//	may need to invalidate this on new context
+		this.VertShaderSource = VertShaderSource;
+		this.FragShaderSource = FragShaderSource;
 	}
 
 	GetGlContext()
