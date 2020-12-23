@@ -101,7 +101,7 @@ function mat4_invert(out, a) {
 
 //	todo: make this detection async so we can match native API
 //		and spin off onto a worker thread
-async function DetectMarkers(imageData,MarkerSizeMetres=0.10)
+async function DetectMarkers(imageData,MarkerSize=1)
 {
 	if ( !DetectorInstance )
 	{
@@ -117,15 +117,25 @@ async function DetectMarkers(imageData,MarkerSizeMetres=0.10)
 	//	client can decide which they want to use
 	//	todo: provide preference of marker# to only process one we're going to use
 	//	todo: swap posit for my old svd/homography
-	//		also let the model size (world mm size of marker) be variable
-	if ( PositInstanceMarkerSize !== MarkerSizeMetres )
+	if ( PositInstanceMarkerSize !== MarkerSize )
 		PositInstance = null;
 	
 	if ( !PositInstance )
 	{
 		const focalLength = ImageWidth;
-		const MarkerSizemm = MarkerSizeMetres*1000;
-		PositInstance = new POS.Posit(MarkerSizemm,focalLength);
+		/*
+		//	gr: added ability to provide our own.
+		//		this dictates the marker plane & dimensions in our world space
+		const Width = MarkerSize/2;
+		const MarkerObjectCoords =
+		[
+			[	-Width,	 Width,	0	],
+			[	 Width,	 Width,	0	],
+			[	 Width,	-Width,	0	],
+			[	-Width,	-Width,	0	],
+		];
+		*/
+		PositInstance = new POS.Posit(MarkerSize,focalLength);
 	}
 	
 	
@@ -151,15 +161,11 @@ async function DetectMarkers(imageData,MarkerSizeMetres=0.10)
 		const ProcessCorners = Marker.corners.map(NormaliseCorner);
 		const Pose = PositInstance.pose(ProcessCorners);
 		
-		function MetresToMM(v)
-		{
-			return v / 1000;
-		}
 		
 		//	gr: these are 3x3, so I guess they're rodrigues rotations?
 		//	convert to a sensible matrix
 		const Rotation3x3 = Pose.bestRotation;
-		const Translation3 = Pose.bestTranslation.map(MetresToMM);
+		const Translation3 = Pose.bestTranslation;
 		
 		const Rotation4x4 = 
 		[
@@ -176,10 +182,6 @@ async function DetectMarkers(imageData,MarkerSizeMetres=0.10)
 			0,					0,					0,					1
 		];		
 		
-		//getRotation(Quaternion,Rotation4x4);
-		//getRotation(Quaternion,Rotation4x4_Transposed);
-		let Rotation = Rotation4x4_Transposed;
-		Rotation = mat4_invert( [], Rotation );
 		
 		/*
 		const yaw = -Math.atan2(Rotation3x3[0][2], Rotation3x3[2][2]);
@@ -188,14 +190,15 @@ async function DetectMarkers(imageData,MarkerSizeMetres=0.10)
 		
 		Pop.Debug(`Rotation3x3=${Rotation3x3} Translation3=${Translation3} pitch=${pitch} yaw=${yaw} roll=${roll}`);
 		*/
+		let Rotation = Rotation4x4_Transposed;
 		const Quaternion = [0,0,0,1];
 		getRotation(Quaternion,Rotation);
 		Pose.Rotation = Quaternion;
-		
-		//	gr: these I think are in mm
-		//	todo: change all units to m. Shouldn't matter to the pose code
+	
+		//	position should be in world space units	
 		Pose.Position = Translation3;
-		Pose.Position = [0,0,0];
+		
+		Pop.Debug(`Translation3 ${Pose.Position}`);
 		Marker.Pose = Pose;
 	}
 	Markers.forEach(AddPoseToMarker);
@@ -1204,7 +1207,15 @@ POS.Posit = function(modelSize, focalLength){
   this.init();
 };
 
-POS.Posit.prototype.buildModel = function(modelSize){
+POS.Posit.prototype.buildModel = function(modelSize)
+{
+	//	gr: allow user to specify their own coords
+	if ( Array.isArray(modelSize) )
+	{
+		if ( modelSize.length != 4 )
+			throw `If providing model coordinates, they should be 4x3 [][]. ${modelSize.length}x${modelSize[0].length} provided`;
+		return modelSize.slice();
+	}
   var half = modelSize / 2.0;
   
   return [
