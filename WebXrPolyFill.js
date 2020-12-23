@@ -125,14 +125,23 @@ function getTranslation(out, mat) {
   return out;
 }
 
+function GetDomPoint(Values)
+{
+	if ( Values === null )
+		return null;
+	const Point = new DOMPoint(...Values)
+	const ReadOnlyPoint = DOMPointReadOnly.fromPoint(Point)
+	return ReadOnlyPoint;
+}
+
 //	https://github.com/immersive-web/webxr-polyfill/blob/0202e9d2b80fcce3d46010f21869b8684da9c4f5/src/api/XRRigidTransform.js
 //	gr: I'm copying as much as possible from the "official" polyfill... shame i can't easily just import it, I dont think
 export class XRRigidTransform
 {
 	constructor(Position,Orientation)
 	{
-		this.position = Position || [0,0,0,1];
-		this.orientation = Orientation || [0,0,0,1];
+		this.position = Position || GetDomPoint([0,0,0,1]);
+		this.orientation = Orientation || GetDomPoint([0,0,0,1]);
 	}
 	
 	get inverse() 
@@ -141,13 +150,16 @@ export class XRRigidTransform
 		mat4_invert(InverseMatrix,this.matrix);
 		
 		//	pull out new pos & orientation and make a new transform
-		const Orientation = [];
+		let Orientation = [];
 		getRotation( Orientation, InverseMatrix );
+		Orientation = GetDomPoint( Orientation );
 		
-		const Translation = [];
+		let Translation = [];
 		getTranslation( Translation, InverseMatrix );
+		Translation.push(1);	//	make sure there's a w
+		Translation = GetDomPoint( Translation );
 		
-		return new XRRigidTransform(Translation,Orientation);
+		return new XRRigidTransform( Translation,Orientation);
 	}
 /*
 	get position() 
@@ -169,7 +181,9 @@ export class XRRigidTransform
 	get matrix()
 	{
 		let Matrix = [];
-		fromRotationTranslation(Matrix,this.orientation,this.position);
+		let Orientation = [ this.orientation.x, this.orientation.y, this.orientation.z, this.orientation.w ];
+		let Position = [ this.position.x, this.position.y, this.position.z, this.position.w ];
+		fromRotationTranslation( Matrix, Orientation, Position );
 		return Matrix;
 	}
 }
