@@ -84,27 +84,72 @@ function mat4_invert(out, a) {
     out[15] = (a20 * b03 - a21 * b01 + a22 * b00) * det;
     return out;
   }
-  
-  
+
+function fromRotationTranslation(out, q, v) {
+  let x = q[0], y = q[1], z = q[2], w = q[3];
+  let x2 = x + x;
+  let y2 = y + y;
+  let z2 = z + z;
+  let xx = x * x2;
+  let xy = x * y2;
+  let xz = x * z2;
+  let yy = y * y2;
+  let yz = y * z2;
+  let zz = z * z2;
+  let wx = w * x2;
+  let wy = w * y2;
+  let wz = w * z2;
+  out[0] = 1 - (yy + zz);
+  out[1] = xy + wz;
+  out[2] = xz - wy;
+  out[3] = 0;
+  out[4] = xy - wz;
+  out[5] = 1 - (xx + zz);
+  out[6] = yz + wx;
+  out[7] = 0;
+  out[8] = xz + wy;
+  out[9] = yz - wx;
+  out[10] = 1 - (xx + yy);
+  out[11] = 0;
+  out[12] = v[0];
+  out[13] = v[1];
+  out[14] = v[2];
+  out[15] = 1;
+  return out;
+}
+
+function getTranslation(out, mat) {
+  out[0] = mat[12];
+  out[1] = mat[13];
+  out[2] = mat[14];
+  return out;
+}
+
 //	https://github.com/immersive-web/webxr-polyfill/blob/0202e9d2b80fcce3d46010f21869b8684da9c4f5/src/api/XRRigidTransform.js
 //	gr: I'm copying as much as possible from the "official" polyfill... shame i can't easily just import it, I dont think
 export class XRRigidTransform
 {
 	constructor(Position,Orientation)
 	{
-		const Identity4x4 = [	1,0,0,0,	0,1,0,0,	0,0,1,0,	0,0,0,1	];
-		Matrix = Matrix || Identity4x4;
-		this.matrix = new Float32Array(Matrix);
+		this.position = Position || [0,0,0,1];
+		this.orientation = Orientation || [0,0,0,1];
 	}
 	
 	get inverse() 
 	{
-		//	calc inverse matrix
-		const Inverse = new Float32Array(4*4);
-		mat4_invert(Inverse,this.matrix);
-		return new XRRigidTransformPolyfill(Inverse);
+		const InverseMatrix = [];
+		mat4_invert(InverseMatrix,this.matrix);
+		
+		//	pull out new pos & orientation and make a new transform
+		const Orientation = [];
+		getRotation( Orientation, InverseMatrix );
+		
+		const Translation = [];
+		getTranslation( Translation, InverseMatrix );
+		
+		return new XRRigidTransformPolyfill(Translation,Orientation);
 	}
-
+/*
 	get position() 
 	{
 		const Position = {};
@@ -119,6 +164,13 @@ export class XRRigidTransform
 		const Quaternion = new Float32Array(4);
 		getRotation(Quaternion,this.matrix);
 		return Quaternion;
+	}
+		*/
+	get matrix()
+	{
+		let Matrix = [];
+		fromRotationTranslation(Matrix,this.orientation,this.position);
+		return Matrix;
 	}
 }
 
