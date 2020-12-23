@@ -198,7 +198,7 @@ async function DetectMarkers(imageData,MarkerSize=1)
 		//	position should be in world space units	
 		Pose.Position = Translation3;
 		
-		Pop.Debug(`Translation3 ${Pose.Position}`);
+		//Pop.Debug(`Translation3 ${Pose.Position}`);
 		Marker.Pose = Pose;
 	}
 	Markers.forEach(AddPoseToMarker);
