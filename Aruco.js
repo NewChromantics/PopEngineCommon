@@ -86,6 +86,7 @@ async function DetectMarkers(imageData,MarkerSizeMetres=0.10)
 		//	gr: these I think are in mm
 		//	todo: change all units to m. Shouldn't matter to the pose code
 		Pose.Position = Translation3;
+		Pose.Position = [0,0,0];
 		Marker.Pose = Pose;
 	}
 	Markers.forEach(AddPoseToMarker);
