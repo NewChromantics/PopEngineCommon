@@ -31,6 +31,7 @@ function getRotation(out, mat) {
   return out;
 }
 
+
 function mat4_invert(out, a) {
     var a00 = a[0],
         a01 = a[1],
@@ -89,7 +90,7 @@ function mat4_invert(out, a) {
 //	gr: I'm copying as much as possible from the "official" polyfill... shame i can't easily just import it, I dont think
 export class XRRigidTransform
 {
-	constructor(Matrix)
+	constructor(Position,Orientation)
 	{
 		const Identity4x4 = [	1,0,0,0,	0,1,0,0,	0,0,1,0,	0,0,0,1	];
 		Matrix = Matrix || Identity4x4;
