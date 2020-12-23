@@ -147,7 +147,7 @@ export class XRRigidTransform
 		const Translation = [];
 		getTranslation( Translation, InverseMatrix );
 		
-		return new XRRigidTransformPolyfill(Translation,Orientation);
+		return new XRRigidTransform(Translation,Orientation);
 	}
 /*
 	get position() 
