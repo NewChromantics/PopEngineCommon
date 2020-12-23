@@ -644,11 +644,21 @@ async function FetchOnce(Url,FetchFunc,OnProgress)
 	if ( FetchCache.hasOwnProperty(Url) )
 		return FetchCache[Url];
 	
-	//	run the fetch, wait for it to finish, then clear the cache
-	FetchCache[Url] = FetchFunc(Url,OnProgress);
-	const Contents = await FetchCache[Url];
-	delete FetchCache[Url];
-	return Contents;
+	//	gr: we happily want FetchFunc to throw, but just calling it here and throwing, chrome considers it
+	//		"uncaught" as it's not pre-setup. Put try/catch around and throw it anyway
+	//		we should hope FetchCache[Url] still has a rejected promise, but for now this gets rid of the incorrect exception
+	try
+	{
+		//	run the fetch, wait for it to finish, then clear the cache
+		FetchCache[Url] = FetchFunc(Url,OnProgress);
+		const Contents = await FetchCache[Url];
+		delete FetchCache[Url];
+		return Contents;
+	}
+	catch(e)
+	{
+		throw e;
+	}
 }
 
 //	gr: this needs a fix like FetchOnce
