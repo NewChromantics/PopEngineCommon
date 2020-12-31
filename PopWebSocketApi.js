@@ -17,7 +17,7 @@ function GetWebsocketError(Event)
 
 
 //	wrapper for websocket
-Pop.Websocket.Client = function(Hostname,Port=80)
+Pop.Websocket.Client = function(Hostname,Port=80,Path='')
 {
 	this.OnConnectPromises = new Pop.PromiseQueue();
 	this.OnMessagePromises = new Pop.PromiseQueue();
@@ -110,6 +110,10 @@ Pop.Websocket.Client = function(Hostname,Port=80)
 	let ServerAddress = `${Hostname}:${Port}`;
 	if (!ServerAddress.startsWith('ws://') && !ServerAddress.startsWith('wss://'))
 		ServerAddress = 'ws://' + ServerAddress;
+		
+	//	add path
+	ServerAddress += `/${Path}`;
+		
 	this.Socket = new WebSocket(ServerAddress);
 	this.Socket.onopen = this.OnConnected.bind(this);
 	this.Socket.onerror = this.OnError.bind(this);
