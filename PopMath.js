@@ -74,33 +74,64 @@ Math.HueToColour = function(Hue,Alpha=1)
 	//	same as NormalToRedGreenBluePurple
 	if ( Normal < 1/6 )
 	{
+		//	red to yellow
 		Normal = Math.Range( 0/6, 1/6, Normal );
 		return [1, Normal, 0, Alpha];
 	}
 	else if ( Normal < 2/6 )
 	{
+		//	yellow to green
 		Normal = Math.Range( 1/6, 2/6, Normal );
 		return [1-Normal, 1, 0, Alpha];
 	}
 	else if ( Normal < 3/6 )
 	{
+		//	green to cyan
 		Normal = Math.Range( 2/6, 3/6, Normal );
 		return [0, 1, Normal, Alpha];
 	}
 	else if ( Normal < 4/6 )
 	{
+		//	cyan to blue
 		Normal = Math.Range( 3/6, 4/6, Normal );
 		return [0, 1-Normal, 1, Alpha];
 	}
 	else if ( Normal < 5/6 )
 	{
+		//	blue to pink
 		Normal = Math.Range( 4/6, 5/6, Normal );
 		return [Normal, 0, 1, Alpha];
 	}
 	else //if ( Normal < 5/6 )
 	{
+		//	pink to red
 		Normal = Math.Range( 5/6, 6/6, Normal );
 		return [1, 0, 1-Normal, Alpha];
+	}
+}
+
+
+
+Math.NormalToRedGreen = function(Normal,Alpha=1)
+{
+	if ( Normal === null )
+		return [0,0,0,Alpha];
+	
+	if ( Normal < 1/2 )
+	{
+		//	red to yellow
+		Normal = Math.Range( 0/2, 1/2, Normal );
+		return [1, Normal, 0, Alpha];
+	}
+	else if ( Normal <= 2/2 )
+	{
+		//	yellow to green
+		Normal = Math.Range( 1/2, 2/2, Normal );
+		return [1-Normal, 1, 0, Alpha];
+	}
+	else
+	{
+		return [0, 0, 1, Alpha];
 	}
 }
 
@@ -125,11 +156,29 @@ Math.SinCos = function(Degrees)
 	return [Sin,Cos];
 }
 
-
-Math.clamp = function(min, max,Value)
+//	note: glsl clamp() is clamp(value,min,max)
+Math.clamp = function(min,max,Value)
 {
 	return Math.min( Math.max(Value, min), max);
 }
+Math.Clamp = Math.clamp;
+
+Math.Clamp01 = function(Value)
+{
+	return Math.Clamp(0,1,Value);
+}
+
+//	note: glsl clamp() is clamp(value,min,max)
+Math.clamp2 = function(Min,Max,Value)
+{
+	if ( !Array.isArray(Min) )	Min = [Min,Min];
+	if ( !Array.isArray(Max) )	Max = [Max,Max];
+	const x = Math.clamp( Min[0], Max[0], Value[0] );
+	const y = Math.clamp( Min[1], Max[1], Value[0] );
+	return [x,y];
+}
+Math.Clamp2 = Math.clamp2;
+
 
 Math.range = function(Min,Max,Value)
 {
@@ -256,6 +305,11 @@ Math.Add3 = function(a,b)
 	return [ a[0]+b[0], a[1]+b[1], a[2]+b[2] ];
 }
 
+Math.Multiply2 = function(a,b)
+{
+	return [ a[0]*b[0], a[1]*b[1] ];
+}
+
 Math.Multiply3 = function(a,b)
 {
 	return [ a[0]*b[0], a[1]*b[1], a[2]*b[2] ];
@@ -298,6 +352,32 @@ Math.Rotate2 = function(xy,AngleDegrees)
 	const y = (sin * xy[0]) + (cos * xy[1]);
 	return [x,y];
 }
+
+//	this acts like glsl; returns min per-component
+//	min2( [1,100], [2,99] ) = [1,99]
+Math.min2 = function(a,b,c,d,etc)
+{
+	const xs = [...arguments].map( n => n[0] );
+	const ys = [...arguments].map( n => n[1] );
+	const x = Math.min( ...xs );
+	const y = Math.min( ...ys );
+	return [x,y];
+}
+Math.Min2 = Math.min2;
+
+//	this acts like glsl; returns max per-component
+Math.max2 = function(a,b,c,d,etc)
+{
+	const xs = [...arguments].map( n => n[0] );
+	const ys = [...arguments].map( n => n[1] );
+	const x = Math.max( ...xs );
+	const y = Math.max( ...ys );
+	return [x,y];
+}
+Math.Max2 = Math.max2;
+
+
+
 
 //	how many angles to turn A to B
 Math.GetAngleDiffDegrees = function(a,b)
@@ -516,8 +596,44 @@ Math.PointInsideRect = function(xy,Rect)
 	return true;
 }
 
+//	is a outside b
+function RectIsOutside(RectA,RectB)
+{
+	let la = RectA[0];
+	let lb = RectB[0];
+	let ta = RectA[1];
+	let tb = RectB[1];
+	let ra = RectA[0] + RectA[2];
+	let rb = RectB[0] + RectB[2];
+	let ba = RectA[1] + RectA[3];
+	let bb = RectB[1] + RectB[3];
+	
+	//	too far left
+	if ( ra < lb )
+		return true;
+	//	too far right
+	if ( la > rb )
+		return true;
+	//	too high up
+	if ( ba < tb )
+		return true;
+	//	too low
+	if ( ta > bb )
+		return true;
+	//	is overlapping (but maybe not wholly inside!)
+	return false;
+}
+
+
+//	are these rects overlapping each other 
 function RectIsOverlapped(RectA,RectB)
 {
+	if ( RectIsOutside( RectA, RectB ) )
+		return false
+	return true;
+
+	//	gr: the below seems to fail when they're close (and A is still inside B)
+	//		leaving this code here because debugging, it seemed correct, but is wrong. (I still want to know why)
 	let la = RectA[0];
 	let lb = RectB[0];
 	let ta = RectA[1];
@@ -566,6 +682,18 @@ Math.GetRectArea = function(Rect)
 Math.GetCircleArea = function(Radius)
 {
 	return Math.PI * (Radius*Radius);
+}
+
+Math.GetBox3Area = function(BoxMin,BoxMax)
+{
+	const Size =
+	[
+	 BoxMax[0] - BoxMin[0],
+	 BoxMax[1] - BoxMin[1],
+	 BoxMax[2] - BoxMin[2],
+	];
+	const Area = Size[0] * Size[1] * Size[2];
+	return Area;
 }
 
 //	overlap area is the overlap as a fraction of the biggest rect
@@ -1042,7 +1170,21 @@ Math.GetFrustumPlanes = function(ProjectionMatrix4x4,Normalised=true)
 	return Planes;
 }
 
-
+Math.GetBox3Corners = function(BoxMin,BoxMax)
+{
+	const BoxCorners =
+	[
+	 [BoxMin[0], BoxMin[1], BoxMin[2] ],
+	 [BoxMax[0], BoxMin[1], BoxMin[2] ],
+	 [BoxMin[0], BoxMax[1], BoxMin[2] ],
+	 [BoxMax[0], BoxMax[1], BoxMin[2] ],
+	 [BoxMin[0], BoxMin[1], BoxMax[2] ],
+	 [BoxMax[0], BoxMin[1], BoxMax[2] ],
+	 [BoxMin[0], BoxMax[1], BoxMax[2] ],
+	 [BoxMax[0], BoxMax[1], BoxMax[2] ],
+	 ];
+	return BoxCorners;
+}
 
 Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
 {
@@ -1092,7 +1234,103 @@ Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
 	return true;
 }
 
-Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
+Math.IsPositionInsideBox3 = function(Position,BoxMin,BoxMax)
+{
+	for ( let dim=0;	dim<3;	dim++ )
+	{
+		const p = Position[dim];
+		const min = BoxMin[dim];
+		const max = BoxMax[dim];
+		if ( p < min )
+			return false;
+		if ( p > max )
+			return false
+	}
+	
+	return true;
+}
+
+Math.IsInsideBox3 = function(Position,BoxMin,BoxMax)
+{
+	Pop.Warning(`Math.IsInsideBox3 Deprecated; use Math.IsPositionInsideBox3`);
+	return Math.IsPositionInsideBox3(...arguments);
+}
+
+
+//	is this box wholly inside another box
+Math.IsBox3InsideBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+{
+	const CornersA = Math.GetBox3Corners(BoxMinA,BoxMaxA);
+	for ( let Pos of CornersA )
+	{
+		const Inside = Math.IsPositionInsideBox3( Pos, BoxMinB, BoxMaxB );
+		if ( !Inside )
+			return false;
+	}
+	return true;
+}
+
+//	get the AND of 2 box3s
+Math.GetOverlappedBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+{
+	//	get the overlapping area as a box
+	//	min = maximum min
+	//	max = minimum max
+	const OverlapMin = [];
+	const OverlapMax = [];
+	for ( let Dim=0;	Dim<3;	Dim++ )
+	{
+		OverlapMin[Dim] = Math.max( BoxMinA[Dim], BoxMinB[Dim] );
+		OverlapMax[Dim] = Math.min( BoxMaxA[Dim], BoxMaxB[Dim] );
+		
+		//	if min > max the boxes aren't overlapping
+		//	doesnt matter which we snap to? but only do one or the box will flip
+		const Min = Math.min( OverlapMin[Dim], OverlapMax[Dim] );
+		//const Max = Math.max( OverlapMin[Dim], OverlapMax[Dim] );
+		OverlapMin[Dim] = Min;
+		//OverlapMax[Dim] = Max;
+	}
+	
+	const Box = {};
+	Box.Min = OverlapMin;
+	Box.Max = OverlapMax;
+	return Box;
+}
+
+
+Math.IsBox3OverlappingBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+{
+	const OverlapBox = Math.GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
+	
+	//	get overlapping amount
+	const OverlapArea = Math.GetBox3Area(OverlapBox.Min,OverlapBox.Max);
+	if ( OverlapArea > 0 )
+		return true;
+	return false;
+}
+
+Math.GetBox3Overlap = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+{
+	const AreaA = Math.GetBox3Area( BoxMinA, BoxMaxA );
+	const AreaB = Math.GetBox3Area( BoxMinB, BoxMaxB );
+	const OverlapBox = Math.GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
+	const OverlapArea = Math.GetBox3Area(OverlapBox.Min,OverlapBox.Max);
+
+	if ( OverlapArea > AreaA || OverlapArea > AreaB )
+	{
+		const OverlapBox2 = Math.GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
+		throw `Math error, Overlap is bigger than boxes`;
+	}
+	
+	if ( AreaB == 0 )
+		return 0;
+
+	const OverlapNormal = OverlapArea / AreaB;
+	return OverlapNormal;
+}
+
+
+Math.GetIntersectionTimeRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
 {
 	let tmin = -Infinity;
 	let tmax = Infinity;
@@ -1118,27 +1356,53 @@ Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
 		return false;
 	}
 	
-	//	ray inside box... maybe change this return so its the exit intersection?
+	//	ray starts inside box... maybe change this return so its the exit intersection?
 	if ( tmin < 0 )
 	{
 		//return RayStart;
 		return false;
 	}
 	
+	
 	//	ray miss
 	if ( tmax < tmin )
-		return;
-	//	from inside?
+		return false;
+	//	from inside? or is this behind
 	if ( tmax < 0.0 )
 		return false;
 	
-	let Intersection = Math.Multiply3( RayDirection, [tmin,tmin,tmin] );
+	return tmin;
+}
+
+Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
+{
+	const IntersectionTime = Math.GetIntersectionTimeRayBox3( RayStart, RayDirection, BoxMin, BoxMax );
+	if ( IntersectionTime === false )
+		return false;
+	
+	let Intersection = Math.Multiply3( RayDirection, [IntersectionTime,IntersectionTime,IntersectionTime] );
 	Intersection = Math.Add3( RayStart, Intersection );
 	
 	return Intersection;
 }
 
 
+Math.GetIntersectionLineBox3 = function(Start,End,BoxMin,BoxMax)
+{
+	const Direction = Math.Subtract3( End, Start );
+	
+	const IntersectionTime = Math.GetIntersectionTimeRayBox3( Start, Direction, BoxMin, BoxMax );
+	if ( IntersectionTime === false )
+		return false;
+
+	if ( IntersectionTime > 1 )
+		return false;
+
+	let Intersection = Math.Multiply3( Direction, [IntersectionTime,IntersectionTime,IntersectionTime] );
+	Intersection = Math.Add3( Start, Intersection );
+	
+	return Intersection;
+}
 
 //	returns signed distance, so if negative, point is behind plane.
 Math.GetDistanceToPlane = function(Plane4,Position3)
@@ -1411,4 +1675,372 @@ Pop.Math.FillRandomFloat = function(Array,Min=0,Max=1)
 	Array.set( Cache, 0, Array.length );
 }
 
+
+//	expecting array[16]
+Pop.Math.GetMatrixTransposed = function(Matrix4x4)
+{
+	//	todo: slice to retain input type (array, float32array etc)
+	//const Trans = Matrix4x4.slice();
+	const m = Matrix4x4;
+	const Transposed =
+	[
+		m[0],	m[4],	m[8],	m[12],
+	 	m[1],	m[5],	m[9],	m[13],
+	 	m[2],	m[6],	m[10],	m[14],
+	 	m[3],	m[7],	m[11],	m[15]
+	];
+	return Transposed;
+}
+
+/*
+bool GetPlaneIntersection(TRay Ray,float4 Plane,out vec3 IntersectionPos)
+{
+	//	https://gist.github.com/doxas/e9a3d006c7d19d2a0047
+	float PlaneOffset = Plane.w;
+	float3 PlaneNormal = Plane.xyz;
+	float PlaneDistance = -PlaneOffset;
+	float Denom = dot( Ray.Dir, PlaneNormal);
+	float t = -(dot( Ray.Pos, PlaneNormal) + PlaneDistance) / Denom;
+	
+	//	wrong side, enable for 2 sided
+	bool DoubleSided = false;
+	
+	float Min = 0.01;
+	
+	if ( t <= Min && !DoubleSided )
+		return false;
+	
+	IntersectionPos = GetRayPositionAtTime( Ray, t );
+	return true;
+}
+*/
+Math.GetIntersectionRayTriangle3 = function(RayStart,RayDirection,a,b,c)
+{
+	//	https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
+	//	get plane normal
+	const ab = Math.Subtract3(b,a);
+	const ac = Math.Subtract3(c,a);
+	//	dont need to normalise?
+	let Normal = Math.Cross3(ab,ac);
+	//const Area = Math.Length3(Normal);
+	
+	//	find intersection on plane
+	
+	//	check if ray and plane are parallel	|- so dot=0
+	const kEpsilon = 0.0001;
+	let NormalDotRayDirection = Math.Dot3( Normal, RayDirection );
+	if ( Math.abs(NormalDotRayDirection) < kEpsilon )
+		return false;
+	
+	//	if this is positive, triangle is facing away (normal in same direction as our ray)
+	//	we want 2 sided, we don't want to care about winding, so flip
+	/*if ( NormalDotRayDirection > 0 )
+	{
+		Normal = Math.Cross3(ac,ab);
+		NormalDotRayDirection = Math.Dot3( Normal, RayDirection );
+	}*/
+	
+	//	get plane distance (origin to plane, its the length a-0 along the normal)
+	const TrianglePlaneDistance = Math.Dot3( Normal, a );
+	
+	//	solve
+	//	intersection = start + (dir*t)
+	//	get plane intersection time
+	//	RayToPlaneDistance is plane's D for the ray (compared to triangle plane distance)
+	const RayToPlaneDistance = Math.Dot3( Normal, RayStart);
+	
+	//	therefore distance from ray origin to triangle is
+	//	RayToPlaneDistance + TrianglePlaneDistance
+	//	but along the ray, it's relative to the direction compared to the plane normal
+	const DistanceRayToTriangle = RayToPlaneDistance - TrianglePlaneDistance;
+	let IntersectionTime = DistanceRayToTriangle / NormalDotRayDirection;
+
+	//	normal is opposite to ray dir, so NormalDotRayDirection will be negative, so flip it
+	IntersectionTime = -IntersectionTime;
+	
+	//	start of ray is behind plane
+	if ( IntersectionTime < 0 )
+	{
+		//return false;
+	}
+	
+	//	get the plane intersection pos
+	const IntersectionPosition = Math.Add3( RayStart, Math.Multiply3( RayDirection, [IntersectionTime,IntersectionTime,IntersectionTime] ) );
+	//Pop.Debug(`IntersectionTime=${IntersectionTime}`);
+	//return IntersectionPosition;
+	
+	//	test if point is inside triangle
+	let TotalSign = 0;
+	{
+		const p = IntersectionPosition;
+		const ab = Math.Subtract3( b, a );
+		const pa = Math.Subtract3( p, a );
+		const cross = Math.Cross3( ab, pa );
+		const nc = Math.Dot3( Normal, cross );
+		if ( nc < 0 )
+			return false;
+		TotalSign += nc;
+	}
+	
+	{
+		const p = IntersectionPosition;
+		const bc = Math.Subtract3( c, b );
+		const pb = Math.Subtract3( p, b );
+		const cross = Math.Cross3( bc, pb );
+		const nc = Math.Dot3( Normal, cross );
+		if ( nc < 0 )
+			return false;
+		TotalSign += nc;
+	}
+
+	{
+		const p = IntersectionPosition;
+		const ca = Math.Subtract3( a, c );
+		const pc = Math.Subtract3( p, c );
+		const cross = Math.Cross3( ca, pc );
+		const nc = Math.Dot3( Normal, cross );
+		if ( nc < 0 )
+			return false;
+		TotalSign += nc;
+	}
+	/*	gr: this is always 1...
+	Pop.Debug(`TotalSign=${TotalSign}`);
+	if ( TotalSign > 2 )
+		return false;
+*/
+	return IntersectionPosition;
+}
+
+/*	get SDF distance, merge with above
+Math.DistanceToTriangle3 = function(Position,a,b,c)
+{
+	const p = Position;
+	const ba = Math.Subtract3(b, a);
+	const pa = Math.Subtract3(p, a);
+	const cb = Math.Subtract3(c, b);
+	const pb = Math.Subtract3(p, b);
+	const ac = Math.Subtract3(a, c);
+	const pc = Math.Subtract3(p, c);
+	const nor = Math.cross3( ba, ac );
+
+	//	work out which side of each edge we're on
+	const Sideab = sign(dot(cross(ba,nor),pa));
+	const Sidecb = sign(dot(cross(cb,nor),pb));
+	const Sideac = sign(dot(cross(ac,nor),pc));
+	const TotalSign = Sideab + Sidecb + Sideac;
+	
+	let DistanceSq;
+	
+	if ( TotalSign < 2 )
+	{
+		DistanceSq = min( min(
+				 dot2(ba*clamp(dot(ba,pa)/dot2(ba),0.0,1.0)-pa),
+				 dot2(cb*clamp(dot(cb,pb)/dot2(cb),0.0,1.0)-pb) ),
+			dot2(ac*clamp(dot(ac,pc)/dot2(ac),0.0,1.0)-pc) )
+	}
+	else
+	{
+		DistanceSq = dot(nor,pa)*dot(nor,pa)/dot2(nor) )
+	}
+	
+	return Math.sqrt(DistanceSq);
+}
+*/
+
+Math.GetDistanceToRect = function(xy,Rect)
+{
+	function sdBox(p,b)
+	{
+		//	b = "radius"
+		//	vec2 d = abs(p)-b;
+		let dx = Math.abs(p[0]) - b[0];
+		let dy = Math.abs(p[1]) - b[1];
+		
+		//	return length(max(d,0.0)) + min(max(d.x,d.y),0.0);
+		const max_d_0 = [ Math.max(dx,0), Math.max(dy,0) ];
+		const length_max_d_0 = Math.Length2(max_d_0);
+		const minmax_dx_0 = Math.min( Math.max(dx,dy), 0 );
+
+		return length_max_d_0 + minmax_dx_0;
+	}
+	
+	const HalfWidth = Rect[2]/2;
+	const HalfHeight = Rect[3]/2;
+	
+	const px = xy[0] - (Rect[0]+HalfWidth);
+	const py = xy[1] - (Rect[1]+HalfHeight);
+	return sdBox( [px,py], [HalfWidth,HalfHeight] );
+}
+
+Math.GetDistanceToCircle = function(xy,CirclePosRadius)
+{
+	const Distance = Math.Distance2(xy,CirclePosRadius);
+	const Radius = CirclePosRadius[2];
+	return Distance - Radius;
+}
+
+Math.GetTimeAlongLine2 = function(Position,Start,End)
+{
+	//	direction or End-in-localspace
+	const Direction = Math.Subtract2( End, Start );
+	const DirectionLength = Math.Length2( Direction );
+	const LocalPosition = Math.Subtract2( Position, Start );
+	if ( DirectionLength == 0 )
+		return 0;
+	const Projection = Math.Dot2( LocalPosition, Direction) / (DirectionLength*DirectionLength);
+	return Projection;
+}
+
+Math.GetNearestPointOnLine2 = function(Position,Start,End)
+{
+	let Projection = Math.GetTimeAlongLine2( Position, Start, End );
+	
+	//	clamp to line
+	//	past start
+	Projection = Math.max( 0.0, Projection );
+	//	past end
+	Projection = Math.min( 1.0, Projection );
+	
+	const Near = Math.Lerp2( Start, End, Projection );
+	return Near;
+}
+
+Math.GetDistanceToLine2 = function(Position,Start,End)
+{
+	//	todo: LineButt & LineSquare versions
+	const Near = Math.GetNearestPointOnLine2(Position,Start,End);
+	const Distance = Math.Distance2(Position,Near);
+	return Distance;
+}
+
+
+//	Corners is an array of [x,y] arrays
+//	gr: dont need a Center but current use pre-calcs it anyway
+Math.GetDistanceToPolygon2 = function(Position,Corners,Center)
+{
+	const uv = Position;
+	
+	function sign(p1,p2,p3)
+	{
+		const p1_x = p1[0];
+		const p1_y = p1[1];
+		const p2_x = p2[0];
+		const p2_y = p2[1];
+		const p3_x = p3[0];
+		const p3_y = p3[1];
+		return (p1_x - p3_x) * (p2_y - p3_y) - (p2_x - p3_x) * (p1_y - p3_y);
+	}
+	
+	//	glsl sign
+	//	sign returns -1.0 if x<0.0, 0.0 if x=0.0 and 1.0 if x>0.0.
+	function sign(f)
+	{
+		if ( f == 0 )	return 0;
+		if ( f < 0 )	return -1;
+		return 1;
+	}
+	
+	//	note GLSL and Math.clamp are different orders!
+	function clamp2(Value,Min,Max)
+	{
+		return Math.Clamp2(Min,Max,Value);
+	}
+	function clamp(Value,Min,Max)
+	{
+		return Math.Clamp(Min,Max,Value);
+	}
+	
+	//	float sdSegment( in vec2 p, in vec2 a, in vec2 b )
+	function sdSegment(p,a,b)
+	{
+		const pa = Math.Subtract2(p,a);
+		const ba = Math.Subtract2(b,a);
+		const delta = Math.Dot2(ba,ba);
+		const h = (delta == 0) ? 0 : clamp( Math.Dot2(pa,ba)/delta, 0.0, 1.0 );
+		const baScaled = Math.Multiply2( ba, [h,h] );
+		return Math.Distance2( pa, baScaled );
+	}
+	
+	function sdTriangle(p,p0,p1,p2 )
+	{
+		//	get edges/deltas
+		const e0 = Math.Subtract2(p1,p0);
+		const e1 = Math.Subtract2(p2,p1);
+		const e2 = Math.Subtract2(p0,p2);
+		const v0 = Math.Subtract2(p ,p0);
+		const v1 = Math.Subtract2(p ,p1);
+		const v2 = Math.Subtract2(p ,p2);
+		const e0_x = e0[0];
+		const e0_y = e0[1];
+		const e1_x = e1[0];
+		const e1_y = e1[1];
+		const e2_x = e2[0];
+		const e2_y = e2[1];
+		
+		const e0_LocalScale = clamp( Math.Dot2(v0,e0)/Math.Dot2(e0,e0), 0.0, 1.0 );
+		const e1_LocalScale = clamp( Math.Dot2(v1,e1)/Math.Dot2(e1,e1), 0.0, 1.0 );
+		const e2_LocalScale = clamp( Math.Dot2(v2,e2)/Math.Dot2(e2,e2), 0.0, 1.0 );
+		const pq0 = Math.Subtract2(v0,Math.Multiply2(e0,[e0_LocalScale,e0_LocalScale]));
+		const pq1 = Math.Subtract2(v1,Math.Multiply2(e1,[e1_LocalScale,e1_LocalScale]));
+		const pq2 = Math.Subtract2(v2,Math.Multiply2(e2,[e2_LocalScale,e2_LocalScale]));
+		const s = sign( e0_x*e2_y - e0_y*e2_x );
+		
+		const pq0_lengthsq = Math.Dot2(pq0,pq0);
+		const pq1_lengthsq = Math.Dot2(pq1,pq1);
+		const pq2_lengthsq = Math.Dot2(pq2,pq2);
+		
+		const v0_x = v0[0];
+		const v0_y = v0[1];
+		const v1_x = v1[0];
+		const v1_y = v1[1];
+		const v2_x = v2[0];
+		const v2_y = v2[1];
+		
+		const pq0_signeddistance2 = [pq0_lengthsq, s*(v0_x*e0_y-v0_y*e0_x)];
+		const pq1_signeddistance2 = [pq1_lengthsq, s*(v1_x*e1_y-v1_y*e1_x)];
+		const pq2_signeddistance2 = [pq2_lengthsq, s*(v2_x*e2_y-v2_y*e2_x)];
+		
+		const d = Math.min2( pq0_signeddistance2, pq1_signeddistance2, pq2_signeddistance2 );
+		return -Math.sqrt(d[0]) * sign(d[1]);
+	}
+	
+	//	get center as 3rd corner of triangle
+	//const Center = GetCenterPosition();
+	if ( !Center )
+		throw `GetDistanceToPolygon2() todo: calc the center, make it optional`;
+	
+	let MinDistance = 999.0;
+	for ( let i=0;	i<Corners.length-1;	i++ )
+	{
+		const a = Corners[i+0];
+		const b = Corners[i+1];
+		
+		//	get distance to outer edge
+		let EdgeDistance = sdSegment(uv,a,b);
+		
+		//	then workout if inside or not
+		let InsideDistance = sdTriangle( uv, a, b, Center );
+		
+		let Distance;
+		if ( InsideDistance < 0.0 )
+		{
+			//	the inside is per triangle, so we'll get triangle distances rather than a polygon distance
+			//Distance = InsideDistance;
+			Distance = -EdgeDistance;
+		}
+		else
+		{
+			Distance = EdgeDistance;
+		}
+		
+		//	we need the LARGEST inner size
+		//	gr: this hasn't helped... something wrong with sdSegment distances?
+		if ( MinDistance < 0.0 && Distance < 0.0 )
+			MinDistance = Math.max( MinDistance, Distance );
+		else
+			MinDistance = Math.min( Distance, MinDistance );
+	}
+	
+	return MinDistance;
+}
 

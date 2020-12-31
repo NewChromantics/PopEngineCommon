@@ -21,14 +21,14 @@ function GetUniqueHash(Object)
 	
 	UniqueHashCounter++;
 	Object._UniqueHash = HashPrefix + UniqueHashCounter;
-	Pop.Debug("Created new hash for object: " + Object._UniqueHash );
+	// Pop.Debug("Created new hash for object: " + Object._UniqueHash );
 	
 	return Object._UniqueHash;
 }
 
 
 let Counter = 100;
-Pop.GetShader = function(RenderContext, FragSource, VertSource)
+Pop.GetShader = function(RenderContext, FragSource, VertSource, ShaderName='A shader')
 {
 	//	javascript will get an index for arrays via toString()
 	//	we need them unique for this case
@@ -46,7 +46,7 @@ Pop.GetShader = function(RenderContext, FragSource, VertSource)
 	
 	if ( !Pop.Opengl.ShaderCache[ContextKey][SourceKey] )
 	{
-		let Shader = new Pop.Opengl.Shader( RenderContext, VertSource, FragSource );
+		let Shader = new Pop.Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
 		Shader.Counter = Counter++;
 		//Pop.Debug("pre Shader keys: " + Object.keys(Pop.Opengl.ShaderCache[ContextKey]) );
 		Pop.Opengl.ShaderCache[ContextKey][SourceKey] = Shader;

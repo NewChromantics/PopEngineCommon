@@ -131,8 +131,20 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 		if ( NormalIndex !== undefined )
 			VertexNormals.push( ...Normals[NormalIndex] );
 		if ( TexCoordIndex !== undefined )
-			VertexTexCoords.push( ...TexCoords[TexCoordIndex] );
-		
+		{
+			//	gr: this seems to only occur for texcoords, (find out why!)
+			//		but I have models where we have a valid TexCoordIndex, but not enough texcoords
+			if ( TexCoordIndex < TexCoords.length )
+			{
+				VertexTexCoords.push( ...TexCoords[TexCoordIndex] );
+			}
+			else
+			{
+				//Pop.Debug(`Warning OBJ Texcoord Index (${TexCoordIndex}) out of bounds(${TexCoords.length})`);
+				VertexTexCoords.push( undefined,undefined,undefined );
+			}
+		}
+
 		//	check all the arrays align
 		const Lengths =
 		[
@@ -156,6 +168,8 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 		//	split the face into triangles
 		if ( Face.length < 3 )
 			throw "OBJ face has less than 3 points";
+		
+		//	quad
 		if ( Face.length == 4 )
 		{
 			//	we don't have to recurse, but for now...
@@ -167,8 +181,14 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 			OnFace( t1.map( i => Face[i] ) );
 			return;
 		}
+
+		//	tri strip?
 		if ( Face.length != 3 )
-			throw "OBJ face with " + Face.length + " != 3 points";
+		{
+			Pop.Warning(`Skipping OBJ face with ${Face.length} points`);
+			//throw `OBJ face with ${Face.length} != 3 points`;
+			return;
+		}
 		
 		//	flush each vertex
 		const FaceVertexIndexes = [];
@@ -185,6 +205,7 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 	function OnPosition(Values)
 	{
 		const xyz = Values.map( ParsePositionFloat );
+		xyz[2] = -xyz[2];
 		Positions.push( xyz );
 	}
 	
@@ -195,6 +216,8 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 
 	function OnTexCoord(Values)
 	{
+		//	pad to 3 values (for now) for the OnVertex alignment check
+		Values.length = 3;
 		TexCoords.push( Values );
 	}
 

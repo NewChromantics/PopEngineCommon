@@ -98,7 +98,7 @@ function CleanSvg(DomSvg)
 	
 	function GetDefaultStyle()
 	{
-		Pop.Debug("GetDefaultStyle");
+		// Pop.Debug("GetDefaultStyle");
 		//	defaults;
 		//	https://www.w3.org/TR/SVG/painting.html#StrokeWidthProperty
 		const SvgDefaults = {};
@@ -133,7 +133,7 @@ function CleanSvg(DomSvg)
 			
 			//	overwrite new values
 			Object.assign( CurrentStyle, Style );
-			Pop.Debug(`Merged style ${SelectorName};`,CurrentStyle);
+			// Pop.Debug(`Merged style ${SelectorName};`,CurrentStyle);
 			CssMap[SelectorName] = CurrentStyle;
 		}
 		//Pop.Debug('SelectorNames',SelectorNames,"Style",Style);
@@ -167,7 +167,7 @@ function CleanSvg(DomSvg)
 		//	Node.sheet not on safari, so use 3rd party
 		//	3rd party parser
 		const CssRules = ParseCss(CssText);
-		Pop.Debug('css',JSON.stringify(CssRules));
+		// Pop.Debug('css',JSON.stringify(CssRules));
 		CssRules.forEach( ParseCssjsStyle );
 
 		/*
@@ -229,7 +229,7 @@ function CleanSvg(DomSvg)
 	}
 	Array.from(DomSvg.children).forEach(PushRootChild);
 	
-	Pop.Debug("CSS selectors", Object.keys(CssMap) );
+	// Pop.Debug("CSS selectors", Object.keys(CssMap) );
 	
 	return Svg;
 }
@@ -365,7 +365,7 @@ function GetPointOnArc(p0, rx, ry, xAxisRotation, largeArcFlag, sweepFlag, p1, t
 	return point;
 }
 
-function ProcessPathCommands(Commands)
+function ProcessPathCommands(Commands, TreePath)
 {
 	let Shapes = [];
 	
@@ -422,7 +422,7 @@ function ProcessPathCommands(Commands)
 	
 	function ProcessArc(RadiusX,RadiusY,Rotation,Arc,Sweep,EndX,EndY)
 	{
-		Pop.Debug('ProcessArc');
+		// Pop.Debug('ProcessArc');
 		//	for now grab points
 		const PointCount = 10;
 
@@ -510,10 +510,10 @@ function ProcessPathCommands(Commands)
 	
 	function ProcessBezierReflectionRelative(ControlX1,ControlY1,EndX,EndY)
 	{
-		ControlX1 += InitialPos[0];
-		ControlY1 += InitialPos[1];
-		EndX += InitialPos[0];
-		EndY += InitialPos[1];
+		ControlX1 += CurrentPos[0];
+		ControlY1 += CurrentPos[1];
+		EndX += CurrentPos[0];
+		EndY += CurrentPos[1];
 		ProcessBezierReflection( ControlX1, ControlY1, EndX, EndY );
 	}
 	
@@ -525,10 +525,10 @@ function ProcessPathCommands(Commands)
 	
 	function ProcessQuadraticRelative(ControlX,ControlY,EndX,EndY)
 	{
-		ControlX += InitialPos[0];
-		ControlY += InitialPos[1];
-		EndX += InitialPos[0];
-		EndY += InitialPos[1];
+		ControlX += CurrentPos[0];
+		ControlY += CurrentPos[1];
+		EndX += CurrentPos[0];
+		EndY += CurrentPos[1];
 		ProcessQuadratic( ControlX, ControlY, EndX, EndY );
 	}
 	
@@ -540,8 +540,8 @@ function ProcessPathCommands(Commands)
 	
 	function ProcessQuadraticReflectionRelative(EndX,EndY)
 	{
-		EndX += InitialPos[0];
-		EndY += InitialPos[1];
+		EndX += CurrentPos[0];
+		EndY += CurrentPos[1];
 		ProcessQuadraticReflection( EndX, EndY );
 	}
 	
@@ -554,10 +554,8 @@ function ProcessPathCommands(Commands)
 	
 	function ProcessLineRelative(x,y)
 	{
-		if ( x !== undefined )
-			x += InitialPos[0];
-		if ( y !== undefined )
-			y += InitialPos[1];
+		if ( x !== undefined )	x += CurrentPos[0];
+		if ( y !== undefined )	y += CurrentPos[1];
 		ProcessLine( x, y );
 	}
 	
@@ -591,7 +589,7 @@ function ProcessPathCommands(Commands)
 
 		const Cmd = Commands.shift();
 		//	gr: close path doesn't take params
-		const Args = CmdHasArguments(Cmd) ? Commands.shift() : [];
+		let Args = CmdHasArguments(Cmd) ? Commands.shift() : [];
 		
 		do
 		{
@@ -599,7 +597,7 @@ function ProcessPathCommands(Commands)
 			{
 				Function( ...Args.splice(0,NumberOfArgs) );
 			}
-		
+
 			switch(Cmd)
 			{
 				//	gr: Move shouldn't draw a line?
@@ -625,18 +623,18 @@ function ProcessPathCommands(Commands)
 				case 't':	Call(ProcessQuadraticReflectionRelative,2);	break;
 				default:	throw `Unhandled path command ${Cmd}`;
 			}
-			if ( Args.length > 0 )
-				Pop.Debug(`Multiple iteration of path command ${Cmd}`);
+
+			// if ( Args.length > 0 ) Pop.Warn(`Multiple iteration of path command ${Cmd}`);
 		}
 		while(Args.length > 0);
 	}
 	//	terminate last line
 	NewShape();
-	
+
 	return Shapes;
 }
 
-function ParseSvgPathCommandContours(Commands)
+function ParseSvgPathCommandContours(Commands, TreePath)
 {
 	//	https://css-tricks.com/svg-path-syntax-illustrated-guide/
 	
@@ -653,7 +651,7 @@ function ParseSvgPathCommandContours(Commands)
 		//	find all floats
 		const Matches = [...String.matchAll(IsNumber)];
 		let Floats = Matches.map( m => m[0] );
-		Pop.Debug(`Floats: ${String}`,Matches);
+		// Pop.Debug(`Floats: ${String}`,Matches);
 		
 		Floats = Floats.map( parseFloat );
 		if ( Floats.some( isNaN ) )
@@ -672,29 +670,42 @@ function ParseSvgPathCommandContours(Commands)
 	}
 	
 	//	split into commands & coords
-	Pop.Debug(`ParseSvgPathCommands(${Commands})`);
+	// Pop.Debug(`ParseSvgPathCommands(${Commands})`);
 	const Matches = Commands.split(IsCommandPattern);
 	const MatchesNotEmpty = Matches.filter( s => s.length );
 	const MatchesWithFloats = MatchesNotEmpty.map(ConvertIfNumbers);
 	//const Matches = [...Commands.matchAll( Pattern )];
-	Pop.Debug(MatchesWithFloats);
+	// Pop.Debug(MatchesWithFloats);
 	
-	const Contours = ProcessPathCommands(MatchesWithFloats);
+	const Contours = ProcessPathCommands(MatchesWithFloats, TreePath);
 	return Contours;
 }
 
-Pop.Svg.ParseShapes = function(Contents,OnShape)
+Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 {
+	FixPosition = FixPosition || function(xy,DocumentBounds)	{	return xy;	}
 	let Svg = Pop.Xml.Parse(Contents);
 	//	note: the DOMParser in chrome turns this into a proper svg object, not just a structure
 	Svg = CleanSvg(Svg);
-	Pop.Debug( JSON.stringify(Svg) );
+	// Pop.Debug( JSON.stringify(Svg) );
 	
 	//	name for each shape is group/group/name
 	const PathSeperator = '/';
 	
 	const Meta = Svg.svg;
 	const Bounds = StringToFloats( Svg.ViewBox );
+	
+	function FixPositionArray(Points)
+	{
+		// Pop.Debug(`FixPositionArray`);
+		//	modify array of pairs
+		for ( let xy of Points )
+		{
+			let NewXy = FixPosition(xy,Bounds);
+			xy[0] = NewXy[0];
+			xy[1] = NewXy[1];
+		}
+	}
 	
 	function NormaliseSize(Value)
 	{
@@ -750,6 +761,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		Modifyx = Modifyx || function(x){return x;};
 		
 		let Floats = String.split(' ');
+		Floats = Floats.filter( f => f.length > 0 );
 		Floats = Floats.map( parseFloat );
 		if ( Floats.some( isNaN ) )
 			throw "String (" + String + ") failed to turn to floats: " + Floats;
@@ -802,18 +814,23 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	}
 	
 	
-	function ParseCircle(Node,ChildIndex,Path)
+	function ParseCircle(Node,ChildIndex,PathName)
 	{
 		const Shape = {};
+		Shape.NodeType = Node.Type;
 		Shape.Style = Node.Style;
 		Shape.Name = Node.id;
-		Shape.Path = Path + PathSeperator;
-		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
+		Shape.PathName = PathName + PathSeperator;
+		Shape.PathName += (Node.id!==undefined) ? Node.id : ChildIndex;
 
 		Shape.Matrix = StringToMatrix( Node['matrix'] );
 		let x = StringToCoord( Node['cx'] );
 		let y = StringToCoord( Node['cy'] );
 		let r = StringToSize( Node['r'] );
+		
+		const xy = FixPosition([x,y],Bounds);
+		x = xy[0];
+		y = xy[1];
 		
 		Shape.Circle = {};
 		Shape.Circle.x = x;
@@ -823,19 +840,24 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		OnShape(Shape);
 	}
 	
-	function ParseEllipse(Node,ChildIndex,Path)
+	function ParseEllipse(Node,ChildIndex,PathName)
 	{
 		const Shape = {};
+		Shape.NodeType = Node.Type;
 		Shape.Style = Node.Style;
 		Shape.Name = Node.id;
-		Shape.Path = Path + PathSeperator;
-		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
+		Shape.PathName = PathName + PathSeperator;
+		Shape.PathName += (Node.id!==undefined) ? Node.id : ChildIndex;
 
 		Shape.Matrix = StringToMatrix( Node['matrix'] );
 		let x = StringToCoord( Node['cx'] );
 		let y = StringToCoord( Node['cy'] );
 		let rx = StringToSize( Node['rx'] );
 		let ry = StringToSize( Node['ry'] );
+		
+		const xy = FixPosition([x,y],Bounds);
+		x = xy[0];
+		y = xy[1];
 		
 		Shape.Ellipse = {};
 		Shape.Ellipse.x = x;
@@ -846,32 +868,36 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		OnShape(Shape);
 	}
 	
-	function ParsePath(Node,ChildIndex,Path)
+	function ParsePath(Node,ChildIndex,PathName)
 	{
-		Pop.Debug(`ParsePath(${Node.id})`);
+		// Pop.Debug(`ParsePath(${Node.id})`);
 		const Shape = {};
+		Shape.NodeType = Node.Type;
 		Shape.Style = Node.Style;
 		Shape.Name = Node.id;
-		Shape.Path = Path + PathSeperator;
-		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
+		Shape.PathName = PathName + PathSeperator;
+		Shape.PathName += (Node.id!==undefined) ? Node.id : ChildIndex;
+		Shape.Path = Node['d'];
 
 		//	get all shapes from the path and output them
-		const PathContours = ParseSvgPathCommandContours(Node['d']);
+		const PathContours = ParseSvgPathCommandContours(Node['d'], PathName);
 
 		function PushShape(Contour)
 		{
 			//	is it a line or a poly
 			let PathShape = {};
-			Pop.Debug("Countour",Contour);
+			// Pop.Debug("Countour",Contour);
 			if ( Shape.Style.fill == "none" )
 			{
 				PathShape.Line = {};
 				PathShape.Line.Points = Contour.Points.map( NormaliseSize );
+				FixPositionArray(PathShape.Line.Points);
 			}
 			else
 			{
 				PathShape.Polygon = {};
 				PathShape.Polygon.Points = Contour.Points.map( NormaliseSize );
+				FixPositionArray(PathShape.Polygon.Points);
 			}
 
 			const OutputShape = Object.assign({},Shape);
@@ -882,27 +908,30 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		PathContours.forEach( PushShape );
 	}
 	
-	function ParsePolygon(Node,ChildIndex,Path)
+	function ParsePolygon(Node,ChildIndex,PathName)
 	{
 		const Shape = {};
+		Shape.NodeType = Node.Type;
 		Shape.Style = Node.Style;
 		Shape.Name = Node.id;
-		Shape.Path = Path + PathSeperator;
-		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
+		Shape.PathName = PathName + PathSeperator;
+		Shape.PathName += (Node.id!==undefined) ? Node.id : ChildIndex;
 
 		Shape.Polygon = {};
 		Shape.Polygon.Points = StringToFloat2Coords(Node['points']);
-		
+		FixPositionArray(Shape.Polygon.Points);
+
 		OnShape(Shape);
 	}
 	
-	function ParseLine(Node,ChildIndex,Path)
+	function ParseLine(Node,ChildIndex,PathName)
 	{
 		const Shape = {};
+		Shape.NodeType = Node.Type;
 		Shape.Style = Node.Style;
 		Shape.Name = Node.id;
-		Shape.Path = Path + PathSeperator;
-		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
+		Shape.PathName = PathName + PathSeperator;
+		Shape.PathName += (Node.id!==undefined) ? Node.id : ChildIndex;
 
 		let x1 = StringToCoord( Node['x1'] );
 		let y1 = StringToCoord( Node['y1'] );
@@ -913,36 +942,44 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 		Shape.Line.Points = [];
 		Shape.Line.Points.push( [x1,y1] );
 		Shape.Line.Points.push( [x2,y2] );
-		
+		FixPositionArray(Shape.Line.Points);
+
 		OnShape( Shape );
 	}
 	
-	function ParsePolyLine(Node,ChildIndex,Path)
+	function ParsePolyLine(Node,ChildIndex,PathName)
 	{
 		const Shape = {};
+		Shape.NodeType = Node.Type;
 		Shape.Style = Node.Style;
 		Shape.Name = Node.id;
-		Shape.Path = Path + PathSeperator;
-		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
+		Shape.PathName = PathName + PathSeperator;
+		Shape.PathName += (Node.id!==undefined) ? Node.id : ChildIndex;
 
 		Shape.Line = {};
 		Shape.Line.Points = StringToFloat2Coords(Node['points']);
+		FixPositionArray(Shape.Line.Points);
 		
 		OnShape( Shape );
 	}
 	
-	function ParseRect(Node,ChildIndex,Path)
+	function ParseRect(Node,ChildIndex,PathName)
 	{
 		const Shape = {};
+		Shape.NodeType = Node.Type;
 		Shape.Style = Node.Style;
 		Shape.Name = Node.id;
-		Shape.Path = Path + PathSeperator;
-		Shape.Path += (Node.id!==undefined) ? Node.id : ChildIndex;
+		Shape.PathName = PathName + PathSeperator;
+		Shape.PathName += (Node.id!==undefined) ? Node.id : ChildIndex;
 		
 		let x = StringToCoord( Node['x'] ) || 0;
 		let y = StringToCoord( Node['y'] ) || 0;
 		let w = StringToSize( Node['width'] );
 		let h = StringToSize( Node['height'] );
+		
+		const xy = FixPosition([x,y],Bounds);
+		x = xy[0];
+		y = xy[1];
 		
 		Shape.Rect = {};
 		Shape.Rect.x = x;
@@ -954,35 +991,34 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 	}
 	
 	
-	function ParseShape(Node,ChildIndex,Path)
+	function ParseShape(Node,ChildIndex,PathName)
 	{
 		try
 		{
 			switch ( Node.Type )
 			{
-				case 'path':		return ParsePath(Node,ChildIndex,Path);
-				case 'circle':		return ParseCircle(Node,ChildIndex,Path);
-				case 'ellipse':		return ParseEllipse(Node,ChildIndex,Path);
-				case 'polygon':		return ParsePolygon(Node,ChildIndex,Path);
-				case 'rect':		return ParseRect(Node,ChildIndex,Path);
-				case 'line':		return ParseLine(Node,ChildIndex,Path);
-				case 'polyline':	return ParsePolyLine(Node,ChildIndex,Path);
+				case 'path':		return ParsePath(Node,ChildIndex,PathName);
+				case 'circle':		return ParseCircle(Node,ChildIndex,PathName);
+				case 'ellipse':		return ParseEllipse(Node,ChildIndex,PathName);
+				case 'polygon':		return ParsePolygon(Node,ChildIndex,PathName);
+				case 'rect':		return ParseRect(Node,ChildIndex,PathName);
+				case 'line':		return ParseLine(Node,ChildIndex,PathName);
+				case 'polyline':	return ParsePolyLine(Node,ChildIndex,PathName);
 			}
-			throw `Unhandled node type ${Node.Type} at ${Path}[${ChildIndex}]`;
+			throw `Unhandled node type ${Node.Type} at ${PathName}[${ChildIndex}]`;
 		}
 		catch(e)
 		{
-			Pop.Debug(`Failed to parse shape ${Node.Type}; ${e}`);
-			console.error(`Failed to parse shape ${Node.Type}; ${e}`);
+			Pop.Warning(`Failed to parse shape ${Node.Type}; ${e}`);
 		}
 	}
 	
-	function ParseNode(Node,NodeIndex,Path)
+	function ParseNode(Node,NodeIndex,PathName)
 	{
 		//	is a shape
 		if ( Node.Type )
 		{
-			ParseShape(Node,NodeIndex,Path);
+			ParseShape(Node,NodeIndex,PathName);
 		}
 		
 		//	is a group
@@ -1002,11 +1038,11 @@ Pop.Svg.ParseShapes = function(Contents,OnShape)
 				}
 			}
 			
-			if ( Path === null || Path.length == 0 )
-				Path = '';
+			if ( PathName === null || PathName.length == 0 )
+				PathName = '';
 			else
-				Path += PathSeperator;
-			const ChildPath = Path + GroupName;
+				PathName += PathSeperator;
+			const ChildPath = PathName + GroupName;
 			function ParseChild(ChildNode,ChildIndex)
 			{
 				ParseNode( ChildNode, ChildIndex, ChildPath );

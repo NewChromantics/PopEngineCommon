@@ -1,6 +1,24 @@
 Pop.Gui = {};
 
 
+const PopGuiStorage = window.sessionStorage;
+
+//	should have some general Pop API to use session storage, localstorage, cookies etc crossplatform
+Pop.Gui.ReadSettingJson = function(Key)
+{
+	const Json = PopGuiStorage.getItem(Key);
+	if ( !Json )
+		throw `No setting for ${Key}`;
+	const Object = JSON.parse(Json);
+	return Object;
+}
+
+Pop.Gui.WriteSettingJson = function(Key,Object)
+{
+	const Json = JSON.stringify(Object);
+	PopGuiStorage.setItem(Key,Json);
+}
+
 function IsHtmlString(Value)
 {
 	if ( typeof Value != 'string' )
@@ -61,6 +79,7 @@ function SetElementPosition(Element,x,y)
 	Element.style.left = ( x) + "px";
 }
 
+//	gr: this should change to a list of always-incrementing z's for our windows
 var $HighestZ = 99;
 function SetElementToTop(Element)
 {
@@ -142,54 +161,62 @@ function float2(_x,_y)
 function GetElementRect(Element)
 {
 	return Element.getBoundingClientRect();
-	let absolutePosition = GetElementRect;
-	let el = Element;
-	//	need to cope with scroll, not just getBoundingClientRect :/
-	//	https://stackoverflow.com/a/32623832/355753
-	let
-	found,
-	left = 0,
-	top = 0,
-	width = 0,
-	height = 0,
-	offsetBase = absolutePosition.offsetBase;
-	if (!offsetBase && document.body) {
-		offsetBase = absolutePosition.offsetBase = document.createElement('div');
-		offsetBase.style.cssText = 'position:absolute;left:0;top:0';
-		document.body.appendChild(offsetBase);
-	}
-	if (el && el.ownerDocument === document && 'getBoundingClientRect' in el && offsetBase) {
-		let boundingRect = el.getBoundingClientRect();
-		let baseRect = offsetBase.getBoundingClientRect();
-		found = true;
-		left = boundingRect.left - baseRect.left;
-		top = boundingRect.top - baseRect.top;
-		width = boundingRect.right - boundingRect.left;
-		height = boundingRect.bottom - boundingRect.top;
-	}
-	return {
-	found: found,
-	left: left,
-	top: top,
-	width: width,
-	height: height,
-	right: left + width,
-	bottom: top + height,
-	x: left,
-	y: top,
-	xy: float2(left,top)
-	};
 }
 
 function SetGuiControl_Draggable(Element)
 {
+	const RectKey = `${Element.id}_WindowRect`;
+	function LoadRect()
+	{
+		//	if an element is draggable, see if we've got a previos position to restore
+		//	todo: make sure previous pos fits on new screen when we restore
+		try
+		{
+			const NewRect = Pop.Gui.ReadSettingJson(RectKey);
+			const x = NewRect.x;
+			const y = NewRect.y;
+			SetElementPosition( Element, x, y );
+		}
+		catch(e)
+		{
+			Pop.Warning(`Failed to restore window position for ${RectKey}`);
+		}
+	}
+
+	function SaveRect()
+	{
+		try
+		{
+			const ElementRect = GetElementRect(Element);
+			if ( !ElementRect )
+				throw `Failed to get element rect (${Element.id}`;
+			const Rect = {};
+			Rect.x = ElementRect.x
+			Rect.y = ElementRect.y;
+			Pop.Gui.WriteSettingJson(RectKey,Rect);
+		}
+		catch(e)
+		{
+			Pop.Warning(`Failed to write window position for ${RectKey}`);
+		}
+	}
+	
 	let AllowInteraction = function(Event)
 	{
-		//	gr: if we prevent too events (or dont preventdefault)
+		//	gr: if we prevent top events (or dont preventdefault)
 		//		then quick movements can fall onto window, and we're not currently
 		//		handling when we move without starting with mousedown
-		if ( Event.target != Element )
-			return false;
+		if (Event.target != Element)
+		{
+			//	gr: hack, to make a child invisible for mouse move/down/up
+			//	find a proper fix for this, but can't seem to get it right
+			//	as we're AddListener(Capture=true) it gets here first before child
+			//	but we want to let children do their thing (eg, scroll bar)
+			//	without registering it as a drag
+			if (Event.target.AllowDraggable !== true )
+				return false;
+			//Pop.Debug(`Dragging from child via AllowDraggable`);
+		}
 		//if ( Event.target.tagName.toUpperCase() == 'INPUT' )
 		//	return false;
 		return true;
@@ -230,8 +257,10 @@ function SetGuiControl_Draggable(Element)
 	{
 		//if ( !AllowInteraction(e) )
 		//	return;
+		//	update window position one final time & save
 		OnMouseDrag(e);
-		
+		SaveRect();
+												   
 		//	drop!
 		let Droppable = Element.DropMeta;
 		//let Droppable = GetDropCallback(Element);
@@ -244,10 +273,11 @@ function SetGuiControl_Draggable(Element)
 			
 			//	do drop
 			Droppable.callback(Element);
+			SaveRect();
 		}
 		else
 		{
-			console.log("revert droppable");
+			//console.log("revert droppable");
 			//	revert the drag
 			if ( Element.OnGrabRevert != null )
 			{
@@ -255,9 +285,10 @@ function SetGuiControl_Draggable(Element)
 			}
 		}
 		Element.OnGrabRevert = null;
-		
-		Element.onmouseup = null;
-		Element.onmousemove = null;
+
+		const CapturePhase = true;
+		Element.removeEventListener('mouseup',OnMouseUp,CapturePhase);
+		Element.removeEventListener('mousemove',OnMouseDrag,CapturePhase);
 		document.onmouseup = null;
 		document.onmousemove = null;
 	};
@@ -290,9 +321,6 @@ function SetGuiControl_Draggable(Element)
 		//	jump to top
 		Element.grabParent = Element.parentNode;
 		SetElementToTop(Element);
-		//	need to make any children go above that though
-		//let ElementCardChildren = GetCardChildren(Element);
-		//ElementCardChildren.forEach( SetElementToTop );
 		
 		Element.grabClientX = e.clientX;
 		Element.grabClientY = e.clientY;
@@ -304,9 +332,10 @@ function SetGuiControl_Draggable(Element)
 		
 		//	convert element to absolute
 		SetElementPosition( Element, Element.startDragX, Element.startDragY );
-		
-		Element.onmouseup = OnMouseUp;
-		Element.onmousemove = OnMouseDrag;
+
+		const CapturePhase = true;
+		Element.addEventListener('mouseup',OnMouseUp,CapturePhase);
+		Element.addEventListener('mousemove',OnMouseDrag,CapturePhase);
 		//	capture document mouse up in case the user drags off-window
 		document.onmouseup = OnMouseUp;
 		//	capture document mouse move for when the user moves the mouse so fast it goes off the element, and we don't get mousemove any more
@@ -315,46 +344,29 @@ function SetGuiControl_Draggable(Element)
 	
 	let OnDetachElement = function(Element)
 	{
-		/*
-		//	can't pickup a mystery card
-		if ( IsCardMystery(Element) )
-			return null;
-		if ( !IsCard(Element) )
-			return null;
-		
-		//	take any non mystery card, but take all those below it too
-		//	gr: maybe the actual detatching needs to be here...
-		let ElementLatterCards = GetCardChildren(DeckElement,Element);
-		let ParentToElement = function(ChildElement)
-		{
-			SetElementParent( ChildElement, Element );
-		};
-		ElementLatterCards.forEach( ParentToElement );
-		*/
 		//	rememeber to put the cards back in order!
 		let Revert = function()
 		{
-			/*
-			SetElementParent( Element, DeckElement );
-			let ElementChildren = GetCardChildren(Element);
-			let ReplaceToDeck = function(ec)
-			{
-				SetElementParent( ec, DeckElement );
-			};
-			ElementChildren.forEach(ReplaceToDeck);
-			 */
 		};
 		return Revert;
 	};
-	
-	Element.onmousedown = OnMouseDown;
+
+	const CapturePhase = true;
+	Element.addEventListener('mousedown',OnMouseDown,CapturePhase);
 	Element.parentNode.OnDetachElement = OnDetachElement;
+
+	LoadRect();
 }
 
 Pop.Gui.Window = function(Name,Rect,Resizable)
 {
 	//	child controls should be added to this
+	//	todo: rename to ChildContainer
 	this.ElementParent = null;
+	this.ElementWindow = null;
+	this.ElementTitleBar = null;
+	this.RestoreHeight = null;		//	if non-null, stores the height we were before minimising
+	this.TitleBarClickLastTime = null;	//	to detect double click 
 
 	//	gr: element may not be assigned yet, maybe rework construction of controls
 	this.AddChildControl = function(Child,Element)
@@ -368,13 +380,14 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		return this.ElementParent;
 	}
 	
-	this.CreateElement = function(Parent)
+	this.CreateElement = function(Name,Parent,Rect)
 	{
 		let Element = document.createElement('div');
 		if ( Rect == Parent.id )
 			SetGuiControl_SubElementStyle(Element);
 		else
 			SetGuiControlStyle( Element, Rect );
+		
 		//Element.innerText = 'Pop.Gui.Window';
 		Element.style.zIndex = $HighestZ;
 		//Element.style.overflow = 'scroll';	//	inner div handles scrolling
@@ -389,25 +402,32 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		}
 		else
 		{
+			//	gr: this should really be the title bar, but would need to move the window element
+			//		so this is just easier
 			SetGuiControl_Draggable( Element );
 		}
 		
 		//	purely for styling
-		let AddChild = function(Parent,ClassName,InnerText='')
+		let AddChild = function(Parent,ClassName,InnerText='',AllowMouseInteraction=true)
 		{
 			let Child = document.createElement('div');
 			Child.className = ClassName;
 			Child.innerText = InnerText;
+			if (!AllowMouseInteraction )
+				Child.style.pointerEvents = 'none';
 			Parent.appendChild( Child );
 			return Child;
 		}
 		this.ElementTitleBar = AddChild( Element, 'PopGuiTitleBar');
 		const TitleBar = this.ElementTitleBar;
-		TitleBar.style.pointerEvents = 'none';
 		//AddChild( TitleBar, 'PopGuiTitleIcon', 'X');
-		AddChild( TitleBar, 'PopGuiTitleText', Name );
+		AddChild(TitleBar,'PopGuiTitleText',Name,false);
+		//	todo: add proper gui button types
 		//AddChild( TitleBar, 'PopGuiButton', '_');
 		//AddChild( TitleBar, 'PopGuiButton', 'X');
+
+		TitleBar.AllowDraggable = true;
+		TitleBar.addEventListener('click',this.OnTitleBarClick.bind(this),true);
 		
 		//	this may need some style to force position
 		this.ElementParent = AddChild( Element, 'PopGuiIconView');
@@ -420,14 +440,45 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		return Element;
 	}
 	
+	this.OnTitleBarClick = function(Event)
+	{
+		const DoubleClickMaxTime = 300;
+		
+		//	todo: filter button
+		//	detect double click
+		if ( this.TitleBarClickLastTime !== null )
+		{
+			const TimeSinceClick = Pop.GetTimeNowMs() -  this.TitleBarClickLastTime;
+			if ( TimeSinceClick < DoubleClickMaxTime )
+			{
+				this.OnToggleMinimise();
+				this.TitleBarClickLastTime = null;
+			}
+		}
+		
+		this.TitleBarClickLastTime = Pop.GetTimeNowMs();				
+	}
+	
 	this.EnableScrollbars = function(Horizontal,Vertical)
 	{
 		this.ElementParent.style.overflowY = Vertical ? 'scroll' : 'hidden';
 		this.ElementParent.style.overflowX = Horizontal ? 'scroll' : 'hidden';
 	}
-	
+
+	this.SetMinimised = function(Minimise=true)
+	{
+		if ( this.IsMinimised() != Minimise )
+		   this.OnToggleMinimise();
+	}
+												   
+	this.IsMinimised = function ()
+	{
+		return (this.RestoreHeight !== null);
+	}
+
 	this.Flash = function(Enable)
 	{
+		//	gr: turn this into an async func!
 		const FlashOn = function()
 		{
 			this.ElementTitleBar.style.backgroundColor = '#888';
@@ -463,10 +514,36 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		}
 	}
 
+	this.OnToggleMinimise = function (DoubleClickEvent)
+	{
+		//Pop.Debug(`OnToggleMinimise`);
+		//	check height of window to see if it's minimised
+		if (!this.IsMinimised())
+		{
+			this.RestoreHeight = this.ElementWindow.style.height;
+			this.ElementWindow.style.height = '18px';
+			this.ElementParent.style.visibility = 'hidden';
+		}
+		else
+		{
+			this.ElementWindow.style.height = this.RestoreHeight;
+			this.RestoreHeight = null;
+			this.ElementParent.style.visibility = 'visible';
+		}
+	}
+
 	let Parent = document.body;
 	if ( typeof Rect == 'string' )
+	{
 		Parent = document.getElementById(Rect);
-	this.Element = this.CreateElement(Parent);
+	}
+	else if ( Rect instanceof HTMLElement )
+	{
+		Parent = Rect;
+		Rect = Parent.id;
+	}
+	
+	this.ElementWindow = this.CreateElement( Name, Parent, Rect );
 }
 
 function GetExistingElement(Name)
@@ -482,6 +559,81 @@ function GetExistingElement(Name)
 }
 
 
+
+function GetButtonFromMouseEventButton(MouseButton,AlternativeButton)
+{
+	//	html/browser definitions
+	const BrowserMouseLeft = 0;
+	const BrowserMouseMiddle = 1;
+	const BrowserMouseRight = 2;
+	
+	//	handle event & button arg
+	if ( typeof MouseButton == "object" )
+	{
+		let MouseEvent = MouseButton;
+		
+		//	this needs a fix for touches
+		if ( MouseEvent.touches )
+		{
+			//	have to assume there's always one?
+			const Touches = Array.from( MouseEvent.touches );
+			if ( Touches.length == 0 )
+				throw "Empty touch array, from event?";
+			MouseButton = BrowserMouseLeft;
+			AlternativeButton = false;
+		}
+		else
+		{
+			MouseButton = MouseEvent.button;
+			AlternativeButton = (MouseEvent.ctrlKey == true);
+		}
+	}
+	
+	if ( AlternativeButton )
+	{
+		switch ( MouseButton )
+		{
+			case BrowserMouseLeft:	return Pop.SoyMouseButton.Back;
+			case BrowserMouseRight:	return Pop.SoyMouseButton.Forward;
+		}
+	}
+	
+	switch ( MouseButton )
+	{
+		case BrowserMouseLeft:		return Pop.SoyMouseButton.Left;
+		case BrowserMouseMiddle:	return Pop.SoyMouseButton.Middle;
+		case BrowserMouseRight:		return Pop.SoyMouseButton.Right;
+	}
+	throw "Unhandled MouseEvent.button (" + MouseButton + ")";
+}
+
+//	gr: should api revert to uv?
+function GetMousePos(MouseEvent,Element)
+{
+	const Rect = Element.getBoundingClientRect();
+	
+	//	touch event, need to handle multiple touch states
+	if ( MouseEvent.touches )
+		MouseEvent = MouseEvent.touches[0];
+	
+	const ClientX = MouseEvent.pageX || MouseEvent.clientX;
+	const ClientY = MouseEvent.pageY || MouseEvent.clientY;
+	const x = ClientX - Rect.left;
+	const y = ClientY - Rect.top;
+	return [x,y];
+}
+
+
+
+Pop.Gui.SetStyle = function(Element,Key,Value)
+{
+	//	change an attribute
+	Element.setAttribute(Key,Value);
+	//	set a css value
+	Element.style.setProperty(`${Key}`,Value);
+	//	set a css variable
+	Element.style.setProperty(`--${Key}`,Value);
+}
 
 //	finally doing proper inheritance for gui
 Pop.Gui.BaseControl = class
@@ -502,6 +654,27 @@ Pop.Gui.BaseControl = class
 		const Element = this.GetElement();
 		Element.addEventListener('drop',this.OnDragDrop.bind(this));
 		Element.addEventListener('dragover',this.OnTryDragDropEvent.bind(this));
+		
+		//	need to move all these from Opengl window
+		Element.addEventListener('wheel', this.OnMouseWheelEvent.bind(this), false );
+	}
+	
+	OnMouseWheelEvent(MouseEvent)
+	{
+		//	if no overload/assigned event, ignore the event
+		if ( !this.OnMouseScroll )
+			return;
+		
+		const Element = this.GetElement();
+		const Pos = GetMousePos(MouseEvent,Element);
+		const Button = GetButtonFromMouseEventButton(MouseEvent);
+		
+		//	gr: maybe change scale based on
+		//WheelEvent.deltaMode = DOM_DELTA_PIXEL, DOM_DELTA_LINE, DOM_DELTA_PAGE
+		const DeltaScale = 0.01;
+		const WheelDelta = [ MouseEvent.deltaX * DeltaScale, MouseEvent.deltaY * DeltaScale, MouseEvent.deltaZ * DeltaScale ];
+		this.OnMouseScroll( Pos[0], Pos[1], Button, WheelDelta );
+		MouseEvent.preventDefault();
 	}
 
 	GetDragDropFilenames(Files)
@@ -552,7 +725,8 @@ Pop.Gui.BaseControl = class
 				const Mime = File.type;
 				Pop.Debug(`Filename ${File.name}->${Filename} mime ${Mime}`);
 				const FileArray = await File.arrayBuffer();
-				Pop._AssetCache[Filename] = new Uint8Array(FileArray);
+				const File8 = new Uint8Array(FileArray);
+				Pop.SetFileCache(Filename,File8);
 				NewFilenames.push(Filename);
 			}
 			//	make a promise for each file
@@ -585,21 +759,21 @@ Pop.Gui.BaseControl = class
 		return this.OnDragDropQueue.WaitForNext();
 	}
 	
-	//	todo: generic pop api for this
 	SetStyle(Key,Value)
 	{
-		//	change an attribute
-		this.Element.setAttribute(Key,Value);
-		//	set a css value
-		this.Element.style.setProperty(`${Key}`,Value);
-		//	set a css variable
-		this.Element.style.setProperty(`--${Key}`,Value);
+		const Element = this.GetElement();
+		Pop.Gui.SetStyle(Element,Key,Value);
 	}
 	
 	SetRect(Rect)
 	{
 		const Element = this.GetElement();
 		SetGuiControlStyle( Element, Rect );
+	}
+	
+	SetVisible(Visible)
+	{
+		this.SetStyle('visibility', Visible ? 'visible' : 'hidden' );
 	}
 }
 
@@ -723,7 +897,7 @@ Pop.Gui.Button = class extends Pop.Gui.BaseControl
 			return Div;
 		
 		//	gr: hard to style buttons/inputs, no benefit afaik, but somehow we shoulld make this an option
-		const ElementType = 'span';//'input';
+		const ElementType = 'input';
 		Div = document.createElement(ElementType);
 		if ( Rect )
 			SetGuiControlStyle( Div, Rect );
@@ -763,6 +937,7 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 	{
 		//	call our callback
 		let Value = this.InputElement.valueAsNumber;
+		this.ValueCache = Value;
 		this.OnChanged( Value );
 	}
 	
@@ -771,6 +946,8 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		const ListenToInput = function(InputElement)
 		{
 			InputElement.addEventListener('input', this.OnElementChanged.bind(this) );
+			//	this is event is triggered from this.SetValue() so creates a loop
+			//InputElement.addEventListener('change', this.OnElementChanged.bind(this) );
 		}.bind(this);
 		
 		let Div = GetExistingElement(Parent);
@@ -944,36 +1121,57 @@ Pop.Gui.Colour = function(Parent,Rect)
 }
 
 
-
-Pop.Gui.TextBox = function(Parent,Rect)
+Pop.Gui.TextBox = class extends Pop.Gui.BaseControl
 {
-	this.Label = '';
-	this.InputElement = null;
-	this.LabelElement = null;
-	
-	this.GetValue = function()
+	constructor(Parent,Rect)
+	{
+		super(...arguments);
+
+		this.Label = '';
+		this.InputElement = null;
+		this.LabelElement = null;
+
+		//	overload
+		this.OnChanged = function (NewValue)
+		{
+			Pop.Debug(`Pop.Gui.TextBox.OnChanged -> ${NewValue}`);
+		}
+
+		this.ContainerElement = this.CreateElement(Parent,Rect);
+		this.InputElement = this.ContainerElement.InputElement;
+		this.LabelElement = this.ContainerElement.LabelElement;
+		this.BindEvents();
+		this.RefreshLabel();
+	}
+
+	GetElement()
+	{
+		return this.ContainerElement;
+	}
+
+	GetValue()
 	{
 		return this.InputElement.value;
 	}
 	
-	this.SetValue = function(Value)
+	SetValue(Value)
 	{
 		this.InputElement.value = Value;
 		this.RefreshLabel();
 	}
 	
-	this.SetLabel = function(Value)
+	SetLabel(Value)
 	{
 		this.Label = Value;
 		this.RefreshLabel();
 	}
 	
-	this.RefreshLabel = function()
+	RefreshLabel()
 	{
 		this.LabelElement.innerText = this.Label;
 	}
 	
-	this.OnElementChanged = function(Event)
+	OnElementChanged(Event)
 	{
 		//	call our callback
 		let Value = this.GetValue();
@@ -981,37 +1179,55 @@ Pop.Gui.TextBox = function(Parent,Rect)
 		this.OnChanged( Value );
 	}
 	
-	this.CreateElement = function(Parent)
+	CreateElement(Parent,Rect)
 	{
-		let Input = document.createElement('input');
-		this.InputElement = Input;
-		
-		//	gr: what are defaults in pop?
+		//	if it already exists, need to work out if it's an input or container
+		const ExistingElement = GetExistingElement(Parent);
+		if (ExistingElement)
+		{
+			//	existing
+			if (ExistingElement.type == "text")
+			{
+				ExistingElement.InputElement = ExistingElement;
+				ExistingElement.LabelElement = {};//	dummy
+				return ExistingElement;
+			}
+			throw `Handle existing element for label`;
+		}
+
+		const ElementType = 'span';//'input';
+		const Div = document.createElement(ElementType);
+		if (Rect)
+			SetGuiControlStyle(Div,Rect);
+		Parent.AddChildControl(Parent,Div);
+
+		const Input = document.createElement('input');
+		SetGuiControl_SubElementStyle(Input,0,50);
 		Input.type = 'text';
+		Input.value = 'Pop.Gui.Button value';
 		SetGuiControl_SubElementStyle( Input, 0, 50 );
+		Div.InputElement = Input;
+		Div.appendChild(Input);
+
+		const Label = document.createElement('label');
+		Label.innerText = 'TextBox';
+		SetGuiControl_SubElementStyle( Label, 50, 100 );
+		Div.LabelElement = Label;
+		Div.appendChild( Label );
+		
+		return Div;
+	}
+
+	BindEvents()
+	{
+		super.BindEvents();
+
+		const Input = this.InputElement;
 		//	oninput = every change
 		//	onchange = on lose focus
 		Input.oninput = this.OnElementChanged.bind(this);
 		Input.onchange = this.OnElementChanged.bind(this);
-
-		let Label = document.createElement('label');
-		this.LabelElement = Label;
-		Label.innerText = 'TextBox';
-		SetGuiControl_SubElementStyle( Label, 50, 100 );
-		
-		
-		let Div = document.createElement('div');
-		SetGuiControlStyle( Div, Rect );
-		
-		Div.appendChild( Input );
-		Div.appendChild( Label );
-		Parent.AddChildControl( this, Div );
-		
-		return Div;
 	}
-	
-	this.Element = this.CreateElement(Parent);
-	this.RefreshLabel();
 }
 
 
@@ -1071,3 +1287,164 @@ Pop.Gui.ImageMap = class extends Pop.Gui.BaseControl
 	}
 }
 
+
+
+
+Pop.Gui.Table = class extends Pop.Gui.BaseControl
+{
+	constructor(Parent,Rect)
+	{
+		super(...arguments);
+		this.TableElement = this.CreateElement(Parent,Rect);
+		this.InitStyle();
+		this.BindEvents();
+		this.KnownKeys = [];
+	}
+
+	GetElement()
+	{
+		return this.TableElement;
+	}
+
+	SetValue(Rows)
+	{
+		function SpecialKey(Key)
+		{
+			return Key == 'Style';
+		}
+		function NotSpecialKey(Key)
+		{
+			return !SpecialKey(Key);
+		}
+
+		//	check is an array of keyd values
+		if (!Array.isArray(Rows) )
+			throw `Pop.Gui.Table.SetValue(${Rows}) expecting an array of keyed objects`;
+
+		//	merge new keys
+		if (Rows.length > 0)
+		{
+			const NewKeys = Object.keys(Rows[0]);
+			this.KnownKeys = Array.from(new Set(this.KnownKeys.concat(NewKeys)));
+			this.KnownKeys = this.KnownKeys.filter(NotSpecialKey);
+		}
+
+		this.UpdateTableDimensions(this.KnownKeys,Rows.length);
+
+		//	set all cells
+		const SetRowCells = function (RowValues,RowIndex)
+		{
+			const Style = RowValues.Style;
+			for (let [Key,Value] of Object.entries(RowValues))
+			{
+				const ColumnIndex = this.KnownKeys.indexOf(Key);
+				//	column/key probably filtered out
+				if (ColumnIndex == -1)
+					continue;
+				this.SetTableCell(ColumnIndex,RowIndex,Value,Style,Key);
+			}
+		}
+		Rows.forEach(SetRowCells.bind(this));
+	}
+
+	SetTableCell(Column,Row,Value,Style,ColumnKey)
+	{
+		const Table = this.GetElement();
+		const Body = Table.tBodies[0];
+		//const Header = Table.createTHead();
+		const Element = Body.rows[Row].cells[Column];
+		Element.innerText = (Value===undefined) ? "" : Value;
+		
+		//	gr: as we're shuffling rows, we currently let old styles hang around
+		//		and they get left set (as they're never unset)
+		//		so clear old style (this still doesn't remove attributes!)
+		Element.style = '';
+		
+		//	style should be a keyed object
+		if ( typeof Style == 'string' )
+		{
+			Pop.Warning(`Deprecated: Style on a table row should be keyed object of attributes; ${ColumnKey}:${Style}`);
+			Element.style = Style;
+		}
+		else if ( Style )
+		{
+			for ( let [StyleName,Value] of Object.entries(Style) )
+			{
+				Pop.Gui.SetStyle(Element,StyleName,Value);
+			}
+		}
+	}
+
+	UpdateTableRow(Row,ColumnValues,SetIdToColumnNames)
+	{
+		while (Row.cells.length < ColumnValues.length)
+			Row.insertCell(0);
+		while (Row.cells.length > ColumnValues.length)
+			Row.deleteCell(0);
+		//if ( SetIdToColumnNames )	Pop.Debug(`SetIdToColumnNames`);
+		function SetCell(Value,Index)
+		{
+			Row.cells[Index].innerText = Value;
+			if ( SetIdToColumnNames )
+				Row.cells[Index].id = ColumnValues[Index];
+		}
+		ColumnValues.forEach(SetCell);
+	}
+
+	UpdateTableDimensions(Columns,RowCount)
+	{
+		const Table = this.GetElement();
+		const Body = Table.tBodies[0];
+		const Header = Table.createTHead();
+
+		//	update header cells
+		this.UpdateTableRow(Header.rows[0],Columns,true);
+		
+		//	append then delete rows
+		while (Body.rows.length < RowCount)
+			Body.insertRow(Body.rows.length - 1);
+		//	todo: work out row diff and try and and cull the correct one
+		while (Body.rows.length > RowCount)
+			Body.deleteRow(0);
+
+		//	make sure all rows are correct size
+		for (let r = 0;r < RowCount;r++)
+		{
+			this.UpdateTableRow(Body.rows[r],Columns);
+		}
+	}
+
+
+	CreateElement(Parent,Rect)
+	{
+		let Div = GetExistingElement(Rect);
+		if (Div)
+		{
+			//	gr: we currently style according to a table
+			if (Div.nodeName != 'TABLE')
+				throw `Pop.Gui.Table parent ${Parent} isn't a table, is ${Div.nodeName}`;
+
+			return Div;
+		}
+
+		Div = document.createElement('TABLE');
+		if (Rect)
+			SetGuiControlStyle(Div,Rect);
+
+		Parent.AddChildControl(Parent,Div);
+		return Div;
+	}
+
+	//	force styling for table
+	InitStyle()
+	{
+		const Table = this.GetElement();
+
+		//	make sure we have distinct bodys and headers
+		Table.createTHead();
+		if (!Table.tHead.rows.length)
+			Table.tHead.insertRow(0);
+		if (!Table.tBodies.length)
+			Table.createTBody();
+	}
+}

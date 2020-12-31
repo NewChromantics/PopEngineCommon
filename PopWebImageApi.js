@@ -1,5 +1,24 @@
 
+//	gr: I forget what browser this was for! add comments when we know!
 const WebApi_HtmlImageElement = this.hasOwnProperty('HTMLImageElement') ? this['HTMLImageElement'] : null;
+const WebApi_HtmlCanvasElement = this.hasOwnProperty('HTMLCanvasElement') ? this['HTMLCanvasElement'] : null;
+
+
+//	in c++ this is SoyPixelsFormat namespace
+function GetChannelsFromPixelFormat(PixelFormat)
+{
+	switch(PixelFormat)
+	{
+		case 'Greyscale':	return 1;
+		case 'RGBA':		return 4;
+		case 'RGB':			return 3;
+		case 'Float3':		return 3;
+		case 'Float4':		return 4;
+		case 'ChromaU':		return 1;
+		case 'ChromaV':		return 1;
+	}
+	throw `unhandled GetChannelsFromPixelFormat(${PixelFormat})`;
+}
 
 
 function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
@@ -36,6 +55,9 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	
 	switch ( PixelFormat )
 	{
+		case 'Luma':
+		case 'ChromaU':
+		case 'ChromaV':
 		case 'Greyscale':	return [ gl.LUMINANCE,	gl.UNSIGNED_BYTE];
 		case 'RGBA':		return [ gl.RGBA,		gl.UNSIGNED_BYTE];
 		case 'RGB':			return [ gl.RGB,		gl.UNSIGNED_BYTE];
@@ -87,6 +109,15 @@ function GetTextureFormatPixelByteSize(OpenglContext,Format,Type)
 }
 
 
+function GetPixelsMetaFromHtmlImageElement(Img)
+{
+	const Meta = {};
+	Meta.Width = Img.width;
+	Meta.Height = Img.height;
+	Meta.Format = 'RGBA';
+	return Meta;
+}
+
 function GetPixelsFromHtmlImageElement(Img)
 {
 	//	html5 image
@@ -125,7 +156,7 @@ async function PngBytesToPixels(PngBytes)
 	const PngBlob = new Blob( [ PngBytes ], { type: "image/png" } );
 	const ImageUrl = URL.createObjectURL( PngBlob );
 	const Image = await Pop.LoadFileAsImageAsync(ImageUrl);
-	const Pixels = GetPixelsFromHtmlImageElement(Image);
+	const Pixels = GetPixelsFromHtmlImageElement(Image.Pixels);
 /*
 	const Pixels = {};
 	Pixels.Width = 1;
@@ -250,8 +281,68 @@ Pop.Image = function(Filename)
 		return this.PixelsFormat;
 	}
 	
+	this.GetChannels = function()
+	{
+		return GetChannelsFromPixelFormat(this.PixelsFormat);
+	}
+	
+	this.SetFormat = function(NewFormat)
+	{
+		if ( this.PixelsFormat == NewFormat )
+			return;
+		throw `Todo: Pixel format conversion from ${this.PixelsFormat} to ${NewFormat}`;
+	}
+
+	this.GetDataUrl = function ()
+	{
+		const Canvas = document.createElement('canvas');
+		const Context = Canvas.getContext('2d');
+		const Width = this.GetWidth();
+		const Height = this.GetHeight();
+		Canvas.width = Width;
+		Canvas.height = Height;
+
+		let Pixels = new Uint8ClampedArray(this.GetPixelBuffer());
+		const Img = new ImageData(Pixels,Width,Height);
+		Context.putImageData(Img,0,0);
+
+		const data = Canvas.toDataURL("image/png");
+
+		//	destroy canvas (safari suggests its hanging around)
+		Canvas.width = 0;
+		Canvas.height = 0;
+		delete Canvas;
+
+		return data;
+	}
+
+	this.GetPngData = function ()
+	{
+		let data = this.GetDataUrl();
+		// Remove meta data
+		data = data.slice(22)
+		data = Uint8Array.from(atob(data), c => c.charCodeAt(0))
+		
+		return data;
+	}
+	
 	this.GetPixelBuffer = function()
 	{
+		if (!this.Pixels)
+			return this.Pixels;
+
+		//	extract pixels from object
+		if ( this.Pixels.constructor == WebApi_HtmlImageElement || this.Pixels.constructor == WebApi_HtmlCanvasElement )
+		{
+			const NewPixels = GetPixelsFromHtmlImageElement(this.Pixels);
+			//	gr: we should replace this.Pixels here, but pixelversion stays the same (texture shouldn't change)
+			//		if this is a problem somewhere, just return the pixel buffer, but note that it's expensive!
+			//		the native api keeps an extra member for different pixel types (eg. this.HtmlPixels for image/canvas,
+			//		like how we have this.Texture & this.Pixels)
+			this.Pixels = NewPixels.Buffer;
+			//throw `GetPixelBuffer() is Canvas element, need to read pixels`;
+		}
+						  
 		return this.Pixels;
 	}
 	
@@ -392,7 +483,7 @@ Pop.Image = function(Filename)
 		}
 		
 		
-		if ( this.Pixels instanceof Image )
+		if ( this.Pixels instanceof Image || this.Pixels instanceof WebApi_HtmlCanvasElement )
 		{
 			//Pop.Debug("Image from Image",this.PixelsFormat);
 			const SourceFormat = gl.RGBA;
@@ -516,17 +607,20 @@ Pop.Image = function(Filename)
 			this.WritePixels( ImageFile.width, ImageFile.height, Image, PixelFormat );
 		}
 	}
-	else if ( Filename && Filename.constructor == WebApi_HtmlImageElement )
+	else if ( Filename && (Filename.constructor == WebApi_HtmlImageElement || Filename.constructor == WebApi_HtmlCanvasElement) )
 	{
 		const HtmlImage = Filename;
 		//	gr: this conversion should be in WritePixels()
-		const Pixels = GetPixelsFromHtmlImageElement(HtmlImage);
-		this.WritePixels(Pixels.Width,Pixels.Height,Pixels.Buffer,Pixels.Format);
+		//const Pixels = GetPixelsFromHtmlImageElement(HtmlImage);
+		//this.WritePixels(Pixels.Width,Pixels.Height,Pixels.Buffer,Pixels.Format);
+		const PixelsMeta = GetPixelsMetaFromHtmlImageElement(HtmlImage);
+		const Pixels = HtmlImage;
+		this.WritePixels(PixelsMeta.Width,PixelsMeta.Height,Pixels,PixelsMeta.Format);
 	}
 	else if ( Array.isArray( Filename ) )
 	{
 		//	initialise size...
-		Pop.Debug("Init image with size", Filename);
+		// Pop.Debug("Init image with size", Filename);
 		const Size = arguments[0];
 		const PixelFormat = arguments[1] || 'RGBA';
 		const Width = Size[0];
