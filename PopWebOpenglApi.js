@@ -607,11 +607,8 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 }
 
 
-Pop.Opengl.Window = function(Name,Rect,CanvasOptions,ChildDocumentRoot)
+Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 {
-	if(ChildDocumentRoot)
-		document = ChildDocumentRoot;
-
 	//	things to overload
 	this.OnRender = function(RenderTarget)					{	Pop.Warning(`OnRender not overloaded`);	};
 	this.OnMouseDown = function(x,y,Button)					{	Pop.DebugMouseEvent('OnMouseDown',...arguments);		};
@@ -711,7 +708,26 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions,ChildDocumentRoot)
 		//	if we're fitting inside a div, then Parent should be the name of a div
 		//	we could want a situation where we want a rect inside a parent? but then
 		//	that should be configured by css?
+
 		let Element = document.getElementById(Name);
+
+		// Check IFrames for Canvas Elements
+		if (!Element)
+		{
+			let IFrames = document.getElementsByTagName("iframe")
+			let IframeCanvases = Object.keys(IFrames).map((key) =>
+			{
+				let iframe = IFrames[key];
+				let iframe_document = iframe.contentDocument || iframe.contentWindow.document;
+				return iframe_document.getElementById(Name);
+			});
+
+			if(IframeCanvases.length > 1)
+				throw `More than one Canvas with the name ${Name} found`
+
+			Element = IframeCanvases[0]
+		}
+
 		if ( Element )
 		{
 			//	https://stackoverflow.com/questions/254302/how-can-i-determine-the-type-of-an-html-element-in-javascript
@@ -720,6 +736,10 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions,ChildDocumentRoot)
 				throw `Pop.Opengl.Window ${Name} needs to be a canvas, is ${Element.nodeName}`;
 			return Element;
 		}
+
+		// if Rect is passed in as an object assume it is the canvas
+		if (typeof Rect === 'object' && Rect !== null)
+			return Rect;
 		
 		//	create new canvas
 		this.NewCanvasElement = document.createElement('canvas');
