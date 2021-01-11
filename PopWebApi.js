@@ -523,6 +523,32 @@ class AbortControllerStub
 };
 window.AbortController = window.AbortController || AbortControllerStub;
 
+//	gr: hack for kandinsky;
+//		if any fetch's fail
+Pop.WebApi.InternetStatus = true;	//	we can pretty safely assume it's initially fine
+Pop.WebApi.InternetStatusChangedQueue = new WebApi_PromiseQueue('InternetStatusChangedQueue');
+
+Pop.WebApi.WaitForInternetStatusChange = async function()
+{
+	//	wait for a change (dirty) and then return latest status 
+	await Pop.WebApi.InternetStatusChangedQueue.WaitForNext();
+	return Pop.WebApi.InternetStatus;
+}
+
+//	call this when any kind of download gets new information
+function OnInternetGood()
+{
+	Pop.WebApi.InternetStatus = true;
+	Pop.WebApi.InternetStatusChangedQueue.PushUnique();
+}
+//	call when any fetch fails (not due to 404 or anything with a response)
+function OnInternetBad()
+{
+	Pop.WebApi.InternetStatus = false;
+	Pop.WebApi.InternetStatusChangedQueue.PushUnique();
+}
+
+
 async function CreateFetch(Url)
 {
 	//	gr: check for not a string?
@@ -549,9 +575,12 @@ async function CreateFetch(Url)
 		Fetched = await fetch(Url,Params);
 		if (!Fetched.ok)
 			throw `fetch result not ok, status=${Fetched.statusText}`;
+		OnInternetGood();
 	}
 	catch(e)
 	{
+		//	gr; need to check for 404 here
+		OnInternetBad();
 		throw `Fetch error with ${Url}; ${e}`;
 	}
 	Fetched.Cancel = Cancel;
@@ -623,6 +652,7 @@ async function FetchArrayBufferStream(Url,OnProgress)
 			}
 			*/
 			const Chunk = await Reader.read();
+			OnInternetGood();
 			const Finished = Chunk.done;
 			const ChunkContents = Chunk.value;
 			//	chunk is undefined on last (finished)read
@@ -644,8 +674,17 @@ async function FetchArrayBufferStream(Url,OnProgress)
 		return true;
 	}
 	
-	const Contents8 = await ReaderThread();
-	return Contents8;
+	try
+	{
+		const Contents8 = await ReaderThread();
+		return Contents8;
+	}
+	catch(e)
+	{
+		Pop.Warning(`Reader thread error; ${e}`);
+		OnInternetBad();
+		throw e;
+	}
 }
 
 async function FetchOnce(Url,FetchFunc,OnProgress)
