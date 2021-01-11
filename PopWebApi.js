@@ -542,9 +542,18 @@ async function CreateFetch(Url)
 	//method: 'get',
 	Params.signal = Signal;
 
-	const Fetched = await fetch(Url,Params);
-	if (!Fetched.ok)
-		throw `Failed to fetch(${Url}) ${Fetched.statusText}`;
+	//	fetch() throws when disconnected, catch it
+	let Fetched = null;
+	try
+	{
+		Fetched = await fetch(Url,Params);
+		if (!Fetched.ok)
+			throw `fetch result not ok, status=${Fetched.statusText}`;
+	}
+	catch(e)
+	{
+		throw `Fetch error with ${Url}; ${e}`;
+	}
 	Fetched.Cancel = Cancel;
 
 	return Fetched;
