@@ -693,10 +693,27 @@ async function FetchOnce(Url,FetchFunc,OnProgress)
 		return FetchCache[Url];
 	
 	//	run the fetch, wait for it to finish, then clear the cache
-	FetchCache[Url] = FetchFunc(Url,OnProgress);
-	const Contents = await FetchCache[Url];
-	delete FetchCache[Url];
-	return Contents;
+	try
+	{
+		FetchCache[Url] = FetchFunc(Url,OnProgress);
+		const Contents = await FetchCache[Url];
+		delete FetchCache[Url];
+		return Contents;
+	}
+	catch(e)
+	{
+		//	gr: to make the app retry (because of the internet-bad stuff)
+		//		delete the fetch cache
+		//		the point of this was originally to stop multiple fetch()s
+		//		previously, if it failed, we ended up with a dangling [rejected] fetch cache
+		//	gr: to avoid CPU hammering, we delay this so if something is trying to fetch
+		//		every frame, we don't constantly fetch & fail
+		//		the downside is we POSSIBLY start a successfull one here and this fetch cache
+		//		gets deleted (can that happen? there's a check before... maybe in multithreaded app it would happen)
+		await Pop.Yield(1000); 
+		delete FetchCache[Url];
+		throw e;
+	}
 }
 
 //	gr: this needs a fix like FetchOnce
