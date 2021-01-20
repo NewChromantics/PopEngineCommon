@@ -624,7 +624,7 @@ function ProcessPathCommands(Commands, TreePath)
 				default:	throw `Unhandled path command ${Cmd}`;
 			}
 
-			// if ( Args.length > 0 ) Pop.Warn(`Multiple iteration of path command ${Cmd}`);
+			// if ( Args.length > 0 ) Pop.Warning(`Multiple iteration of path command ${Cmd}`);
 		}
 		while(Args.length > 0);
 	}
