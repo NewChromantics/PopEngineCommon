@@ -2,7 +2,7 @@
 //	gr: safari scopes const & let away from modules,
 //		so if this file is loaded outside a module, Pop isn't availible
 //		to modules in safari. So fully-global/singletons need to be var.
-var Pop = {};
+var Pop = Pop || {};
 
 
 
@@ -406,9 +406,8 @@ Pop.SetFileCache = Pop.WebApi.FileCache.Set.bind(Pop.WebApi.FileCache);
 Pop.SetFileCacheError = Pop.WebApi.FileCache.SetError.bind(Pop.WebApi.FileCache);
 
 //	simple aliases
-Pop.Debug = console.log;
-Pop.Warn = console.warn;
-Pop.Warning = console.warn;
+Pop.Debug = Pop.Debug || console.log;
+Pop.Warning = Pop.Warning || console.warn;
 
 Pop.GetPlatform = function()
 {
