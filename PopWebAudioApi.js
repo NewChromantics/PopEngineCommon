@@ -939,32 +939,19 @@ function SplitMp3(DataChunks,HasEof,Frames,RemainderData)
 //	more complex WebAudio sound
 Pop.Audio.Sound = class
 {
-	constructor(WaveDatas,Name)
+	constructor(WaveData,Name)
 	{
-		//	gr: now can support chunks of data (without joining), so if it's not an array of [typedarray wave data], make it so
-		if ( !Array.isArray(WaveDatas) )
-			WaveDatas = [WaveDatas];
-		
-		const Mp3Frames = [];
-		const RemainderDatas = [];
-		const HasEof = false;
-		SplitMp3( WaveDatas, HasEof, Mp3Frames, RemainderDatas );
-		Mp3Frames.length = Math.min( Mp3Frames.length, 10);
-		const WaveData = Pop.JoinTypedArrays( ...Mp3Frames );
-		this.WaveData = WaveData;
-		
+		this.WaveDatas = [];
+		this.SampleBuffers = [];
+				
 		//	overload this for visualisation
 		this.OnVolumeChanged = function(Volume01){};
 
-		//	data
-		this.BufferByteSize = WaveData.length;
-		this.SampleBuffer = null;
-		
 		//	webaudio says bufferSource's are one-shot and cheap to make
 		//	and kill themselves off.
 		//	we only need a reference to the last one in case we need to kill it
 		//	or modify the node tree (params on effects)
-		this.SampleNode = null;
+		this.SampleNodes = null;
 		this.SampleGainNode = null;
 		this.SampleVolume = 1;	//	gain
 
@@ -1041,6 +1028,19 @@ Pop.Audio.Sound = class
 	
 	SetSample(WaveData)
 	{
+		/*
+		//	gr: now can support chunks of data (without joining), so if it's not an array of [typedarray wave data], make it so
+		if ( !Array.isArray(WaveDatas) )
+			WaveDatas = [WaveDatas];
+		
+		//	gr: need to work out whether this wave data is complete or not
+		const Eof = false;
+		const LastMp3FrameStart = FindLastMp3Frame(WaveDatas,Eof);
+		const WaveData = Pop.JoinTypedArrays( ...Mp3Frames, LastMp3FrameStart );
+		WaveData;
+*/
+
+	
 		async function Run(Context)
 		{
 			if ( WaveData instanceof AudioBuffer )
