@@ -840,12 +840,29 @@ function GetMp3FrameStarts(Data)
 			}
 			return Value;
 		}
+		
+		//	faster check high 10 bits on
+		const TwoBits = (1<<7)|(1<<6);
+		if ( d == 255 && ( c & TwoBits) == TwoBits )
+			return true;
+		return false;
+		
 		//	21-31
 		const TenBits = (1<<10)-1;
 		const FrameSync = GetBits(31,30,29,28,27,26,25,24,23,22,21);
 		if ( FrameSync != TenBits )
 			return null;
-		
+			
+		if ( d != 255 )
+		{
+			Pop.Debug(`Wrong D`);
+		}
+		else
+		{
+			//	next 2 bits of 2nd byte
+			
+		}
+		/*
 		//	gr: need to + instead of or! because of javascript 32bit->signed
 		const Version = GetBits(19,20);
 		const LayerDescription = GetBits(17,18);
@@ -870,14 +887,18 @@ function GetMp3FrameStarts(Data)
 		const VersionMap = ['2.5','reserved','2.0','1.0'];
 		//	gr; this is giving inconsistent results, so I think I have something wrong
 		//Pop.Debug(`Found frame version: ${VersionMap[Version]}`);
-
+		*/
 		return true;		 
 	}
 		
 	const StartPositions = [];
 	
+	//	4th byte should be 255 
+	//	gr: lookup my Panopoly extensively-tested fast-marker finder
 	for ( let i=0;	i<Data.length-4;	i++ )
 	{
+		if ( Data[i+3] != 255 )
+			continue;
 		let abcd = Data.slice(i,i+4);
 		let Header = ReadFrameHeader(...abcd);
 		if ( !Header )
