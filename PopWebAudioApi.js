@@ -810,17 +810,128 @@ Pop.Audio.WaitForContext = async function()
 
 Pop.Audio.SoundInstanceCounter = 1000;
 
+
+
+
+function GetMp3FrameStarts(Data)
+{
+	//	gr: dealing with upper bits of 32bit int in javascript is too painful, so wrapper funcs!
+	function ReadFrameHeader(a,b,c,d)
+	{
+		//	http://www.mp3-tech.org/programmer/frame_header.html
+		function GetBit(n)
+		{
+			if ( n < 8 )
+				return a & (1<<(n-0));
+			if ( n < 16 )
+				return b & (1<<(n-8));
+			if ( n < 24 )
+				return c & (1<<(n-16));
+			return d & (1<<(n-24));
+		}
+		function GetBits(a,b,c,etc)
+		{
+			let Value = 0;
+			for ( let i=0;	i<arguments.length;	i++ )
+			{
+				const Bit = arguments[i];
+				const BitValue = GetBit(Bit);
+				Value += (1<<i) * (BitValue?1:0);
+			}
+			return Value;
+		}
+		//	21-31
+		const TenBits = (1<<10)-1;
+		const FrameSync = GetBits(31,30,29,28,27,26,25,24,23,22,21);
+		if ( FrameSync != TenBits )
+			return null;
+		
+		//	gr: need to + instead of or! because of javascript 32bit->signed
+		const Version = GetBits(19,20);
+		const LayerDescription = GetBits(17,18);
+		const ProtectedHasCrc = GetBits(16);
+		const BitRateIndex = GetBits(12,13,14,15);
+		const SamplingRateFrequencyIndex = GetBits(10,11);
+		const PaddingBit = GetBits(9);
+		const PrivateBit = GetBits(8);
+		const ChannelMode = GetBits(6,7);
+		const ModeExtension = GetBits(4,5);
+		const Copyright = GetBits(3);
+		const Original = GetBits(2);
+		const Emphasis = GetBits(0,1);
+		
+		//	as much verification as possible, check version isn't reserved?
+		const Version_25 = 0;
+		const Version_Reserved = 1;
+		const Version_20 = 2;
+		const Version_10 = 3;
+		
+		//	gr: maybe output frequency, channels etc to make sure data is good
+		const VersionMap = ['2.5','reserved','2.0','1.0'];
+		//	gr; this is giving inconsistent results, so I think I have something wrong
+		//Pop.Debug(`Found frame version: ${VersionMap[Version]}`);
+
+		return true;		 
+	}
+		
+	const StartPositions = [];
+	
+	for ( let i=0;	i<Data.length-4;	i++ )
+	{
+		let abcd = Data.slice(i,i+4);
+		let Header = ReadFrameHeader(...abcd);
+		if ( !Header )
+			continue;
+		StartPositions.push(i);
+		//	todo: skip header size
+	}
+
+	return StartPositions;
+}
+
+function SplitMp3(DataChunks,HasEof,Frames,RemainderData)
+{
+	//	temp
+	const Data = Pop.JoinTypedArrays(...DataChunks);
+	
+	const Starts = GetMp3FrameStarts(Data);
+	for ( let s=1;	s<Starts.length;	s++ )
+	{
+		const Start = Starts[s-1];
+		const End = Starts[s];
+		const Frame = Data.slice( Start, End );
+		Frames.push(Frame);
+	}
+	//	gr: we either add the remaining data as last frame
+	//		or its unprocessed data waiting to join with the next lot
+	{
+		const Start = Starts[ Starts.length-1 ];
+		const End = Data.length;
+		const LastFrame = Data.slice( Start, End ); 
+		if ( HasEof )
+			Frames.push(LastFrame);
+		else
+			RemainderData.push(LastFrame);
+	}
+}
+
 //	more complex WebAudio sound
 Pop.Audio.Sound = class
 {
-	constructor(WaveData,Name)
+	constructor(WaveDatas,Name)
 	{
-		if ( Array.isArray(WaveData) )
-		{
-			Pop.Debug(`Joining wave data`);
-			WaveData = Pop.JoinTypedArrays(...WaveData);
-		}
-	
+		//	gr: now can support chunks of data (without joining), so if it's not an array of [typedarray wave data], make it so
+		if ( !Array.isArray(WaveDatas) )
+			WaveDatas = [WaveDatas];
+		
+		const Mp3Frames = [];
+		const RemainderDatas = [];
+		const HasEof = false;
+		SplitMp3( WaveDatas, HasEof, Mp3Frames, RemainderDatas );
+		Mp3Frames.length = Math.min( Mp3Frames.length, 10);
+		const WaveData = Pop.JoinTypedArrays( ...Mp3Frames );
+		this.WaveData = WaveData;
+		
 		//	overload this for visualisation
 		this.OnVolumeChanged = function(Volume01){};
 
