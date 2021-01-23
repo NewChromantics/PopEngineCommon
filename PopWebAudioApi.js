@@ -1205,7 +1205,7 @@ Pop.Audio.Sound = class
 		}
 	}
 	
-	HasNewSamplerNodeReady()
+	GetNewReadySamplerNode()
 	{
 		try
 		{
@@ -1213,7 +1213,7 @@ Pop.Audio.Sound = class
 			if ( !Latest )
 				return false;
 			if ( this.SampleNodeIndex !== Latest.Index )
-				return true;
+				return Latest;
 			return false;
 		}
 		catch(e)
@@ -1359,16 +1359,33 @@ Pop.Audio.Sound = class
 		//	todo: simple sound checks for .ended here
 
 		//	gr: if we have a newer sample data, switch to new sample by triggering node load
-		const HasNewSamplerNode = this.HasNewSamplerNodeReady();
-		if ( HasNewSamplerNode )
+		const MaxTimeRemainingBeforeReloadMs = 2*1000;
+		let NewSamplerData = this.GetNewReadySamplerNode();
+		if ( NewSamplerData )
 		{
-			Pop.Debug(`Audio ${this.Name} has new sampler node ready`);
+			//	gr: ignore if we're not close to finishing current node
+			if ( this.SampleNodeIndex !== null )
+			{
+				const CurrentSamplerData = this.WaveSampleDatas[this.SampleNodeIndex];
+				const CurrentSamplerDuration = CurrentSamplerData.GetDurationMs();
+				const CurrentSamplerTime = this.GetSampleNodeCurrentTimeMs();
+				const TimeRemaining = CurrentSamplerDuration - CurrentSamplerTime;
+				if ( TimeRemaining < MaxTimeRemainingBeforeReloadMs )
+				{
+					Pop.Debug(`Audio ${this.Name} has new sampler node ready TimeRemaining=${TimeRemaining}`);
+				}
+				else
+				{
+					//Pop.Debug(`Audio ${this.Name} has new sampler node ready skipped as TimeRemaining=${TimeRemaining}`);
+					NewSamplerData = null;
+				}
+			}
 		}
 		
 		//	skip any changes if sample node is close to where it should be
 		//	gr: but not if we have new data
 		//	gr: only do this if the current sampler node is near the end?
-		if ( !HasNewSamplerNode )
+		if ( !NewSamplerData )
 		{
 			const MaxMsOffset = Math.min( 2000, Duration ? Duration/2 : 9999999 );
 			if (SampleTimeIsClose(MaxMsOffset))
