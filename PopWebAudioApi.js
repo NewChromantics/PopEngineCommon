@@ -936,13 +936,72 @@ function SplitMp3(DataChunks,HasEof,Frames,RemainderData)
 	}
 }
 
+class WaveSampleData_t
+{
+	constructor(WaveData)
+	{
+		this.WaveData = WaveData;
+		this.SampleBuffer = null;
+	}
+	
+	async DecodeAudioBuffer(Context,WaveData)
+	{
+		function isTypedArray(obj)
+		{
+			return !!obj && obj.byteLength !== undefined;
+		}
+
+		//	safari doesn't currently support the promise version of this
+		//	https://github.com/chrisguttandin/standardized-audio-context
+		//this.SampleBuffer = await Context.decodeAudioData( this.WaveData.buffer );
+		const DecodeAudioPromise = Pop.CreatePromise();
+		//	decodeAudioData detaches the data from the original source so becomes empty
+		//	as this can affect the original file, we duplicate here
+		const DataCopy = isTypedArray(WaveData) ? WaveData.slice() : Pop.JoinTypedArrays(...WaveData);
+		
+		Context.decodeAudioData( DataCopy.buffer, DecodeAudioPromise.Resolve, DecodeAudioPromise.Reject );
+		const SampleBuffer = await DecodeAudioPromise;
+		//Pop.Debug(`Audio ${this.Name} duration: ${this.KnownDurationMs}ms`);
+		return SampleBuffer;
+	}
+	
+	HasDecodedData()
+	{
+		return this.SampleBuffer != null;
+	}
+	
+	async Decode(Context)
+	{
+		//	already decoded data	
+		if ( this.WaveData instanceof AudioBuffer )
+		{
+			this.SampleBuffer = this.WaveData;
+			return;
+		}
+		
+		//	decode
+		//	todo: crop data to last mp3 frame (if we know this data isn't complete)
+		this.SampleBuffer = await this.DecodeAudioBuffer(Context,this.WaveData);
+	}
+	
+	GetDurationMs()
+	{
+		return this.SampleBuffer.duration * 1000;
+	}	
+			
+	Free()
+	{
+		this.SampleBuffer = null;
+		this.WaveData =null;
+	}
+}
+
 //	more complex WebAudio sound
 Pop.Audio.Sound = class
 {
 	constructor(WaveData,Name)
 	{
-		this.WaveDatas = [];
-		this.SampleBuffers = [];
+		this.WaveSampleDatas = [];		//	WaveSampleData_t
 				
 		//	overload this for visualisation
 		this.OnVolumeChanged = function(Volume01){};
@@ -951,7 +1010,8 @@ Pop.Audio.Sound = class
 		//	and kill themselves off.
 		//	we only need a reference to the last one in case we need to kill it
 		//	or modify the node tree (params on effects)
-		this.SampleNodes = null;
+		this.SampleNode = null;
+		this.SampleNodeIndex = null;	//	which WaveSampleData are we using
 		this.SampleGainNode = null;
 		this.SampleVolume = 1;	//	gain
 
@@ -1028,6 +1088,11 @@ Pop.Audio.Sound = class
 	
 	SetSample(WaveData)
 	{
+		//	make a new sample buffer, load it & prep
+		//	todo: defer this until either
+		//		- have no data
+		//		- Xms until we run out of current buffer
+		//		- clip buffer to last mp3 frame
 		/*
 		//	gr: now can support chunks of data (without joining), so if it's not an array of [typedarray wave data], make it so
 		if ( !Array.isArray(WaveDatas) )
@@ -1039,21 +1104,28 @@ Pop.Audio.Sound = class
 		const WaveData = Pop.JoinTypedArrays( ...Mp3Frames, LastMp3FrameStart );
 		WaveData;
 */
-
+		const WaveSample = new WaveSampleData_t(WaveData);
+		WaveSample.Index = this.WaveSampleDatas.length;
+		this.WaveSampleDatas.push( WaveSample );
 	
 		async function Run(Context)
 		{
-			if ( WaveData instanceof AudioBuffer )
+			//	gr: don't decode if there's newer data
+			const Index = WaveSample.Index;
+			if ( Index != this.WaveSampleDatas.length - 1 )
 			{
-				this.SampleBuffer = WaveData;
+				Pop.Debug(`Skipped decode of wave sample data as newer data exists`);
+				WaveSample.Free();
+				return;
 			}
-			else
-			{
-				this.SampleBuffer = await this.DecodeAudioBuffer(Context,WaveData);
-			}
-			//	now out of date/not dirty
-			this.SampleWaveData = null;
-			Pop.Debug(`New sample buffer for ${this.Name}/${this.UniqueInstanceNumber} duration=${this.GetDurationMs()}`);
+			//	gr: we get quite a lot of these, so we should try and avoid decoding these unless we need it
+			await WaveSample.Decode(Context);
+
+			const NewDurationMs = WaveSample.GetDurationMs();
+			Pop.Debug(`${this.Name} decoded wave data ${NewDurationMs}ms ${Index}/${this.WaveSampleDatas.length}`);
+			this.KnownDurationMs = Math.max( this.KnownDurationMs, NewDurationMs );
+			
+			//Pop.Debug(`New sample buffer for ${this.Name}/${this.UniqueInstanceNumber} duration=${this.GetDurationMs()}`);
 
 			//	restore time/stopped state, but force sampler rebuild
 			//this.DestroySamplerNodes(Context);
@@ -1061,23 +1133,7 @@ Pop.Audio.Sound = class
 		}
 		this.ActionQueue.Push(Run);
 	}
-	
-	
-	async DecodeAudioBuffer(Context,WaveData)
-	{
-		//	safari doesn't currently support the promise version of this
-		//	https://github.com/chrisguttandin/standardized-audio-context
-		//this.SampleBuffer = await Context.decodeAudioData( this.WaveData.buffer );
-		const DecodeAudioPromise = Pop.CreatePromise();
-		//	decodeAudioData detaches the data from the original source so becomes empty
-		//	as this can affect the original file, we duplicate here
-		const DataCopy = WaveData.slice();
-		Context.decodeAudioData( DataCopy.buffer, DecodeAudioPromise.Resolve, DecodeAudioPromise.Reject );
-		const SampleBuffer = await DecodeAudioPromise;
-		this.KnownDurationMs = SampleBuffer.duration * 1000;
-		//Pop.Debug(`Audio ${this.Name} duration: ${this.KnownDurationMs}ms`);
-		return SampleBuffer;
-	}
+		
 	
 	//	todo: update logic to match simplesound
 	async Update()
@@ -1134,6 +1190,7 @@ Pop.Audio.Sound = class
 				this.SampleNode.stop();
 			this.SampleNode.disconnect();
 			this.SampleNode = null;
+			this.SampleNodeIndex = null;
 			
 			this.OnVolumeChanged(0);
 		}
@@ -1148,23 +1205,42 @@ Pop.Audio.Sound = class
 		}
 	}
 	
+	//	get the sample buffer to turn into a node
+	GetSampleLatestWaveDataSampleWithBuffer()
+	{
+		if ( this.WaveSampleDatas.length == 0 )
+			throw `No sample buffer loaded yet`;
+
+		const DecodedDatas = this.WaveSampleDatas.filter( wd => wd.HasDecodedData() );
+		if ( !DecodedDatas.length )
+			throw `No sample buffer decoded yet`;
+			
+		const LastData = DecodedDatas[DecodedDatas.length-1];
+		return LastData;
+	}
+	
 	CreateSamplerNodes(Context)
 	{
 		if ( this.SampleNode )
+		{
+			if ( this.SampleNodeIndex != this.WaveSampleDatas.length-1 )
+				Pop.Debug(`CreateSamplerNodes() but using old sample ${this.SampleNodeIndex}/${this.WaveSampleDatas.length}`);
 			return;
+		}
 		//	gr: why was i destroying this all the time?
 		//	gr: because start() can only be called once!
 		//	this func allocs, so needs to destroy
 		this.DestroySamplerNodes(Context);
 		
 		//	create sample buffer if we need to (ie. out of date)
-		if ( !this.SampleBuffer )
-			throw `Sample Buffer is out of date/not loaded yet`;
+		const WaveDataSample = this.GetSampleLatestWaveDataSampleWithBuffer();
+		const SampleBuffer = WaveDataSample.SampleBuffer;
 		
 		//	create nodes
 		this.SampleNode = Context.createBufferSource();
-		this.SampleNode.buffer = this.SampleBuffer;
+		this.SampleNode.buffer = SampleBuffer;
 		this.SampleNode.loop = this.Looping;
+		this.SampleNodeIndex = WaveDataSample.Index;
 		
 		//	create gain node if it doesn't exist
 		if ( !this.SampleGainNode )
@@ -1227,7 +1303,8 @@ Pop.Audio.Sound = class
 		}
 		catch(e)
 		{
-			Pop.Warning(`UpdatePlayTargetTime(${this.Name}) Duration exception ${e} (not loaded yet? needs a play? paused=${this.Sound.paused}`);
+			//Pop.Warning(`UpdatePlayTargetTime(${this.Name}) Duration exception ${e} (not loaded yet? needs a play? paused=${this.Sound.paused}`);
+			Pop.Warning(`UpdatePlayTargetTime(${this.Name}) Duration exception ${e} (not loaded yet? needs a play?`);
 		}
 
 		//	seek to time
@@ -1283,18 +1360,21 @@ Pop.Audio.Sound = class
 			return;
 		}
 
-		//	gr: https://stackoverflow.com/a/55730826/355753 
-		//		invalid state comes on this.SampleNode.start if seeking past duration
-		if ( TimeMs > Duration )
-		{
-			Pop.Warning(`Clamped seek time ${TimeMs} as it's past the duration ${Duration} on ${this.Name}/${this.UniqueInstanceNumber}`);
-			TimeMs = Duration;
-		}
-
 		//	gr: cannot call start() more than once, so NEED to destroy old sampler node
 		this.DestroySamplerNodes(Context); 
 		this.CreateSamplerNodes(Context);
 
+		//	gr: https://stackoverflow.com/a/55730826/355753 
+		//		invalid state comes on this.SampleNode.start if seeking past duration
+		//	do this AFTER recreating sampler node
+		{
+			const CurrentSamplerDuration = this.WaveSampleDatas[this.SampleNodeIndex].GetDurationMs();
+			if ( TimeMs > CurrentSamplerDuration )
+			{
+				Pop.Warning(`Clamped seek time ${TimeMs} as it's past the SAMPLER duration ${CurrentSamplerDuration}(Total known duration ${Duration}) on ${this.Name}/${this.UniqueInstanceNumber}`);
+				TimeMs = CurrentSamplerDuration;
+			}
+		}
 
 		//	start!
 		const DelaySecs = 0;
@@ -1338,9 +1418,10 @@ Pop.Audio.Sound = class
 		async function Destroy(Context)
 		{
 			this.DestroyAllNodes(Context);
+			
 			//Pop.Debug(`Destroy other sound resources`,this);
-			this.SampleBuffer = null;
-			this.SampleWaveData = null;
+			this.WaveSampleDatas.forEach( wd => wd.Free() );
+			this.WaveSampleDatas = [];
 			Pop.Debug(`Free'd sound instance #${this.UniqueInstanceNumber}/${this.Name}`)
 		}
 		//	other immediate cleanup here?
