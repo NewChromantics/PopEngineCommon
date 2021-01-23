@@ -1228,7 +1228,7 @@ Pop.Audio.Sound = class
 		if ( this.WaveSampleDatas.length == 0 )
 			throw `No sample buffer loaded yet`;
 
-		const DecodedDatas = this.WaveSampleDatas.filter( wd => wd.HasDecodedData() );
+		const DecodedDatas = this.WaveSampleDatas.filter( wd => wd && wd.HasDecodedData() );
 		if ( !DecodedDatas.length )
 			throw `No sample buffer decoded yet`;
 			
@@ -1370,9 +1370,11 @@ Pop.Audio.Sound = class
 			if ( this.SampleNodeIndex !== null )
 			{
 				const CurrentSamplerData = this.WaveSampleDatas[this.SampleNodeIndex];
-				const CurrentSamplerDuration = CurrentSamplerData.GetDurationMs();
-				const CurrentSamplerTime = this.GetSampleNodeCurrentTimeMs();
-				const TimeRemaining = CurrentSamplerDuration - CurrentSamplerTime;
+				if ( CurrentSamplerData )
+				{
+					const CurrentSamplerDuration = CurrentSamplerData.GetDurationMs();
+					const CurrentSamplerTime = this.GetSampleNodeCurrentTimeMs();
+					const TimeRemaining = CurrentSamplerDuration - CurrentSamplerTime;
 				if ( TimeRemaining < MaxTimeRemainingBeforeReloadMs )
 				{
 					Pop.Debug(`Audio ${this.Name} has new sampler node ready TimeRemaining=${TimeRemaining}`);
@@ -1380,7 +1382,12 @@ Pop.Audio.Sound = class
 				else
 				{
 					//Pop.Debug(`Audio ${this.Name} has new sampler node ready skipped as TimeRemaining=${TimeRemaining}`);
-					NewSamplerData = null;
+						NewSamplerData = null;
+					}
+				}
+				else
+				{
+					Pop.Warning(`Audio ${this.Name} has null wavedata for current sample index? ${this.SampleNodeIndex}`);
 				}
 			}
 		}
@@ -1478,8 +1485,13 @@ Pop.Audio.Sound = class
 		{
 			this.DestroyAllNodes(Context);
 			
+			function FreeWaveSampleData(wsd)
+			{
+				if ( wsd )
+					wsd.Free();
+			}
 			//Pop.Debug(`Destroy other sound resources`,this);
-			this.WaveSampleDatas.forEach( wd => wd.Free() );
+			this.WaveSampleDatas.forEach(FreeWaveSampleData);
 			this.WaveSampleDatas = [];
 			Pop.Debug(`Free'd sound instance #${this.UniqueInstanceNumber}/${this.Name}`)
 		}
