@@ -945,8 +945,9 @@ class WaveSampleData_t
 		//		then we have the long duration (maybe from future data) but silence,
 		//		so maybe it's full of zeros that haven't been written yet...?
 		//		but putting a join here is bad as we're gonna be redundantly joining data over and over
-		this.WaveData = Pop.JoinTypedArrays(...WaveData);
-		Pop.Debug(`WaveSampleData_t( x${this.WaveData.length} )`);
+		//this.WaveData = Pop.JoinTypedArrays(...WaveData);
+		//Pop.Debug(`WaveSampleData_t( x${this.WaveData.length} )`);
+		this.WaveData = WaveData;
 		this.SampleBuffer = null;
 	}
 	
@@ -964,11 +965,11 @@ class WaveSampleData_t
 		
 		//	decodeAudioData detaches the data from the original source so becomes empty
 		//	as this can affect the original file, we duplicate here
-		//const ContiguiousData = isTypedArray(WaveData) ? WaveData.slice() : Pop.JoinTypedArrays(...WaveData);
-		//const DataCopy = ContiguiousData.slice();
+		const ContiguiousData = isTypedArray(WaveData) ? WaveData.slice() : Pop.JoinTypedArrays(...WaveData);
+		const DataCopy = ContiguiousData.slice();
 		//const DataCopy = isTypedArray(WaveData) ? WaveData.slice() : Pop.JoinTypedArrays(...WaveData);
 		//	gr; reuse data as in the constructor we're already copying it
-		const DataCopy = this.WaveData;
+		//const DataCopy = this.WaveData;
 		
 		Context.decodeAudioData( DataCopy.buffer, DecodeAudioPromise.Resolve, DecodeAudioPromise.Reject );
 		const SampleBuffer = await DecodeAudioPromise;
