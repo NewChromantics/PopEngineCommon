@@ -1370,12 +1370,12 @@ Pop.Audio.Sound = class
 			if ( this.SampleNodeIndex !== null )
 			{
 				const CurrentSamplerData = this.WaveSampleDatas[this.SampleNodeIndex];
-				if ( CurrentSamplerData )
+				if ( CurrentSamplerData && this.SampleNode )
 				{
-					const CurrentSamplerDuration = CurrentSamplerData.GetDurationMs();
+					const CurrentSamplerDuration = this.SampleNode.buffer.duration*1000;//CurrentSamplerData.GetDurationMs();
 					const CurrentSamplerTime = this.GetSampleNodeCurrentTimeMs();
 					const TimeRemaining = CurrentSamplerDuration - CurrentSamplerTime;
-				if ( TimeRemaining < MaxTimeRemainingBeforeReloadMs )
+					if ( TimeRemaining < MaxTimeRemainingBeforeReloadMs )
 				{
 					Pop.Debug(`Audio ${this.Name} has new sampler node ready TimeRemaining=${TimeRemaining}`);
 				}
@@ -1435,7 +1435,7 @@ Pop.Audio.Sound = class
 		const OffsetSecs = TimeMs / 1000;
 		const CurrentTime = this.GetSampleNodeCurrentTimeMs();
 		
-		Pop.Debug(`SampleNode.Start(${TimeMs}, current=${CurrentTime} Duration=${Duration} ${this.Name}/${this.UniqueInstanceNumber}`);
+		Pop.Debug(`SampleNode.Start(${TimeMs}, current=${CurrentTime} SampleNodeDuration=${this.SampleNode.buffer.duration*1000} KnownDuration=${Duration} ${this.Name}/${this.UniqueInstanceNumber}`);
 		this.SampleNode.start(DelaySecs,OffsetSecs);
 		this.SampleNodeStartTime = Pop.GetTimeNowMs() - TimeMs;
 		Pop.Debug(`Starting audio ${OffsetSecs} secs #${this.UniqueInstanceNumber} ${this.Name}`);
