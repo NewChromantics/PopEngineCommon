@@ -1259,6 +1259,9 @@ Pop.Audio.Sound = class
 		this.SampleNode.loop = this.Looping;
 		this.SampleNodeIndex = WaveDataSample.Index;
 		
+		//	delete old data we don't need any more
+		this.FreeOldWaveData(this.SampleNodeIndex);
+		
 		//	create gain node if it doesn't exist
 		if ( !this.SampleGainNode )
 		{
@@ -1453,6 +1456,18 @@ Pop.Audio.Sound = class
 		//	mark dirty and cause update of state (if not already queued)
 		this.PlayTargetTime = false;
 		this.ActionQueue.PushUnique('UpdatePlayTargetTime');
+	}
+	
+	FreeOldWaveData(CurrentIndex)
+	{
+		for ( let i=0;	i<CurrentIndex;	i++ )
+		{
+			const wsd = this.WaveSampleDatas[i];
+			if ( !wsd )
+				continue;
+			wsd.Free();
+			this.WaveSampleDatas[i] = null;
+		}
 	}
 	
 	Free()
