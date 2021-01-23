@@ -940,7 +940,13 @@ class WaveSampleData_t
 {
 	constructor(WaveData)
 	{
-		this.WaveData = WaveData;
+		//	gr: something is going wrong here, we shouldn't have to join the data here
+		//		on safari on ios, if we dont duplicate the data here (instead of in Decode())
+		//		then we have the long duration (maybe from future data) but silence,
+		//		so maybe it's full of zeros that haven't been written yet...?
+		//		but putting a join here is bad as we're gonna be redundantly joining data over and over
+		this.WaveData = Pop.JoinTypedArrays(...WaveData);
+		Pop.Debug(`WaveSampleData_t( x${this.WaveData.length} )`);
 		this.SampleBuffer = null;
 	}
 	
@@ -955,9 +961,14 @@ class WaveSampleData_t
 		//	https://github.com/chrisguttandin/standardized-audio-context
 		//this.SampleBuffer = await Context.decodeAudioData( this.WaveData.buffer );
 		const DecodeAudioPromise = Pop.CreatePromise();
+		
 		//	decodeAudioData detaches the data from the original source so becomes empty
 		//	as this can affect the original file, we duplicate here
-		const DataCopy = isTypedArray(WaveData) ? WaveData.slice() : Pop.JoinTypedArrays(...WaveData);
+		//const ContiguiousData = isTypedArray(WaveData) ? WaveData.slice() : Pop.JoinTypedArrays(...WaveData);
+		//const DataCopy = ContiguiousData.slice();
+		//const DataCopy = isTypedArray(WaveData) ? WaveData.slice() : Pop.JoinTypedArrays(...WaveData);
+		//	gr; reuse data as in the constructor we're already copying it
+		const DataCopy = this.WaveData;
 		
 		Context.decodeAudioData( DataCopy.buffer, DecodeAudioPromise.Resolve, DecodeAudioPromise.Reject );
 		const SampleBuffer = await DecodeAudioPromise;
