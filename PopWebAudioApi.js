@@ -1205,6 +1205,23 @@ Pop.Audio.Sound = class
 		}
 	}
 	
+	HasNewSamplerNodeReady()
+	{
+		try
+		{
+			const Latest = this.GetSampleLatestWaveDataSampleWithBuffer();
+			if ( !Latest )
+				return false;
+			if ( this.SampleNodeIndex !== Latest.Index )
+				return true;
+			return false;
+		}
+		catch(e)
+		{
+			return false;
+		}
+	}
+	
 	//	get the sample buffer to turn into a node
 	GetSampleLatestWaveDataSampleWithBuffer()
 	{
@@ -1341,7 +1358,17 @@ Pop.Audio.Sound = class
 		*/
 		//	todo: simple sound checks for .ended here
 
-		//	
+		//	gr: if we have a newer sample data, switch to new sample by triggering node load
+		const HasNewSamplerNode = this.HasNewSamplerNodeReady();
+		if ( HasNewSamplerNode )
+		{
+			Pop.Debug(`Audio ${this.Name} has new sampler node ready`);
+		}
+		
+		//	skip any changes if sample node is close to where it should be
+		//	gr: but not if we have new data
+		//	gr: only do this if the current sampler node is near the end?
+		if ( !HasNewSamplerNode )
 		{
 			const MaxMsOffset = Math.min( 2000, Duration ? Duration/2 : 9999999 );
 			if (SampleTimeIsClose(MaxMsOffset))
