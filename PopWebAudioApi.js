@@ -1374,6 +1374,7 @@ Pop.Audio.Sound = class
 
 		//	gr: if we have a newer sample data, switch to new sample by triggering node load
 		const MaxTimeRemainingBeforeReloadMs = 2*1000;
+		const MaxTimeThrottleBeforeReloadMs = 2*1000;
 		let NewSamplerData = this.GetNewReadySamplerNode();
 		if ( NewSamplerData )
 		{
@@ -1383,17 +1384,43 @@ Pop.Audio.Sound = class
 				const CurrentSamplerData = this.WaveSampleDatas[this.SampleNodeIndex];
 				if ( CurrentSamplerData && this.SampleNode )
 				{
-					const CurrentSamplerDuration = this.SampleNode.buffer.duration*1000;//CurrentSamplerData.GetDurationMs();
-					const CurrentSamplerTime = this.GetSampleNodeCurrentTimeMs();
-					const TimeRemaining = CurrentSamplerDuration - CurrentSamplerTime;
+					//	gr: there's something wrong on IOS where the sound stops early
+					//		when there's new data availible, BUT debugging, the current wavedata (0)
+					//		SAYS the data & sample buffer duration are the SAME
+					//		somewhere the wavedata is wrong (yet it created a sample buffer and says its fine...)
+					//		I had to make an immediate duplicate of the wave data in the same data constructor to
+					//		make this gap further back, which really makes it sound like something isn't filling the 
+					//		typed array data fast enough and we make a SampleBuffer with a load of zeroes
+					//		To avoid this, we reload if we haven't created new data (when we seeked, we MUST have created new data) for X seconds
+					//		desktop safari & chrome seem to be fine...
+					const RecreateThrottleMode = true;	//	ios fix
+					if ( RecreateThrottleMode )
+					{
+						const TimeSinceStart = Pop.GetTimeNowMs() - this.SampleNodeStartCallTime;	//	this.SampleNodeStartCallTime = 0/undefined if never seeked
+						if ( TimeSinceStart > MaxTimeThrottleBeforeReloadMs )
+						{
+							Pop.Debug(`Audio ${this.Name} has new sampler node ready, TimeSinceStart=${TimeSinceStart}`);
+						}
+						else
+						{
+							Pop.Debug(`Audio ${this.Name} has new sampler node ready, skipped as throttling TimeSinceStart=${TimeSinceStart}`);
+							NewSamplerData = null;
+						}
+					}
+					else
+					{
+						const CurrentSamplerDuration = this.SampleNode.buffer.duration*1000;//CurrentSamplerData.GetDurationMs();
+						const CurrentSamplerTime = this.GetSampleNodeCurrentTimeMs();
+						const TimeRemaining = CurrentSamplerDuration - CurrentSamplerTime;
 					if ( TimeRemaining < MaxTimeRemainingBeforeReloadMs )
 				{
 					Pop.Debug(`Audio ${this.Name} has new sampler node ready TimeRemaining=${TimeRemaining}`);
-				}
-				else
-				{
-					//Pop.Debug(`Audio ${this.Name} has new sampler node ready skipped as TimeRemaining=${TimeRemaining}`);
-						NewSamplerData = null;
+						}
+						else
+						{
+							Pop.Debug(`Audio ${this.Name} has new sampler node ready skipped as TimeRemaining=${TimeRemaining}`);
+							NewSamplerData = null;
+						}
 					}
 				}
 				else
@@ -1449,6 +1476,7 @@ Pop.Audio.Sound = class
 		Pop.Debug(`SampleNode.Start(${TimeMs}, current=${CurrentTime} SampleNodeDuration=${this.SampleNode.buffer.duration*1000} KnownDuration=${Duration} ${this.Name}/${this.UniqueInstanceNumber}`);
 		this.SampleNode.start(DelaySecs,OffsetSecs);
 		this.SampleNodeStartTime = Pop.GetTimeNowMs() - TimeMs;
+		this.SampleNodeStartCallTime = Pop.GetTimeNowMs();
 		Pop.Debug(`Starting audio ${OffsetSecs} secs #${this.UniqueInstanceNumber} ${this.Name}`);
 		this.PlayTargetTime = null;
 	}
