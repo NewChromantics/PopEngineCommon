@@ -165,6 +165,8 @@ function GetElementRect(Element)
 
 function SetGuiControl_Draggable(Element)
 {
+	if ( !Element )
+		return;
 	const RectKey = `${Element.id}_WindowRect`;
 	function LoadRect()
 	{
