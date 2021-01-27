@@ -1095,7 +1095,7 @@ Pop.Audio.Sound = class
 		}
 		catch(e)
 		{
-			Pop.Warning(`UpdatePlayTargetTime(${this.Name}) Duration exception ${e} (not loaded yet? needs a play? paused=${this.Sound.paused}`);
+			Pop.Warning(`UpdatePlayTargetTime(${this.Name}) Duration exception ${e} (not loaded yet? needs a play?)`);
 		}
 
 		//	seek to time
