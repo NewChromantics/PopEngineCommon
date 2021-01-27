@@ -811,6 +811,21 @@ Pop.Audio.WaitForContext = async function()
 Pop.Audio.SoundInstanceCounter = 1000;
 Pop.Audio.TotalDecodedInputBytes = 0;
 Pop.Audio.TotalDecodedCount = 0;
+Pop.Audio.TotalFreedSampleCount = 0;
+//	gr: 22 & 24 seems to crash on iphone se safari
+//	gr: 20 still breaks
+const MaxActiveSampleBuffers = 20;	
+
+Pop.Audio.NullBuffer = null;
+Pop.Audio.GetNullBuffer = function(Context)
+{
+	//	https://stackoverflow.com/a/32568948/355753
+	if ( !Pop.Audio.NullBuffer )
+	{
+		Pop.Audio.NullBuffer = Context.createBuffer(1, 1, 22050);
+	}
+	return Pop.Audio.NullBuffer;
+}
 
 //	more complex WebAudio sound
 Pop.Audio.Sound = class
@@ -836,6 +851,7 @@ Pop.Audio.Sound = class
 		//	or modify the node tree (params on effects)
 		this.SampleNode = null;
 		this.SampleGainNode = null;
+		this.CreateSampleGainNode = false;
 		this.SampleVolume = 1;	//	gain
 
 		//	meta
@@ -942,11 +958,25 @@ Pop.Audio.Sound = class
 		//	decodeAudioData detaches the data from the original source so becomes empty
 		//	as this can affect the original file, we duplicate here
 		const DataCopy = WaveData.slice();
+		
+		//	gr: limit total number of samples
+		while ( Pop.Audio.TotalDecodedCount - Pop.Audio.TotalFreedSampleCount > MaxActiveSampleBuffers )
+		{
+			if ( !this.Alive )
+				break;
+			Pop.Debug(`tot Waiting for sample buffer to free; currently alloc ${Pop.Audio.TotalDecodedCount} - free ${Pop.Audio.TotalFreedSampleCount}`);
+			await Pop.Yield(1000);
+		}
+
+		if ( !this.Alive )
+			throw `DecodeAudioBuffer aborted, not alive`;
+		
+		Pop.Debug(`decoding ${DataCopy.length} ...Pop.Audio.TotalDecodedInputBytes=${Pop.Audio.TotalDecodedInputBytes} TotalDecodedCount=${Pop.Audio.TotalDecodedCount} TotalFreedSampleCount=${Pop.Audio.TotalFreedSampleCount}`);
 		Context.decodeAudioData( DataCopy.buffer, DecodeAudioPromise.Resolve, DecodeAudioPromise.Reject );
 		const SampleBuffer = await DecodeAudioPromise;
 		Pop.Audio.TotalDecodedInputBytes += DataCopy.length;
 		Pop.Audio.TotalDecodedCount += 1;
-		Pop.Debug(`Pop.Audio.TotalDecodedInputBytes=${Pop.Audio.TotalDecodedInputBytes} TotalDecodedCount=${Pop.Audio.TotalDecodedCount}`);
+		Pop.Debug(`Pop.Audio.TotalDecodedInputBytes=${Pop.Audio.TotalDecodedInputBytes} TotalDecodedCount=${Pop.Audio.TotalDecodedCount} TotalFreedSampleCount=${Pop.Audio.TotalFreedSampleCount}`);
 		this.KnownDurationMs = SampleBuffer.duration * 1000;
 		//Pop.Debug(`Audio ${this.Name} duration: ${this.KnownDurationMs}ms`);
 		return SampleBuffer;
@@ -1005,9 +1035,20 @@ Pop.Audio.Sound = class
 			//	this should stop the reverb too as it's linked to this node
 			if ( this.SampleNode.stop )
 				this.SampleNode.stop();
+				
+			//	https://stackoverflow.com/a/32568948/355753
+			//	node=null may not be enough to free the data properly
 			this.SampleNode.disconnect();
+			try 
+			{
+				this.SampleNode.buffer = Pop.Audio.GetNullBuffer(Context);				 
+			}
+			catch(e) 
+			{
+				Pop.Warning(`Free/this.SampleNode.buffer= nullbuffer error; ${e}`); 
+			}
 			this.SampleNode = null;
-			
+
 			this.OnVolumeChanged(0);
 		}
 		
@@ -1040,7 +1081,7 @@ Pop.Audio.Sound = class
 		this.SampleNode.loop = this.Looping;
 		
 		//	create gain node if it doesn't exist
-		if ( !this.SampleGainNode )
+		if ( !this.SampleGainNode && this.CreateSampleGainNode )
 		{
 			this.SampleGainNode = Context.createGain();
 			//	make sure volume is correct
@@ -1049,11 +1090,18 @@ Pop.Audio.Sound = class
 		}
 		
 		//	report for visualisation
-		const Volume = this.SampleGainNode.gain.value;
-		this.OnVolumeChanged(Volume);
+		if ( this.SampleGainNode )
+		{
+			const Volume = this.SampleGainNode.gain.value;
+			this.OnVolumeChanged(Volume);
 
-		this.SampleNode.connect( this.SampleGainNode );
-		this.SampleGainNode.connect( Context.destination );
+			this.SampleNode.connect( this.SampleGainNode );
+			this.SampleGainNode.connect( Context.destination );
+		}
+		else
+		{
+			this.SampleNode.connect( Context.destination );
+		}
 		
 		Pop.Debug(`CreateSamplerNodes ${this.Name}`);
 	}
@@ -1212,7 +1260,12 @@ Pop.Audio.Sound = class
 		{
 			this.DestroyAllNodes(Context);
 			//Pop.Debug(`Destroy other sound resources`,this);
-			this.SampleBuffer = null;
+			if ( this.SampleBuffer )
+			{
+				this.SampleBuffer = null;
+				Pop.Audio.TotalFreedSampleCount++;
+				Pop.Debug(`Pop.Audio.TotalDecodedInputBytes=${Pop.Audio.TotalDecodedInputBytes} TotalDecodedCount=${Pop.Audio.TotalDecodedCount} TotalFreedSampleCount=${Pop.Audio.TotalFreedSampleCount}`);
+			}
 			this.SampleWaveData = null;
 			Pop.Debug(`Free'd sound instance #${this.UniqueInstanceNumber}/${this.Name}`)
 		}
