@@ -809,6 +809,8 @@ Pop.Audio.WaitForContext = async function()
 }
 
 Pop.Audio.SoundInstanceCounter = 1000;
+Pop.Audio.TotalDecodedInputBytes = 0;
+Pop.Audio.TotalDecodedCount = 0;
 
 //	more complex WebAudio sound
 Pop.Audio.Sound = class
@@ -942,6 +944,9 @@ Pop.Audio.Sound = class
 		const DataCopy = WaveData.slice();
 		Context.decodeAudioData( DataCopy.buffer, DecodeAudioPromise.Resolve, DecodeAudioPromise.Reject );
 		const SampleBuffer = await DecodeAudioPromise;
+		Pop.Audio.TotalDecodedInputBytes += DataCopy.length;
+		Pop.Audio.TotalDecodedCount += 1;
+		Pop.Debug(`Pop.Audio.TotalDecodedInputBytes=${Pop.Audio.TotalDecodedInputBytes} TotalDecodedCount=${Pop.Audio.TotalDecodedCount}`);
 		this.KnownDurationMs = SampleBuffer.duration * 1000;
 		//Pop.Debug(`Audio ${this.Name} duration: ${this.KnownDurationMs}ms`);
 		return SampleBuffer;
