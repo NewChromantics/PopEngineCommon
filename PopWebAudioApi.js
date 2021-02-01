@@ -814,7 +814,12 @@ Pop.Audio.TotalDecodedCount = 0;
 Pop.Audio.TotalFreedSampleCount = 0;
 //	gr: 22 & 24 seems to crash on iphone se safari
 //	gr: 20 still breaks
-const MaxActiveSampleBuffers = 20;	
+const MaxActiveSampleBuffers = 9999;
+
+//	gr: avoid letting decoded buffers free
+
+
+
 
 Pop.Audio.NullBuffer = null;
 Pop.Audio.GetNullBuffer = function(Context)
