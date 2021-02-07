@@ -964,6 +964,12 @@ Math.CreateTranslationScaleMatrix = function(Position,Scale)
 	return [ sx,0,0,0,	0,sy,0,0,	0,0,sz,0,	tx,ty,tz,1 ];
 }
 
+Math.CreateTranslationQuaternionMatrix = function(Position,Quaternion)
+{
+	//	todo; quaternion to matrix
+	return Math.CreateTranslationMatrix(...Position);
+}
+
 Math.Matrix3x3ToMatrix4x4 = function(Matrix3,Row4=[0,0,0,1])
 {
 	let Matrix4 =
