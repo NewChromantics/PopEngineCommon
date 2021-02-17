@@ -297,7 +297,7 @@ Pop.WebRtc.Client = class
 			//Pop.Debug(`Client got message`,Event);
 			const Packet = {};
 			Packet.Peer = null;
-			Packet.Message = Event.data;
+			Packet.Data = Event.data;
 			this.MessageQueue.Push(Packet);
 		}
 		
