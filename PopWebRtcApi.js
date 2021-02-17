@@ -275,6 +275,11 @@ Pop.WebRtc.Client = class
 		this.OnAddressChanged();
 	}
 	
+	GetAddress()
+	{
+		return this.Address;
+	}
+	
 	async WaitForAddress()
 	{
 		return this.HasAddressPromise;
