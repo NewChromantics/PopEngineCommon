@@ -111,6 +111,7 @@ Pop.WebRtc.Server = class
 			this.HasConnectedPeerPromise.Reject(e);
 			throw e;
 		}	
+		//	now we have a remote description, we should be connected...
 	}
 	
 	OnChannelMessage(Message,Channel)
