@@ -90,8 +90,13 @@ Pop.WebRtc.Server = class
 				Pop.Warning(`Error client ice candidate to server ${e}`);
 			}
 		}
-		
-		//	now we have a remote description, we should be connected...
+
+		//	gr:we get an exception if we already have one set
+		if ( this.Connection.remoteDescription )
+		{
+			//Pop.Warning(`connection already has a remote descrption, ignoring new one in addclient()`);
+			return;
+		}
 		const ClientDescription = Address.AnswerDescription;
 		try
 		{
