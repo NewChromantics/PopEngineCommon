@@ -200,8 +200,15 @@ Pop.WebRtc.Server = class
 		this.HasAddressPromise.Resolve();
 	}
 	
+	GetPeers()
+	{
+		return [null];
+	}
+	
 	Send(Peer,Data,ChannelName='Data')
 	{
+		if ( Peer != this.GetPeers()[0] )
+			throw `Send(Peer=${Peer}) peer expected=${this.GetPeers()[0]}`;
 		if ( !this.Channels.hasOwnProperty(ChannelName) )
 			throw `Server has no channel named ${ChannelName}`;
 			
@@ -316,9 +323,17 @@ Pop.WebRtc.Client = class
 		this.HasAddressPromise.Resolve( this.Address );
 	}
 	
+	GetPeers()
+	{
+		return [null];
+	}
+	
 	//	peer is not needed, but fits api of other sockets
 	Send(Peer,Data,ChannelName='Data')
 	{
+		if ( Peer != this.GetPeers()[0] )
+			throw `Send(Peer=${Peer}) peer expected=${this.GetPeers()[0]}`;
+	
 		if ( !this.Channels.hasOwnProperty(ChannelName) )
 		{
 			//throw `No channel named ${ChannelName}; ${Object.keys(this.Channels)}`;
