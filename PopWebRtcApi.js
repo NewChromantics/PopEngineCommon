@@ -119,6 +119,9 @@ Pop.WebRtc.Server = class
 		const Packet = {};
 		Packet.Peer = null;
 		Packet.Data = Message.data;
+		Packet.Channel = Channel;
+		Packet.RecieveTime = Pop.GetTimeNowMs();
+
 		this.MessageQueue.Push(Packet);
 		//Pop.Debug(`Server OnChannelMessage`,...arguments);
 	}
