@@ -1046,7 +1046,11 @@ Math.GetMatrixTranslation = function(Matrix,DivW=false)
 
 Math.GetMatrixQuaternion = function(Matrix)
 {
-	const m = Matrix;
+	function m(col,row)
+	{
+		let Index = col + (row*4);
+		return Matrix[Index];
+	}
 	//	https://github.com/sacchy/Unity-Arkit/blob/master/Assets/Plugins/iOS/UnityARKit/Utility/UnityARMatrixOps.cs
 	//Quaternion q = new Quaternion();
 	const q = {};
@@ -1056,13 +1060,13 @@ Math.GetMatrixQuaternion = function(Matrix)
 	q.w = 1;
 	// Adapted from: http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/index.htm
 	//	>	The max( 0, ... ) is just a safeguard against rounding error.
-	q.w = Math.sqrt(Math.max(0, 1 + m[0, 0] + m[1, 1] + m[2, 2])) / 2;
-	q.x = Math.sqrt(Math.max(0, 1 + m[0, 0] - m[1, 1] - m[2, 2])) / 2;
-	q.y = Math.sqrt(Math.max(0, 1 - m[0, 0] + m[1, 1] - m[2, 2])) / 2;
-	q.z = Math.sqrt(Math.max(0, 1 - m[0, 0] - m[1, 1] + m[2, 2])) / 2;
-	q.x *= Math.sign(q.x * (m[1, 2] - m[2, 1]));
-	q.y *= Math.sign(q.y * (m[2, 0] - m[0, 2]));
-	q.z *= Math.sign(q.z * (m[0, 1] - m[1, 0]));
+	q.w = Math.sqrt(Math.max(0, 1 + m(0, 0) + m(1, 1) + m(2, 2))) / 2;
+	q.x = Math.sqrt(Math.max(0, 1 + m(0, 0) - m(1, 1) - m(2, 2))) / 2;
+	q.y = Math.sqrt(Math.max(0, 1 - m(0, 0) + m(1, 1) - m(2, 2))) / 2;
+	q.z = Math.sqrt(Math.max(0, 1 - m(0, 0) - m(1, 1) + m(2, 2))) / 2;
+	q.x *= Math.sign(q.x * (m(1, 2) - m(2, 1)));
+	q.y *= Math.sign(q.y * (m(2, 0) - m(0, 2)));
+	q.z *= Math.sign(q.z * (m(0, 1) - m(1, 0)));
 
 	//	gr: pop math structs are all arrays	
 	//return q;
