@@ -976,7 +976,7 @@ Math.CreateTranslationQuaternionMatrix = function(Position,Quaternion)
 	const tx = Position[0];
 	const ty = Position[1];
 	const tz = Position[2];
-	const tw = 1;
+	const tw = (Position.length >= 4) ? Position[3] : 1;
 	const Matrix =
 	[
 		(1.0-2.0*(ry*ry + rz*rz))*sx,
