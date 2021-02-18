@@ -182,7 +182,8 @@ Pop.WebRtc.Server = class
 			Pop.Debug(`Server got ${Candidate} candidate`);
 			return;
 		}
-		const CandidateString = Candidate.toJSON().stringify();
+		const CandidateJson = Candidate.toJSON();
+		const CandidateString = JSON.stringify(CandidateJson);
 		this.Address.IceCandidateStrings.push(CandidateString);
 		this.OnAddressChanged();
 	}
@@ -238,9 +239,11 @@ Pop.WebRtc.Client = class
 		this.Channels = {};	//	Channel['Name']
 		
 		this.Connection = new RTCPeerConnection(Pop.WebRtc.IceServers );
+		this.Connection.onicecandidate = this.OnIceCandidate.bind(this);
 		this.Connection.ondatachannel = this.OnFoundDataChannel.bind(this);
 		this.ConnectedPromise = this.Connect(RemoteAddress);
 	}
+	
 	
 	async Connect(Address)
 	{
@@ -281,6 +284,21 @@ Pop.WebRtc.Client = class
 	GetAddress()
 	{
 		return this.Address;
+	}
+	
+	OnIceCandidate(Event)
+	{
+		//	update "address"
+		const Candidate = Event.candidate;
+		if ( !Candidate )
+		{
+			Pop.Debug(`Server got ${Candidate} candidate`);
+			return;
+		}
+		const CandidateJson = Candidate.toJSON();
+		const CandidateString = JSON.stringify(CandidateJson);
+		this.Address.IceCandidateStrings.push(CandidateString);
+		this.OnAddressChanged();
 	}
 	
 	async WaitForAddress()
