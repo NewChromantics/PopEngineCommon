@@ -63,7 +63,7 @@ Pop.WebRtc.Server = class
 		this.Address = {};
 		this.Address.Sdp = null;	//	connection info for protocol
 		this.Address.OfferDescription = null;	//	sdp is in here
-		this.Address.IceCandidates = [];	//	possible routing candidates
+		this.Address.IceCandidateStrings = [];	//	possible routing candidates
 		
 		this.MessageQueue = new Pop.PromiseQueue(`WebRtc server message queue`);
 		
@@ -77,9 +77,10 @@ Pop.WebRtc.Server = class
 	//		but we dont NEED the ice candidiate to connect local-local
 	async AddClient(Address)
 	{
-		for ( let ic=0;	ic<Address.IceCandidates.length;	ic++ )
+		for ( let ic=0;	ic<Address.IceCandidateStrings.length;	ic++ )
 		{
-			const IceCandidate = Address.IceCandidates[ic];
+			const IceCandidateString = Address.IceCandidateStrings[ic];
+			const IceCandidate = JSON.parse(IceCandidateString);
 			try
 			{
 				const Addded = await this.Connection.addIceCandidate(IceCandidate);
@@ -181,7 +182,8 @@ Pop.WebRtc.Server = class
 			Pop.Debug(`Server got ${Candidate} candidate`);
 			return;
 		}
-		this.Address.IceCandidates.push(Event.candidate);
+		const CandidateString = Candidate.toJSON().stringify();
+		this.Address.IceCandidateStrings.push(CandidateString);
 		this.OnAddressChanged();
 	}
 	
@@ -196,7 +198,7 @@ Pop.WebRtc.Server = class
 		}
 		//	docs say we don't need an ice candidate, but...
 		//	it won't connect without...
-		if ( !this.Address.IceCandidates.length )
+		if ( !this.Address.IceCandidateStrings.length )
 		{
 			Pop.Warning(`OnAddressChanged, waiting for ice candidate`);
 			return;
@@ -229,7 +231,7 @@ Pop.WebRtc.Client = class
 		this.MessageQueue = new Pop.PromiseQueue(`webrtc client message queue`);
 		
 		this.Address = {};
-		this.Address.IceCandidates = [];
+		this.Address.IceCandidateStrings = [];
 		this.Address.AnswerDescription = null;
 		this.HasAddressPromise = Pop.CreatePromise();
 		
@@ -255,10 +257,11 @@ Pop.WebRtc.Client = class
 		
 		
 		//	add all possible candidates (async, hence here)
-		//forEach ( let IceCandidate of Address.IceCandidates )
-		for ( let i=0;	i<Address.IceCandidates.length;	i++ )
+		//forEach ( let IceCandidate of Address.IceCandidateStrings )
+		for ( let i=0;	i<Address.IceCandidateStrings.length;	i++ )
 		{
-			let IceCandidate = Address.IceCandidates[i];
+			const IceCandidateString = Address.IceCandidateStrings[i];
+			const IceCandidate = JSON.parse(IceCandidateString);
 			try
 			{
 				const AddedIce = await this.Connection.addIceCandidate(IceCandidate);
