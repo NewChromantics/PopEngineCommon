@@ -83,6 +83,8 @@ Pop.WebRtc.Server = class
 			const IceCandidate = JSON.parse(IceCandidateString);
 			try
 			{
+				if ( !this.Connection.remoteDescription )
+					throw `Cannot add ice candidiate until remote description has been set/processed`;
 				const Addded = await this.Connection.addIceCandidate(IceCandidate);
 				Pop.Debug(`Added client ice candidate to server`);
 			}
