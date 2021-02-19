@@ -100,7 +100,7 @@ Pop.WebRtc.Server = class
 			//Pop.Warning(`connection already has a remote descrption, ignoring new one in addclient()`);
 			return;
 		}
-		const ClientDescription = Address.AnswerDescription;
+		const ClientDescription = new RTCSessionDescription(Address.AnswerDescription);
 		try
 		{
 			const Result = await this.Connection.setRemoteDescription(ClientDescription);
@@ -250,7 +250,8 @@ Pop.WebRtc.Client = class
 	async Connect(Address)
 	{
 		//	set the description&sdp of "server"
-		await this.Connection.setRemoteDescription( Address.OfferDescription );
+		const OfferDescription = new RTCSessionDescription(Address.OfferDescription);
+		await this.Connection.setRemoteDescription(OfferDescription);
 		Pop.Debug(`Client SetRemote`);
 		
 		
