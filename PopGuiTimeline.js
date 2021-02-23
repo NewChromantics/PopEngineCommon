@@ -51,7 +51,7 @@ Pop.Gui.Timeline = class
 		const Height = 7;
 		const Pixels = new Uint8Array(Width*Height*Components);
 		Pixels.fill(255);
-		this.ViewImage = new Pop.Image();
+		this.ViewImage = new Pop.Image('Timeline data');
 		this.ViewImage.WritePixels( Width, Height, Pixels, Format );
 		function Write(x,y,Colour)
 		{
@@ -182,7 +182,7 @@ Pop.Gui.Timeline = class
 		{
 			const Pixels = new Uint8Array(Width*Height*Components);
 			Pixels.fill(123);
-			this.ViewImage = new Pop.Image();
+			this.ViewImage = new Pop.Image('Timeline Data');
 			this.ViewImage.WritePixels( Width, Height, Pixels, Format );
 			Pixels.fill(255);
 		}

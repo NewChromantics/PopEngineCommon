@@ -1028,6 +1028,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		try
 		{
 			const FloatTexture = new Pop.Image([1,1],'Float4');
+			FloatTexture.Name = 'IsFloatRenderTargetSupported';
 			const RenderTarget = new Pop.Opengl.TextureRenderTarget( [FloatTexture] );
 			const RenderContext = this;
 			RenderTarget.BindRenderTarget( RenderContext );
