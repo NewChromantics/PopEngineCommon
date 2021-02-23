@@ -593,16 +593,17 @@ function GetButtonFromMouseEventButton(MouseButton,AlternativeButton)
 	{
 		switch ( MouseButton )
 		{
-			case BrowserMouseLeft:	return Pop.SoyMouseButton.Back;
-			case BrowserMouseRight:	return Pop.SoyMouseButton.Forward;
+			case BrowserMouseLeft:	return 'Back';
+			case BrowserMouseRight:	return 'Forward';
 		}
 	}
-	
+		
+	//	gr: where is back and forward mouse buttons??
 	switch ( MouseButton )
 	{
-		case BrowserMouseLeft:		return Pop.SoyMouseButton.Left;
-		case BrowserMouseMiddle:	return Pop.SoyMouseButton.Middle;
-		case BrowserMouseRight:		return Pop.SoyMouseButton.Right;
+		case BrowserMouseLeft:		return 'Left';
+		case BrowserMouseMiddle:	return 'Middle';
+		case BrowserMouseRight:		return 'Right';
 	}
 	throw "Unhandled MouseEvent.button (" + MouseButton + ")";
 }
