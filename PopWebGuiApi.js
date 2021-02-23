@@ -719,6 +719,7 @@ Pop.Gui.BaseControl = class
 		async function LoadFilesAsync(Files)
 		{
 			const NewFilenames = this.GetDragDropFilenames(Files);
+			const FinalAddedFiles = [];
 			async function LoadFile(File,FileIndex)
 			{
 				const Filename = NewFilenames[FileIndex];
@@ -727,7 +728,7 @@ Pop.Gui.BaseControl = class
 				const FileArray = await File.arrayBuffer();
 				const File8 = new Uint8Array(FileArray);
 				Pop.SetFileCache(Filename,File8);
-				NewFilenames.push(Filename);
+				FinalAddedFiles.push(Filename);
 			}
 			//	make a promise for each file
 			const LoadPromises = Files.map(LoadFile.bind(this));
@@ -735,7 +736,7 @@ Pop.Gui.BaseControl = class
 			await Promise.all(LoadPromises);
 
 			//	now notify with new filenames
-			this.OnDragDropQueue.Push(NewFilenames);
+			this.OnDragDropQueue.Push(FinalAddedFiles);
 		}
 
 		Event.preventDefault();
