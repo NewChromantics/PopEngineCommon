@@ -1167,10 +1167,8 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		this.GeometryHeap.OnDeallocated( Geometry.OpenglByteSize );
 	}
 	
-	this.GetTextureRenderTarget = function(Textures)
+	this.GetRenderTargetIndex = function(Textures)
 	{
-		if ( !Array.isArray(Textures) )
-			Textures = [Textures];
 		function MatchRenderTarget(RenderTarget)
 		{
 			const RTTextures = RenderTarget.Images;
@@ -1187,16 +1185,43 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			return true;
 		}
 		
-		let RenderTarget = this.TextureRenderTargets.find(MatchRenderTarget);
-		if ( RenderTarget )
-			return RenderTarget;
+		const RenderTargetIndex = this.TextureRenderTargets.findIndex(MatchRenderTarget);
+		if ( RenderTargetIndex < 0 )
+			return false;
+		return RenderTargetIndex;
+	}
+	
+	this.GetTextureRenderTarget = function(Textures)
+	{
+		if ( !Array.isArray(Textures) )
+			Textures = [Textures];
+		
+		const RenderTargetIndex = this.GetRenderTargetIndex(Textures);
+		if ( RenderTargetIndex !== false )
+			return this.TextureRenderTargets[RenderTargetIndex];
 		
 		//	make a new one
-		RenderTarget = new Pop.Opengl.TextureRenderTarget( Textures );
+		const RenderTarget = new Pop.Opengl.TextureRenderTarget( Textures );
 		this.TextureRenderTargets.push( RenderTarget );
-		if ( !this.TextureRenderTargets.find(MatchRenderTarget) )
+		if ( this.GetRenderTargetIndex(Textures) === false )
 			throw "New render target didn't re-find";
 		return RenderTarget;
+	}
+	
+	this.FreeRenderTarget = function(Textures)
+	{
+		if ( !Array.isArray(Textures) )
+			Textures = [Textures];
+		
+		//	in case there's more than one!
+		while(true)
+		{
+			const TargetIndex = this.GetRenderTargetIndex(Textures);
+			if ( TargetIndex === false )
+				break;
+				
+			this.TextureRenderTargets.splice(TargetIndex,1);
+		}
 	}
 	
 	this.ReadPixels = function(Image,ReadBackFormat)
@@ -1695,7 +1720,8 @@ function WindowRenderTarget(Window)
 		const RenderRect = this.GetRenderTargetRect();
 		return RenderRect[3] * (this.ViewportMinMax[3]-this.ViewportMinMax[1]);
 	}
-	
+
+	this.FreeRenderTarget = RenderContext.FreeRenderTarget.bind(RenderContext);
 }
 
 
