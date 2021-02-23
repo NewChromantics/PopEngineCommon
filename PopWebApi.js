@@ -499,7 +499,10 @@ Pop.GetExeArguments = function()
 
 Pop.GetTimeNowMs = function()
 {
-	return performance.now();
+	//	this returns a float, even though it's in ms,
+	//	so round to integer
+	const Now = performance.now();
+	return Math.floor(Now);
 }
 
 
