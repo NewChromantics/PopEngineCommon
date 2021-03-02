@@ -19,7 +19,7 @@ function GetWebsocketError(Event)
 //	wrapper for websocket
 Pop.Websocket.Client = class
 {
-	constructor(Hostname,Port=80)
+	constructor(Hostname,Port=80,Path='')
 	{
 		this.OnConnectPromises = new Pop.PromiseQueue('WebsocketClient Connects');
 		this.OnMessagePromises = new Pop.PromiseQueue('WebsocketClient Messages');
@@ -58,7 +58,18 @@ Pop.Websocket.Client = class
 
 		let ServerAddress = `${Hostname}:${Port}`;
 		if (!ServerAddress.startsWith('ws://') && !ServerAddress.startsWith('wss://'))
-			ServerAddress = 'ws://' + ServerAddress;
+		{
+			//	gr: on chrome, we cannot connect to secure from insecure and vice versa, so default
+			//		use protocol matching window location
+			//	gr: localhost is considered secure, but for testing, it doesnt usually have a certificate
+			//const Protocol = window.isSecureContext ? 'wss://' : 'ws://';
+			const Protocol = window.protocol=='https:' ? 'wss://' : 'ws://';
+			ServerAddress = Protocol + ServerAddress;
+		}
+
+		//	add path
+		ServerAddress += `/${Path}`;
+
 		this.Socket = new WebSocket(ServerAddress);
 		this.Socket.onerror = this.OnError.bind(this);
 		this.Socket.onclose = this.OnDisconnected.bind(this);

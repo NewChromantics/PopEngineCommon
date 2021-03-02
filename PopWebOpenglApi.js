@@ -708,7 +708,26 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		//	if we're fitting inside a div, then Parent should be the name of a div
 		//	we could want a situation where we want a rect inside a parent? but then
 		//	that should be configured by css?
+
 		let Element = document.getElementById(Name);
+
+		// Check IFrames for Canvas Elements
+		if (!Element)
+		{
+			let IFrames = document.getElementsByTagName("iframe")
+			let IframeCanvases = Object.keys(IFrames).map((key) =>
+			{
+				let iframe = IFrames[key];
+				let iframe_document = iframe.contentDocument || iframe.contentWindow.document;
+				return iframe_document.getElementById(Name);
+			});
+
+			if(IframeCanvases.length > 1)
+				throw `More than one Canvas with the name ${Name} found`
+
+			Element = IframeCanvases[0]
+		}
+
 		if ( Element )
 		{
 			//	https://stackoverflow.com/questions/254302/how-can-i-determine-the-type-of-an-html-element-in-javascript
@@ -717,6 +736,10 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 				throw `Pop.Opengl.Window ${Name} needs to be a canvas, is ${Element.nodeName}`;
 			return Element;
 		}
+
+		// if Rect is passed in as an object assume it is the canvas
+		if (typeof Rect === 'object' && Rect !== null)
+			return Rect;
 		
 		//	create new canvas
 		this.NewCanvasElement = document.createElement('canvas');
@@ -1005,6 +1028,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		try
 		{
 			const FloatTexture = new Pop.Image([1,1],'Float4');
+			FloatTexture.Name = 'IsFloatRenderTargetSupported';
 			const RenderTarget = new Pop.Opengl.TextureRenderTarget( [FloatTexture] );
 			const RenderContext = this;
 			RenderTarget.BindRenderTarget( RenderContext );
@@ -1143,10 +1167,8 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		this.GeometryHeap.OnDeallocated( Geometry.OpenglByteSize );
 	}
 	
-	this.GetTextureRenderTarget = function(Textures)
+	this.GetRenderTargetIndex = function(Textures)
 	{
-		if ( !Array.isArray(Textures) )
-			Textures = [Textures];
 		function MatchRenderTarget(RenderTarget)
 		{
 			const RTTextures = RenderTarget.Images;
@@ -1163,16 +1185,43 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			return true;
 		}
 		
-		let RenderTarget = this.TextureRenderTargets.find(MatchRenderTarget);
-		if ( RenderTarget )
-			return RenderTarget;
+		const RenderTargetIndex = this.TextureRenderTargets.findIndex(MatchRenderTarget);
+		if ( RenderTargetIndex < 0 )
+			return false;
+		return RenderTargetIndex;
+	}
+	
+	this.GetTextureRenderTarget = function(Textures)
+	{
+		if ( !Array.isArray(Textures) )
+			Textures = [Textures];
+		
+		const RenderTargetIndex = this.GetRenderTargetIndex(Textures);
+		if ( RenderTargetIndex !== false )
+			return this.TextureRenderTargets[RenderTargetIndex];
 		
 		//	make a new one
-		RenderTarget = new Pop.Opengl.TextureRenderTarget( Textures );
+		const RenderTarget = new Pop.Opengl.TextureRenderTarget( Textures );
 		this.TextureRenderTargets.push( RenderTarget );
-		if ( !this.TextureRenderTargets.find(MatchRenderTarget) )
+		if ( this.GetRenderTargetIndex(Textures) === false )
 			throw "New render target didn't re-find";
 		return RenderTarget;
+	}
+	
+	this.FreeRenderTarget = function(Textures)
+	{
+		if ( !Array.isArray(Textures) )
+			Textures = [Textures];
+		
+		//	in case there's more than one!
+		while(true)
+		{
+			const TargetIndex = this.GetRenderTargetIndex(Textures);
+			if ( TargetIndex === false )
+				break;
+				
+			this.TextureRenderTargets.splice(TargetIndex,1);
+		}
 	}
 	
 	this.ReadPixels = function(Image,ReadBackFormat)
@@ -1671,11 +1720,12 @@ function WindowRenderTarget(Window)
 		const RenderRect = this.GetRenderTargetRect();
 		return RenderRect[3] * (this.ViewportMinMax[3]-this.ViewportMinMax[1]);
 	}
-	
+
+	this.FreeRenderTarget = RenderContext.FreeRenderTarget.bind(RenderContext);
 }
 
 
-
+//	this is being deprected for the class in the module PopEngineOpengl
 Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSource)
 {
 	if ( typeof RenderContext == 'string' )
@@ -1839,6 +1889,13 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 		if ( Values.length == ExpectedValueCount )
 		{
 			UniformMeta.SetValues( Values );
+			return;
+		}
+		//	providing MORE values, do a quick slice. Should we warn about this?
+		if ( Values.length >= ExpectedValueCount )
+		{
+			const ValuesCut = Values.slice(0,ExpectedValueCount);
+			UniformMeta.SetValues( ValuesCut );
 			return;
 		}
 		
@@ -2234,6 +2291,11 @@ Pop.Opengl.TriangleBuffer = class
 			//		even if we call gl.enableVertexAttribArray
 			this.BindVertexPointers( RenderContext, Shader );
 		}
+	}
+	
+	GetIndexCount()
+	{
+		return this.IndexCount;
 	}
 }
 

@@ -165,6 +165,8 @@ function GetElementRect(Element)
 
 function SetGuiControl_Draggable(Element)
 {
+	if ( !Element )
+		return;
 	const RectKey = `${Element.id}_WindowRect`;
 	function LoadRect()
 	{
@@ -366,6 +368,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 	this.ElementWindow = null;
 	this.ElementTitleBar = null;
 	this.RestoreHeight = null;		//	if non-null, stores the height we were before minimising
+	this.TitleBarClickLastTime = null;	//	to detect double click 
 
 	//	gr: element may not be assigned yet, maybe rework construction of controls
 	this.AddChildControl = function(Child,Element)
@@ -426,7 +429,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		//AddChild( TitleBar, 'PopGuiButton', 'X');
 
 		TitleBar.AllowDraggable = true;
-		TitleBar.addEventListener('dblclick',this.OnToggleMinimise.bind(this),true);
+		TitleBar.addEventListener('click',this.OnTitleBarClick.bind(this),true);
 		
 		//	this may need some style to force position
 		this.ElementParent = AddChild( Element, 'PopGuiIconView');
@@ -437,6 +440,25 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		this.EnableScrollbars(true,true);
 		
 		return Element;
+	}
+	
+	this.OnTitleBarClick = function(Event)
+	{
+		const DoubleClickMaxTime = 300;
+		
+		//	todo: filter button
+		//	detect double click
+		if ( this.TitleBarClickLastTime !== null )
+		{
+			const TimeSinceClick = Pop.GetTimeNowMs() -  this.TitleBarClickLastTime;
+			if ( TimeSinceClick < DoubleClickMaxTime )
+			{
+				this.OnToggleMinimise();
+				this.TitleBarClickLastTime = null;
+			}
+		}
+		
+		this.TitleBarClickLastTime = Pop.GetTimeNowMs();				
 	}
 	
 	this.EnableScrollbars = function(Horizontal,Vertical)
@@ -573,16 +595,17 @@ function GetButtonFromMouseEventButton(MouseButton,AlternativeButton)
 	{
 		switch ( MouseButton )
 		{
-			case BrowserMouseLeft:	return Pop.SoyMouseButton.Back;
-			case BrowserMouseRight:	return Pop.SoyMouseButton.Forward;
+			case BrowserMouseLeft:	return 'Back';
+			case BrowserMouseRight:	return 'Forward';
 		}
 	}
-	
+		
+	//	gr: where is back and forward mouse buttons??
 	switch ( MouseButton )
 	{
-		case BrowserMouseLeft:		return Pop.SoyMouseButton.Left;
-		case BrowserMouseMiddle:	return Pop.SoyMouseButton.Middle;
-		case BrowserMouseRight:		return Pop.SoyMouseButton.Right;
+		case BrowserMouseLeft:		return 'Left';
+		case BrowserMouseMiddle:	return 'Middle';
+		case BrowserMouseRight:		return 'Right';
 	}
 	throw "Unhandled MouseEvent.button (" + MouseButton + ")";
 }
@@ -699,6 +722,7 @@ Pop.Gui.BaseControl = class
 		async function LoadFilesAsync(Files)
 		{
 			const NewFilenames = this.GetDragDropFilenames(Files);
+			const FinalAddedFiles = [];
 			async function LoadFile(File,FileIndex)
 			{
 				const Filename = NewFilenames[FileIndex];
@@ -707,7 +731,7 @@ Pop.Gui.BaseControl = class
 				const FileArray = await File.arrayBuffer();
 				const File8 = new Uint8Array(FileArray);
 				Pop.SetFileCache(Filename,File8);
-				NewFilenames.push(Filename);
+				FinalAddedFiles.push(Filename);
 			}
 			//	make a promise for each file
 			const LoadPromises = Files.map(LoadFile.bind(this));
@@ -715,7 +739,7 @@ Pop.Gui.BaseControl = class
 			await Promise.all(LoadPromises);
 
 			//	now notify with new filenames
-			this.OnDragDropQueue.Push(NewFilenames);
+			this.OnDragDropQueue.Push(FinalAddedFiles);
 		}
 
 		Event.preventDefault();

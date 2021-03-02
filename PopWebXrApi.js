@@ -22,6 +22,8 @@ function RenderTargetFrameBufferProxy(OpenglFrameBuffer,Viewport,RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
 		const FrameBuffer = this.GetFrameBuffer();
+		if ( FrameBuffer === undefined )
+			throw `RenderTargetFrameBufferProxy BindRenderTarget() with ${FrameBuffer}, invalid`;
 	
 		//	todo: make this common code
 		gl.bindFramebuffer( gl.FRAMEBUFFER, FrameBuffer );
@@ -42,24 +44,14 @@ Pop.Xr.Devices = [];
 
 Pop.Xr.SupportedSessionMode = null;
 
-Pop.Xr.IsSupported = function()
-{
-	//	in chromium (usually) navigator.xr is only availible under secure connections
-	//	but accessible from localhost. To enable use of this, use chromium
-	//	remote inspctor to portforward $PORT to devmachine:$PORT then
-	//	browse to localhost:$PORT
-	const PlatformXr = navigator.xr;
-	if ( !PlatformXr )
-		return false;
-	
-	//	check session mode support
-	//	this replaces this function with true/fa
-	return Pop.Xr.SupportedSessionMode != false;
-}
+//	allow this to be overriden with custom polyfills
+//	todo: abstract these interfaces so we can have our own XR API along side navigator
+Pop.Xr.PlatformXr = navigator.xr;		
+Pop.Xr.PlatformXRWebGLLayer = (typeof XRWebGLLayer !== 'undefined') ? XRWebGLLayer : null; 
 
 Pop.Xr.GetSupportedSessionMode = async function()
 {
-	const PlatformXr = navigator.xr;
+	const PlatformXr = Pop.Xr.PlatformXr || navigator.xr;
 	if ( !PlatformXr )
 		return false;
 	
@@ -85,35 +77,35 @@ Pop.Xr.GetSupportedSessionMode = async function()
 		}
 	}
 	
-	try
-	{
-		const Supported = await PlatformXr.isSessionSupported('immersive-vr');
-		if (!Supported)
-			throw Supported;
-		return 'immersive-vr';
-	}
-	catch(e)
-	{
-		Pop.Debug("Browser doesn't support immersive-vr",e);
-	}
+	//	gr: we may want to enumerate all the modes
+	const SessionTypes = 
+	[
+	'immersive-ar',
+	'immersive-vr',
+	'inline'
+	];
 	
-	try
+	const Errors = [];
+	for ( let SessionType of SessionTypes )
 	{
-		const Supported = await PlatformXr.isSessionSupported('inline');
-		if (!Supported)
-			throw Supported;
-		return 'inline';
+		try
+		{
+			const Supported = await PlatformXr.isSessionSupported(SessionType);
+			if (!Supported)
+				throw `XR SessionType ${SessionType} not supported (${Supported})`;
+			return SessionType;
+		}
+		catch(e)
+		{
+			Pop.Warning(e);
+		}
 	}
-	catch(e)
-	{
-		Pop.Debug("Browser doesn't support inline",e);
-	}
-	
+
 	return false;
 }
 
 //	setup cache of support for synchronous call
-Pop.Xr.GetSupportedSessionMode().then( Mode => Pop.Xr.SupportedSessionMode=Mode ).catch( Pop.Debug );
+//Pop.Xr.GetSupportedSessionMode().then( Mode => Pop.Xr.SupportedSessionMode=Mode ).catch( Pop.Debug );
 
 
 function IsReferenceSpaceOriginFloor(ReferenceSpaceType)
@@ -140,6 +132,23 @@ class XrInputState
 		this.Transform = null;	//	for now, saving .position .quaternion .matrix
 	}
 }
+
+//	return alpha 0 or 1 for AR(alpha blend) or additive mode
+function GetClearAlphaFromBlendMode(BlendMode)
+{
+	//	if undefined or invalid, assume opaque
+	switch(BlendMode)
+	{
+	case 'additive':
+	case 'alpha-blend':
+		return 0;
+	
+	case 'opaque':
+	default:
+		return 1;
+	}
+}
+
 
 Pop.Xr.Device = class
 {
@@ -199,7 +208,7 @@ Pop.Xr.Device = class
 	InitLayer(RenderContext)
 	{
 		const OpenglContext = this.RenderContext.GetGlContext();
-		this.Layer = new XRWebGLLayer(this.Session, OpenglContext);
+		this.Layer = new Pop.Xr.PlatformXRWebGLLayer(this.Session, OpenglContext);
 		this.Session.updateRenderState({ baseLayer: this.Layer });
 	}
 	
@@ -441,6 +450,7 @@ Pop.Xr.Device = class
 		function GetCameraName(View)
 		{
 			//	different names from different browsers
+			//	webxr spec is expecting 'left', 'right' and 'none' for mono
 			if (typeof View.eye == 'string')
 				return View.eye.toLowerCase();
 			
@@ -466,6 +476,9 @@ Pop.Xr.Device = class
 			//	maybe need a better place to propogate this info (along with chaperone/bounds)
 			//	but for now renderer just needs to know (but input doesnt know!)
 			Camera.IsOriginFloor = IsOriginFloor;
+			
+			//	AR (and additive, eg. hololens) need to be transparent
+			Camera.ClearAlpha = GetClearAlphaFromBlendMode(Frame.session.environmentBlendMode);
 
 			//	use the render params on our camera
 			if ( Frame.session.renderState )
@@ -534,7 +547,7 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 	if ( Pop.Xr.Devices.length )
 		await Pop.Xr.Devices[0].WaitForEnd();
 
-	const PlatformXr = navigator.xr;
+	const PlatformXr = Pop.Xr.PlatformXr;
 
 	//	loop until we get a session
 	while(true)
@@ -594,7 +607,7 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 					}
 					catch(e)
 					{
-						Pop.Warning(`XR ReferenceSpace type ${ReferenceSpaceType} not supported.`);
+						Pop.Warning(`XR ReferenceSpace type ${ReferenceSpaceType} not supported. ${e}`);
 					}
 				}
 				throw `Failed to find supported XR reference space`;

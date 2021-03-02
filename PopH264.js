@@ -83,3 +83,39 @@ Pop.H264.IsKeyframe = function (Packet)
 	}
 }
 
+Pop.H264.SplitNalus = function(Packet)
+{
+	//	gr: we need this fast search-for-bytes as a generic thing so we can get the fastest possible func
+	const Marker = new Uint8Array([0,0,1]);
+	const MarkerStarts = [];
+	
+	for ( let i=0;	i<Packet.length-Marker.length;	i++ )
+	{
+		const a = Packet[i+0] == Marker[0];
+		const b = Packet[i+1] == Marker[1];
+		const c = Packet[i+2] == Marker[2];
+		if ( a && b && c )
+			MarkerStarts.push(i);
+	}
+	
+	if ( MarkerStarts.length == 0 )
+	{
+		Pop.Debug(`Didn't find any nalu markers. Assuming start`);
+		MarkerStarts.push(0);
+	}
+
+	//	add a position at the end	
+	MarkerStarts.push( Packet.length );
+
+	const Nalus = [];
+	for ( let ms=0;	ms<MarkerStarts.length-1;	ms++ )
+	{
+		const Start = MarkerStarts[ms+0];
+		const End = MarkerStarts[ms+1];
+		const Nalu = Packet.slice(Start,End);
+		Nalus.push(Nalu);
+	}
+	return Nalus;
+}
+
+
