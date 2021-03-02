@@ -59,6 +59,9 @@ const TestFrameBuffer = false;
 const TestAttribLocation = false;
 const DisableOldVertexAttribArrays = false;
 const AllowVao = !Pop.GetExeArguments().DisableVao;
+//	I was concerned active texture was being used as render target and failing to write
+const CheckActiveTexturesBeforeRenderTargetBind = false;	
+const UnbindActiveTexturesBeforeRenderTargetBind = false;
 
 //	if we fail to get a context (eg. lost context) wait this long before restarting the render loop (where it tries again)
 //	this stops thrashing cpu/system whilst waiting
@@ -640,7 +643,8 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 	this.FloatTextureSupported = false;
 	this.Int32TextureSupported = false;	//	depth texture 24,8
 	
-	this.ActiveTexureIndex = 0;
+	this.ActiveTextureIndex = 0;
+	this.ActiveTextureRef = {};
 	this.TextureRenderTargets = [];	//	this is a context asset, so maybe it shouldn't be kept here
 
 	this.Close = function ()
@@ -688,12 +692,17 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		this.RefreshCanvasResolution();
 	}
 	
-	this.AllocTexureIndex = function()
+	this.AllocTextureIndex = function(Image)
 	{
 		//	gr: make a pool or something
 		//		we fixed this on desktop, so take same model
-		const Index = (this.ActiveTexureIndex % 8);
-		this.ActiveTexureIndex++;
+		const Index = (this.ActiveTextureIndex % 8);
+		this.ActiveTextureIndex++;
+	
+		//	gr: only keep image reference for debugging!
+		if ( CheckActiveTexturesBeforeRenderTargetBind )
+			this.ActiveTextureRef[Index] = Image;	//	for debugging, check if any active textures are our target
+			
 		return Index;
 	}
 	
@@ -875,7 +884,8 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 	this.ResetContextAssets = function()
 	{
 		//	dont need to reset this? but we will anyway
-		this.ActiveTexureIndex = 0;
+		this.ActiveTextureIndex = 0;
+		this.ActiveTextureRef = {};
 		
 		//	todo: proper cleanup
 		this.TextureRenderTargets = [];
@@ -1341,10 +1351,31 @@ Pop.Opengl.RenderTarget = function()
 	this.RenderToRenderTarget = function(TargetTexture,RenderFunction,ReadBackFormat,ReadTargetTexture)
 	{
 		const RenderContext = this.GetRenderContext();
+
+		if ( CheckActiveTexturesBeforeRenderTargetBind )
+		{
+			const CurrentActiveTextureIndex =  (RenderContext.ActiveTextureIndex-1) % 8;
+			const ActiveTexture = RenderContext.ActiveTextureRef[CurrentActiveTextureIndex];
+			const ActiveTextureName = ActiveTexture ? ActiveTexture.Name : `<null ${CurrentActiveTextureIndex}>`;
+			Pop.Debug(`BindRenderTarget to ${TargetTexture.Name} active=${ActiveTextureName}`);
+		}
+		//	unbind all texture units
+		if ( UnbindActiveTexturesBeforeRenderTargetBind )
+		{
+			const gl = RenderContext.GetGlContext();
+			const GlTextureNames = [ gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7 ];
+			function UnbindTextureSlot(SlotName)
+			{
+				gl.activeTexture(SlotName);
+				gl.bindTexture(gl.TEXTURE_2D, null );
+			}
+			GlTextureNames.forEach(UnbindTextureSlot);
+		}
 		
 		//	setup render target
 		let RenderTarget = RenderContext.GetTextureRenderTarget( TargetTexture );
 		RenderTarget.BindRenderTarget( RenderContext );
+		
 		
 		RenderFunction( RenderTarget );
 		
@@ -1642,9 +1673,9 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 		this.ResetState();
 	}
 	
-	this.AllocTexureIndex = function()
+	this.AllocTextureIndex = function()
 	{
-		return this.RenderContext.AllocTexureIndex();
+		return this.RenderContext.AllocTextureIndex();
 	}
 	
 	//	verify each image is same dimensions (and format?)
@@ -1668,9 +1699,9 @@ function WindowRenderTarget(Window)
 		return RenderContext;
 	}
 	
-	this.AllocTexureIndex = function()
+	this.AllocTextureIndex = function()
 	{
-		return Window.AllocTexureIndex();
+		return Window.AllocTextureIndex();
 	}
 
 	this.GetScreenRect = function()
@@ -1870,7 +1901,7 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 			return;
 		if( Array.isArray(Value) )					this.SetUniformArray( Uniform, UniformMeta, Value );
 		else if( Value instanceof Float32Array )	this.SetUniformArray( Uniform, UniformMeta, Value );
-		else if ( Value instanceof Pop.Image )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTexureIndex() );
+		else if ( Value instanceof Pop.Image )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTextureIndex(Value) );
 		else if ( typeof Value === 'number' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else if ( typeof Value === 'boolean' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else

@@ -442,7 +442,7 @@ Pop.Image = function(Filename)
 		const Texture = this.OpenglTexture;
 		
 		//	set a new texture slot
-		const TextureIndex = RenderContext.AllocTexureIndex();
+		const TextureIndex = RenderContext.AllocTextureIndex(this);
 		let GlTextureNames = [ gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7 ];
 		gl.activeTexture( GlTextureNames[TextureIndex] );
 
