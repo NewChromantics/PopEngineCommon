@@ -335,7 +335,7 @@ Pop.WebApi.TFileCache = class
 			{
 				if ( this.Cache[Filename] === false )
 					throw `We have chunks, but cache is false (error), shouldn't hit this combination, something has errored but we still have chunks (still downloading?)`;
-				Pop.Debug(`Skipping chunk resolve of ${Filename} x${Meta.ContentChunks.length} chunks`);
+				//Pop.Debug(`Skipping chunk resolve of ${Filename} x${Meta.ContentChunks.length} chunks`);
 				return Meta.ContentChunks;
 			}
 		}		
@@ -361,7 +361,7 @@ Pop.WebApi.TFileCache = class
 			{
 				if ( this.Cache[Filename] === false )
 					throw `We have chunks, but cache is false (error), shouldn't hit this combination, something has errored but we still have chunks (still downloading?)`;
-				Pop.Debug(`Skipping chunk resolve of ${Filename} x${Meta.ContentChunks.length} chunks`);
+				//Pop.Debug(`Skipping chunk resolve of ${Filename} x${Meta.ContentChunks.length} chunks`);
 				return Meta.ContentChunks;
 			}
 		}		
@@ -499,7 +499,10 @@ Pop.GetExeArguments = function()
 
 Pop.GetTimeNowMs = function()
 {
-	return performance.now();
+	//	this returns a float, even though it's in ms,
+	//	so round to integer
+	const Now = performance.now();
+	return Math.floor(Now);
 }
 
 
