@@ -1041,9 +1041,10 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			FloatTexture.Name = 'IsFloatRenderTargetSupported';
 			const RenderTarget = new Pop.Opengl.TextureRenderTarget( [FloatTexture] );
 			const RenderContext = this;
-			RenderTarget.BindRenderTarget( RenderContext );
+			const Unbind = RenderTarget.BindRenderTarget( RenderContext );
 			//	cleanup!
 			//	todo: restore binding, viewports etc
+			Unbind();
 			return true;
 		}
 		catch(e)
@@ -1125,12 +1126,15 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			const RenderContext = this;
 			if ( !this.RenderTarget )
 				this.RenderTarget = new WindowRenderTarget(this);
-			this.RenderTarget.BindRenderTarget( RenderContext );
+			const Unbind = this.RenderTarget.BindRenderTarget( RenderContext );
 
 			//	request next frame, before any render fails, so we will get exceptions thrown for debugging, but recover
 			window.requestAnimationFrame( Render.bind(this) );
 
 			this.OnRender( this.RenderTarget );
+			
+			Unbind();
+			
 			Pop.Opengl.Stats.Renders++;
 		}
 		window.requestAnimationFrame( Render.bind(this) );
@@ -1239,7 +1243,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		const RenderContext = this;
 		const gl = this.GetGlContext();
 		const RenderTarget = this.GetTextureRenderTarget(Image);
-		RenderTarget.BindRenderTarget( RenderContext );
+		const Unbind = RenderTarget.BindRenderTarget( RenderContext );
 		const Pixels = {};
 		Pixels.Width = RenderTarget.GetRenderTargetRect()[2];
 		Pixels.Height = RenderTarget.GetRenderTargetRect()[3];
@@ -1249,6 +1253,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			Pixels.Channels = 4;
 			Pixels.Data = new Uint8Array(Pixels.Width * Pixels.Height * Pixels.Channels);
 			gl.readPixels(0,0,Pixels.Width,Pixels.Height,gl.RGBA,gl.UNSIGNED_BYTE,Pixels.Data);
+			Unbind();
 			return Pixels;
 		}
 		else if ( ReadBackFormat == 'Float4' )
@@ -1256,10 +1261,12 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			Pixels.Channels = 4;
 			Pixels.Data = new Float32Array(Pixels.Width * Pixels.Height * Pixels.Channels);
 			gl.readPixels(0,0,Pixels.Width,Pixels.Height,gl.RGBA,gl.FLOAT,Pixels.Data);
+			Unbind();
 			return Pixels;
 		}
 		//	this needs to restore bound rendertarget, really
 		//	although any renders should be binding render target explicitly
+		Unbind();
 	}
 
 	this.IsFullscreenSupported = function()
@@ -1374,7 +1381,7 @@ Pop.Opengl.RenderTarget = function()
 		
 		//	setup render target
 		let RenderTarget = RenderContext.GetTextureRenderTarget( TargetTexture );
-		RenderTarget.BindRenderTarget( RenderContext );
+		const Unbind = RenderTarget.BindRenderTarget( RenderContext );
 		
 		
 		RenderFunction( RenderTarget );
@@ -1390,6 +1397,8 @@ Pop.Opengl.RenderTarget = function()
 			const target = ReadTargetTexture !== undefined ? ReadTargetTexture : TargetTexture
 			target.WritePixels(Width,Height,Pixels,'RGBA');
 		}
+		
+		Unbind();
 		
 		//	todo: restore previously bound, not this.
 		//	restore rendertarget
@@ -1652,6 +1661,20 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 			if ( !gl.isFramebuffer( this.FrameBuffer ) )
 				throw "Is not frame buffer!";
 
+		//	gr: chrome on mac; linear filter doesn't error, but renders black, force it off
+		let PreviousFilter = null;
+		if ( this.Images )
+		{
+			const ImageTarget = this.Images[0];
+			const Texture = ImageTarget.OpenglTexture;
+			gl.bindTexture(gl.TEXTURE_2D,Texture);
+			PreviousFilter = ImageTarget.LinearFilter;
+			const FilterMode = gl.NEAREST;
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, FilterMode);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, FilterMode);
+			gl.bindTexture(gl.TEXTURE_2D,null);
+		}
+		
 		const FrameBuffer = this.GetFrameBuffer();
 		
 		//	todo: make this common code
@@ -1671,6 +1694,23 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 		gl.scissor( ...Viewport );
 		
 		this.ResetState();
+		
+		function Unbind()
+		{
+			if ( this.Images )
+			{
+				const ImageTarget = this.Images[0];
+				const Texture = ImageTarget.OpenglTexture;
+				gl.bindTexture(gl.TEXTURE_2D,Texture);
+				PreviousFilter = ImageTarget.LinearFilter;
+				const FilterMode = gl.LINEAR;
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, FilterMode);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, FilterMode);
+				gl.bindTexture(gl.TEXTURE_2D,null);
+			}
+		}
+		
+		return Unbind;
 	}
 	
 	this.AllocTextureIndex = function()
@@ -1738,6 +1778,11 @@ function WindowRenderTarget(Window)
 		gl.scissor( ...Viewport );
 		
 		this.ResetState();
+		
+		function Unbind()
+		{
+		}
+		return Unbind;
 	}
 	
 	this.GetViewportWidth = function()
