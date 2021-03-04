@@ -504,6 +504,10 @@ Pop.GetTimeNowMs = function()
 	return Math.floor(Now);
 }
 
+Pop.ShowWebPage = function(Url)
+{
+	window.open( Url, '_blank');
+}
 
 //	gr: if we call fetch() 100 times for the same url, we make 100 requests
 //		quick fix, have a cache of pending fetch() requests
