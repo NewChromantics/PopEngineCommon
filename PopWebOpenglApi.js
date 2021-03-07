@@ -1909,6 +1909,7 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 		if ( !CompileStatus )
 		{
 			let Error = gl.getShaderInfoLog(Shader);
+			console.error(`Failed to compile ${this.Name}(${TypeName}): ${Error}`);
 			throw `Failed to compile ${this.Name}(${TypeName}): ${Error}`;
 		}
 		return Shader;
