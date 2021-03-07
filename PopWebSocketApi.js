@@ -63,7 +63,7 @@ Pop.Websocket.Client = class
 			//		use protocol matching window location
 			//	gr: localhost is considered secure, but for testing, it doesnt usually have a certificate
 			//const Protocol = window.isSecureContext ? 'wss://' : 'ws://';
-			const Protocol = window.protocol=='https:' ? 'wss://' : 'ws://';
+			const Protocol = window.location.protocol=='https:' ? 'wss://' : 'ws://';
 			ServerAddress = Protocol + ServerAddress;
 		}
 
