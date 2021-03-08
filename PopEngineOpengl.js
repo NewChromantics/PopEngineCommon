@@ -356,7 +356,7 @@ class TriangleBuffer
 		//	backwards compatibility
 		if ( typeof Attribs == 'string' )
 		{
-			Pop.Warn("[deprecated] Old TriangleBuffer constructor, use a keyed object");
+			Pop.Warning("[deprecated] Old TriangleBuffer constructor, use a keyed object");
 			const VertexAttributeName = arguments[1];
 			const VertexData = arguments[2];
 			const VertexSize = arguments[3];
@@ -385,7 +385,7 @@ class TriangleBuffer
 	{
 		if ( this.BufferContextVersion !== RenderContext.ContextVersion )
 		{
-			Pop.Warn("Buffer context version changed",this.BufferContextVersion,RenderContext.ContextVersion);
+			Pop.Warning("Buffer context version changed",this.BufferContextVersion,RenderContext.ContextVersion);
 			this.CreateBuffer(RenderContext);
 		}
 		return this.Buffer;
