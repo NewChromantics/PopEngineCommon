@@ -743,16 +743,18 @@ Pop.LoadFileAsImageAsync = async function(Filename)
 	{
 		let Promise = Pop.CreatePromise();
 		const HtmlImage = new Image();
-		HtmlImage.crossOrigin = "anonymous";
 		HtmlImage.onload = function ()
 		{
 			Promise.Resolve(HtmlImage);
 		};
+		HtmlImage.addEventListener('load', HtmlImage.onload, false);
 		HtmlImage.onerror = function (Error)
 		{
 			Promise.Reject(Error);
 		}
+		HtmlImage.crossOrigin = "anonymous";
 		//  trigger load
+		HtmlImage.src = '';
 		HtmlImage.src = Filename;
 		return Promise;
 	}
