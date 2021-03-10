@@ -134,15 +134,20 @@ function IsObjectInstanceOf(This,TypeConstructor)
 }
 
 //	https://stackoverflow.com/a/46999598/355753
-function IsTypedArray(obj)
+Pop.IsTypedArray = function(obj)
 {
 	return !!obj && obj.byteLength !== undefined;
+}
+function IsTypedArray(obj)
+{
+	Pop.Warning(`Deprecated: IsTypedArray(); use Pop.IsTypedArray()`);
+	return Pop.IsTypedArray(obj);
 }
 
 Pop.JoinTypedArrays = function(a,b,c,etc)
 {
 	//	gr: need some more rigirous checks here
-	if ( !IsTypedArray(a) )
+	if ( !Pop.IsTypedArray(a) )
 		throw `Cannot JoinTypedArrays where 1st not typed array (${a})`;
 
 	const Constructor = a.constructor;

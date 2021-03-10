@@ -596,8 +596,44 @@ Math.PointInsideRect = function(xy,Rect)
 	return true;
 }
 
+//	is a outside b
+function RectIsOutside(RectA,RectB)
+{
+	let la = RectA[0];
+	let lb = RectB[0];
+	let ta = RectA[1];
+	let tb = RectB[1];
+	let ra = RectA[0] + RectA[2];
+	let rb = RectB[0] + RectB[2];
+	let ba = RectA[1] + RectA[3];
+	let bb = RectB[1] + RectB[3];
+	
+	//	too far left
+	if ( ra < lb )
+		return true;
+	//	too far right
+	if ( la > rb )
+		return true;
+	//	too high up
+	if ( ba < tb )
+		return true;
+	//	too low
+	if ( ta > bb )
+		return true;
+	//	is overlapping (but maybe not wholly inside!)
+	return false;
+}
+
+
+//	are these rects overlapping each other 
 function RectIsOverlapped(RectA,RectB)
 {
+	if ( RectIsOutside( RectA, RectB ) )
+		return false
+	return true;
+
+	//	gr: the below seems to fail when they're close (and A is still inside B)
+	//		leaving this code here because debugging, it seemed correct, but is wrong. (I still want to know why)
 	let la = RectA[0];
 	let lb = RectB[0];
 	let ta = RectA[1];
@@ -928,6 +964,44 @@ Math.CreateTranslationScaleMatrix = function(Position,Scale)
 	return [ sx,0,0,0,	0,sy,0,0,	0,0,sz,0,	tx,ty,tz,1 ];
 }
 
+Math.CreateTranslationQuaternionMatrix = function(Position,Quaternion)
+{
+	const rx = Quaternion[0];
+	const ry = Quaternion[1];
+	const rz = Quaternion[2];
+	const rw = Quaternion[3];
+	const sx = 1;
+	const sy = 1;
+	const sz = 1;
+	const tx = Position[0];
+	const ty = Position[1];
+	const tz = Position[2];
+	const tw = (Position.length >= 4) ? Position[3] : 1;
+	const Matrix =
+	[
+		(1.0-2.0*(ry*ry + rz*rz))*sx,
+		(rx*ry + rz*rw)*sx*2.0,
+		(rx*rz - ry*rw)*sx*2.0,
+		0.0,
+
+		(rx*ry - rz*rw)*sy*2.0,
+		(1.0-2.0*(rx*rx + rz*rz))*sy,
+		(ry*rz + rx*rw)*sy*2.0,
+		0.0,
+
+		(rx*rz + ry*rw)*sz*2.0,
+		(ry*rz - rx*rw)*sz*2.0,
+		(1.0-2.0*(rx*rx + ry*ry))*sz,
+		0.0,
+
+		tx,
+		ty,
+		tz,
+		tw
+	];
+	return Matrix;
+}
+
 Math.Matrix3x3ToMatrix4x4 = function(Matrix3,Row4=[0,0,0,1])
 {
 	let Matrix4 =
@@ -968,6 +1042,35 @@ Math.GetMatrixTranslation = function(Matrix,DivW=false)
 		xyz[2] /= w;
 	}
 	return xyz;
+}
+
+Math.GetMatrixQuaternion = function(Matrix)
+{
+	function m(col,row)
+	{
+		let Index = col + (row*4);
+		return Matrix[Index];
+	}
+	//	https://github.com/sacchy/Unity-Arkit/blob/master/Assets/Plugins/iOS/UnityARKit/Utility/UnityARMatrixOps.cs
+	//Quaternion q = new Quaternion();
+	const q = {};
+	q.x = 0;
+	q.y = 0;
+	q.z = 0;
+	q.w = 1;
+	// Adapted from: http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/index.htm
+	//	>	The max( 0, ... ) is just a safeguard against rounding error.
+	q.w = Math.sqrt(Math.max(0, 1 + m(0, 0) + m(1, 1) + m(2, 2))) / 2;
+	q.x = Math.sqrt(Math.max(0, 1 + m(0, 0) - m(1, 1) - m(2, 2))) / 2;
+	q.y = Math.sqrt(Math.max(0, 1 - m(0, 0) + m(1, 1) - m(2, 2))) / 2;
+	q.z = Math.sqrt(Math.max(0, 1 - m(0, 0) - m(1, 1) + m(2, 2))) / 2;
+	q.x *= Math.sign(q.x * (m(1, 2) - m(2, 1)));
+	q.y *= Math.sign(q.y * (m(2, 0) - m(0, 2)));
+	q.z *= Math.sign(q.z * (m(0, 1) - m(1, 0)));
+
+	//	gr: pop math structs are all arrays	
+	//return q;
+	return [q.x,q.y,q.z,q.w];
 }
 
 Math.CreateAxisRotationMatrix = function(Axis,Degrees)

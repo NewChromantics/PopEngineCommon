@@ -1,5 +1,8 @@
 //	namespace
-const Pop = {};
+//	gr: safari scopes const & let away from modules,
+//		so if this file is loaded outside a module, Pop isn't availible
+//		to modules in safari. So fully-global/singletons need to be var.
+var Pop = Pop || {};
 
 
 
@@ -77,7 +80,7 @@ class WebApi_PromiseQueue
 		//	skip adding if existing match
 		if ( this.PendingValues.some(IsMatch) )
 		{
-			Pop.Debug(`Skipping non-unique ${Args}`);
+			//Pop.Debug(`Skipping non-unique ${Args}`);
 			return;
 		}
 		this.Push(...Args);
@@ -186,16 +189,19 @@ Pop.WebApi.IsForeground = function ()
 	//	normal:				!hidden visible foreground
 	//	click non-page:		!hidden visible !foreground
 	//	minimised:			hidden !visible foreground
-	return Pop.WebApi.ForegroundState;
+	let State = Pop.WebApi.ForegroundState;
+	State = State && !Pop.WebApi.IsMinimised();
+	return State;
 }
 
 Pop.WebApi.SetIsForeground = function (IsForeground)
 {
-	//Pop.Debug("Foreground changed from ",Pop.WebApi.ForegroundState,"to",IsForeground);
+	Pop.Debug(`Foreground changed from ,${Pop.WebApi.ForegroundState} to ${IsForeground}. Document.hidden=${document.hidden}`);
 	if (IsForeground!==undefined)
 		Pop.WebApi.ForegroundState = IsForeground;
 
-	const Foreground = Pop.WebApi.IsForeground() && !Pop.WebApi.IsMinimised();
+	const Foreground = Pop.WebApi.IsForeground();
+	Pop.Debug(`IsForeground state = ${Pop.WebApi.IsForeground()}`);
 	Pop.WebApi.ForegroundChangePromises.Push(Foreground);
 }
 
@@ -208,7 +214,7 @@ Pop.WebApi.WaitForForegroundChange = async function ()
 //	todo: call a func here in case we expand to have some async change promise queues
 window.addEventListener('focus',function () { Pop.WebApi.SetIsForeground(true); });
 window.addEventListener('blur',function () { Pop.WebApi.SetIsForeground(false); });
-window.addEventListener('visibilitychange',function () { Pop.WebApi.SetIsForeground(document.hidden); });
+window.addEventListener('visibilitychange',function () { Pop.WebApi.SetIsForeground(!document.hidden); });
 
 
 //	this will become generic and not webapi specific
@@ -220,7 +226,7 @@ Pop.WebApi.TFileCache = class
 		//	Do we leave this, even if we unload a file?
 		this.CacheMeta = {};	//	[Filename] = .Size .OtherThings .LastAccessed?
 		this.Cache = {};		//	[Filename] = Contents
-		this.OnFilesChanged = new WebApi_PromiseQueue();
+		this.OnFilesChanged = new WebApi_PromiseQueue('FileCache.OnFilesChanged');
 	}
 
 	async WaitForFileChange()
@@ -250,17 +256,63 @@ Pop.WebApi.TFileCache = class
 		this.Set(Filename,false);
 	}
 
-	Set(Filename,Contents)
+	Set(Filename,Contents,ContentChunks=undefined)
 	{
 		if (this.Cache.hasOwnProperty(Filename))
 		{
 			// Pop.Debug(`Warning overwriting AssetCache[${Filename}]`);
 		}
+		
+		//	if our content is in chunks, store them, then
+		//	on request, join together
+		//	expecting Contents to be null
+		//if ( ContentChunks )
+		//	gr: always set chunks, so it gets unset
+		{
+			const Meta = this.GetMeta(Filename);
+			Meta.ContentChunks = ContentChunks;
+			
+			//	gr: I really don't want to store this meta as it can go out of date
+			//		but if this is the ONLY place the chunks get updated, it can do for now
+			//		Some systems (filemonitor) call GetMeta(), can't JUST have it in 
+			//		the OnChanged callback
+			if ( Meta.ContentChunks === undefined )
+			{
+				Meta.PendingContentsSize = undefined;	//	not streaming(any more)
+			}
+			else
+			{
+				Meta.PendingContentsSize = 0;
+				Meta.ContentChunks.forEach( Chunk => Meta.PendingContentsSize += Chunk.byteLength );
+			}
+			
+			//	update known size
+			if ( Contents )
+			{
+				Meta.Size = Math.max( Contents.length, Meta.Size||0 );
+			}
+		}
+		
 		this.Cache[Filename] = Contents;
 		this.OnFilesChanged.PushUnique(Filename);
 	}
 
-	Get(Filename)
+	//	call this before returning any contents, expecting called to have already
+	//	verified it exists etc, and just re-setting the contents/cache
+	ResolveChunks(Filename)
+	{
+		const Meta = this.GetMeta(Filename);
+		if ( !Meta.ContentChunks )
+			return;
+		//	todo: store running Contents and only append new chunks
+		//		so we minimise copies as the already-copied parts aren't going
+		//		to change (in theory)
+		Pop.Debug(`Resolving x${Meta.ContentChunks.length} chunks of ${Filename}`);
+		this.Cache[Filename] = Pop.JoinTypedArrays(...Meta.ContentChunks);
+		Meta.ContentChunks = null;
+	}
+	
+	Get(Filename,ResolveChunks=true)
 	{
 		if (!this.Cache.hasOwnProperty(Filename))
 		{
@@ -274,14 +326,49 @@ Pop.WebApi.TFileCache = class
 			const Error = this.GetMeta(Filename).Error;
 			throw `${Filename} failed to load: ${Error}`;
 		}
+		
+		//	gr: send back chunks if they haven't been resolved
+		if ( !ResolveChunks )
+		{
+			const Meta = this.GetMeta(Filename);
+			if ( Meta.ContentChunks )
+			{
+				if ( this.Cache[Filename] === false )
+					throw `We have chunks, but cache is false (error), shouldn't hit this combination, something has errored but we still have chunks (still downloading?)`;
+				//Pop.Debug(`Skipping chunk resolve of ${Filename} x${Meta.ContentChunks.length} chunks`);
+				return Meta.ContentChunks;
+			}
+		}		
+		
+		//	if there are pending content chunks, we need to join them together
+		//	as it's the first time it's been requested
+		this.ResolveChunks(Filename);
+		
 		return this.Cache[Filename];
 	}
 
 	//	non-throwing function which returns false if the file load has errored
-	GetOrFalse(Filename)
+	GetOrFalse(Filename,ResolveChunks=true)
 	{
 		if (!this.Cache.hasOwnProperty(Filename))
 			return false;
+		
+		//	gr: send back chunks if they haven't been resolved
+		if ( !ResolveChunks )
+		{
+			const Meta = this.GetMeta(Filename);
+			if ( Meta.ContentChunks )
+			{
+				if ( this.Cache[Filename] === false )
+					throw `We have chunks, but cache is false (error), shouldn't hit this combination, something has errored but we still have chunks (still downloading?)`;
+				//Pop.Debug(`Skipping chunk resolve of ${Filename} x${Meta.ContentChunks.length} chunks`);
+				return Meta.ContentChunks;
+			}
+		}		
+		
+		//	if there are pending content chunks, we need to join them together
+		//	as it's the first time it's been requested
+		this.ResolveChunks(Filename);
 
 		//	if this has failed to load, it will also be false
 		const Asset = this.Cache[Filename];
@@ -290,7 +377,10 @@ Pop.WebApi.TFileCache = class
 
 	IsCached(Filename)
 	{
-		return this.GetOrFalse(Filename) !== false;
+		//	don't resolve chunks here, skip excess work for a simple "not false" check
+		const ResolveChunks = false;
+		
+		return this.GetOrFalse(Filename,ResolveChunks) !== false;
 	}
 	
 	SetKnownSize(Filename,Size)
@@ -316,9 +406,8 @@ Pop.SetFileCache = Pop.WebApi.FileCache.Set.bind(Pop.WebApi.FileCache);
 Pop.SetFileCacheError = Pop.WebApi.FileCache.SetError.bind(Pop.WebApi.FileCache);
 
 //	simple aliases
-Pop.Debug = console.log;
-Pop.Warn = console.warn;
-Pop.Warning = console.warn;
+Pop.Debug = Pop.Debug || console.log;
+Pop.Warning = Pop.Warning || console.warn;
 
 Pop.GetPlatform = function()
 {
@@ -388,7 +477,12 @@ Pop.GetExeArguments = function()
 		if ( typeof Value == 'string' )
 		{
 			const NumberValue = Number(Value);
-			if ( !isNaN(NumberValue) )
+
+			if ( Value === '' )
+				Value = null;
+			else if ( Value == 'null' )
+				Value = null;
+			else if ( !isNaN(NumberValue) )
 				Value = NumberValue;
 			else if ( Value == 'true' )
 				Value = true;
@@ -404,15 +498,62 @@ Pop.GetExeArguments = function()
 
 Pop.GetTimeNowMs = function()
 {
-	return performance.now();
+	//	this returns a float, even though it's in ms,
+	//	so round to integer
+	const Now = performance.now();
+	return Math.floor(Now);
 }
 
+Pop.ShowWebPage = function(Url)
+{
+	window.open( Url, '_blank');
+}
 
 //	gr: if we call fetch() 100 times for the same url, we make 100 requests
 //		quick fix, have a cache of pending fetch() requests
 //	gr: we cannot consume the result (.text or .arrayBuffer) more than once
 //		so inside this caching, we need to do the read too, hence extra funcs
 const FetchCache = {};
+
+//	AbortController is undefined on firefox browser on hololens2
+class AbortControllerStub
+{
+	constructor()
+	{
+		this.signal = null;
+	}
+
+	abort()
+	{
+	}
+};
+window.AbortController = window.AbortController || AbortControllerStub;
+
+//	gr: hack for kandinsky;
+//		if any fetch's fail
+Pop.WebApi.InternetStatus = true;	//	we can pretty safely assume it's initially fine
+Pop.WebApi.InternetStatusChangedQueue = new WebApi_PromiseQueue('InternetStatusChangedQueue');
+
+Pop.WebApi.WaitForInternetStatusChange = async function()
+{
+	//	wait for a change (dirty) and then return latest status 
+	await Pop.WebApi.InternetStatusChangedQueue.WaitForNext();
+	return Pop.WebApi.InternetStatus;
+}
+
+//	call this when any kind of download gets new information
+function OnInternetGood()
+{
+	Pop.WebApi.InternetStatus = true;
+	Pop.WebApi.InternetStatusChangedQueue.PushUnique();
+}
+//	call when any fetch fails (not due to 404 or anything with a response)
+function OnInternetBad()
+{
+	Pop.WebApi.InternetStatus = false;
+	Pop.WebApi.InternetStatusChangedQueue.PushUnique();
+}
+
 
 async function CreateFetch(Url)
 {
@@ -422,7 +563,7 @@ async function CreateFetch(Url)
 		
 	//	attach a Cancel() function
 	//	gr: work out when not supported
-	const Controller = new AbortController();
+	const Controller = new window.AbortController();
 	const Signal = Controller.signal;
 	function Cancel()
 	{
@@ -433,9 +574,21 @@ async function CreateFetch(Url)
 	//method: 'get',
 	Params.signal = Signal;
 
-	const Fetched = await fetch(Url,Params);
-	if (!Fetched.ok)
-		throw `Failed to fetch(${Url}) ${Fetched.statusText}`;
+	//	fetch() throws when disconnected, catch it
+	let Fetched = null;
+	try
+	{
+		Fetched = await fetch(Url,Params);
+		if (!Fetched.ok)
+			throw `fetch result not ok, status=${Fetched.statusText}`;
+		OnInternetGood();
+	}
+	catch(e)
+	{
+		//	gr; need to check for 404 here
+		OnInternetBad();
+		throw `Fetch error with ${Url}; ${e}`;
+	}
 	Fetched.Cancel = Cancel;
 
 	return Fetched;
@@ -465,28 +618,32 @@ async function FetchArrayBufferStream(Url,OnProgress)
 	let KnownSize = parseInt(Fetched.headers.get("content-length"));
 	KnownSize = isNaN(KnownSize) ? -1 : KnownSize;
 	const KnownSizeKb = (KnownSize/1024).toFixed(2);
+	//	gr: maybe fture speed up with our own buffer
+	//		https://developer.mozilla.org/en-US/docs/Web/API/ReadableStreamBYOBReader but currently 0 support
 	const Reader = Fetched.body.getReader();
 
 	async function ReaderThread()
 	{
 		Pop.Debug(`Reading fetch stream ${Url}/${KnownSizeKb}kb`);
-		//	gr: we want to report the current contents, so even if merging later is faster, lets keep resizing
-		let TotalContents = new Uint8Array(0);
+	
+		//	it's slow to keep merging chunks and notifying changes
+		//	so push chunks to the file cache,
+		//	the file cache can then merge them on demand (which will be
+		//	far less frequent than this read)
 		
+		let ContentChunks = [];
+		
+		//	gr: this function is expensive, especially when called often
+		//		we should keep an array of chunks, and merge on demand (or at the end)
 		function AppendChunk(Chunk)
 		{
+			//	last is undefined
 			if ( !Chunk )
 				return;
-			const NewSize = TotalContents.length + Chunk.length;
-			const NewContents = new Uint8Array(NewSize);
-			NewContents.set( TotalContents, 0 );
-			NewContents.set( Chunk, TotalContents.length );
-			TotalContents = NewContents;
-			OnProgress( TotalContents, KnownSize );
+			ContentChunks.push(Chunk);
+			OnProgress( ContentChunks, KnownSize );
 		}
 		
-		//	should we keep resizing a buffer, or do it once at the end...
-		const Chunks = [];
 		while (true)
 		{
 			/*
@@ -501,20 +658,39 @@ async function FetchArrayBufferStream(Url,OnProgress)
 			}
 			*/
 			const Chunk = await Reader.read();
+			OnInternetGood();
 			const Finished = Chunk.done;
 			const ChunkContents = Chunk.value;
 			//	chunk is undefined on last (finished)read
 			const ChunkSize = ChunkContents ? ChunkContents.length : 0;
-			Pop.Debug(`chunk ${Url} Finished=${Finished} x${ChunkSize}/${KnownSizeKb}`,Chunk);
+			//Pop.Debug(`chunk ${Url} Finished=${Finished} x${ChunkSize}/${KnownSizeKb}`,Chunk);
 			AppendChunk(ChunkContents);
 			if ( Finished )
 				break;
 		}
-		return TotalContents;
+		
+		
+		//	do a final join. OnProgress should have done this in the file cache
+		//	so this array may be a bit redundant (and a duplicate!)
+		//	so try and fetch the other one, but for now, keep it here to make sure
+		//	the old way of expecting a complete buffer is here
+		//	gr: we now only auto resolve chunks on request
+		//const TotalContents = Pop.JoinTypedArrays(...ContentChunks);
+		//return TotalContents;
+		return true;
 	}
 	
-	const Contents8 = await ReaderThread();
-	return Contents8;
+	try
+	{
+		const Contents8 = await ReaderThread();
+		return Contents8;
+	}
+	catch(e)
+	{
+		Pop.Warning(`Reader thread error; ${e}`);
+		OnInternetBad();
+		throw e;
+	}
 }
 
 async function FetchOnce(Url,FetchFunc,OnProgress)
@@ -523,10 +699,27 @@ async function FetchOnce(Url,FetchFunc,OnProgress)
 		return FetchCache[Url];
 	
 	//	run the fetch, wait for it to finish, then clear the cache
-	FetchCache[Url] = FetchFunc(Url,OnProgress);
-	const Contents = await FetchCache[Url];
-	delete FetchCache[Url];
-	return Contents;
+	try
+	{
+		FetchCache[Url] = FetchFunc(Url,OnProgress);
+		const Contents = await FetchCache[Url];
+		delete FetchCache[Url];
+		return Contents;
+	}
+	catch(e)
+	{
+		//	gr: to make the app retry (because of the internet-bad stuff)
+		//		delete the fetch cache
+		//		the point of this was originally to stop multiple fetch()s
+		//		previously, if it failed, we ended up with a dangling [rejected] fetch cache
+		//	gr: to avoid CPU hammering, we delay this so if something is trying to fetch
+		//		every frame, we don't constantly fetch & fail
+		//		the downside is we POSSIBLY start a successfull one here and this fetch cache
+		//		gets deleted (can that happen? there's a check before... maybe in multithreaded app it would happen)
+		await Pop.Yield(1000); 
+		delete FetchCache[Url];
+		throw e;
+	}
 }
 
 //	gr: this needs a fix like FetchOnce
@@ -550,16 +743,18 @@ Pop.LoadFileAsImageAsync = async function(Filename)
 	{
 		let Promise = Pop.CreatePromise();
 		const HtmlImage = new Image();
-		HtmlImage.crossOrigin = "anonymous";
 		HtmlImage.onload = function ()
 		{
 			Promise.Resolve(HtmlImage);
 		};
+		HtmlImage.addEventListener('load', HtmlImage.onload, false);
 		HtmlImage.onerror = function (Error)
 		{
 			Promise.Reject(Error);
 		}
+		HtmlImage.crossOrigin = "anonymous";
 		//  trigger load
+		HtmlImage.src = '';
 		HtmlImage.src = Filename;
 		return Promise;
 	}
@@ -608,10 +803,10 @@ Pop.LoadFileAsArrayBufferAsync = async function(Filename)
 }
 
 
-Pop.LoadFileAsArrayBufferStreamAsync = async function (Filename)
+Pop.LoadFileAsArrayBufferStreamAsync = async function (Filename,ResolveChunks=true)
 {
 	//	return cache if availible, if it failed before, try and load again
-	const Cache = Pop.GetCachedAssetOrFalse(Filename);
+	const Cache = Pop.GetCachedAssetOrFalse(Filename,ResolveChunks);
 	if (Cache !== false)
 		return Cache;
 
@@ -621,12 +816,15 @@ Pop.LoadFileAsArrayBufferStreamAsync = async function (Filename)
 		if ( TotalSize )
 			Pop.SetFileKnownSize(Filename,TotalSize);
 		//	keep re-writing a new file
-		Pop.SetFileCache(Filename,Contents);
+		Pop.SetFileCache(Filename,null,Contents);
 	}
 
 	const Contents = await FetchOnce(Filename,FetchArrayBufferStream,OnStreamProgress);
-	Pop.SetFileCache(Filename,Contents);
-	return Contents;
+	if ( Contents !== true )
+		throw `FetchArrayBufferStream() should now return only true, to avoid auto resolving chunks`;
+	//Pop.SetFileCache(Filename,Contents);
+	//return Contents;
+	return Pop.GetCachedAssetOrFalse(Filename,ResolveChunks);
 }
 
 Pop.AsyncCacheAssetAsString = async function(Filename)
@@ -685,7 +883,7 @@ Pop.LoadFileAsImage = function(Filename)
 }
 
 
-Pop.LoadFileAsArrayBuffer = function(Filename)
+Pop.LoadFileAsArrayBuffer = function(Filename,ResolveChunks=true)
 {
 	//	synchronous functions on web will fail
 	if (!Pop.WebApi.FileCache.IsCached(Filename))
@@ -695,27 +893,40 @@ Pop.LoadFileAsArrayBuffer = function(Filename)
 	
 	//	gr: our asset loader currently replaces the contents of this
 	//		with binary, so do the conversion here (as native engine does)
-	const Contents = Pop.GetCachedAsset(Filename);
+	const Contents = Pop.GetCachedAsset(Filename,ResolveChunks);
 	return Contents;
 }
 
 //	on web, this call causes a Save As... dialog to appear to save the contents
-Pop.WriteStringToFile = function(Filename,Contents)
+Pop.WriteToFile = function(Filename,Contents,Append=false)
 {
+	if ( Append )
+		throw `WriteToFile cannot append on web`;
+		
+	let MimePrefix;
+	if ( typeof Contents == 'string' )
+	{
+		MimePrefix = "text/plain;charset=utf-8";
+	}
+	else
+	{
+		//'application/json'
+	}
+		
+		
 	//	on web (chrome?)
 	//		folder/folder/file.txt
 	//	turns in folder_folder_file.txt, so clip the name
 	const DownloadFilename = Filename.split('/').slice(-1)[0];
 
 	//	gr: "not a sequence" error means the contents need to be an array
-	const ContentsBlob = new Blob([Contents],
-		{
-			type: "text/plain;charset=utf-8"
-		}
-	);
+	const Options = {};
+	if ( MimePrefix )
+		Options.type = MimePrefix;
+	const ContentsBlob = new Blob([Contents],Options);
 
 	const DataUrl = URL.createObjectURL(ContentsBlob);
-	Pop.Debug(`WriteFile blob url: `)
+	Pop.Debug(`WriteFile blob url: ${DataUrl}`);
 
 	//	make a temp element to invoke the download
 	const a = window.document.createElement('a');
@@ -729,16 +940,23 @@ Pop.WriteStringToFile = function(Filename,Contents)
 	{
 		a.href = DataUrl;
 		a.download = DownloadFilename;
+		//	gr: trying to get callback when this was succesfull or failed
+		//a.ping = "data:text/html,<script>alert('hi');</script>";
+		//a.onerror = function(e){	Pop.Debug(`link error ${e}`);	}
 		document.body.appendChild(a);
-		a.click();
+		a.click();	//	returns nothing
 		Cleanup();
 	}
 	catch (e)
 	{
 		Cleanup();
 		throw e;
-	}		
+	}	
 }
+
+Pop.WriteStringToFile = Pop.WriteToFile;
+
+
 
 Pop.LoadFilePromptAsStringAsync = async function (Filename)
 {
@@ -868,4 +1086,6 @@ Pop.WaitForFrame = async function()
 	Pop.WebApi.LastFrameTime = Time;
 	return Timestep;
 }
+//	gr: I keep assuming this is the name of the func, so maybe this is a better name
+Pop.WaitForNextFrame = Pop.WaitForFrame;
 

@@ -4,6 +4,22 @@ const WebApi_HtmlImageElement = this.hasOwnProperty('HTMLImageElement') ? this['
 const WebApi_HtmlCanvasElement = this.hasOwnProperty('HTMLCanvasElement') ? this['HTMLCanvasElement'] : null;
 
 
+//	in c++ this is SoyPixelsFormat namespace
+function GetChannelsFromPixelFormat(PixelFormat)
+{
+	switch(PixelFormat)
+	{
+		case 'Greyscale':	return 1;
+		case 'RGBA':		return 4;
+		case 'RGB':			return 3;
+		case 'Float3':		return 3;
+		case 'Float4':		return 4;
+		case 'ChromaU':		return 1;
+		case 'ChromaV':		return 1;
+	}
+	throw `unhandled GetChannelsFromPixelFormat(${PixelFormat})`;
+}
+
 
 function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 {
@@ -265,6 +281,11 @@ Pop.Image = function(Filename)
 		return this.PixelsFormat;
 	}
 	
+	this.GetChannels = function()
+	{
+		return GetChannelsFromPixelFormat(this.PixelsFormat);
+	}
+	
 	this.SetFormat = function(NewFormat)
 	{
 		if ( this.PixelsFormat == NewFormat )
@@ -272,29 +293,36 @@ Pop.Image = function(Filename)
 		throw `Todo: Pixel format conversion from ${this.PixelsFormat} to ${NewFormat}`;
 	}
 
-	this.GetPngData = function ()
+	this.GetDataUrl = function ()
 	{
-		const Canvas = document.createElement( 'canvas' );
-		const Context = Canvas.getContext( '2d' );
+		const Canvas = document.createElement('canvas');
+		const Context = Canvas.getContext('2d');
 		const Width = this.GetWidth();
 		const Height = this.GetHeight();
 		Canvas.width = Width;
 		Canvas.height = Height;
-		
+
 		let Pixels = new Uint8ClampedArray(this.GetPixelBuffer());
-		const Img = new ImageData( Pixels, Width, Height );
-		Context.putImageData(Img, 0, 0);
-		
-		let data = Canvas.toDataURL("image/png")
-		// Remove meta data
-		data = data.slice(22)
-		data = Uint8Array.from(atob(data), c => c.charCodeAt(0))
-		
+		const Img = new ImageData(Pixels,Width,Height);
+		Context.putImageData(Img,0,0);
+
+		const data = Canvas.toDataURL("image/png");
+
 		//	destroy canvas (safari suggests its hanging around)
 		Canvas.width = 0;
 		Canvas.height = 0;
 		delete Canvas;
 
+		return data;
+	}
+
+	this.GetPngData = function ()
+	{
+		let data = this.GetDataUrl();
+		// Remove meta data
+		data = data.slice(22)
+		data = Uint8Array.from(atob(data), c => c.charCodeAt(0))
+		
 		return data;
 	}
 	
@@ -414,7 +442,7 @@ Pop.Image = function(Filename)
 		const Texture = this.OpenglTexture;
 		
 		//	set a new texture slot
-		const TextureIndex = RenderContext.AllocTexureIndex();
+		const TextureIndex = RenderContext.AllocTextureIndex(this);
 		let GlTextureNames = [ gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7 ];
 		gl.activeTexture( GlTextureNames[TextureIndex] );
 

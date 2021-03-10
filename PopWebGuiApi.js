@@ -165,6 +165,8 @@ function GetElementRect(Element)
 
 function SetGuiControl_Draggable(Element)
 {
+	if ( !Element )
+		return;
 	const RectKey = `${Element.id}_WindowRect`;
 	function LoadRect()
 	{
@@ -366,6 +368,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 	this.ElementWindow = null;
 	this.ElementTitleBar = null;
 	this.RestoreHeight = null;		//	if non-null, stores the height we were before minimising
+	this.TitleBarClickLastTime = null;	//	to detect double click 
 
 	//	gr: element may not be assigned yet, maybe rework construction of controls
 	this.AddChildControl = function(Child,Element)
@@ -426,7 +429,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		//AddChild( TitleBar, 'PopGuiButton', 'X');
 
 		TitleBar.AllowDraggable = true;
-		TitleBar.addEventListener('dblclick',this.OnToggleMinimise.bind(this),true);
+		TitleBar.addEventListener('click',this.OnTitleBarClick.bind(this),true);
 		
 		//	this may need some style to force position
 		this.ElementParent = AddChild( Element, 'PopGuiIconView');
@@ -437,6 +440,25 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		this.EnableScrollbars(true,true);
 		
 		return Element;
+	}
+	
+	this.OnTitleBarClick = function(Event)
+	{
+		const DoubleClickMaxTime = 300;
+		
+		//	todo: filter button
+		//	detect double click
+		if ( this.TitleBarClickLastTime !== null )
+		{
+			const TimeSinceClick = Pop.GetTimeNowMs() -  this.TitleBarClickLastTime;
+			if ( TimeSinceClick < DoubleClickMaxTime )
+			{
+				this.OnToggleMinimise();
+				this.TitleBarClickLastTime = null;
+			}
+		}
+		
+		this.TitleBarClickLastTime = Pop.GetTimeNowMs();				
 	}
 	
 	this.EnableScrollbars = function(Horizontal,Vertical)
@@ -573,16 +595,17 @@ function GetButtonFromMouseEventButton(MouseButton,AlternativeButton)
 	{
 		switch ( MouseButton )
 		{
-			case BrowserMouseLeft:	return Pop.SoyMouseButton.Back;
-			case BrowserMouseRight:	return Pop.SoyMouseButton.Forward;
+			case BrowserMouseLeft:	return 'Back';
+			case BrowserMouseRight:	return 'Forward';
 		}
 	}
-	
+		
+	//	gr: where is back and forward mouse buttons??
 	switch ( MouseButton )
 	{
-		case BrowserMouseLeft:		return Pop.SoyMouseButton.Left;
-		case BrowserMouseMiddle:	return Pop.SoyMouseButton.Middle;
-		case BrowserMouseRight:		return Pop.SoyMouseButton.Right;
+		case BrowserMouseLeft:		return 'Left';
+		case BrowserMouseMiddle:	return 'Middle';
+		case BrowserMouseRight:		return 'Right';
 	}
 	throw "Unhandled MouseEvent.button (" + MouseButton + ")";
 }
@@ -699,6 +722,7 @@ Pop.Gui.BaseControl = class
 		async function LoadFilesAsync(Files)
 		{
 			const NewFilenames = this.GetDragDropFilenames(Files);
+			const FinalAddedFiles = [];
 			async function LoadFile(File,FileIndex)
 			{
 				const Filename = NewFilenames[FileIndex];
@@ -707,7 +731,7 @@ Pop.Gui.BaseControl = class
 				const FileArray = await File.arrayBuffer();
 				const File8 = new Uint8Array(FileArray);
 				Pop.SetFileCache(Filename,File8);
-				NewFilenames.push(Filename);
+				FinalAddedFiles.push(Filename);
 			}
 			//	make a promise for each file
 			const LoadPromises = Files.map(LoadFile.bind(this));
@@ -715,7 +739,7 @@ Pop.Gui.BaseControl = class
 			await Promise.all(LoadPromises);
 
 			//	now notify with new filenames
-			this.OnDragDropQueue.Push(NewFilenames);
+			this.OnDragDropQueue.Push(FinalAddedFiles);
 		}
 
 		Event.preventDefault();
@@ -877,7 +901,7 @@ Pop.Gui.Button = class extends Pop.Gui.BaseControl
 			return Div;
 		
 		//	gr: hard to style buttons/inputs, no benefit afaik, but somehow we shoulld make this an option
-		const ElementType = 'span';//'input';
+		const ElementType = 'input';
 		Div = document.createElement(ElementType);
 		if ( Rect )
 			SetGuiControlStyle( Div, Rect );
@@ -1101,39 +1125,57 @@ Pop.Gui.Colour = function(Parent,Rect)
 }
 
 
-
-Pop.Gui.TextBox = function(Parent,Rect)
+Pop.Gui.TextBox = class extends Pop.Gui.BaseControl
 {
-	this.Label = '';
-	this.InputElement = null;
-	this.LabelElement = null;
+	constructor(Parent,Rect)
+	{
+		super(...arguments);
 
-	//	overwrite/overload this
-	this.OnChanged = function (NewValue) { };
-	
-	this.GetValue = function()
+		this.Label = '';
+		this.InputElement = null;
+		this.LabelElement = null;
+
+		//	overload
+		this.OnChanged = function (NewValue)
+		{
+			Pop.Debug(`Pop.Gui.TextBox.OnChanged -> ${NewValue}`);
+		}
+
+		this.ContainerElement = this.CreateElement(Parent,Rect);
+		this.InputElement = this.ContainerElement.InputElement;
+		this.LabelElement = this.ContainerElement.LabelElement;
+		this.BindEvents();
+		this.RefreshLabel();
+	}
+
+	GetElement()
+	{
+		return this.ContainerElement;
+	}
+
+	GetValue()
 	{
 		return this.InputElement.value;
 	}
 	
-	this.SetValue = function(Value)
+	SetValue(Value)
 	{
 		this.InputElement.value = Value;
 		this.RefreshLabel();
 	}
 	
-	this.SetLabel = function(Value)
+	SetLabel(Value)
 	{
 		this.Label = Value;
 		this.RefreshLabel();
 	}
 	
-	this.RefreshLabel = function()
+	RefreshLabel()
 	{
 		this.LabelElement.innerText = this.Label;
 	}
 	
-	this.OnElementChanged = function(Event)
+	OnElementChanged(Event)
 	{
 		//	call our callback
 		let Value = this.GetValue();
@@ -1141,37 +1183,55 @@ Pop.Gui.TextBox = function(Parent,Rect)
 		this.OnChanged( Value );
 	}
 	
-	this.CreateElement = function(Parent)
+	CreateElement(Parent,Rect)
 	{
-		let Input = document.createElement('input');
-		this.InputElement = Input;
-		
-		//	gr: what are defaults in pop?
+		//	if it already exists, need to work out if it's an input or container
+		const ExistingElement = GetExistingElement(Parent);
+		if (ExistingElement)
+		{
+			//	existing
+			if (ExistingElement.type == "text")
+			{
+				ExistingElement.InputElement = ExistingElement;
+				ExistingElement.LabelElement = {};//	dummy
+				return ExistingElement;
+			}
+			throw `Handle existing element for label`;
+		}
+
+		const ElementType = 'span';//'input';
+		const Div = document.createElement(ElementType);
+		if (Rect)
+			SetGuiControlStyle(Div,Rect);
+		Parent.AddChildControl(Parent,Div);
+
+		const Input = document.createElement('input');
+		SetGuiControl_SubElementStyle(Input,0,50);
 		Input.type = 'text';
+		Input.value = 'Pop.Gui.Button value';
 		SetGuiControl_SubElementStyle( Input, 0, 50 );
+		Div.InputElement = Input;
+		Div.appendChild(Input);
+
+		const Label = document.createElement('label');
+		Label.innerText = 'TextBox';
+		SetGuiControl_SubElementStyle( Label, 50, 100 );
+		Div.LabelElement = Label;
+		Div.appendChild( Label );
+		
+		return Div;
+	}
+
+	BindEvents()
+	{
+		super.BindEvents();
+
+		const Input = this.InputElement;
 		//	oninput = every change
 		//	onchange = on lose focus
 		Input.oninput = this.OnElementChanged.bind(this);
 		Input.onchange = this.OnElementChanged.bind(this);
-
-		let Label = document.createElement('label');
-		this.LabelElement = Label;
-		Label.innerText = 'TextBox';
-		SetGuiControl_SubElementStyle( Label, 50, 100 );
-		
-		
-		let Div = document.createElement('div');
-		SetGuiControlStyle( Div, Rect );
-		
-		Div.appendChild( Input );
-		Div.appendChild( Label );
-		Parent.AddChildControl( this, Div );
-		
-		return Div;
 	}
-	
-	this.Element = this.CreateElement(Parent);
-	this.RefreshLabel();
 }
 
 

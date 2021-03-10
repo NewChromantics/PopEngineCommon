@@ -116,6 +116,8 @@ Pop.DummyParamsWindow = function()
 	this.OnParamsChanged = function(){};
 	this.AddParam = function(){};
 	this.GetParamMetas = function() {	return {};	};
+	this.Window = {};
+	this.Window.SetMinimised = function(){};
 	
 	this.WaitForParamsChanged = function ()
 	{
@@ -544,7 +546,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 
 function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 {
-	Pop.Warn("Using deprecated CreateParamsWindow(), switch to new Pop.TParamsWindow");
+	Pop.Warning("Using deprecated CreateParamsWindow(), switch to new Pop.TParamsWindow");
 	const Window = new Pop.ParamsWindow(Params,OnAnyChanged,WindowRect);
 	return Window;
 }
