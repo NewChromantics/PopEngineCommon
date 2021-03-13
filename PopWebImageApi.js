@@ -144,7 +144,7 @@ function GetPixelsFromHtmlImageElement(Img)
 		//	destroy canvas (safari suggests its hanging around)
 		Canvas.width = 0;
 		Canvas.height = 0;
-		delete Canvas;
+		//delete Canvas;	//	not allowed in strict mode
 		//Canvas = null;
 		return Pixels;
 	}
@@ -311,7 +311,7 @@ Pop.Image = function(Filename)
 		//	destroy canvas (safari suggests its hanging around)
 		Canvas.width = 0;
 		Canvas.height = 0;
-		delete Canvas;
+		//delete Canvas;	//	not allowed in strict mode
 
 		return data;
 	}
