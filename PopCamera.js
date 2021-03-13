@@ -1,3 +1,5 @@
+import * as PopMath from './PopEngineCommon/Math.js'
+
 
 Pop.Camera = function(CopyCamera)
 {
@@ -37,8 +39,8 @@ Pop.Camera = function(CopyCamera)
 		//	lengths should be in pixels?
 		let Width = 1;
 		let Height = 1;
-		let FocalLengthHorz = Width / Math.tan( Math.radians(FovHorz) / 2);
-		let FocalLengthVert = Height / Math.tan( Math.radians(FovVert) / 2);
+		let FocalLengthHorz = Width / Math.tan( PopMath.radians(FovHorz) / 2);
+		let FocalLengthVert = Height / Math.tan( PopMath.radians(FovVert) / 2);
 		Pop.Debug('FocalLengthVert',FocalLengthVert,'FocalLengthHorz',FocalLengthHorz);
 		//^^^ FocalLengthHorz=1.816739344621
 		
@@ -68,8 +70,8 @@ Pop.Camera = function(CopyCamera)
 	
 	this.FocalLengthsToFieldOfView = function(fx,fy,cx,cy,ImageWidth,ImageHeight)
 	{
-		let FovHorizontal = Math.RadToDeg( 2 * Math.atan( ImageWidth / (2*fx) ) );
-		let FovVertical = Math.RadToDeg( 2 * Math.atan( ImageHeight / (2*fy) ) );
+		let FovHorizontal = PopMath.RadToDeg( 2 * Math.atan( ImageWidth / (2*fx) ) );
+		let FovVertical = PopMath.RadToDeg( 2 * Math.atan( ImageHeight / (2*fy) ) );
 		let Fov = {};
 		Fov.Horz = FovHorizontal;
 		Fov.Vert = FovVertical;
@@ -151,8 +153,8 @@ Pop.Camera = function(CopyCamera)
 		//const FovHorizontal = FovVertical * Aspect;
 		
 		const OpenglFocal = {};
-		OpenglFocal.fy = 1.0 / Math.tan( Math.radians(FovVertical) / 2);
-		//OpenglFocal.fx = 1.0 / Math.tan( Math.radians(FovHorizontal) / 2);
+		OpenglFocal.fy = 1.0 / Math.tan( PopMath.radians(FovVertical) / 2);
+		//OpenglFocal.fx = 1.0 / Math.tan( PopMath.radians(FovHorizontal) / 2);
 		OpenglFocal.fx = OpenglFocal.fy / Aspect;
 		OpenglFocal.cx = this.FocalCenter[0];
 		OpenglFocal.cy = this.FocalCenter[1];
@@ -186,11 +188,11 @@ Pop.Camera = function(CopyCamera)
 		let h = ViewRect[3];
 		
 		let Fov = this.FocalLengthsToFieldOfView( fx, fy, cx, cy, w, h );
-		//let FovHorizontal = Math.RadToDeg( 2 * Math.atan( w / (2*fx) ) );
-		//let FovVertical = Math.RadToDeg( 2 * Math.atan( h / (2*fy) ) );
+		//let FovHorizontal = PopMath.RadToDeg( 2 * Math.atan( w / (2*fx) ) );
+		//let FovVertical = PopMath.RadToDeg( 2 * Math.atan( h / (2*fy) ) );
 		Pop.Debug('opencv camera','FovHorizontal',Fov.Horz,'FovVertical',Fov.Vert);
 		
-		//let FocalLengthHorz = w / Math.tan( Math.radians(FovHorizontal) / 2) / 2;
+		//let FocalLengthHorz = w / Math.tan( PopMath.radians(FovHorizontal) / 2) / 2;
 		//Pop.Debug("fx",fx,"...",FocalLengthHorz);
 		*/
 		return Matrix;
@@ -279,10 +281,10 @@ Pop.Camera = function(CopyCamera)
 		const InvertRotationEye = this.IsProjectionForwardNegativeZ();
 		if ( InvertRotationEye )
 		{
-			const Mtx = Math.CreateLookAtRotationMatrix( this.LookAt, Up, this.Position );
+			const Mtx = PopMath.CreateLookAtRotationMatrix( this.LookAt, Up, this.Position );
 			return Mtx;
 		}
-		const Mtx = Math.CreateLookAtRotationMatrix( this.Position, Up, this.LookAt );
+		const Mtx = PopMath.CreateLookAtRotationMatrix( this.Position, Up, this.LookAt );
 		return Mtx;
 	}
 	
@@ -291,14 +293,14 @@ Pop.Camera = function(CopyCamera)
 	//	would be nice to seperate to be more readable
 	function CreateLookAtMatrix(eye,up,center)
 	{
-		let z = Math.Subtract3( eye, center );
-		z = Math.Normalise3( z );
+		let z = PopMath.Subtract3( eye, center );
+		z = PopMath.Normalise3( z );
 		
-		let x = Math.Cross3( up, z );
-		x = Math.Normalise3( x );
+		let x = PopMath.Cross3( up, z );
+		x = PopMath.Normalise3( x );
 		
-		let y = Math.Cross3( z,x );
-		y = Math.Normalise3( y );
+		let y = PopMath.Cross3( z,x );
+		y = PopMath.Normalise3( y );
 		
 		//	this is the result when multiplying rot*trans matrix
 		//	(dot prod)
@@ -328,9 +330,9 @@ Pop.Camera = function(CopyCamera)
 		
 		//	to move from world space to camera space, we should take away the camera origin
 		//	so this should always be -pos
-		let Trans = Math.Subtract3( [0,0,0], this.Position );
-		let Translation = Math.CreateTranslationMatrix( ...Trans );
-		let Matrix = Math.MatrixMultiply4x4( Rotation, Translation );
+		let Trans = PopMath.Subtract3( [0,0,0], this.Position );
+		let Translation = PopMath.CreateTranslationMatrix( ...Trans );
+		let Matrix = PopMath.MatrixMultiply4x4( Rotation, Translation );
 		//Pop.Debug("GetWorldToCameraMatrix", Matrix.slice(12,16) );
 		return Matrix;
 	}
@@ -340,7 +342,7 @@ Pop.Camera = function(CopyCamera)
 		let WorldToCameraMatrix = this.GetWorldToCameraMatrix();
 		
 		//	gr; this SHOULD be inverse...
-		let Matrix = Math.MatrixInverse4x4( WorldToCameraMatrix );
+		let Matrix = PopMath.MatrixInverse4x4( WorldToCameraMatrix );
 		//let Matrix = LocalToWorld;
 		//Pop.Debug("Matrix",Matrix);
 		
@@ -351,7 +353,7 @@ Pop.Camera = function(CopyCamera)
 	{
 		const CameraToFrustum = this.GetProjectionMatrix( ViewRect );
 		const WorldToCamera = this.GetWorldToCameraMatrix();
-		const WorldToFrustum = Math.MatrixMultiply4x4( CameraToFrustum, WorldToCamera );
+		const WorldToFrustum = PopMath.MatrixMultiply4x4( CameraToFrustum, WorldToCamera );
 		return WorldToFrustum;
 	}
 	
@@ -362,31 +364,31 @@ Pop.Camera = function(CopyCamera)
 		//	todo: correct viewrect with aspect ratio of viewport
 		//		maybe change input to Viewport to match GetProjection matrix?
 		let Matrix = this.GetProjectionMatrix( ViewRect );
-		Matrix = Math.MatrixInverse4x4( Matrix );
+		Matrix = PopMath.MatrixInverse4x4( Matrix );
 		//	put into world space
-		Matrix = Math.MatrixMultiply4x4( this.GetLocalToWorldMatrix(), Matrix );
+		Matrix = PopMath.MatrixMultiply4x4( this.GetLocalToWorldMatrix(), Matrix );
 		return Matrix;
 	}
 	
 	this.GetUp = function()
 	{
-		//let y = Math.Cross3( z,x );
-		//y = Math.Normalise3( y );
+		//let y = PopMath.Cross3( z,x );
+		//y = PopMath.Normalise3( y );
 		return this.Up.slice();
 	}
 	
 	this.GetForward = function(Normalised=true)
 	{
-		let z = Math.Subtract3( this.LookAt, this.Position );
+		let z = PopMath.Subtract3( this.LookAt, this.Position );
 		if ( Normalised )
-			z = Math.Normalise3( z );
+			z = PopMath.Normalise3( z );
 		return z;
 	}
 	
 	this.GetBackward = function(Normalised=true)
 	{
 		const Forward = this.GetForward(Normalised);
-		const Backward = Math.Multiply3(Forward,[-1,-1,-1]);
+		const Backward = PopMath.Multiply3(Forward,[-1,-1,-1]);
 		return Backward;
 	}
 	
@@ -394,8 +396,8 @@ Pop.Camera = function(CopyCamera)
 	{
 		const up = this.GetUp();
 		const z = this.GetForward();
-		let x = Math.Cross3( up, z );
-		x = Math.Normalise3( x );
+		let x = PopMath.Cross3( up, z );
+		x = PopMath.Normalise3( x );
 		return x;
 	}
 	
@@ -414,12 +416,12 @@ Pop.Camera = function(CopyCamera)
 	{
 		//	dir from lookat to position (orbit, not first person)
 		let Dir = this.GetBackward(false);
-		let Distance = Math.Length3( Dir );
+		let Distance = PopMath.Length3( Dir );
 		//Pop.Debug("Distance = ",Distance,Dir);
-		Dir = Math.Normalise3( Dir );
+		Dir = PopMath.Normalise3( Dir );
 		
-		let Yaw = Math.RadToDeg( Math.atan2( Dir[0], Dir[2] ) );
-		let Pitch = Math.RadToDeg( Math.asin(-Dir[1]) );
+		let Yaw = PopMath.RadToDeg( Math.atan2( Dir[0], Dir[2] ) );
+		let Pitch = PopMath.RadToDeg( Math.asin(-Dir[1]) );
 		let Roll = 0;
 		
 		return [Pitch,Yaw,Roll,Distance];
@@ -427,8 +429,8 @@ Pop.Camera = function(CopyCamera)
 	
 	this.SetOrbit = function(Pitch,Yaw,Roll,Distance)
 	{
-		let Pitchr = Math.radians(Pitch);
-		let Yawr = Math.radians(Yaw);
+		let Pitchr = PopMath.radians(Pitch);
+		let Yawr = PopMath.radians(Yaw);
 		//Pop.Debug("SetOrbit()", ...arguments );
 		//Pop.Debug("Pitch = "+Pitch);
 		
@@ -482,12 +484,12 @@ Pop.Camera = function(CopyCamera)
 	{
 		//	forward instead of backward
 		let Dir = this.GetForward(false);
-		let Distance = Math.Length3( Dir );
+		let Distance = PopMath.Length3( Dir );
 		//Pop.Debug("Distance = ",Distance,Dir);
-		Dir = Math.Normalise3( Dir );
+		Dir = PopMath.Normalise3( Dir );
 		
-		let Yaw = Math.RadToDeg( Math.atan2( Dir[0], Dir[2] ) );
-		let Pitch = Math.RadToDeg( Math.asin(-Dir[1]) );
+		let Yaw = PopMath.RadToDeg( Math.atan2( Dir[0], Dir[2] ) );
+		let Pitch = PopMath.RadToDeg( Math.asin(-Dir[1]) );
 		let Roll = 0;
 		
 		return [Pitch,Yaw,Roll,Distance];
@@ -496,8 +498,8 @@ Pop.Camera = function(CopyCamera)
 	//	opposite of SetOrbit
 	this.SetLookAtRotation = function(Pitch,Yaw,Roll,Distance)
 	{
-		let Pitchr = Math.radians(Pitch);
-		let Yawr = Math.radians(Yaw);
+		let Pitchr = PopMath.radians(Pitch);
+		let Yawr = PopMath.radians(Yaw);
 		//Pop.Debug("SetOrbit()", ...arguments );
 		//Pop.Debug("Pitch = "+Pitch);
 		
@@ -579,15 +581,15 @@ Pop.Camera = function(CopyCamera)
 		Deltaz *= -0.01;
 
 		let Right3 = this.GetRight();
-		Right3 = Math.Multiply3( Right3, [Deltax,Deltax,Deltax] );
+		Right3 = PopMath.Multiply3( Right3, [Deltax,Deltax,Deltax] );
 		this.MoveCameraAndLookAt( Right3 );
 
 		let Up3 = this.GetUp();
-		Up3 = Math.Multiply3( Up3, [Deltay,Deltay,Deltay] );
+		Up3 = PopMath.Multiply3( Up3, [Deltay,Deltay,Deltay] );
 		this.MoveCameraAndLookAt( Up3 );
 
 		let Forward3 = this.GetForward();
-		Forward3 = Math.Multiply3( Forward3, [Deltaz,Deltaz,Deltaz] );
+		Forward3 = PopMath.Multiply3( Forward3, [Deltaz,Deltaz,Deltaz] );
 		this.MoveCameraAndLookAt( Forward3 );
 
 		this.LastPos_PanLocalPos = [x,y,z];
@@ -596,33 +598,33 @@ Pop.Camera = function(CopyCamera)
 	this.GetScreenRay = function(u,v,ScreenRect)
 	{
 		let Aspect = ScreenRect[2] / ScreenRect[3];
-		let x = Math.lerp( -Aspect, Aspect, u );
-		let y = Math.lerp( 1, -1, v );
+		let x = PopMath.lerp( -Aspect, Aspect, u );
+		let y = PopMath.lerp( 1, -1, v );
 		const ViewRect = [-1,-1,1,1];
 		
 		const Camera = this;
 		const RayDistance = 1000;
 		
 		let ScreenToCameraTransform = Camera.GetProjectionMatrix( ViewRect );
-		ScreenToCameraTransform = Math.MatrixInverse4x4( ScreenToCameraTransform );
+		ScreenToCameraTransform = PopMath.MatrixInverse4x4( ScreenToCameraTransform );
 		
-		let StartMatrix = Math.CreateTranslationMatrix( x, y, 0.1 );
-		let EndMatrix = Math.CreateTranslationMatrix( x, y, RayDistance );
-		StartMatrix = Math.MatrixMultiply4x4( ScreenToCameraTransform, StartMatrix );
-		EndMatrix = Math.MatrixMultiply4x4( ScreenToCameraTransform, EndMatrix );
+		let StartMatrix = PopMath.CreateTranslationMatrix( x, y, 0.1 );
+		let EndMatrix = PopMath.CreateTranslationMatrix( x, y, RayDistance );
+		StartMatrix = PopMath.MatrixMultiply4x4( ScreenToCameraTransform, StartMatrix );
+		EndMatrix = PopMath.MatrixMultiply4x4( ScreenToCameraTransform, EndMatrix );
 		
-		StartMatrix = Math.MatrixMultiply4x4( Camera.GetLocalToWorldMatrix(), StartMatrix );
-		EndMatrix = Math.MatrixMultiply4x4( Camera.GetLocalToWorldMatrix(), EndMatrix );
+		StartMatrix = PopMath.MatrixMultiply4x4( Camera.GetLocalToWorldMatrix(), StartMatrix );
+		EndMatrix = PopMath.MatrixMultiply4x4( Camera.GetLocalToWorldMatrix(), EndMatrix );
 
 		const Ray = {};
-		Ray.Start = Math.GetMatrixTranslation( StartMatrix, true );
-		Ray.End = Math.GetMatrixTranslation( EndMatrix, true );
+		Ray.Start = PopMath.GetMatrixTranslation( StartMatrix, true );
+		Ray.End = PopMath.GetMatrixTranslation( EndMatrix, true );
 		
 		//	gr: this ray is BACKWARDS
 		//		but this is working for world-space math checks
 		//		I think the Z dir is backwards in the projection hence why it renders correctly, but maths is backwards
 		//		the raymarch dir is also backwards, which matches this backwards
-		Ray.Direction = Math.Normalise3( Math.Subtract3( Ray.Start, Ray.End ) );
+		Ray.Direction = PopMath.Normalise3( PopMath.Subtract3( Ray.Start, Ray.End ) );
 										
 		return Ray;
 	}
