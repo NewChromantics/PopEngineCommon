@@ -19,6 +19,8 @@ Pop.GlslVersion = 100;
 //		(and we typically want to know it without a render context)
 //		set to false to force it off (eg. for testing on desktop against
 //		ios which doesn't support it [as of 13]
+//	gr: mac safari 14.0.3 seems to not error at float texture support, but just writes zeroes
+//		tested filters, clamping, POW sizes...
 Pop.Opengl.CanRenderToFloat = undefined;
 
 //	allow turning off float support
