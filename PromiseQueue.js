@@ -6,9 +6,10 @@
 //	gr: this is getting out of sync with the cyclic-fixing-copy in WebApi. Make it seperate!
 export default class PromiseQueue
 {
-	constructor(DebugName='UnnamedPromiseQueue',Warning)
+	constructor(DebugName='UnnamedPromiseQueue',QueueWarningSize=100,Warning)
 	{
 		this.Warning = Warning || function(){};
+		this.QueueWarningSize = QueueWarningSize;
 		this.Name = DebugName;
 		//	pending promises
 		this.Promises = [];
@@ -102,7 +103,7 @@ export default class PromiseQueue
 		Value.ResolveValues = Args;
 		this.PendingValues.push( Value );
 		
-		if ( this.PendingValues.length > 100 )
+		if ( this.PendingValues.length > this.QueueWarningSize )
 			this.Warning(`This (${this.Name}) promise queue has ${this.PendingValues.length} pending values and ${this.Promises.length} pending promises`,this);
 		
 		this.FlushPending();
