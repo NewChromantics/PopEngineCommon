@@ -1,15 +1,22 @@
 
-Pop.FrameCounter = function(CounterName="",LapTimeMs=1000)
+export default class FrameCounter
 {
-	this.LastLapTime = null;
-	this.Count = 0;
-	
-	this.Report = function(CountPerSec)
+	constructor(CounterName="",LapTimeMs=1000)
 	{
-		Pop.Debug( CounterName + " " + CountPerSec.toFixed(2) + "/sec");
+		this.CounterName = CounterName;
+		this.LastLapTime = null;
+		this.Count = 0;
+		
+		//	this can be overloaded, so is a member
+		this.Report = this.ReportDefault.bind(this);
+	}
+	
+	ReportDefault(CountPerSec)
+	{
+		Pop.Debug( this.CounterName + " " + CountPerSec.toFixed(2) + "/sec");
 	}
 
-	this.OnLap = function()
+	OnLap()
 	{
 		let TimeElapsed = Pop.GetTimeNowMs() - this.LastLapTime;
 		let Scalar = TimeElapsed / LapTimeMs;
@@ -19,7 +26,7 @@ Pop.FrameCounter = function(CounterName="",LapTimeMs=1000)
 		this.Count = 0;
 	}
 	
-	this.Add = function(Increment=1)
+	Add(Increment=1)
 	{
 		this.Count += Increment;
 		
