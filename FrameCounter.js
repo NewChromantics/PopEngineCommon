@@ -4,6 +4,7 @@ export default class FrameCounter
 	constructor(CounterName="",LapTimeMs=1000)
 	{
 		this.CounterName = CounterName;
+		this.LapTimeMs = LapTimeMs;
 		this.LastLapTime = null;
 		this.Count = 0;
 		
@@ -19,7 +20,7 @@ export default class FrameCounter
 	OnLap()
 	{
 		let TimeElapsed = Pop.GetTimeNowMs() - this.LastLapTime;
-		let Scalar = TimeElapsed / LapTimeMs;
+		let Scalar = TimeElapsed / this.LapTimeMs;
 		let CountPerSec = this.Count / Scalar;
 		this.Report( CountPerSec );
 		this.LastLapTime = Pop.GetTimeNowMs();
@@ -34,7 +35,7 @@ export default class FrameCounter
 			this.LastLapTime = Pop.GetTimeNowMs();
 		
 		let TimeElapsed = Pop.GetTimeNowMs() - this.LastLapTime;
-		if ( TimeElapsed > LapTimeMs )
+		if ( TimeElapsed > this.LapTimeMs )
 		{
 			this.OnLap();
 		}
