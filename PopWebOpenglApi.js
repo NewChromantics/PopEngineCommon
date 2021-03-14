@@ -1,17 +1,20 @@
-Pop.Opengl = {};
+import PopImage from './PopWebImageApi.js'
+import * as Pop from './PopWebApi.js'
+const Default = 'Pop Opengl module';
+export default Default;
 
 //	counters for debugging
-Pop.Opengl.Stats = {};
-Pop.Opengl.Stats.TrianglesDrawn = 0;
-Pop.Opengl.Stats.BatchesDrawn = 0;
-Pop.Opengl.Stats.GeometryBindSkip = 0;
-Pop.Opengl.Stats.ShaderBindSkip = 0;
-Pop.Opengl.Stats.GeometryBinds = 0;
-Pop.Opengl.Stats.ShaderBinds = 0;
-Pop.Opengl.Stats.Renders = 0;
+export const Stats = {};
+Stats.TrianglesDrawn = 0;
+Stats.BatchesDrawn = 0;
+Stats.GeometryBindSkip = 0;
+Stats.ShaderBindSkip = 0;
+Stats.GeometryBinds = 0;
+Stats.ShaderBinds = 0;
+Stats.Renders = 0;
 
 //	webgl only supports glsl 100!
-Pop.GlslVersion = 100;
+const GlslVersion = 100;
 
 //	mobile typically can not render to a float texture. Emulate this on desktop
 //	gr: we now test for this on context creation.
@@ -21,14 +24,14 @@ Pop.GlslVersion = 100;
 //		ios which doesn't support it [as of 13]
 //	gr: mac safari 14.0.3 seems to not error at float texture support, but just writes zeroes
 //		tested filters, clamping, POW sizes...
-Pop.Opengl.CanRenderToFloat = undefined;
+export let CanRenderToFloat = undefined;
 
 //	allow turning off float support
-Pop.Opengl.AllowFloatTextures = !Pop.GetExeArguments().DisableFloatTextures;
+export let AllowFloatTextures = !Pop.GetExeArguments().DisableFloatTextures;
 
-Pop.DebugMouseEvent = function(){};	//	Pop.Debug;
+export let DebugMouseEvent = function(){};	//	Pop.Debug;
 
-Pop.Opengl.GetString = function(Context,Enum)
+function GetString(Context,Enum)
 {
 	const gl = Context;
 	const Enums =
@@ -72,12 +75,15 @@ const RetryGetContextMs = 1000;
 
 //	need a generic memory heap system in Pop for js side so
 //	we can do generic heap GUIs
-Pop.HeapMeta = function(Name)
+class HeapMeta
 {
-	this.AllocCount = 0;
-	this.AllocSize = 0;
+	constructor(Name)
+	{
+		this.AllocCount = 0;
+		this.AllocSize = 0;
+	}
 	
-	this.OnAllocated = function(Size)
+	OnAllocated(Size)
 	{
 		if ( isNaN(Size) )
 			throw "Bad size " + Size;
@@ -85,7 +91,7 @@ Pop.HeapMeta = function(Name)
 		this.AllocSize += Size;
 	}
 	
-	this.OnDeallocated = function(Size)
+	OnDeallocated(Size)
 	{
 		if ( isNaN(Size) )
 			throw "Bad size " + Size;
@@ -101,7 +107,7 @@ Pop.HeapMeta = function(Name)
 
 
 //	this is currenly in c++ in the engine. need to swap to javascript
-Pop.Opengl.RefactorGlslShader = function(Source)
+function RefactorGlslShader(Source)
 {
 	if ( !Source.startsWith('#version ') )
 	{
@@ -117,11 +123,11 @@ Pop.Opengl.RefactorGlslShader = function(Source)
 	return Source;
 }
 
-Pop.Opengl.RefactorVertShader = function(Source)
+function RefactorVertShader(Source)
 {
-	Source = Pop.Opengl.RefactorGlslShader(Source);
+	Source = RefactorGlslShader(Source);
 	
-	if ( Pop.GlslVersion == 100 )
+	if ( GlslVersion == 100 )
 	{
 		Source = Source.replace(/\nin /gi,'\nattribute ');
 		Source = Source.replace(/\nout /gi,'\nvarying ');
@@ -136,7 +142,7 @@ Pop.Opengl.RefactorVertShader = function(Source)
 		Source = Source.replace(/textureLod/gi,'texture2DLod');
 		
 	}
-	else if ( Pop.GlslVersion >= 300 )
+	else if ( GlslVersion >= 300 )
 	{
 		Source = Source.replace(/attribute /gi,'in ');
 		Source = Source.replace(/varying /gi,'out ');
@@ -146,9 +152,9 @@ Pop.Opengl.RefactorVertShader = function(Source)
 	return Source;
 }
 
-Pop.Opengl.RefactorFragShader = function(Source)
+function RefactorFragShader(Source)
 {
-	Source = Pop.Opengl.RefactorGlslShader(Source);
+	Source = RefactorGlslShader(Source);
 
 	//	gr: this messes up xcode's auto formatting :/
 	//let Match = /texture2D\(/gi;
@@ -255,7 +261,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 				return;
 			
 			const ButtonIndex = GetNextUnassignedButtonIndex();
-			Pop.DebugMouseEvent(`New touch ${Touch.identifier} = Button ${ButtonIndex}`);
+			DebugMouseEvent(`New touch ${Touch.identifier} = Button ${ButtonIndex}`);
 			RegisteredTouchButtons[Touch.identifier] = ButtonIndex;
 			ArchiveRegisteredTouchButtons[Touch.identifier] = ButtonIndex;
 		}
@@ -264,11 +270,11 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 			//	gr: we cannot unregister, as some things use the identifer later
 			if ( !RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
 			{
-				Pop.DebugMouseEvent(`UnregisterTouch ${Touch.identifier} but not registered`);
+				DebugMouseEvent(`UnregisterTouch ${Touch.identifier} but not registered`);
 				return;
 			}
 			const Button = RegisteredTouchButtons[Touch.identifier];
-			Pop.DebugMouseEvent(`UnregisterTouch ${Touch.identifier} button was ${Button}`);
+			DebugMouseEvent(`UnregisterTouch ${Touch.identifier} button was ${Button}`);
 			delete RegisteredTouchButtons[Touch.identifier];
 		}
 
@@ -429,7 +435,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 			{
 				const Button = GetButtonNameFromTouch(Touch);
 				const Position = GetPositionFromTouch(Touch);
-				Pop.DebugMouseEvent(`Touch MouseDown ${Position} button ${Button}`);
+				DebugMouseEvent(`Touch MouseDown ${Position} button ${Button}`);
 				OnMouseDown(...Position,Button);
 			}
 			MouseEvent.AddedTouches.forEach(ReportNewTouch);
@@ -442,7 +448,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 			{
 				const Button = GetButtonNameFromTouch(Touch);
 				const Position = GetPositionFromTouch(Touch);
-				Pop.DebugMouseEvent(`Touch MouseMove ${Position} button ${Button}`);
+				DebugMouseEvent(`Touch MouseMove ${Position} button ${Button}`);
 				OnMouseMove(...Position,Button);
 			}
 			MouseEvent.Touches.forEach(ReportTouchMove);
@@ -454,7 +460,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 			{
 				const Button = GetButtonNameFromTouch(Touch);
 				const Position = GetPositionFromTouch(Touch);
-				Pop.DebugMouseEvent(`Touch MouseUp ${Position} button ${Button}`);
+				DebugMouseEvent(`Touch MouseUp ${Position} button ${Button}`);
 				OnMouseUp(...Position,Button);
 			}
 			MouseEvent.RemovedTouches.forEach(ReportOldTouch);
@@ -474,12 +480,12 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 			
 			if ( Buttons.length == 0 )
 			{
-				Pop.DebugMouseEvent(`MouseMove ${Pos} zero buttons ${Buttons}`);
+				DebugMouseEvent(`MouseMove ${Pos} zero buttons ${Buttons}`);
 				Buttons.push(null);
 			}
 			
 			//	report each button as its own mouse move
-			Pop.DebugMouseEvent(`MouseMove ${Pos} buttons ${Buttons}`);
+			DebugMouseEvent(`MouseMove ${Pos} buttons ${Buttons}`);
 			for ( let Button of Buttons )
 				OnMouseMove( Pos[0], Pos[1], Button );
 		}
@@ -495,7 +501,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		{
 			const Pos = GetMousePos(MouseEvent);
 			const Button = GetButtonFromMouseEventButton(MouseEvent);
-			Pop.DebugMouseEvent(`MouseDown ${Pos} ${Button}`);
+			DebugMouseEvent(`MouseDown ${Pos} ${Button}`);
 			OnMouseDown( Pos[0], Pos[1], Button );
 		}
 		MouseEvent.preventDefault();
@@ -519,7 +525,7 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 			const Meta = {};
 			Meta.IsTouch = MouseEvent.touches != undefined;	//	gr: this will break on screens with a touch screen
 		
-			Pop.DebugMouseEvent(`MouseUp ${Pos} ${Button} ${JSON.stringify(Meta)}`);
+			DebugMouseEvent(`MouseUp ${Pos} ${Button} ${JSON.stringify(Meta)}`);
 			OnMouseUp( Pos[0], Pos[1], Button, Meta );
 		}
 		MouseEvent.preventDefault();
@@ -575,7 +581,7 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 {
 	function GetKeyFromKeyEventButton(KeyEvent)
 	{
-		// Pop.DebugMouseEvent("KeyEvent",KeyEvent);
+		// DebugMouseEvent("KeyEvent",KeyEvent);
 		return KeyEvent.key;
 	}
 	
@@ -584,7 +590,7 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 		//	if an input element has focus, ignore event
 		if ( KeyEvent.srcElement instanceof HTMLInputElement )
 		{
-			Pop.DebugMouseEvent("Ignoring OnKeyDown as input has focus",KeyEvent);
+			DebugMouseEvent("Ignoring OnKeyDown as input has focus",KeyEvent);
 			return false;
 		}
 		//Pop.Debug("OnKey down",KeyEvent);
@@ -612,44 +618,75 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 }
 
 
-Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
+export class Window
 {
-	//	things to overload
-	this.OnRender = function(RenderTarget)					{	Pop.Warning(`OnRender not overloaded`);	};
-	this.OnMouseDown = function(x,y,Button)					{	Pop.DebugMouseEvent('OnMouseDown',...arguments);		};
-	this.OnMouseMove = function(x,y,Button)					{	Pop.DebugMouseEvent("OnMouseMove",...arguments);		};
-	this.OnMouseUp = function(x,y,Button)					{	Pop.DebugMouseEvent('OnMouseUp',...arguments);		};
-	this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	Pop.DebugMouseEvent('OnMouseScroll',...arguments);	};
-	this.OnKeyDown = function(Key)							{	Pop.DebugMouseEvent('OnKeyDown',...arguments);		};
-	this.OnKeyUp = function(Key)							{	Pop.DebugMouseEvent('OnKeyUp',...arguments);			};
+	constructor(Name,Rect,CanvasOptions)
+	{
+		//	things to overload
+		this.OnRender = function(RenderTarget)					{	Pop.Warning(`OnRender not overloaded`);	};
+		this.OnMouseDown = function(x,y,Button)					{	DebugMouseEvent('OnMouseDown',...arguments);		};
+		this.OnMouseMove = function(x,y,Button)					{	DebugMouseEvent("OnMouseMove",...arguments);		};
+		this.OnMouseUp = function(x,y,Button)					{	DebugMouseEvent('OnMouseUp',...arguments);		};
+		this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	DebugMouseEvent('OnMouseScroll',...arguments);	};
+		this.OnKeyDown = function(Key)							{	DebugMouseEvent('OnKeyDown',...arguments);		};
+		this.OnKeyUp = function(Key)							{	DebugMouseEvent('OnKeyUp',...arguments);			};
 
-	//	treat minimised and foreground as the same on web;
-	//	todo: foreground state for multiple windows on one page
-	this.IsForeground = function () { return Pop.WebApi.IsForeground(); }
-	this.IsMinimised = function () { return Pop.WebApi.IsForeground(); }
+		//	treat minimised and foreground as the same on web;
+		//	todo: foreground state for multiple windows on one page
+		this.IsForeground = function () { return Pop.WebApi.IsForeground(); }
+		this.IsMinimised = function () { return Pop.WebApi.IsForeground(); }
 
-	this.IsOpen = true;	//	renderloop stops if false
-	this.NewCanvasElement = null;	//	canvas we created
-	this.CanvasElement = null;		//	cached element pointer
-	this.CanvasOptions = CanvasOptions || {};
+		this.IsOpen = true;	//	renderloop stops if false
+		this.NewCanvasElement = null;	//	canvas we created
+		this.CanvasElement = null;		//	cached element pointer
+		this.CanvasOptions = CanvasOptions || {};
 
-	this.Context = null;
-	this.ContextVersion = 0;	//	used to tell if resources are out of date
-	this.RenderTarget = null;
-	this.CanvasMouseHandler = null;
-	this.CanvasKeyHandler = null;
-	this.ScreenRectCache = null;
-	this.TextureHeap = new Pop.HeapMeta("Opengl Textures");
-	this.GeometryHeap = new Pop.HeapMeta("Opengl Geometry");
+		this.Context = null;
+		this.ContextVersion = 0;	//	used to tell if resources are out of date
+		this.RenderTarget = null;
+		this.CanvasMouseHandler = null;
+		this.CanvasKeyHandler = null;
+		this.ScreenRectCache = null;
+		this.TextureHeap = new HeapMeta("Opengl Textures");
+		this.GeometryHeap = new HeapMeta("Opengl Geometry");
 
-	this.FloatTextureSupported = false;
-	this.Int32TextureSupported = false;	//	depth texture 24,8
-	
-	this.ActiveTextureIndex = 0;
-	this.ActiveTextureRef = {};
-	this.TextureRenderTargets = [];	//	this is a context asset, so maybe it shouldn't be kept here
+		this.FloatTextureSupported = false;
+		this.Int32TextureSupported = false;	//	depth texture 24,8
+		
+		this.ActiveTextureIndex = 0;
+		this.ActiveTextureRef = {};
+		this.TextureRenderTargets = [];	//	this is a context asset, so maybe it shouldn't be kept here
+		
 
-	this.Close = function ()
+		//	gr: this class needs to re-organise into a "opengl view" to go inside a gui window
+		//		native API also needs to do this
+		//	like Pop.Gui controls;
+		//		if Name==Canvas.id, then it should initialise there
+		//		else if rect is a string (or direct element) we should create a new canvas inside
+		//			that element
+		//		else if rect is a number, we should create a canvas in the body at the specified size
+		//		if name is canvas.id and rect==parent, then we have to ignore the rect
+		let Parent = document.body;
+		if ( typeof Rect == 'string' )
+		{
+			Parent = document.getElementById(Rect);
+		}
+		else if ( Rect instanceof HTMLElement )
+		{
+			Parent = Rect;
+			Rect = Parent.id;
+		}
+		
+		//	gr: this was context before canvas??
+		this.CanvasElement = this.InitCanvasElement( Name, Parent, Rect );
+		
+		this.RefreshCanvasResolution();
+		this.InitialiseContext();
+
+		this.RenderLoop();
+	}
+
+	Close()
 	{
 		Pop.Debug(`Opengl.Window.Close`);
 
@@ -667,7 +704,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		}
 	}
 
-	this.OnOrientationChange = function (ResizeEvent)
+	OnOrientationChange(ResizeEvent)
 	{
 		const DoResize = function ()
 		{
@@ -682,7 +719,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		setTimeout(DoResize,1000);
 	}
 
-	this.OnResize = function(ResizeEvent)
+	OnResize(ResizeEvent)
 	{
 		Pop.Debug(`Pop.Opengl.Window OnResize type=${ResizeEvent ? ResizeEvent.type:'null'}`);
 		
@@ -694,7 +731,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		this.RefreshCanvasResolution();
 	}
 	
-	this.AllocTextureIndex = function(Image)
+	AllocTextureIndex(Image)
 	{
 		//	gr: make a pool or something
 		//		we fixed this on desktop, so take same model
@@ -708,12 +745,12 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		return Index;
 	}
 	
-	this.GetCanvasElement = function()
+	GetCanvasElement()
 	{
 		return this.CanvasElement;
 	}
 	
-	this.CreateCanvasElement = function(Name,Parent,Rect)
+	CreateCanvasElement(Name,Parent,Rect)
 	{
 		//	if element already exists, we need it to be a canvas
 		//	if we're fitting inside a div, then Parent should be the name of a div
@@ -768,7 +805,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		return Element;
 	}
 	
-	this.InitCanvasElement = function(Name,Parent,Rect)
+	InitCanvasElement(Name,Parent,Rect)
 	{
 		const Element = this.CreateCanvasElement(Name,Parent,Rect);
 		
@@ -809,7 +846,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		return Element;
 	}
 	
-	this.GetScreenRect = function()
+	GetScreenRect()
 	{
 		if ( !this.ScreenRectCache )
 		{
@@ -826,7 +863,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 	}
 	
 	
-	this.GetCanvasDomRect = function(Element)
+	GetCanvasDomRect(Element)
 	{
 		//	first see if WE have our own rect
 		const SelfRect = Element.getBoundingClientRect();
@@ -858,7 +895,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		throw `Don't know how to get canvas size`;
 	}
 		
-	this.RefreshCanvasResolution = function()
+	RefreshCanvasResolution()
 	{
 		const Canvas = this.GetCanvasElement();
 
@@ -874,7 +911,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		Canvas.height = h;
 	}
 	
-	this.OnLostContext = function(Error)
+	OnLostContext(Error)
 	{
 		Pop.Debug("Lost webgl context",Error);
 		this.Context = null;
@@ -883,7 +920,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		this.ResetContextAssets();
 	}
 	
-	this.ResetContextAssets = function()
+	ResetContextAssets()
 	{
 		//	dont need to reset this? but we will anyway
 		this.ActiveTextureIndex = 0;
@@ -893,7 +930,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		this.TextureRenderTargets = [];
 	}
 
-	this.TestLoseContext = function()
+	TestLoseContext()
 	{
 		Pop.Debug("TestLoseContext");
 		const Context = this.GetGlContext();
@@ -912,7 +949,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 	}
 	
 
-	this.CreateContext = function()
+	CreateContext()
 	{
 		const ContextMode = "webgl";
 		const Canvas = this.GetCanvasElement();
@@ -1013,7 +1050,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			}
 		};
 		
-		if ( Pop.Opengl.AllowFloatTextures )
+		if ( AllowFloatTextures )
 			EnableExtension('OES_texture_float',InitFloatTexture);
 		EnableExtension('WEBGL_depth_texture',InitDepthTexture);
 		EnableExtension('EXT_blend_minmax');
@@ -1029,7 +1066,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		return Context;
 	}
 	
-	this.IsFloatRenderTargetSupported = function()
+	IsFloatRenderTargetSupported()
 	{
 		//	gr: because of some internal workarounds/auto conversion in images
 		//		trying to create & bind a float4 will inadvertently work! if we
@@ -1039,9 +1076,9 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		
 		try
 		{
-			const FloatTexture = new Pop.Image([1,1],'Float4');
+			const FloatTexture = new PopImage([1,1],'Float4');
 			FloatTexture.Name = 'IsFloatRenderTargetSupported';
-			const RenderTarget = new Pop.Opengl.TextureRenderTarget( [FloatTexture] );
+			const RenderTarget = new TextureRenderTarget( [FloatTexture] );
 			const RenderContext = this;
 			const Unbind = RenderTarget.BindRenderTarget( RenderContext );
 			//	cleanup!
@@ -1057,7 +1094,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 	}
 
 	
-	this.InitVao = function(Context,Extension)
+	InitVao(Context,Extension)
 	{
 		//	already enabled with webgl2
 		if ( Context.createVertexArray )
@@ -1069,7 +1106,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		Context.bindVertexArray = Extension.bindVertexArrayOES.bind(Extension);
 	}
 	
-	this.InitMultipleRenderTargets = function(Context,Extension)
+	InitMultipleRenderTargets(Context,Extension)
 	{
 		Pop.Debug("MRT has MAX_COLOR_ATTACHMENTS_WEBGL=" + Extension.MAX_COLOR_ATTACHMENTS_WEBGL + " MAX_DRAW_BUFFERS_WEBGL=" + Extension.MAX_DRAW_BUFFERS_WEBGL );
 		Extension.AttachmentPoints =
@@ -1088,7 +1125,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 	
 	
 	
-	this.InitialiseContext = function()
+	InitialiseContext()
 	{
 		this.Context = this.CreateContext();
 		this.ContextVersion++;
@@ -1097,14 +1134,14 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		//		so doing it here for now
 		//	test support for float render targets
 		//	test for undefined, as it may have been forced off by client
-		if ( Pop.Opengl.CanRenderToFloat === undefined )
+		if ( CanRenderToFloat === undefined )
 		{
-			Pop.Opengl.CanRenderToFloat = this.IsFloatRenderTargetSupported();
+			CanRenderToFloat = this.IsFloatRenderTargetSupported();
 		}
 	}
 	
 	//	we could make this async for some more control...
-	this.RenderLoop = function()
+	RenderLoop()
 	{
 		let Render = function(Timestamp)
 		{
@@ -1137,12 +1174,12 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			
 			Unbind();
 			
-			Pop.Opengl.Stats.Renders++;
+			Stats.Renders++;
 		}
 		window.requestAnimationFrame( Render.bind(this) );
 	}
 
-	this.GetGlContext = function()
+	GetGlContext()
 	{
 		//	catch if we have a context but its lost
 		if ( this.Context )
@@ -1162,28 +1199,28 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		return this.Context;
 	}
 	
-	this.OnAllocatedTexture = function(Image)
+	OnAllocatedTexture(Image)
 	{
 		this.TextureHeap.OnAllocated( Image.OpenglByteSize );
 	}
 	
-	this.OnDeletedTexture = function(Image)
+	OnDeletedTexture(Image)
 	{
 		//	todo: delete render targets that use this image
 		this.TextureHeap.OnDeallocated( Image.OpenglByteSize );
 	}
 	
-	this.OnAllocatedGeometry = function(Geometry)
+	OnAllocatedGeometry(Geometry)
 	{
 		this.GeometryHeap.OnAllocated( Geometry.OpenglByteSize );
 	}
 	
-	this.OnDeletedGeometry = function(Geometry)
+	OnDeletedGeometry(Geometry)
 	{
 		this.GeometryHeap.OnDeallocated( Geometry.OpenglByteSize );
 	}
 	
-	this.GetRenderTargetIndex = function(Textures)
+	GetRenderTargetIndex(Textures)
 	{
 		function MatchRenderTarget(RenderTarget)
 		{
@@ -1207,7 +1244,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		return RenderTargetIndex;
 	}
 	
-	this.GetTextureRenderTarget = function(Textures)
+	GetTextureRenderTarget(Textures)
 	{
 		if ( !Array.isArray(Textures) )
 			Textures = [Textures];
@@ -1217,14 +1254,14 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			return this.TextureRenderTargets[RenderTargetIndex];
 		
 		//	make a new one
-		const RenderTarget = new Pop.Opengl.TextureRenderTarget( Textures );
+		const RenderTarget = new TextureRenderTarget( Textures );
 		this.TextureRenderTargets.push( RenderTarget );
 		if ( this.GetRenderTargetIndex(Textures) === false )
 			throw "New render target didn't re-find";
 		return RenderTarget;
 	}
 	
-	this.FreeRenderTarget = function(Textures)
+	FreeRenderTarget(Textures)
 	{
 		if ( !Array.isArray(Textures) )
 			Textures = [Textures];
@@ -1240,7 +1277,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		}
 	}
 	
-	this.ReadPixels = function(Image,ReadBackFormat)
+	ReadPixels(Image,ReadBackFormat)
 	{
 		const RenderContext = this;
 		const gl = this.GetGlContext();
@@ -1271,18 +1308,18 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		Unbind();
 	}
 
-	this.IsFullscreenSupported = function()
+	IsFullscreenSupported()
 	{
 		return document.fullscreenEnabled;
 	}
 	
-	this.OnFullscreenChanged = function(Event)
+	OnFullscreenChanged(Event)
 	{
 		Pop.Debug("OnFullscreenChanged", Event);
 		//this.OnResize();
 	}
 	
-	this.IsFullscreen = function()
+	IsFullscreen()
 	{
 		const Canvas = this.GetCanvasElement();
 		//if ( document.fullscreenElement == Canvas )
@@ -1291,7 +1328,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		return false;
 	}
 	
-	this.SetFullscreen = function(Enable=true)
+	SetFullscreen(Enable=true)
 	{
 		if ( !Enable )
 		{
@@ -1319,45 +1356,18 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		//Element.requestFullscreen().then( OnFullscreenSuccess ).catch( OnFullscreenError );
 	}
 	
-
-	//	gr: this class needs to re-organise into a "opengl view" to go inside a gui window
-	//		native API also needs to do this
-	//	like Pop.Gui controls;
-	//		if Name==Canvas.id, then it should initialise there
-	//		else if rect is a string (or direct element) we should create a new canvas inside
-	//			that element
-	//		else if rect is a number, we should create a canvas in the body at the specified size
-	//		if name is canvas.id and rect==parent, then we have to ignore the rect
-	let Parent = document.body;
-	if ( typeof Rect == 'string' )
-	{
-		Parent = document.getElementById(Rect);
-	}
-	else if ( Rect instanceof HTMLElement )
-	{
-		Parent = Rect;
-		Rect = Parent.id;
-	}
-	
-	//	gr: this was context before canvas??
-	this.CanvasElement = this.InitCanvasElement( Name, Parent, Rect );
-	
-	this.RefreshCanvasResolution();
-	this.InitialiseContext();
-
-	this.RenderLoop();
 }
 
 
 //	base class with generic opengl stuff
-Pop.Opengl.RenderTarget = function()
+export class RenderTarget
 {
-	this.GetRenderContext = function()
+	GetRenderContext()
 	{
 		throw "Override this on your render target";
 	}
 	
-	this.RenderToRenderTarget = function(TargetTexture,RenderFunction,ReadBackFormat,ReadTargetTexture)
+	RenderToRenderTarget(TargetTexture,RenderFunction,ReadBackFormat,ReadTargetTexture)
 	{
 		const RenderContext = this.GetRenderContext();
 
@@ -1407,27 +1417,27 @@ Pop.Opengl.RenderTarget = function()
 		this.BindRenderTarget( RenderContext );
 	}
 	
-	this.GetGlContext = function()
+	GetGlContext()
 	{
 		const RenderContext = this.GetRenderContext();
 		const Context = RenderContext.GetGlContext();
 		return Context;
 	}
 	
-	this.ClearColour = function(r,g,b,a=1)
+	ClearColour(r,g,b,a=1)
 	{
 		const gl = this.GetGlContext();
 		gl.clearColor( r, g, b, a );
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	}
 
-	this.ClearDepth = function()
+	ClearDepth()
 	{
 		const gl = this.GetGlContext();
 		gl.clear(gl.DEPTH_BUFFER_BIT);
 	}
 
-	this.ResetState = function()
+	ResetState()
 	{
 		const gl = this.GetGlContext();
 		gl.disable(gl.CULL_FACE);
@@ -1438,7 +1448,7 @@ Pop.Opengl.RenderTarget = function()
 		gl.depthFunc(gl.LEQUAL);
 	}
 	
-	this.SetBlendModeBlit = function()
+	SetBlendModeBlit()
 	{
 		const gl = this.GetGlContext();
 		
@@ -1447,7 +1457,7 @@ Pop.Opengl.RenderTarget = function()
 		gl.blendEquation( gl.FUNC_ADD );
 	}
 	
-	this.SetBlendModeAlpha = function()
+	SetBlendModeAlpha()
 	{
 		const gl = this.GetGlContext();
 		
@@ -1458,7 +1468,7 @@ Pop.Opengl.RenderTarget = function()
 		gl.blendEquation( gl.FUNC_ADD );
 	}
 	
-	this.SetBlendModeMax = function()
+	SetBlendModeMax()
 	{
 		const gl = this.GetGlContext();
 		if ( gl.EXT_blend_minmax === undefined )
@@ -1473,7 +1483,7 @@ Pop.Opengl.RenderTarget = function()
 		//GL_FUNC_ADD
 	}
 	
-	this.DrawGeometry = function(Geometry,Shader,SetUniforms,TriangleCount)
+	DrawGeometry(Geometry,Shader,SetUniforms,TriangleCount)
 	{
 		const RenderContext = this.GetRenderContext();
 		
@@ -1492,11 +1502,11 @@ Pop.Opengl.RenderTarget = function()
 			const Program = Shader.GetProgram(RenderContext);
 			gl.useProgram( Program );
 			gl.CurrentBoundShaderHash = GetUniqueHash(Shader);
-			Pop.Opengl.Stats.ShaderBinds++;
+			Stats.ShaderBinds++;
 		}
 		else
 		{
-			Pop.Opengl.Stats.ShaderBindSkip++;
+			Stats.ShaderBindSkip++;
 		}
 		
 		//	this doesn't make any difference
@@ -1504,11 +1514,11 @@ Pop.Opengl.RenderTarget = function()
 		{
 			Geometry.Bind( RenderContext );
 			gl.CurrentBoundGeometryHash = GetUniqueHash(Geometry);
-			Pop.Opengl.Stats.GeometryBinds++;
+			Stats.GeometryBinds++;
 		}
 		else
 		{
-			Pop.Opengl.Stats.GeometryBindSkip++;
+			Stats.GeometryBindSkip++;
 		}
 		SetUniforms( Shader, Geometry );
 
@@ -1519,8 +1529,8 @@ Pop.Opengl.RenderTarget = function()
 		//	if we try and render more triangles than geometry has, webgl sometimes will render nothing and give no warning
 		TriangleCount = Math.min( TriangleCount, GeoTriangleCount );
 
-		Pop.Opengl.Stats.TrianglesDrawn += TriangleCount;
-		Pop.Opengl.Stats.BatchesDrawn += 1;
+		Stats.TrianglesDrawn += TriangleCount;
+		Stats.BatchesDrawn += 1;
 		gl.drawArrays( Geometry.PrimitiveType, 0, TriangleCount * 3 );
 	}
 	
@@ -1528,18 +1538,24 @@ Pop.Opengl.RenderTarget = function()
 
 
 //	maybe this should be an API type
-Pop.Opengl.TextureRenderTarget = function(Images)
+class TextureRenderTarget extends RenderTarget
 {
-	Pop.Opengl.RenderTarget.call( this );
-	if ( !Array.isArray(Images) )
-		throw "Pop.Opengl.TextureRenderTarget now expects array of images for MRT support";
+	constructor(Images)
+	{
+		super();
+		if ( !Array.isArray(Images) )
+			throw "Pop.Opengl.TextureRenderTarget now expects array of images for MRT support";
+		
+		this.FrameBuffer = null;
+		this.FrameBufferContextVersion = null;
+		this.FrameBufferRenderContext = null;
+		this.Images = Images;
+			
+		//	verify each image is same dimensions (and format?)
+		this.IsImagesValid();
+	}
 	
-	this.FrameBuffer = null;
-	this.FrameBufferContextVersion = null;
-	this.FrameBufferRenderContext = null;
-	this.Images = Images;
-	
-	this.IsImagesValid = function()
+	IsImagesValid()
 	{
 		// Pop.Debug("IsImagesValid",this);
 		
@@ -1561,18 +1577,18 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 		const IsImageRenderable = function(Image)
 		{
 			const IsFloat = Image.PixelsFormat.startsWith('Float');
-			if ( IsFloat && Pop.Opengl.CanRenderToFloat===false )
+			if ( IsFloat && CanRenderToFloat===false )
 				throw "This platform cannot render to " + Image.PixelsFormat + " texture";
 		}
 		IsImageRenderable(Image0);
 	}
 	
-	this.GetRenderContext = function()
+	GetRenderContext()
 	{
 		return this.FrameBufferRenderContext;
 	}
 	
-	this.GetRenderTargetRect = function()
+	GetRenderTargetRect()
 	{
 		const FirstImage = this.Images[0];
 		let Rect = [0,0,0,0];
@@ -1581,7 +1597,7 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 		return Rect;
 	}
 	
-	this.CreateFrameBuffer = function(RenderContext)
+	CreateFrameBuffer(RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
 		this.FrameBuffer = gl.createFramebuffer();
@@ -1628,7 +1644,7 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 			Pop.Debug("Is not frame buffer!");
 		const Status = gl.checkFramebufferStatus( gl.FRAMEBUFFER );
 		if ( Status != gl.FRAMEBUFFER_COMPLETE )
-			throw "New framebuffer attachment status not complete: " + Pop.Opengl.GetString(gl,Status);
+			throw "New framebuffer attachment status not complete: " + GetString(gl,Status);
 		
 		if ( TestFrameBuffer )
 			if ( !gl.isFramebuffer( this.FrameBuffer ) )
@@ -1637,13 +1653,13 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 		//Pop.Debug("Framebuffer status",Status);
 	}
 	
-	this.GetFrameBuffer = function()
+	GetFrameBuffer()
 	{
 		return this.FrameBuffer;
 	}
 	
 	//  bind for rendering
-	this.BindRenderTarget = function(RenderContext)
+	BindRenderTarget(RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
 		
@@ -1712,46 +1728,53 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 			}
 		}
 		
-		return Unbind;
+		return Unbind.bind(this);
 	}
 	
-	this.AllocTextureIndex = function()
+	AllocTextureIndex()
 	{
 		return this.RenderContext.AllocTextureIndex();
 	}
-	
-	//	verify each image is same dimensions (and format?)
-	this.IsImagesValid();
 }
 
-function WindowRenderTarget(Window)
+class WindowRenderTarget extends RenderTarget
 {
-	const RenderContext = Window;
-	this.ViewportMinMax = [0,0,1,1];
-
-	Pop.Opengl.RenderTarget.call( this );
-
-	this.GetFrameBuffer = function()
+	constructor(Window)
+	{
+		super();
+		this.Window = Window;
+		this.RenderContext = Window;
+		this.ViewportMinMax = [0,0,1,1];
+	}
+	
+	GetFrameBuffer()
 	{
 		return null;
 	}
-	
-	this.GetRenderContext = function()
+
+	GetWindow()
 	{
-		return RenderContext;
+		return this.Window;
 	}
 	
-	this.AllocTextureIndex = function()
+	GetRenderContext()
 	{
-		return Window.AllocTextureIndex();
+		return this.RenderContext;
+	}
+	
+	AllocTextureIndex()
+	{
+		const Context = this.GetRenderContext();
+		return Context.AllocTextureIndex();
 	}
 
-	this.GetScreenRect = function()
+	GetScreenRect()
 	{
+		const Window = this.GetWindow();
 		return Window.GetScreenRect();
 	}
 
-	this.GetRenderTargetRect = function()
+	GetRenderTargetRect()
 	{
 		let Rect = this.GetScreenRect();
 		Rect[0] = 0;
@@ -1760,9 +1783,9 @@ function WindowRenderTarget(Window)
 	}
 
 	
-	this.BindRenderTarget = function(RenderContext)
+	BindRenderTarget(RenderContext)
 	{
-		const gl = RenderContext.GetGlContext();
+		const gl = this.RenderContext.GetGlContext();
 		const FrameBuffer = this.GetFrameBuffer();
 
 		//	todo: make this common code
@@ -1784,51 +1807,43 @@ function WindowRenderTarget(Window)
 		function Unbind()
 		{
 		}
-		return Unbind;
+		return Unbind.bind(this);
 	}
 	
-	this.GetViewportWidth = function()
+	GetViewportWidth()
 	{
 		const RenderRect = this.GetRenderTargetRect();
 		return RenderRect[2] * (this.ViewportMinMax[2]-this.ViewportMinMax[0]);
 	}
 	
-	this.GetViewportHeight = function()
+	GetViewportHeight()
 	{
 		const RenderRect = this.GetRenderTargetRect();
 		return RenderRect[3] * (this.ViewportMinMax[3]-this.ViewportMinMax[1]);
 	}
-
-	this.FreeRenderTarget = RenderContext.FreeRenderTarget.bind(RenderContext);
 }
 
 
-//	this is being deprected for the class in the module PopEngineOpengl
-Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSource)
+
+export class Shader
 {
-	if ( typeof RenderContext == 'string' )
+	constructor(RenderContext,Name,VertShaderSource,FragShaderSource)
 	{
-		Pop.Warning(`Shader constructor first argument is a RenderContext, not a name`);
-		FragShaderSource = VertShaderSource;
-		VertShaderSource = Name;
-		Name = RenderContext;
+		this.Name = Name;
+		this.Program = null;
+		this.ProgramContextVersion = null;
+		this.Context = null;			//	 need to remove this, currently still here for SetUniformConvinience
+		this.UniformMetaCache = null;	//	may need to invalidate this on new context
+		this.VertShaderSource = VertShaderSource;
+		this.FragShaderSource = FragShaderSource;
 	}
-	this.Name = Name;
-	this.Program = null;
-	this.ProgramContextVersion = null;
-	this.Context = null;			//	 need to remove this, currently still here for SetUniformConvinience
-	this.UniformMetaCache = null;	//	may need to invalidate this on new context
-	
 
-	this.VertShaderSource = Pop.Opengl.RefactorVertShader(VertShaderSource);
-	this.FragShaderSource = Pop.Opengl.RefactorFragShader(FragShaderSource);
-
-	this.GetGlContext = function()
+	GetGlContext()
 	{
 		return this.Context.GetGlContext();
 	}
 	
-	this.GetProgram = function(RenderContext)
+	GetProgram(RenderContext)
 	{
 		//	if out of date, recompile
 		if ( this.ProgramContextVersion !== RenderContext.ContextVersion )
@@ -1841,51 +1856,60 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 		return this.Program;
 	}
 	
-	function StringToAsciis(String)
+	Bind(RenderContext)
 	{
-		const Asciis = [];
-		for ( let i=0;	i<String.length;	i++ )
-			Asciis.push( String.charCodeAt(i) );
-		return Asciis;
+		const gl = RenderContext.GetGlContext();
+		const Program = this.GetProgram(RenderContext);
+		gl.useProgram( Program );
 	}
 	
-	function IsNonAsciiCharCode(CharCode)
+	CompileShader(RenderContext,Type,Source,TypeName)
 	{
-		if ( CharCode >= 128 )
-			return true;
-		if ( CharCode < 0 )
-			return true;
+		function StringToAsciis(String)
+		{
+			const Asciis = [];
+			for ( let i=0;	i<String.length;	i++ )
+				Asciis.push( String.charCodeAt(i) );
+			return Asciis;
+		}
 		
-		//	wierdly, glsl (on a 2011 imac, AMD Radeon HD 6970M 1024 MB, safari, high sierra)
-		//	considers ' (ascii 39) a non-ascii char
-		if ( CharCode == 39 )
-			return true;
-		return false;
-	}
-	
-	function CleanNonAsciiString(TheString)
-	{
-		//	safari glsl (on a 2011 imac, AMD Radeon HD 6970M 1024 MB, safari, high sierra)
-		//	rejects these chracters as "non-ascii"
-		//const NonAsciiCharCodes = [39];
-		//const NonAsciiChars = NonAsciiCharCodes.map( cc => {	return String.fromCharCode(cc);});
-		const NonAsciiChars = "'@";
-		const ReplacementAsciiChar = '_';
-		const Match = `[${NonAsciiChars}]`;
-		var NonAsciiRegex = new RegExp(Match, 'g');
-		const CleanString = TheString.replace(NonAsciiRegex,ReplacementAsciiChar);
-		return CleanString;
-	}
-	
-	function CleanLineFeeds(TheString)
-	{
-		const Lines = TheString.split(/\r?\n/);
-		const NewLines = Lines.join('\n');
-		return NewLines;
-	}
-	
-	this.CompileShader = function(RenderContext,Type,Source,TypeName)
-	{
+		function IsNonAsciiCharCode(CharCode)
+		{
+			if ( CharCode >= 128 )
+				return true;
+			if ( CharCode < 0 )
+				return true;
+			
+			//	wierdly, glsl (on a 2011 imac, AMD Radeon HD 6970M 1024 MB, safari, high sierra)
+			//	considers ' (ascii 39) a non-ascii char
+			if ( CharCode == 39 )
+				return true;
+			return false;
+		}
+		
+		
+		function CleanNonAsciiString(TheString)
+		{
+			//	safari glsl (on a 2011 imac, AMD Radeon HD 6970M 1024 MB, safari, high sierra)
+			//	rejects these chracters as "non-ascii"
+			//const NonAsciiCharCodes = [39];
+			//const NonAsciiChars = NonAsciiCharCodes.map( cc => {	return String.fromCharCode(cc);});
+			const NonAsciiChars = "'@";
+			const ReplacementAsciiChar = '_';
+			const Match = `[${NonAsciiChars}]`;
+			var NonAsciiRegex = new RegExp(Match, 'g');
+			const CleanString = TheString.replace(NonAsciiRegex,ReplacementAsciiChar);
+			return CleanString;
+		}
+		
+		function CleanLineFeeds(TheString)
+		{
+			const Lines = TheString.split(/\r?\n/);
+			const NewLines = Lines.join('\n');
+			return NewLines;
+		}
+		
+		
 		Source = CleanNonAsciiString(Source);
 		
 		//	safari will fail in shaderSource with non-ascii strings, so detect them to make it easier
@@ -1917,7 +1941,7 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 		return Shader;
 	}
 	
-	this.CompileProgram = function(RenderContext)
+	CompileProgram(RenderContext)
 	{
 		let gl = RenderContext.GetGlContext();
 		
@@ -1942,14 +1966,14 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 	
 	
 	//	gr: can't tell the difference between int and float, so err that wont work
-	this.SetUniform = function(Uniform,Value)
+	SetUniform(Uniform,Value)
 	{
 		const UniformMeta = this.GetUniformMeta(Uniform);
 		if ( !UniformMeta )
 			return;
 		if( Array.isArray(Value) )					this.SetUniformArray( Uniform, UniformMeta, Value );
 		else if( Value instanceof Float32Array )	this.SetUniformArray( Uniform, UniformMeta, Value );
-		else if ( Value instanceof Pop.Image )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTextureIndex(Value) );
+		else if ( Value instanceof PopImage )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTextureIndex() );
 		else if ( typeof Value === 'number' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else if ( typeof Value === 'boolean' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else
@@ -1960,7 +1984,7 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 		}
 	}
 	
-	this.SetUniformArray = function(UniformName,UniformMeta,Values)
+	SetUniformArray(UniformName,UniformMeta,Values)
 	{
 		const ExpectedValueCount = UniformMeta.ElementSize * UniformMeta.ElementCount;
 		
@@ -2006,7 +2030,7 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 		UniformMeta.SetValues( ValuesExpanded );
 	}
 	
-	this.SetUniformTexture = function(Uniform,UniformMeta,Image,TextureIndex)
+	SetUniformTexture(Uniform,UniformMeta,Image,TextureIndex)
 	{
 		const Texture = Image.GetOpenglTexture( this.Context );
 		const gl = this.GetGlContext();
@@ -2027,7 +2051,7 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 		UniformMeta.SetValues( [TextureIndex] );
 	}
 	
-	this.SetUniformNumber = function(Uniform,UniformMeta,Value)
+	SetUniformNumber(Uniform,UniformMeta,Value)
 	{
 		//	these are hard to track down and pretty rare anyone would want a nan
 		if ( isNaN(Value) )
@@ -2037,7 +2061,7 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 		UniformMeta.SetValues( [Value] );
 	}
 	
-	this.GetUniformMetas = function()
+	GetUniformMetas()
 	{
 		if ( this.UniformMetaCache )
 			return this.UniformMetaCache;
@@ -2105,7 +2129,7 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 		return this.UniformMetaCache;
 	}
 
-	this.GetUniformMeta = function(MatchUniformName)
+	GetUniformMeta(MatchUniformName)
 	{
 		const Metas = this.GetUniformMetas();
 		if ( !Metas.hasOwnProperty(MatchUniformName) )
@@ -2119,6 +2143,7 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 }
 
 
+
 function GetOpenglElementType(OpenglContext,Elements)
 {
 	if ( Elements instanceof Float32Array )	return OpenglContext.FLOAT;
@@ -2130,7 +2155,7 @@ function GetOpenglElementType(OpenglContext,Elements)
 //	attributes are keyed objects for each semantic
 //	Attrib['Position'].Size = 3
 //	Attrib['Position'].Data = <float32Array(size*vertcount)>
-Pop.Opengl.TriangleBuffer = class
+export class TriangleBuffer
 {
 	constructor(RenderContext,Attribs,TriangleIndexes)
 	{

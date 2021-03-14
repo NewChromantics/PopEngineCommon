@@ -1,6 +1,7 @@
 import PopImage from './PopWebImageApi.js'
 import PromiseQueue from './PromiseQueue.js'
 export * from './PopWebApiCore.js'
+import * as Pop from './PopWebApiCore.js'
 
 //	need to re-export some of the core parts
 //export Debug,Warning;
@@ -54,12 +55,12 @@ function IsForeground()
 
 function SetIsForeground(NowIsForeground)
 {
-	Debug(`Foreground changed from ,${ForegroundState} to ${NowIsForeground}. Document.hidden=${document.hidden}`);
+	Pop.Debug(`Foreground changed from ,${ForegroundState} to ${NowIsForeground}. Document.hidden=${document.hidden}`);
 	if (NowIsForeground!==undefined)
 		ForegroundState = NowIsForeground;
 
 	const Foreground = IsForeground();
-	Debug(`IsForeground state = ${IsForeground()}`);
+	Pop.Debug(`IsForeground state = ${IsForeground()}`);
 	ForegroundChangePromises.Push(Foreground);
 }
 
@@ -272,7 +273,7 @@ async function FetchArrayBufferStream(Url,OnProgress)
 	const Fetched = await CreateFetch(Url);
 
 	//	gr: do we know full file size here
-	Debug(`Streaming file; `,Fetched);
+	Pop.Debug(`Streaming file; `,Fetched);
 	let KnownSize = parseInt(Fetched.headers.get("content-length"));
 	KnownSize = isNaN(KnownSize) ? -1 : KnownSize;
 	const KnownSizeKb = (KnownSize/1024).toFixed(2);
@@ -282,7 +283,7 @@ async function FetchArrayBufferStream(Url,OnProgress)
 
 	async function ReaderThread()
 	{
-		Debug(`Reading fetch stream ${Url}/${KnownSizeKb}kb`);
+		Pop.Debug(`Reading fetch stream ${Url}/${KnownSizeKb}kb`);
 	
 		//	it's slow to keep merging chunks and notifying changes
 		//	so push chunks to the file cache,
@@ -308,7 +309,7 @@ async function FetchArrayBufferStream(Url,OnProgress)
 			//	gr: testing to see if we can pause the fetch by not read()ing
 			if (TotalContents.length > 1024 * 500)
 			{
-				Debug(`Stopping stream ${Filename} at ${TotalContents.length / 1024}kb`);
+				Pop.Debug(`Stopping stream ${Filename} at ${TotalContents.length / 1024}kb`);
 				//	both of these stop network streaming
 				Reader.cancel();
 				Fetched.Cancel();

@@ -19,6 +19,9 @@ Pop.Colour = Colour;
 import * as PopMath from './Math.js'
 Pop.Math = PopMath;
 
+import * as Opengl from './PopWebOpenglApi.js'
+Pop.Opengl = Opengl;
+
 import * as FileSystem from './FileSystem.js'
 //	gr: hmm these are root functions, so they need to go into PopWebApi?
 Pop.FileSystem = FileSystem;
