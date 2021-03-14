@@ -1,7 +1,7 @@
-import Image from './PopWebImageApi.js'
+import PopImage from './PopWebImageApi.js'
 import FileCache_t from './FileCache.js'
 import PromiseQueue from './PromiseQueue.js'
-
+import {Debug,CreatePromise} from './PopWebApiCore.js'
 
 const Default = 'FileSystem.js Module';
 export default Default;
@@ -282,7 +282,7 @@ async function FetchOnce(Url,FetchFunc,OnProgress)
 export async function LoadFileAsImageAsync(Filename)
 {
 	//	return cache if availible, if it failed before, try and load again
-	const Cache = WebApi.FileCache.GetOrFalse(Filename);
+	const Cache = FileCache.GetOrFalse(Filename);
 	if ( Cache !== false )
 	{
 		if ( IsObjectInstanceOf(Cache,PopImage) )
@@ -386,7 +386,7 @@ export async function LoadFileAsArrayBufferStreamAsync(Filename,ResolveChunks=tr
 export function LoadFileAsString(Filename)
 {
 	//	synchronous functions on web will fail
-	if (!Pop.WebApi.FileCache.IsCached(Filename))
+	if (!FileCache.IsCached(Filename))
 	{
 		throw "Cannot synchronously load " + Filename + ", needs to be precached first with [async] Pop.AsyncCacheAsset()";
 	}
@@ -424,7 +424,7 @@ export function LoadFileAsImage(Filename)
 export function LoadFileAsArrayBuffer(Filename,ResolveChunks=true)
 {
 	//	synchronous functions on web will fail
-	if (!Pop.WebApi.FileCache.IsCached(Filename))
+	if (!FileCache.IsCached(Filename))
 	{
 		throw "Cannot synchronously load " + Filename + ", needs to be precached first with [async] Pop.AsyncCacheAsset()";
 	}
@@ -464,7 +464,7 @@ export function WriteToFile(Filename,Contents,Append=false)
 	const ContentsBlob = new Blob([Contents],Options);
 
 	const DataUrl = URL.createObjectURL(ContentsBlob);
-	Pop.Debug(`WriteFile blob url: ${DataUrl}`);
+	Debug(`WriteFile blob url: ${DataUrl}`);
 
 	//	make a temp element to invoke the download
 	const a = window.document.createElement('a');
@@ -480,7 +480,7 @@ export function WriteToFile(Filename,Contents,Append=false)
 		a.download = DownloadFilename;
 		//	gr: trying to get callback when this was succesfull or failed
 		//a.ping = "data:text/html,<script>alert('hi');</script>";
-		//a.onerror = function(e){	Pop.Debug(`link error ${e}`);	}
+		//a.onerror = function(e){	Debug(`link error ${e}`);	}
 		document.body.appendChild(a);
 		a.click();	//	returns nothing
 		Cleanup();
@@ -508,7 +508,7 @@ export async function LoadFilePromptAsStringAsync(Filename)
 	{
 		//	extract files from the control
 		const Files = Array.from(InputElement.files);
-		Pop.Debug(`OnChanged: ${JSON.stringify(Files)}`);
+		Debug(`OnChanged: ${JSON.stringify(Files)}`);
 		OnChangedPromise.Resolve(Files);
 		InputElement.files = null;
 	}

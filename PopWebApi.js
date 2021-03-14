@@ -1,8 +1,9 @@
 import PopImage from './PopWebImageApi.js'
 import PromiseQueue from './PromiseQueue.js'
+export * from './PopWebApiCore.js'
 
-//	export anything we essentially want to be Pop.XXX
-//export PopImage as Image;
+//	need to re-export some of the core parts
+//export Debug,Warning;
 
 //	we cannot poll the focus/blur state of our page, so we
 //	assume it's foreground (may not be the case if opened via middle button?)
@@ -75,10 +76,6 @@ window.addEventListener('visibilitychange',function () { SetIsForeground(!docume
 
 
 
-
-//	simple aliases
-export const Debug = console.log;
-export const Warning = console.warn;
 
 export function GetPlatform()
 {

@@ -13,6 +13,12 @@ export default Pop;
 import PopImage from './PopWebImageApi.js'
 Pop.Image = PopImage;
 
-import FileSystem from './FileSystem.js'
+import * as Colour from './Colour.js'
+Pop.Colour = Colour;
+
+import * as PopMath from './Math.js'
+Pop.Math = PopMath;
+
+import * as FileSystem from './FileSystem.js'
 //	gr: hmm these are root functions, so they need to go into PopWebApi?
 Pop.FileSystem = FileSystem;

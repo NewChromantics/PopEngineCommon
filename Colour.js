@@ -1,10 +1,14 @@
+const Default = 'Pop Colour.js module';
+export default Default;
 
-//	colour conversion namespace
-Pop.Colour = {};
-
-Pop.Colour.RgbfToHex = function(Rgb)
+function Range(Min,Max,Value)
 {
-	let FloatToHex = function(f)
+	return (Value-Min) / (Max-Min);
+}
+
+export function RgbfToHex(Rgb)
+{
+	function FloatToHex(f)
 	{
 		let Byte = Math.floor(f * 255.0);
 		let a = (Byte & 0xf0) >> 4;
@@ -22,7 +26,7 @@ Pop.Colour.RgbfToHex = function(Rgb)
 
 
 //	returns null if no colour
-Math.ColourToHue = function(Rgbaf)
+export function ColourToHue(Rgbaf)
 {
 	let [r,g,b,a] = [...Rgbaf];
 	
@@ -64,7 +68,7 @@ Math.ColourToHue = function(Rgbaf)
 	return Hue;
 }
 
-Math.HueToColour = function(Hue,Alpha=1)
+export function HueToColour(Hue,Alpha=1)
 {
 	if ( Hue === null )
 		return [0,0,0,Alpha];
@@ -74,44 +78,44 @@ Math.HueToColour = function(Hue,Alpha=1)
 	if ( Normal < 1/6 )
 	{
 		//	red to yellow
-		Normal = Math.Range( 0/6, 1/6, Normal );
+		Normal = Range( 0/6, 1/6, Normal );
 		return [1, Normal, 0, Alpha];
 	}
 	else if ( Normal < 2/6 )
 	{
 		//	yellow to green
-		Normal = Math.Range( 1/6, 2/6, Normal );
+		Normal = Range( 1/6, 2/6, Normal );
 		return [1-Normal, 1, 0, Alpha];
 	}
 	else if ( Normal < 3/6 )
 	{
 		//	green to cyan
-		Normal = Math.Range( 2/6, 3/6, Normal );
+		Normal = Range( 2/6, 3/6, Normal );
 		return [0, 1, Normal, Alpha];
 	}
 	else if ( Normal < 4/6 )
 	{
 		//	cyan to blue
-		Normal = Math.Range( 3/6, 4/6, Normal );
+		Normal = Range( 3/6, 4/6, Normal );
 		return [0, 1-Normal, 1, Alpha];
 	}
 	else if ( Normal < 5/6 )
 	{
 		//	blue to pink
-		Normal = Math.Range( 4/6, 5/6, Normal );
+		Normal = Range( 4/6, 5/6, Normal );
 		return [Normal, 0, 1, Alpha];
 	}
 	else //if ( Normal < 5/6 )
 	{
 		//	pink to red
-		Normal = Math.Range( 5/6, 6/6, Normal );
+		Normal = Range( 5/6, 6/6, Normal );
 		return [1, 0, 1-Normal, Alpha];
 	}
 }
 
 
 
-Math.NormalToRedGreen = function(Normal,Alpha=1)
+export function NormalToRedGreen(Normal,Alpha=1)
 {
 	if ( Normal === null )
 		return [0,0,0,Alpha];
@@ -119,13 +123,13 @@ Math.NormalToRedGreen = function(Normal,Alpha=1)
 	if ( Normal < 1/2 )
 	{
 		//	red to yellow
-		Normal = Math.Range( 0/2, 1/2, Normal );
+		Normal = Range( 0/2, 1/2, Normal );
 		return [1, Normal, 0, Alpha];
 	}
 	else if ( Normal <= 2/2 )
 	{
 		//	yellow to green
-		Normal = Math.Range( 1/2, 2/2, Normal );
+		Normal = Range( 1/2, 2/2, Normal );
 		return [1-Normal, 1, 0, Alpha];
 	}
 	else
@@ -134,17 +138,103 @@ Math.NormalToRedGreen = function(Normal,Alpha=1)
 	}
 }
 
-Pop.Colour.HexToRgbf = function(HexRgb)
+export function HexToRgbf(HexRgb)
 {
-	let rgb = Pop.Colour.HexToRgb( HexRgb );
+	let rgb = HexToRgb( HexRgb );
 	rgb[0] /= 255;
 	rgb[1] /= 255;
 	rgb[2] /= 255;
 	return rgb;
 }
+/*
+function GetRed(Colour)
+{
+	let Value = parseInt( Colour.substring(0,2), 16);
+	return Value / 255;
+}
 
+function GetGreen(Colour)
+{
+	let Value = parseInt( Colour.substring(2,4), 16);
+	return Value / 255;
+}
 
-Pop.Colour.HexToRgb = function(HexRgb)
+function GetBlue(Colour)
+{
+	let Value = parseInt( Colour.substring(4,6), 16);
+	return Value / 255;
+}
+
+function GetAlpha(Colour)
+{
+	let Value = parseInt( Colour.substring(6,8), 16);
+	return Value / 255;
+}
+
+function HexToColour4(Hex)
+{
+	let Colour4 = new float4(0,0,0,0);
+	Colour4.x = GetRed( Hex );
+	Colour4.y = GetGreen( Hex );
+	Colour4.z = GetBlue( Hex );
+	Colour4.w = GetAlpha( Hex );
+	return Colour4;
+}
+*/
+
+function CharToHex(Char)
+{
+	Char = Char.charCodeAt(0);
+	let a = 'a'.charCodeAt(0);
+	let z = 'z'.charCodeAt(0);
+	let A = 'A'.charCodeAt(0);
+	let Z = 'Z'.charCodeAt(0);
+	let zero = '0'.charCodeAt(0);
+	let nine = '9'.charCodeAt(0);
+	if (Char >= zero && Char <= nine) return (0+Char-zero);
+	if (Char >= a && Char <= z) return (10+Char-a);
+	if (Char >= A && Char <= Z) return (10+Char-A);
+	throw "Non hex-char " + Char;
+}
+
+function ByteToFloat(Byte)
+{
+	return Byte/255.0;
+}
+
+//	mix of previous functions
+export function HexToRgbaf(HexColour)
+{
+	if ( typeof HexColour != 'string' )
+		throw `HexToRgbaf(${HexColour}) not handling non-strings`;
+	
+	if ( HexColour[0] == '#' )
+		HexColour = HexColour.substr(1);
+	
+	//	gr; use string to bytes?
+	const NibbleChars = HexColour.split('');
+	const Nibbles = NibbleChars.map(CharToHex);
+	
+	//	todo: handle FFF short hexes
+	//	pad missing bytes for rgb
+	while ( Nibbles.length < 2*3 )
+		Nibbles.push(0);
+	//	padd bytes for alpha
+	while ( Nibbles.length < 2*4 )
+		Nibbles.push(0xf);
+	
+	const [a,b, c,d, e,f, g,h] = Nibbles;
+	
+	const Red = (a<<4) | b;
+	const Green = (c<<4) | d;
+	const Blue = (e<<4) | f;
+	const Alpha = (g<<4) | h;
+	const Rgba = [Red,Green,Blue,Alpha];
+	const Rgbaf = Rgba.map(ByteToFloat);
+	return Rgbaf;	
+}
+
+export function HexToRgb(HexRgb)
 {
 	let GetNibble;
 	let NibbleCount = 0;
@@ -159,16 +249,7 @@ Pop.Colour.HexToRgb = function(HexRgb)
 		GetNibble = function(CharIndex)
 		{
 			let Char = HexRgb.charCodeAt(CharIndex+1);
-			let a = 'a'.charCodeAt(0);
-			let z = 'z'.charCodeAt(0);
-			let A = 'A'.charCodeAt(0);
-			let Z = 'Z'.charCodeAt(0);
-			let zero = '0'.charCodeAt(0);
-			let nine = '9'.charCodeAt(0);
-			if (Char >= zero && Char <= nine) return (0+Char-zero);
-			if (Char >= a && Char <= z) return (10+Char-a);
-			if (Char >= A && Char <= Z) return (10+Char-A);
-			throw "Non hex-char " + Char;
+			return CharToHex(Char);
 		}
 	}
 	else	//	int 0xffaa00
