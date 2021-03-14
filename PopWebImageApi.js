@@ -1,7 +1,7 @@
 
 //	gr: I forget what browser this was for! add comments when we know!
-const WebApi_HtmlImageElement = this.hasOwnProperty('HTMLImageElement') ? this['HTMLImageElement'] : null;
-const WebApi_HtmlCanvasElement = this.hasOwnProperty('HTMLCanvasElement') ? this['HTMLCanvasElement'] : null;
+const WebApi_HtmlImageElement = window.hasOwnProperty('HTMLImageElement') ? window['HTMLImageElement'] : null;
+const WebApi_HtmlCanvasElement = window.hasOwnProperty('HTMLCanvasElement') ? window['HTMLCanvasElement'] : null;
 
 
 //	in c++ this is SoyPixelsFormat namespace
@@ -249,51 +249,108 @@ function FloatToInt8Pixels(FloatArray,FloatFormat,Width,Height)
 }
 
 
-Pop.Image = function(Filename)
+export default class PopImage
 {
-	this.Name = (typeof Filename == 'string') ? Filename : "Pop.Image";
-	this.Size = [undefined,undefined];
-	this.OpenglTexture = null;
-	this.OpenglTextureContextVersion = null;
-	this.OpenglVersion = undefined;
-	this.Pixels = null;
-	this.PixelsFormat = null;
-	this.PixelsVersion = undefined;
-	this.LinearFilter = false;
+	constructor(Filename)
+	{
+		this.Name = (typeof Filename == 'string') ? Filename : "Pop.Image";
+		this.Size = [undefined,undefined];
+		this.OpenglTexture = null;
+		this.OpenglTextureContextVersion = null;
+		this.OpenglVersion = undefined;
+		this.Pixels = null;
+		this.PixelsFormat = null;
+		this.PixelsVersion = undefined;
+		this.LinearFilter = false;
+		
+		//	load file
+		if ( typeof Filename == 'string' && Filename.includes('.') )
+		{
+			const ImageFile = Pop.GetCachedAsset(Filename);
+			
+			//	gr: this conversion should be in WritePixels()
+			if ( ImageFile.constructor == WebApi_HtmlImageElement )
+			{
+				const Pixels = GetPixelsFromHtmlImageElement(ImageFile);
+				this.WritePixels( Pixels.Width, Pixels.Height, Pixels.Buffer, Pixels.Format );
+			}
+			else if ( IsObjectInstanceOf(ImageFile,Pop.Image) )
+			{
+				console.warn(`Constructing Pop.Image(${Filename}) from filename results in a copy. Can now just async load the asset straight into a Pop.Image`);
+				this.Copy(ImageFile);
+			}
+			else
+			{
+				const PixelFormat = undefined;
+				this.WritePixels( ImageFile.width, ImageFile.height, Image, PixelFormat );
+			}
+		}
+		else if ( Filename && (Filename.constructor == WebApi_HtmlImageElement || Filename.constructor == WebApi_HtmlCanvasElement) )
+		{
+			const HtmlImage = Filename;
+			//	gr: this conversion should be in WritePixels()
+			//const Pixels = GetPixelsFromHtmlImageElement(HtmlImage);
+			//this.WritePixels(Pixels.Width,Pixels.Height,Pixels.Buffer,Pixels.Format);
+			const PixelsMeta = GetPixelsMetaFromHtmlImageElement(HtmlImage);
+			const Pixels = HtmlImage;
+			this.WritePixels(PixelsMeta.Width,PixelsMeta.Height,Pixels,PixelsMeta.Format);
+		}
+		else if ( Array.isArray( Filename ) )
+		{
+			//	initialise size...
+			// Pop.Debug("Init image with size", Filename);
+			const Size = arguments[0];
+			const PixelFormat = arguments[1] || 'RGBA';
+			const Width = Size[0];
+			const Height = Size[1];
+			let PixelData = new Array(Width * Height * 4);
+			PixelData.fill(0);
+			const Pixels = IsFloatFormat(PixelFormat) ? new Float32Array(PixelData) : new Uint8Array(PixelData);
+			this.WritePixels( Width, Height, Pixels, PixelFormat );
+		}
+		else if ( typeof Filename == 'string' )
+		{
+			//	just name
+		}
+		else if ( Filename !== undefined )
+		{
+			throw "Unhandled Pop.Image constructor; " + [...arguments];
+		}
+	}
 	
-	this.SetLinearFilter = function(Linear)
+	SetLinearFilter(Linear)
 	{
 		this.LinearFilter = Linear;
 	}
 	
-	this.GetWidth = function()
+	GetWidth()
 	{
 		return this.Size[0];
 	}
 	
-	this.GetHeight = function()
+	GetHeight()
 	{
 		return this.Size[1];
 	}
 
-	this.GetFormat = function()
+	GetFormat()
 	{
 		return this.PixelsFormat;
 	}
 	
-	this.GetChannels = function()
+	GetChannels()
 	{
 		return GetChannelsFromPixelFormat(this.PixelsFormat);
 	}
 	
-	this.SetFormat = function(NewFormat)
+	SetFormat(NewFormat)
 	{
 		if ( this.PixelsFormat == NewFormat )
 			return;
 		throw `Todo: Pixel format conversion from ${this.PixelsFormat} to ${NewFormat}`;
 	}
 
-	this.GetDataUrl = function ()
+	GetDataUrl()
 	{
 		const Canvas = document.createElement('canvas');
 		const Context = Canvas.getContext('2d');
@@ -316,7 +373,7 @@ Pop.Image = function(Filename)
 		return data;
 	}
 
-	this.GetPngData = function ()
+	GetPngData()
 	{
 		let data = this.GetDataUrl();
 		// Remove meta data
@@ -326,7 +383,7 @@ Pop.Image = function(Filename)
 		return data;
 	}
 	
-	this.GetPixelBuffer = function()
+	GetPixelBuffer()
 	{
 		if (!this.Pixels)
 			return this.Pixels;
@@ -346,7 +403,7 @@ Pop.Image = function(Filename)
 		return this.Pixels;
 	}
 	
-	this.GetLatestVersion = function()
+	GetLatestVersion()
 	{
 		let Version = 0;
 		Version = Math.max( Version, this.PixelsVersion || 0 );
@@ -354,7 +411,7 @@ Pop.Image = function(Filename)
 		return Version;
 	}
 	
-	this.WritePixels = function(Width,Height,Pixels,Format)
+	WritePixels(Width,Height,Pixels,Format)
 	{
 		this.Size = [Width,Height];
 		this.Pixels = Pixels;
@@ -362,7 +419,7 @@ Pop.Image = function(Filename)
 		this.PixelsVersion = this.GetLatestVersion()+1;
 	}
 	
-	this.Clear = function()
+	Clear()
 	{
 		//	this is getting convuluted, so maybe the API need to change (C++ side too)
 		this.DeleteOpenglTexture( this.OpenglOwnerContext );
@@ -370,14 +427,14 @@ Pop.Image = function(Filename)
 		this.DeletePixels();
 	}
 	
-	this.DeletePixels = function()
+	DeletePixels()
 	{
 		this.PixelsVersion = null;
 		this.Pixels = null;
 		this.PixelsFormat = null;
 	}
 	
-	this.GetOpenglTexture = function(RenderContext)
+	GetOpenglTexture(RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
 		this.UpdateTexturePixels( RenderContext );
@@ -385,7 +442,7 @@ Pop.Image = function(Filename)
 		return this.OpenglTexture;
 	}
 	
-	this.DeleteOpenglTexture = function(RenderContext)
+	DeleteOpenglTexture(RenderContext)
 	{
 		if ( this.OpenglTexture == null )
 			return;
@@ -411,7 +468,7 @@ Pop.Image = function(Filename)
 		}
 	}
 	
-	this.UpdateTexturePixels = function(RenderContext)
+	UpdateTexturePixels(RenderContext)
 	{
 		//	texture is from an old context
 		if ( this.OpenglTextureContextVersion !== RenderContext.ContextVersion )
@@ -568,7 +625,7 @@ Pop.Image = function(Filename)
 		this.OpenglVersion = this.GetLatestVersion();
 	}
 	
-	this.Copy = function(Source)
+	Copy(Source)
 	{
 		//	need to add read-from-opengl to do this
 		if ( Source.PixelsVersion != Source.GetLatestVersion() )
@@ -577,65 +634,11 @@ Pop.Image = function(Filename)
 		this.WritePixels( Source.GetWidth(), Source.GetHeight(), Source.Pixels, Source.PixelsFormat );
 	}
 	
-	this.LoadPng = async function(PngBytes)
+	async LoadPng(PngBytes)
 	{
 		//	convert to RGBA buffer
 		const Pixels = await PngBytesToPixels(PngBytes);
 		this.WritePixels( Pixels.Width, Pixels.Height, Pixels.Buffer, Pixels.Format );
 	}
 	
-	
-	//	load file
-	if ( typeof Filename == 'string' && Filename.includes('.') )
-	{
-		const ImageFile = Pop.GetCachedAsset(Filename);
-		
-		//	gr: this conversion should be in WritePixels()
-		if ( ImageFile.constructor == WebApi_HtmlImageElement )
-		{
-			const Pixels = GetPixelsFromHtmlImageElement(ImageFile);
-			this.WritePixels( Pixels.Width, Pixels.Height, Pixels.Buffer, Pixels.Format );
-		}
-		else if ( IsObjectInstanceOf(ImageFile,Pop.Image) )
-		{
-			console.warn(`Constructing Pop.Image(${Filename}) from filename results in a copy. Can now just async load the asset straight into a Pop.Image`);
-			this.Copy(ImageFile);
-		}
-		else
-		{
-			const PixelFormat = undefined;
-			this.WritePixels( ImageFile.width, ImageFile.height, Image, PixelFormat );
-		}
-	}
-	else if ( Filename && (Filename.constructor == WebApi_HtmlImageElement || Filename.constructor == WebApi_HtmlCanvasElement) )
-	{
-		const HtmlImage = Filename;
-		//	gr: this conversion should be in WritePixels()
-		//const Pixels = GetPixelsFromHtmlImageElement(HtmlImage);
-		//this.WritePixels(Pixels.Width,Pixels.Height,Pixels.Buffer,Pixels.Format);
-		const PixelsMeta = GetPixelsMetaFromHtmlImageElement(HtmlImage);
-		const Pixels = HtmlImage;
-		this.WritePixels(PixelsMeta.Width,PixelsMeta.Height,Pixels,PixelsMeta.Format);
-	}
-	else if ( Array.isArray( Filename ) )
-	{
-		//	initialise size...
-		// Pop.Debug("Init image with size", Filename);
-		const Size = arguments[0];
-		const PixelFormat = arguments[1] || 'RGBA';
-		const Width = Size[0];
-		const Height = Size[1];
-		let PixelData = new Array(Width * Height * 4);
-		PixelData.fill(0);
-		const Pixels = IsFloatFormat(PixelFormat) ? new Float32Array(PixelData) : new Uint8Array(PixelData);
-		this.WritePixels( Width, Height, Pixels, PixelFormat );
-	}
-	else if ( typeof Filename == 'string' )
-	{
-		//	just name
-	}
-	else if ( Filename !== undefined )
-	{
-		throw "Unhandled Pop.Image constructor; " + [...arguments];
-	}
 }
