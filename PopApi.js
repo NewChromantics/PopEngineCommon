@@ -1,9 +1,9 @@
-//	some generic javascript helpers
-
-Pop.Array = {};
+//	some generic javascript helpers used in web & native
+const Default = 'PopApi.js module';
+export default Default; 
 
 //	returns shuffled version of array
-Pop.Array.Shuffled = function(Array)
+export function GetArrayShuffled(Array)
 {
 	let ArrayBin = Array.slice();
 	let NewArray = [];
@@ -19,7 +19,7 @@ Pop.Array.Shuffled = function(Array)
 }
 
 //	shuffle in place
-Pop.Array.Shuffle = function(array)
+export function ShuffleArray(array)
 {
 	//	https://stackoverflow.com/a/47900462/355753
 	//	this is faster than splicing
@@ -30,7 +30,7 @@ Pop.Array.Shuffle = function(array)
 	}
 }
 
-Pop.Array.MoveElementFromArrayToArray = function(Element,SourceArray,DestArray)
+export function MoveElementFromArrayToArray(Element,SourceArray,DestArray)
 {
 	const SourceIndex = SourceArray.indexOf( Element );
 	if ( SourceIndex < 0 )
@@ -42,7 +42,7 @@ Pop.Array.MoveElementFromArrayToArray = function(Element,SourceArray,DestArray)
 	DestArray.push( Element );
 }
 
-Pop.Array.IsMatch = function(a,b)
+export function ArrayIsMatch(a,b)
 {
 	if ( a.length !== b.length )
 		return false;
@@ -55,7 +55,7 @@ Pop.Array.IsMatch = function(a,b)
 
 //	maybe better named as BufferToString? but this should be clear its "text vs binary"
 //	this is for ascii, NOT UTF16 (hence bytes, not shorts)
-Pop.BytesToString = function(Bytes)
+export function BytesToString(Bytes)
 {
 	let Str = "";
 	for ( let i=0;	i<Bytes.length;	i++ )
@@ -67,7 +67,7 @@ Pop.BytesToString = function(Bytes)
 }
 
 
-Pop.StringToBytes = function(Str,AsArrayBuffer=false)
+export function StringToBytes(Str,AsArrayBuffer=false)
 {
 	let Bytes = [];
 	for ( let i=0;	i<Str.length;	i++ )
@@ -88,7 +88,7 @@ Pop.StringToBytes = function(Str,AsArrayBuffer=false)
 //	gr: this is to deal with
 //	SomeThing.constructor == Pop.Image <-- chrome/v8
 //	SomeThing.constructor == Pop.Image.constructor <-- javascript core
-function IsObjectInstanceOf(This,TypeConstructor)
+export function IsObjectInstanceOf(This,TypeConstructor)
 {
 	if ( !(This instanceof Object) )
 		return false;
@@ -134,20 +134,15 @@ function IsObjectInstanceOf(This,TypeConstructor)
 }
 
 //	https://stackoverflow.com/a/46999598/355753
-Pop.IsTypedArray = function(obj)
+export function IsTypedArray(obj)
 {
 	return !!obj && obj.byteLength !== undefined;
 }
-function IsTypedArray(obj)
-{
-	Pop.Warning(`Deprecated: IsTypedArray(); use Pop.IsTypedArray()`);
-	return Pop.IsTypedArray(obj);
-}
 
-Pop.JoinTypedArrays = function(a,b,c,etc)
+export function JoinTypedArrays(a,b,c,etc)
 {
 	//	gr: need some more rigirous checks here
-	if ( !Pop.IsTypedArray(a) )
+	if ( !IsTypedArray(a) )
 		throw `Cannot JoinTypedArrays where 1st not typed array (${a})`;
 
 	const Constructor = a.constructor;
@@ -169,7 +164,7 @@ Pop.JoinTypedArrays = function(a,b,c,etc)
 
 
 //	create a promise function with the Resolve & Reject functions attached so we can call them
-Pop.CreatePromise = function()
+export function CreatePromise()
 {
 	let Callbacks = {};
 	let PromiseHandler = function(Resolve,Reject)
