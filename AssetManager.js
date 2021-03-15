@@ -1,6 +1,9 @@
 const PopAssetManager = {};
 export default PopAssetManager;
 
+import {GetUniqueHash} from './Hash.js'
+
+
 //	AssetCacheContexts[ContextHash][AssetName] = CachedAsset
 PopAssetManager.AssetCacheContexts = {};
 
