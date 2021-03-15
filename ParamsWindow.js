@@ -110,57 +110,64 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 
 //	dummy window we can swap out quickly in code
 //	change this so params window can just be hidden more easily?
-Pop.DummyParamsWindow = function()
+export class DummyParamsWindow
 {
-	this.OnParamChanged = function(){};
-	this.OnParamsChanged = function(){};
-	this.AddParam = function(){};
-	this.GetParamMetas = function() {	return {};	};
-	this.Window = {};
-	this.Window.SetMinimised = function(){};
+	constructor()
+	{
+		this.OnParamChanged = function(){};
+		this.OnParamsChanged = function(){};
+		this.AddParam = function(){};
+		this.GetParamMetas = function() {	return {};	};
+		this.Window = {};
+		this.Window.SetMinimised = function(){};
+	}
 	
-	this.WaitForParamsChanged = function ()
+	async WaitForParamsChanged()
 	{
 		return new Promise( function(res,rej){} );
 	}
 }
 
-Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
+
+export class ParamsWindow
 {
-	OnAnyChanged = OnAnyChanged || function(){};
-
-	//	if the window rect is a string, then it's for gui/form/div mapping
-	//	but to layout the controls, we still want some value
-	const DefaultWidth = 600;
-	WindowRect = WindowRect || [800,20,DefaultWidth,300];
-	const WindowWidth = !isNaN(WindowRect[2]) ? WindowRect[2] : DefaultWidth;
-	this.ControlTop = 10;
-
-	const LabelLeft = 10;
-	const LabelWidth = WindowWidth * 0.3;
-	const LabelHeight = 18;
-	const ControlLeft = LabelLeft + LabelWidth + 10;
-	const ControlWidth = WindowWidth - ControlLeft - 40;
-	const ControlHeight = LabelHeight;
-	const ControlSpacing = 10;
-
-	this.Window = new Pop.Gui.Window(WindowName,WindowRect,false);
-	this.Window.EnableScrollbars(false,true);
-	this.Handlers = {};
-	this.ParamMetas = {};
-	this.WaitForParamsChangedPromiseQueue = new Pop.PromiseQueue();
-
-	this.WaitForParamsChanged = function ()
+	constructor(Params,OnAnyChanged,WindowRect,WindowName="Params")
 	{
-		return this.WaitForParamsChangedPromiseQueue.WaitForNext();
+		OnAnyChanged = OnAnyChanged || function(){};
+
+		//	if the window rect is a string, then it's for gui/form/div mapping
+		//	but to layout the controls, we still want some value
+		const DefaultWidth = 600;
+		WindowRect = WindowRect || [800,20,DefaultWidth,300];
+		const WindowWidth = !isNaN(WindowRect[2]) ? WindowRect[2] : DefaultWidth;
+		this.ControlTop = 10;
+
+		const LabelLeft = 10;
+		const LabelWidth = WindowWidth * 0.3;
+		const LabelHeight = 18;
+		const ControlLeft = LabelLeft + LabelWidth + 10;
+		const ControlWidth = WindowWidth - ControlLeft - 40;
+		const ControlHeight = LabelHeight;
+		const ControlSpacing = 10;
+
+		this.Window = new Pop.Gui.Window(WindowName,WindowRect,false);
+		this.Window.EnableScrollbars(false,true);
+		this.Handlers = {};
+		this.ParamMetas = {};
+		this.WaitForParamsChangedPromiseQueue = new Pop.PromiseQueue();
+	}
+	
+	async WaitForParamsChanged()
+	{
+		return WaitForParamsChangedPromiseQueue.WaitForNext();
 	}
 
-	this.GetParamMetas = function ()
+	GetParamMetas()
 	{
 		return this.ParamMetas;
 	}
 
-	function GetMetaFromArguments(Arguments)
+	GetMetaFromArguments(Arguments)
 	{
 		//	first is name
 		const Name = Arguments.shift();
@@ -180,7 +187,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 	//		AddParam('Float',Math.floor);
 	//	TreatAsType overrides the control
 	//		AddParam('Port',0,1,Math.floor,'String')
-	this.AddParam = function (Name,Min,Max,CleanValue,TreatAsType)
+	AddParam(Name,Min,Max,CleanValue,TreatAsType)
 	{
 		try
 		{
@@ -192,7 +199,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 		}
 	}
 	
-	this.AddParamUnsafe = function (Name,Min,Max,CleanValue,TreatAsType)
+	AddParamUnsafe(Name,Min,Max,CleanValue,TreatAsType)
 	{
 		this.ParamMetas[Name] = GetMetaFromArguments(Array.from(arguments));
 
@@ -506,10 +513,10 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 
 		this.ControlTop += ControlHeight;
 		this.ControlTop += ControlSpacing;
-	}.bind(this);
+	}
 	
 	//	changed externally, update display
-	this.OnParamChanged = function (Name)
+	OnParamChanged(Name)
 	{
 		const Handler = this.Handlers[Name];
 		if (!Handler)
@@ -519,10 +526,10 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 			return;
 		}
 		Handler.UpdateDisplay();
-	}.bind(this);
+	}
 
 	//	changed externally
-	this.OnParamsChanged = function ()
+	OnParamsChanged()
 	{
 		const Keys = Object.keys(this.Handlers);
 		//Pop.Debug("OnParamsChanged",Keys);
@@ -538,21 +545,12 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 				Pop.Debug("OnParamChanged(" + Key + ") error",e);
 			}
 		}
-	}.bind(this);
-	
+	}	
 }
 
 
 
-function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
-{
-	Pop.Warning("Using deprecated CreateParamsWindow(), switch to new Pop.TParamsWindow");
-	const Window = new Pop.ParamsWindow(Params,OnAnyChanged,WindowRect);
-	return Window;
-}
-
-
-function RunParamsWebsocketServer(Port,OnJsonRecieved)
+export function RunParamsWebsocketServer(Port,OnJsonRecieved)
 {
 	let CurrentSocket = null;
 	
@@ -617,7 +615,7 @@ function RunParamsWebsocketServer(Port,OnJsonRecieved)
 	return Output;
 }
 
-function RunParamsHttpServer(Params,ParamsWindow,Port=80)
+export function RunParamsHttpServer(Params,ParamsWindow,Port=80)
 {
 	function OnJsonRecieved(Json)
 	{
@@ -712,3 +710,4 @@ function RunParamsHttpServer(Params,ParamsWindow,Port=80)
 	return Http;
 }
 
+export default ParamsWindow;
