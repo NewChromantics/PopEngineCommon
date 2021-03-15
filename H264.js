@@ -1,21 +1,24 @@
+const Default = 'H264 module';
+export default Default;
 
-Pop.H264 = {};
+//	this is in a namespace so we can enum keys
+export const ContentTypes = {};
+ContentTypes.Slice_NonIDRPicture = 1;
+ContentTypes.Slice_CodedPartitionA = 2;
+ContentTypes.Slice_CodedPartitionB = 3;
+ContentTypes.Slice_CodedPartitionC = 4;
+ContentTypes.Slice_CodedIDRPicture = 5;
+ContentTypes.SEI = 6;	//	supplimental enhancement info
+ContentTypes.SPS = 7;
+ContentTypes.PPS = 8;
+ContentTypes.AccessUnitDelimiter = 9;
+ContentTypes.EOS = 10;	//	endof sequence
+ContentTypes.EOF = 11;	//	end of stream
 
-Pop.H264.Slice_NonIDRPicture = 1;
-Pop.H264.Slice_CodedPartitionA = 2;
-Pop.H264.Slice_CodedPartitionB = 3;
-Pop.H264.Slice_CodedPartitionC = 4;
-Pop.H264.Slice_CodedIDRPicture = 5;
-Pop.H264.SEI = 6;	//	supplimental enhancement info
-Pop.H264.SPS = 7;
-Pop.H264.PPS = 8;
-Pop.H264.AccessUnitDelimiter = 9;
-Pop.H264.EOS = 10;	//	endof sequence
-Pop.H264.EOF = 11;	//	end of stream
 
-Pop.H264.GetContentName = function(ContentType)
+export function GetContentName(ContentType)
 {
-	const KeyValues = Object.entries(Pop.H264);
+	const KeyValues = Object.entries(ContentTypes);
 	for ( const [Key, Value] of KeyValues)
 	{
 		if ( Value === ContentType )
@@ -24,7 +27,7 @@ Pop.H264.GetContentName = function(ContentType)
 	return `Unknown H264 content type ${ContentType}`;
 }
 
-Pop.H264.GetNaluLength = function(Packet)
+export function GetNaluLength(Packet)
 {
 	const Data = Packet.slice(0,4);
 	if (Data[0] != 0 && Data[1] != 0)
@@ -39,9 +42,9 @@ Pop.H264.GetNaluLength = function(Packet)
 }
 
 
-Pop.H264.GetNaluMeta = function (Packet)
+export function GetNaluMeta(Packet)
 {
-	const NaluSize = Pop.H264.GetNaluLength(Packet);
+	const NaluSize = GetNaluLength(Packet);
 	const TypeAndPriority = Packet[NaluSize];
 	const Type = TypeAndPriority & 0x1f;
 	const Priority = TypeAndPriority >> 5;
@@ -54,26 +57,26 @@ Pop.H264.GetNaluMeta = function (Packet)
 	return Meta;
 }
 
-Pop.H264.GetNaluType = function (Packet)
+export function GetNaluType(Packet)
 {
-	const Meta = Pop.H264.GetNaluMeta(Packet);
+	const Meta = GetNaluMeta(Packet);
 	return Meta.Content;
 }
 
 
 
-Pop.H264.IsKeyframe = function (Packet)
+export function IsKeyframe(Packet)
 {
-	const Meta = Pop.H264.GetNaluMeta(Packet);
+	const Meta = GetNaluMeta(Packet);
 	
 	switch (Meta.Content)
 	{
-		case Pop.H264.SPS:
-		case Pop.H264.PPS:
-		case Pop.H264.SEI:
-		case Pop.H264.EOS:
-		case Pop.H264.EOF:
-		case Pop.H264.Slice_CodedIDRPicture:
+		case ContentTypes.SPS:
+		case ContentTypes.PPS:
+		case ContentTypes.SEI:
+		case ContentTypes.EOS:
+		case ContentTypes.EOF:
+		case ContentTypes.Slice_CodedIDRPicture:
 			return true;
 
 		//	picture
@@ -83,7 +86,7 @@ Pop.H264.IsKeyframe = function (Packet)
 	}
 }
 
-Pop.H264.SplitNalus = function(Packet)
+export function SplitNalus(Packet)
 {
 	//	gr: we need this fast search-for-bytes as a generic thing so we can get the fastest possible func
 	const Marker = new Uint8Array([0,0,1]);
