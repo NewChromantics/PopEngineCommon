@@ -25,3 +25,6 @@ Pop.Opengl = Opengl;
 import * as FileSystem from './FileSystem.js'
 //	gr: hmm these are root functions, so they need to go into PopWebApi?
 Pop.FileSystem = FileSystem;
+
+import * as Assets from './AssetManager.js'
+Pop.Assets = Assets;
