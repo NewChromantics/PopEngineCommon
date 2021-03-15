@@ -1,7 +1,7 @@
 import PopImage from './PopWebImageApi.js'
 import FileCache_t from './FileCache.js'
 import PromiseQueue from './PromiseQueue.js'
-import {Debug,CreatePromise} from './PopWebApiCore.js'
+import {Debug,Warning,CreatePromise} from './PopWebApiCore.js'
 
 const Default = 'FileSystem.js Module';
 export default Default;
@@ -370,7 +370,7 @@ export async function LoadFileAsArrayBufferStreamAsync(Filename,ResolveChunks=tr
 	{
 		//	set meta of known size if we have it, so we can work out %
 		if ( TotalSize )
-			FileCache.SetFileKnownSize(Filename,TotalSize);
+			FileCache.SetKnownSize(Filename,TotalSize);
 		//	keep re-writing a new file
 		FileCache.Set(Filename,null,Contents);
 	}

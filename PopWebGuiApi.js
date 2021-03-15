@@ -1,10 +1,12 @@
-Pop.Gui = {};
+import PromiseQueue from './PromiseQueue.js'
 
+const Default = 'Pop Gui module';
+export default Default;
 
 const PopGuiStorage = window.sessionStorage;
 
 //	should have some general Pop API to use session storage, localstorage, cookies etc crossplatform
-Pop.Gui.ReadSettingJson = function(Key)
+export function ReadSettingJson(Key)
 {
 	const Json = PopGuiStorage.getItem(Key);
 	if ( !Json )
@@ -13,7 +15,7 @@ Pop.Gui.ReadSettingJson = function(Key)
 	return Object;
 }
 
-Pop.Gui.WriteSettingJson = function(Key,Object)
+export function WriteSettingJson(Key,Object)
 {
 	const Json = JSON.stringify(Object);
 	PopGuiStorage.setItem(Key,Json);
@@ -174,7 +176,7 @@ function SetGuiControl_Draggable(Element)
 		//	todo: make sure previous pos fits on new screen when we restore
 		try
 		{
-			const NewRect = Pop.Gui.ReadSettingJson(RectKey);
+			const NewRect = ReadSettingJson(RectKey);
 			const x = NewRect.x;
 			const y = NewRect.y;
 			SetElementPosition( Element, x, y );
@@ -195,7 +197,7 @@ function SetGuiControl_Draggable(Element)
 			const Rect = {};
 			Rect.x = ElementRect.x
 			Rect.y = ElementRect.y;
-			Pop.Gui.WriteSettingJson(RectKey,Rect);
+			WriteSettingJson(RectKey,Rect);
 		}
 		catch(e)
 		{
@@ -360,29 +362,46 @@ function SetGuiControl_Draggable(Element)
 	LoadRect();
 }
 
-Pop.Gui.Window = function(Name,Rect,Resizable)
+export class Window
 {
-	//	child controls should be added to this
-	//	todo: rename to ChildContainer
-	this.ElementParent = null;
-	this.ElementWindow = null;
-	this.ElementTitleBar = null;
-	this.RestoreHeight = null;		//	if non-null, stores the height we were before minimising
-	this.TitleBarClickLastTime = null;	//	to detect double click 
+	constructor(Name,Rect,Resizable)
+	{
+		//	child controls should be added to this
+		//	todo: rename to ChildContainer
+		this.ElementParent = null;
+		this.ElementWindow = null;
+		this.ElementTitleBar = null;
+		this.RestoreHeight = null;		//	if non-null, stores the height we were before minimising
+		this.TitleBarClickLastTime = null;	//	to detect double click 
+		
+			
+		let Parent = document.body;
+		if ( typeof Rect == 'string' )
+		{
+			Parent = document.getElementById(Rect);
+		}
+		else if ( Rect instanceof HTMLElement )
+		{
+			Parent = Rect;
+			Rect = Parent.id;
+		}
+		
+		this.ElementWindow = this.CreateElement( Name, Parent, Rect );
+	}
 
 	//	gr: element may not be assigned yet, maybe rework construction of controls
-	this.AddChildControl = function(Child,Element)
+	AddChildControl(Child,Element)
 	{
 		//Element.style.zIndex = 2;
 		this.ElementParent.appendChild( Element );
 	}
 	
-	this.GetContainerElement = function()
+	GetContainerElement()
 	{
 		return this.ElementParent;
 	}
 	
-	this.CreateElement = function(Name,Parent,Rect)
+	CreateElement(Name,Parent,Rect)
 	{
 		let Element = document.createElement('div');
 		if ( Rect == Parent.id )
@@ -442,7 +461,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		return Element;
 	}
 	
-	this.OnTitleBarClick = function(Event)
+	OnTitleBarClick(Event)
 	{
 		const DoubleClickMaxTime = 300;
 		
@@ -461,24 +480,24 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		this.TitleBarClickLastTime = Pop.GetTimeNowMs();				
 	}
 	
-	this.EnableScrollbars = function(Horizontal,Vertical)
+	EnableScrollbars(Horizontal,Vertical)
 	{
 		this.ElementParent.style.overflowY = Vertical ? 'scroll' : 'hidden';
 		this.ElementParent.style.overflowX = Horizontal ? 'scroll' : 'hidden';
 	}
 
-	this.SetMinimised = function(Minimise=true)
+	SetMinimised(Minimise=true)
 	{
 		if ( this.IsMinimised() != Minimise )
 		   this.OnToggleMinimise();
 	}
 												   
-	this.IsMinimised = function ()
+	IsMinimised()
 	{
 		return (this.RestoreHeight !== null);
 	}
 
-	this.Flash = function(Enable)
+	Flash(Enable)
 	{
 		//	gr: turn this into an async func!
 		const FlashOn = function()
@@ -516,7 +535,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		}
 	}
 
-	this.OnToggleMinimise = function (DoubleClickEvent)
+	OnToggleMinimise(DoubleClickEvent)
 	{
 		//Pop.Debug(`OnToggleMinimise`);
 		//	check height of window to see if it's minimised
@@ -534,18 +553,6 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		}
 	}
 
-	let Parent = document.body;
-	if ( typeof Rect == 'string' )
-	{
-		Parent = document.getElementById(Rect);
-	}
-	else if ( Rect instanceof HTMLElement )
-	{
-		Parent = Rect;
-		Rect = Parent.id;
-	}
-	
-	this.ElementWindow = this.CreateElement( Name, Parent, Rect );
 }
 
 function GetExistingElement(Name)
@@ -628,7 +635,7 @@ function GetMousePos(MouseEvent,Element)
 
 
 
-Pop.Gui.SetStyle = function(Element,Key,Value)
+function SetStyle(Element,Key,Value)
 {
 	//	change an attribute
 	Element.setAttribute(Key,Value);
@@ -639,11 +646,11 @@ Pop.Gui.SetStyle = function(Element,Key,Value)
 }
 
 //	finally doing proper inheritance for gui
-Pop.Gui.BaseControl = class
+export class BaseControl
 {
 	constructor()
 	{
-		this.OnDragDropQueue = new Pop.PromiseQueue();
+		this.OnDragDropQueue = new PromiseQueue();
 
 		//	WaitForDragDrop() can provide a function to rename files
 		//	this may have issues with multi-callers or race conditions
@@ -766,7 +773,7 @@ Pop.Gui.BaseControl = class
 	SetStyle(Key,Value)
 	{
 		const Element = this.GetElement();
-		Pop.Gui.SetStyle(Element,Key,Value);
+		SetStyle(Element,Key,Value);
 	}
 	
 	SetRect(Rect)
@@ -783,7 +790,7 @@ Pop.Gui.BaseControl = class
 
 
 
-Pop.Gui.Label = class extends Pop.Gui.BaseControl
+export class Label extends BaseControl
 {
 	constructor(Parent,Rect)
 	{
@@ -831,7 +838,7 @@ Pop.Gui.Label = class extends Pop.Gui.BaseControl
 
 
 
-Pop.Gui.Button = class extends Pop.Gui.BaseControl
+export class Button extends BaseControl
 {
 	constructor(Parent,Rect)
 	{
@@ -914,18 +921,23 @@ Pop.Gui.Button = class extends Pop.Gui.BaseControl
 	}
 }
 
-Pop.Gui.Slider = function(Parent,Rect,Notches)
+export class Slider
 {
-	this.InputElement = null;
-	this.ValueCache = undefined;
+	constructor(Parent,Rect,Notches)
+	{
+		this.InputElement = null;
+		this.ValueCache = undefined;
 	
-	this.SetMinMax = function(Min,Max)
+		this.Element = this.CreateElement(Parent);
+	}
+	
+	SetMinMax(Min,Max)
 	{
 		this.InputElement.min = Min;
 		this.InputElement.max = Max;
 	}
 	
-	this.SetValue = function(Value)
+	SetValue(Value)
 	{
 		if ( this.ValueCache === Value )
 			return;
@@ -937,7 +949,7 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		this.InputElement.dispatchEvent(new Event('change'));
 	}
 	
-	this.OnElementChanged = function(Event)
+	OnElementChanged(Event)
 	{
 		//	call our callback
 		let Value = this.InputElement.valueAsNumber;
@@ -945,7 +957,7 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		this.OnChanged( Value );
 	}
 	
-	this.CreateElement = function(Parent)
+	CreateElement(Parent)
 	{
 		const ListenToInput = function(InputElement)
 		{
@@ -983,40 +995,44 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		
 		return Div;
 	}
-	
-	this.Element = this.CreateElement(Parent);
 }
 
 
-Pop.Gui.TickBox = function(Parent,Rect)
+export class TickBox
 {
-	this.Label = '';
-	this.InputElement = null;
-	this.LabelElement = null;
+	constructor(Parent,Rect)
+	{
+		this.Label = '';
+		this.InputElement = null;
+		this.LabelElement = null;
+	
+		this.Element = this.CreateElement(Parent);
+		this.RefreshLabel();
+	}
 
-	this.GetValue = function()
+	GetValue()
 	{
 		return this.InputElement.checked;
 	}
 	
-	this.SetValue = function(Value)
+	SetValue(Value)
 	{
 		this.InputElement.checked = Value;
 		this.RefreshLabel();
 	}
 	
-	this.SetLabel = function(Value)
+	SetLabel(Value)
 	{
 		this.Label = Value;
 		this.RefreshLabel();
 	}
 	
-	this.RefreshLabel = function()
+	RefreshLabel()
 	{
 		this.LabelElement.innerText = this.Label;
 	}
 
-	this.OnElementChanged = function(Event)
+	OnElementChanged(Event)
 	{
 		//	call our callback
 		let Value = this.GetValue();
@@ -1024,7 +1040,7 @@ Pop.Gui.TickBox = function(Parent,Rect)
 		this.OnChanged( Value );
 	}
 	
-	this.CreateElement = function(Parent)
+	CreateElement(Parent)
 	{
 		let Input = document.createElement('input');
 		this.InputElement = Input;
@@ -1050,28 +1066,30 @@ Pop.Gui.TickBox = function(Parent,Rect)
 
 		return Div;
 	}
-	
-	this.Element = this.CreateElement(Parent);
-	this.RefreshLabel();
 }
 
 
 
-Pop.Gui.Colour = function(Parent,Rect)
+export class Colour
 {
-	this.InputElement = null;
-	this.LabelElement = null;
-	this.LabelTextCache = undefined;
-	this.ValueCache = undefined;
+	constructor(Parent,Rect)
+	{
+		this.InputElement = null;
+		this.LabelElement = null;
+		this.LabelTextCache = undefined;
+		this.ValueCache = undefined;
 	
-	this.GetValue = function()
+		this.Element = this.CreateElement(Parent);
+	}
+	
+	GetValue()
 	{
 		let RgbHex = this.InputElement.value;
 		let Rgbf = Pop.Colour.HexToRgbf( RgbHex );
 		return Rgbf;
 	}
 	
-	this.SetValue = function(Value)
+	SetValue(Value)
 	{
 		let RgbHex = Pop.Colour.RgbfToHex( Value );
 		if ( this.ValueCache === RgbHex )
@@ -1080,7 +1098,7 @@ Pop.Gui.Colour = function(Parent,Rect)
 		this.ValueCache = RgbHex;
 	}
 	
-	this.SetLabel = function(Value)
+	SetLabel(Value)
 	{
 		if ( this.LabelTextCache === Value )
 			return;
@@ -1088,14 +1106,14 @@ Pop.Gui.Colour = function(Parent,Rect)
 		this.LabelTextCache = Value;
 	}
 	
-	this.OnElementChanged = function(Event)
+	OnElementChanged(Event)
 	{
 		//	call our callback
 		let Value = this.GetValue();
 		this.OnChanged( Value );
 	}
 	
-	this.CreateElement = function(Parent)
+	CreateElement(Parent)
 	{
 		let Input = document.createElement('input');
 		this.InputElement = Input;
@@ -1120,12 +1138,10 @@ Pop.Gui.Colour = function(Parent,Rect)
 		
 		return Div;
 	}
-	
-	this.Element = this.CreateElement(Parent);
 }
 
 
-Pop.Gui.TextBox = class extends Pop.Gui.BaseControl
+export class TextBox extends BaseControl
 {
 	constructor(Parent,Rect)
 	{
@@ -1235,7 +1251,7 @@ Pop.Gui.TextBox = class extends Pop.Gui.BaseControl
 }
 
 
-Pop.Gui.ImageMap = class extends Pop.Gui.BaseControl
+export class ImageMap extends BaseControl
 {
 	constructor(Parent,Rect)
 	{
@@ -1294,7 +1310,7 @@ Pop.Gui.ImageMap = class extends Pop.Gui.BaseControl
 
 
 
-Pop.Gui.Table = class extends Pop.Gui.BaseControl
+export class Table extends BaseControl
 {
 	constructor(Parent,Rect)
 	{
@@ -1374,7 +1390,7 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 		{
 			for ( let [StyleName,Value] of Object.entries(Style) )
 			{
-				Pop.Gui.SetStyle(Element,StyleName,Value);
+				SetStyle(Element,StyleName,Value);
 			}
 		}
 	}

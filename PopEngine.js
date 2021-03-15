@@ -22,9 +22,14 @@ Pop.Math = PopMath;
 import * as Opengl from './PopWebOpenglApi.js'
 Pop.Opengl = Opengl;
 
+import * as Assets from './AssetManager.js'
+Pop.Assets = Assets;
+
+import * as Gui from './PopWebGuiApi.js'
+Pop.Gui = Gui;
+
 import * as FileSystem from './FileSystem.js'
 //	gr: hmm these are root functions, so they need to go into PopWebApi?
 Pop.FileSystem = FileSystem;
-
-import * as Assets from './AssetManager.js'
-Pop.Assets = Assets;
+//Pop.LoadFileAsStringAsync = Pop.FileSystem.LoadFileAsStringAsync;
+Object.assign( Pop, Pop.FileSystem );

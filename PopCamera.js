@@ -1,34 +1,66 @@
-import * as PopMath from './PopEngineCommon/Math.js'
+import * as PopMath from './Math.js'
 
-
-Pop.Camera = function(CopyCamera)
+//	this generates a pos & rot matrix already multiplied together
+//	would be nice to seperate to be more readable
+function CreateLookAtMatrix(eye,up,center)
 {
-	this.FovVertical = 45;
-
-	this.Up = [0,1,0];
-	this.Position = [ 0,2,20 ];
-	this.LookAt = [ 0,0,0 ];
-	this.Rotation4x4 = undefined;		//	override rotation
-	this.ProjectionMatrix = undefined;	//	override projection matrix
+	let z = PopMath.Subtract3( eye, center );
+	z = PopMath.Normalise3( z );
 	
-	this.NearDistance = 0.01;
-	this.FarDistance = 100;
+	let x = PopMath.Cross3( up, z );
+	x = PopMath.Normalise3( x );
+	
+	let y = PopMath.Cross3( z,x );
+	y = PopMath.Normalise3( y );
+	
+	//	this is the result when multiplying rot*trans matrix
+	//	(dot prod)
+	let tx = -(x[0] * eye[0] + x[1] * eye[1] + x[2] * eye[2]);
+	let ty = -(y[0] * eye[0] + y[1] * eye[1] + y[2] * eye[2]);
+	let tz = -(z[0] * eye[0] + z[1] * eye[1] + z[2] * eye[2]);
+	
+	let out =
+	[
+	 x[0],	y[0],	z[0],	0,
+	 x[1],	y[1],	z[1],	0,
+	 x[2],	y[2],	z[2],	0,
+	 tx,	ty,	tz,	1,
+	 ];
+	
+	return out;
+}
 
-	this.FocalCenter = [0,0];		//	cx & cy for projection matrix
 
-	if ( CopyCamera instanceof Pop.Camera )
+export class Camera
+{
+	constructor(CopyCamera)
 	{
-		this.FovVertical = CopyCamera.FovVertical;
-		this.Position = CopyCamera.Position.slice();
-		this.LookAt = CopyCamera.LookAt.slice();
-		this.NearDistance = CopyCamera.NearDistance;
-		this.FarDistance = CopyCamera.FarDistance;
-		this.Rotation4x4 = CopyCamera.Rotation4x4;
+		this.FovVertical = 45;
+
+		this.Up = [0,1,0];
+		this.Position = [ 0,2,20 ];
+		this.LookAt = [ 0,0,0 ];
+		this.Rotation4x4 = undefined;		//	override rotation
+		this.ProjectionMatrix = undefined;	//	override projection matrix
+		
+		this.NearDistance = 0.01;
+		this.FarDistance = 100;
+
+		this.FocalCenter = [0,0];		//	cx & cy for projection matrix
+
+		if ( CopyCamera instanceof Camera )
+		{
+			this.FovVertical = CopyCamera.FovVertical;
+			this.Position = CopyCamera.Position.slice();
+			this.LookAt = CopyCamera.LookAt.slice();
+			this.NearDistance = CopyCamera.NearDistance;
+			this.FarDistance = CopyCamera.FarDistance;
+			this.Rotation4x4 = CopyCamera.Rotation4x4;
+		}
 	}
 
 	
-	
-	this.FieldOfViewToFocalLengths = function(FovHorz,FovVert)
+	FieldOfViewToFocalLengths(FovHorz,FovVert)
 	{
 		let fx = 363.30 * 2;
 		let s = 0;
@@ -68,7 +100,7 @@ Pop.Camera = function(CopyCamera)
 		return Focal;
 	}
 	
-	this.FocalLengthsToFieldOfView = function(fx,fy,cx,cy,ImageWidth,ImageHeight)
+	FocalLengthsToFieldOfView(fx,fy,cx,cy,ImageWidth,ImageHeight)
 	{
 		let FovHorizontal = PopMath.RadToDeg( 2 * Math.atan( ImageWidth / (2*fx) ) );
 		let FovVertical = PopMath.RadToDeg( 2 * Math.atan( ImageHeight / (2*fy) ) );
@@ -78,7 +110,7 @@ Pop.Camera = function(CopyCamera)
 		return Fov;
 	}
 	
-	this.GetFieldOfView = function(ViewRect)
+	GetFieldOfView(ViewRect)
 	{
 		let Fov = {};
 		let Aspect = ViewRect[2] / ViewRect[3];
@@ -87,7 +119,7 @@ Pop.Camera = function(CopyCamera)
 		return Fov;
 	}
 	
-	this.GetPixelFocalLengths = function(ViewRect)
+	GetPixelFocalLengths(ViewRect)
 	{
 		/*
 		let UseFov = true;
@@ -108,7 +140,7 @@ Pop.Camera = function(CopyCamera)
 		return Focal;
 	}
 	
-	this.PixelToOpenglFocalLengths = function(PixelFocals,ImageSize)
+	PixelToOpenglFocalLengths(PixelFocals,ImageSize)
 	{
 		//	https://strawlab.org/2011/11/05/augmented-reality-with-OpenGL
 		//	convert pixel focal projection to opengl projection frustum
@@ -138,7 +170,7 @@ Pop.Camera = function(CopyCamera)
 		return OpenglFocal;
 	}
 	
-	this.GetOpenglFocalLengths = function(ViewRect)
+	GetOpenglFocalLengths(ViewRect)
 	{
 		/*
 		const Focal = this.GetPixelFocalLengths();
@@ -163,7 +195,7 @@ Pop.Camera = function(CopyCamera)
 	}
 	
 	//	world to pixel
-	this.GetOpencvProjectionMatrix = function(ViewRect)
+	GetOpencvProjectionMatrix(ViewRect)
 	{
 		//	this is the projection matrix on a rectified/undistorted image
 		//	3D to 2D... (seems like its backwards..)
@@ -199,7 +231,7 @@ Pop.Camera = function(CopyCamera)
 	}
 	
 	//	GetOpencvProjectionMatrix but 4x4 with z correction for near/far
-	this.GetProjectionMatrix = function(ViewRect)
+	GetProjectionMatrix(ViewRect)
 	{
 		//	overriding user-provided matrix
 		if ( this.ProjectionMatrix )
@@ -252,7 +284,7 @@ Pop.Camera = function(CopyCamera)
 	}
 	
 	
-	this.SetLocalRotationMatrix = function(Rotation4x4)
+	SetLocalRotationMatrix(Rotation4x4)
 	{
 		if ( Rotation4x4.length != 4*4 )
 			throw "SetLocalRotationMatrix() matrix is not 4x4: " + JSON.stringify(Rotation4x4);
@@ -260,7 +292,7 @@ Pop.Camera = function(CopyCamera)
 		this.Rotation4x4 = Rotation4x4.slice();
 	}
 	
-	this.IsProjectionForwardNegativeZ = function()
+	IsProjectionForwardNegativeZ()
 	{
 		const Matrix = this.GetProjectionMatrix([0,0,1,1]);
 		//	gr [10] AND [11] are always negative?
@@ -269,7 +301,7 @@ Pop.Camera = function(CopyCamera)
 		return ZForwardIsNegative;
 	}
 	
-	this.GetLocalRotationMatrix = function()
+	GetLocalRotationMatrix()
 	{
 		if ( this.Rotation4x4 )
 			return this.Rotation4x4;
@@ -289,39 +321,10 @@ Pop.Camera = function(CopyCamera)
 	}
 	
 	
-	//	this generates a pos & rot matrix already multiplied together
-	//	would be nice to seperate to be more readable
-	function CreateLookAtMatrix(eye,up,center)
-	{
-		let z = PopMath.Subtract3( eye, center );
-		z = PopMath.Normalise3( z );
-		
-		let x = PopMath.Cross3( up, z );
-		x = PopMath.Normalise3( x );
-		
-		let y = PopMath.Cross3( z,x );
-		y = PopMath.Normalise3( y );
-		
-		//	this is the result when multiplying rot*trans matrix
-		//	(dot prod)
-		let tx = -(x[0] * eye[0] + x[1] * eye[1] + x[2] * eye[2]);
-		let ty = -(y[0] * eye[0] + y[1] * eye[1] + y[2] * eye[2]);
-		let tz = -(z[0] * eye[0] + z[1] * eye[1] + z[2] * eye[2]);
-		
-		let out =
-		[
-		 x[0],	y[0],	z[0],	0,
-		 x[1],	y[1],	z[1],	0,
-		 x[2],	y[2],	z[2],	0,
-		 tx,	ty,	tz,	1,
-		 ];
-		
-		return out;
-	}
 
 	
 	//	camera's modelview transform
-	this.GetWorldToCameraMatrix = function()
+	GetWorldToCameraMatrix()
 	{
 		//	https://stackoverflow.com/questions/349050/calculating-a-lookat-matrix
 		const Up = this.GetUp();
@@ -337,7 +340,7 @@ Pop.Camera = function(CopyCamera)
 		return Matrix;
 	}
 	
-	this.GetLocalToWorldMatrix = function()
+	GetLocalToWorldMatrix()
 	{
 		let WorldToCameraMatrix = this.GetWorldToCameraMatrix();
 		
@@ -349,7 +352,7 @@ Pop.Camera = function(CopyCamera)
 		return Matrix;
 	}
 	
-	this.GetWorldToFrustumTransform = function(ViewRect=[-1,-1,1,1])
+	GetWorldToFrustumTransform(ViewRect=[-1,-1,1,1])
 	{
 		const CameraToFrustum = this.GetProjectionMatrix( ViewRect );
 		const WorldToCamera = this.GetWorldToCameraMatrix();
@@ -359,7 +362,7 @@ Pop.Camera = function(CopyCamera)
 	
 	//	this gets a transform, which when applied to a cube of -1..1,-1..1,-1..1
 	//	will skew the cube into a representation of the view frustum in world space
-	this.GetLocalToWorldFrustumTransformMatrix = function(ViewRect=[-1,-1,1,1])
+	GetLocalToWorldFrustumTransformMatrix(ViewRect=[-1,-1,1,1])
 	{
 		//	todo: correct viewrect with aspect ratio of viewport
 		//		maybe change input to Viewport to match GetProjection matrix?
@@ -370,14 +373,14 @@ Pop.Camera = function(CopyCamera)
 		return Matrix;
 	}
 	
-	this.GetUp = function()
+	GetUp()
 	{
 		//let y = PopMath.Cross3( z,x );
 		//y = PopMath.Normalise3( y );
 		return this.Up.slice();
 	}
 	
-	this.GetForward = function(Normalised=true)
+	GetForward(Normalised=true)
 	{
 		let z = PopMath.Subtract3( this.LookAt, this.Position );
 		if ( Normalised )
@@ -385,14 +388,14 @@ Pop.Camera = function(CopyCamera)
 		return z;
 	}
 	
-	this.GetBackward = function(Normalised=true)
+	GetBackward(Normalised=true)
 	{
 		const Forward = this.GetForward(Normalised);
 		const Backward = PopMath.Multiply3(Forward,[-1,-1,-1]);
 		return Backward;
 	}
 	
-	this.GetRight = function()
+	GetRight()
 	{
 		const up = this.GetUp();
 		const z = this.GetForward();
@@ -402,7 +405,7 @@ Pop.Camera = function(CopyCamera)
 	}
 	
 	
-	this.MoveCameraAndLookAt = function(Delta)
+	MoveCameraAndLookAt(Delta)
 	{
 		this.Position[0] += Delta[0];
 		this.Position[1] += Delta[1];
@@ -412,7 +415,7 @@ Pop.Camera = function(CopyCamera)
 		this.LookAt[2] += Delta[2];
 	}
 	
-	this.GetPitchYawRollDistance = function()
+	GetPitchYawRollDistance()
 	{
 		//	dir from lookat to position (orbit, not first person)
 		let Dir = this.GetBackward(false);
@@ -427,7 +430,7 @@ Pop.Camera = function(CopyCamera)
 		return [Pitch,Yaw,Roll,Distance];
 	}
 	
-	this.SetOrbit = function(Pitch,Yaw,Roll,Distance)
+	SetOrbit(Pitch,Yaw,Roll,Distance)
 	{
 		let Pitchr = PopMath.radians(Pitch);
 		let Yawr = PopMath.radians(Yaw);
@@ -448,7 +451,7 @@ Pop.Camera = function(CopyCamera)
 		
 	}
 	
-	this.OnCameraOrbit = function(x,y,z,FirstClick)
+	OnCameraOrbit(x,y,z,FirstClick)
 	{
 		//	remap input from xy to yaw, pitch
 		let yxz = [y,x,z];
@@ -480,7 +483,7 @@ Pop.Camera = function(CopyCamera)
 	}
 	
 	//	opposite of GetOrbit
-	this.GetLookAtRotation = function()
+	GetLookAtRotation()
 	{
 		//	forward instead of backward
 		let Dir = this.GetForward(false);
@@ -496,7 +499,7 @@ Pop.Camera = function(CopyCamera)
 	}
 	
 	//	opposite of SetOrbit
-	this.SetLookAtRotation = function(Pitch,Yaw,Roll,Distance)
+	SetLookAtRotation(Pitch,Yaw,Roll,Distance)
 	{
 		let Pitchr = PopMath.radians(Pitch);
 		let Yawr = PopMath.radians(Yaw);
@@ -517,7 +520,7 @@ Pop.Camera = function(CopyCamera)
 	}
 	
 	//	better name! like... RotateLookAt
-	this.OnCameraFirstPersonRotate = function(x,y,z,FirstClick)
+	OnCameraFirstPersonRotate(x,y,z,FirstClick)
 	{
 		//	remap input from xy to yaw, pitch
 		let yxz = [y,x,z];
@@ -550,7 +553,7 @@ Pop.Camera = function(CopyCamera)
 	
 
 	
-	this.OnCameraPan = function(x,y,z,FirstClick)
+	OnCameraPan(x,y,z,FirstClick)
 	{
 		if ( FirstClick )
 			this.LastPos_PanPos = [x,y,z];
@@ -568,7 +571,7 @@ Pop.Camera = function(CopyCamera)
 		this.LastPos_PanPos = [x,y,z];
 	}
 	
-	this.OnCameraPanLocal = function(x,y,z,FirstClick)
+	OnCameraPanLocal(x,y,z,FirstClick)
 	{
 		if ( FirstClick || !this.LastPos_PanLocalPos )
 			this.LastPos_PanLocalPos = [x,y,z];
@@ -595,7 +598,7 @@ Pop.Camera = function(CopyCamera)
 		this.LastPos_PanLocalPos = [x,y,z];
 	}
 										
-	this.GetScreenRay = function(u,v,ScreenRect)
+	GetScreenRay(u,v,ScreenRect)
 	{
 		let Aspect = ScreenRect[2] / ScreenRect[3];
 		let x = PopMath.lerp( -Aspect, Aspect, u );
@@ -632,3 +635,4 @@ Pop.Camera = function(CopyCamera)
 	//Pop.Debug("initial pitch/yaw/roll/distance",this.GetPitchYawRollDistance());
 }
 
+export default Camera;

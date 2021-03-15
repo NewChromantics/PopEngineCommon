@@ -1,4 +1,6 @@
-
+//	can I export Math here?
+const Default = 'Pop Math';
+export default Default;
 
 export function DegToRad(Degrees)
 {

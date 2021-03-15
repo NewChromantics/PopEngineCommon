@@ -5,7 +5,7 @@ const WebApi_HtmlCanvasElement = window.hasOwnProperty('HTMLCanvasElement') ? wi
 
 
 //	in c++ this is SoyPixelsFormat namespace
-function GetChannelsFromPixelFormat(PixelFormat)
+export function GetChannelsFromPixelFormat(PixelFormat)
 {
 	switch(PixelFormat)
 	{
@@ -66,7 +66,7 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	throw "PixelFormatToOpenglFormat: Unhandled pixel format " + PixelFormat;
 }
 
-function IsFloatFormat(Format)
+export function IsFloatFormat(Format)
 {
 	switch(Format)
 	{
