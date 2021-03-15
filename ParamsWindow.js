@@ -1,3 +1,5 @@
+import PromiseQueue from './PromiseQueue.js'
+
 //	gr: need to sort a dependency system
 //		PopEngineCommon/PopMath.js
 function isFunction(functionToCheck)
@@ -154,7 +156,7 @@ export class ParamsWindow
 		this.Window.EnableScrollbars(false,true);
 		this.Handlers = {};
 		this.ParamMetas = {};
-		this.WaitForParamsChangedPromiseQueue = new Pop.PromiseQueue();
+		this.WaitForParamsChangedPromiseQueue = new PromiseQueue();
 	}
 	
 	async WaitForParamsChanged()
