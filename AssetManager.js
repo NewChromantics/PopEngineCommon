@@ -2,7 +2,7 @@ const PopAssetManager = {};
 export default PopAssetManager;
 
 import {GetUniqueHash} from './Hash.js'
-
+import * as Opengl from './PopWebOpenglApi.js'
 
 //	AssetCacheContexts[ContextHash][AssetName] = CachedAsset
 PopAssetManager.AssetCacheContexts = {};
@@ -70,23 +70,25 @@ export function GetAsset(Name,RenderContext)
 
 
 //	this returns the "asset name"
+//	gr: should this be somewhere else, not in the core asset manager?
 export function RegisterShaderAssetFilename(FragFilename,VertFilename)
 {
 	const AssetFetchFunctions = PopAssetManager.AssetFetchFunctions;
-
-	function LoadAndCompileShader(RenderContext)
-	{
-		const FragShaderContents = Pop.LoadFileAsString(FragFilename);
-		const VertShaderContents = Pop.LoadFileAsString(VertFilename);
-		const Shader = Pop.GetShader( RenderContext, FragShaderContents, VertShaderContents );
-		return Shader;
-	}
 
 	//	we use / as its not a valid filename char
 	const AssetName = FragFilename+PopAssetManager.AssetFilenameJoinString+VertFilename;
 	if ( AssetFetchFunctions.hasOwnProperty(AssetName) )
 		throw "Shader asset name clash, need to change the name we use";
 	
+	function LoadAndCompileShader(RenderContext)
+	{
+		const ShaderName = AssetName;
+		const FragSource = Pop.LoadFileAsString(FragFilename);
+		const VertSource = Pop.LoadFileAsString(VertFilename);
+		const Shader = new Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
+		return Shader;
+	}
+
 	RegisterAssetFetchFunction(AssetName,LoadAndCompileShader);
 	return AssetName;
 }
