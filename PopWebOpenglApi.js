@@ -1693,9 +1693,13 @@ class TextureRenderTarget extends RenderTarget
 			gl.bindTexture(gl.TEXTURE_2D,Texture);
 			PreviousFilter = ImageTarget.LinearFilter;
 			const FilterMode = gl.NEAREST;
+			const RepeatMode = gl.CLAMP_TO_EDGE;
 			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, FilterMode);
 			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, FilterMode);
-			gl.bindTexture(gl.TEXTURE_2D,null);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, RepeatMode);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, RepeatMode);
+			//gl.bindTexture(gl.TEXTURE_2D,null);
+			
 		}
 		
 		const FrameBuffer = this.GetFrameBuffer();
