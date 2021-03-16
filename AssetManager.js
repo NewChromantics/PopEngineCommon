@@ -77,8 +77,6 @@ export function RegisterShaderAssetFilename(FragFilename,VertFilename)
 
 	//	we use / as its not a valid filename char
 	const AssetName = FragFilename+PopAssetManager.AssetFilenameJoinString+VertFilename;
-	if ( AssetFetchFunctions.hasOwnProperty(AssetName) )
-		throw "Shader asset name clash, need to change the name we use";
 	
 	function LoadAndCompileShader(RenderContext)
 	{
