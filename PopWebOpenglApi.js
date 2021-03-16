@@ -1930,8 +1930,12 @@ export class Shader
 		}
 		
 		Source = CleanLineFeeds(Source);
-		
+
 		const gl = RenderContext.GetGlContext();
+		
+		const RefactorFunc = ( Type == gl.FRAGMENT_SHADER ) ? RefactorFragShader : RefactorVertShader;
+		Source = RefactorFunc(Source);
+		
 		const Shader = gl.createShader(Type);
 		gl.shaderSource( Shader, Source );
 		gl.compileShader( Shader );
