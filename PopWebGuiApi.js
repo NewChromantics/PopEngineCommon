@@ -558,16 +558,25 @@ export class Window
 
 }
 
-function GetExistingElement(Name)
+function GetExistingElement(Name,ExpectedType=null)
 {
+	if ( Name == null )
+		return null;
 	if ( typeof Name != 'string' )
 		return null;
 	
 	let Element = document.getElementById(Name);
-	if ( Element )
-		return Element;
-	
-	return null;
+	if ( !Element )
+		throw `No existing element named ${Name}`;
+		
+	//	verify (input) type
+	if ( ExpectedType )
+	{
+		if ( Element.type != ExpectedType )
+			throw `Found element ${Name} but type is ${Element.type} not ${ExpectedType}`;
+	}
+
+	return Element;
 }
 
 
@@ -965,23 +974,17 @@ export class Slider
 	
 	CreateElement(Parent,Rect)
 	{
-		const ListenToInput = function(InputElement)
+		const ExistingSlider = GetExistingElement(Rect,'range');
+		if ( ExistingSlider )
 		{
-			InputElement.addEventListener('input', this.OnElementChanged.bind(this) );
-			//	this is event is triggered from this.SetValue() so creates a loop
-			//InputElement.addEventListener('change', this.OnElementChanged.bind(this) );
-		}.bind(this);
-		
-		let Div = GetExistingElement(Parent);
-		if ( Div )
-		{
-			this.InputElement = Div;
-			ListenToInput(Div);
-			return Div;
+			this.InputElement = ExistingSlider;
+			this.SetupEvents();
+			return ExistingSlider;
 		}
 		
 		let Input = document.createElement('input');
 		this.InputElement = Input;
+		this.SetupEvents();
 		
 		//	gr: what are defaults in pop?
 		Input.min = 0;
@@ -990,9 +993,9 @@ export class Slider
 		Input.type = 'range';
 		SetGuiControl_SubElementStyle( Input );
 		//Input.oninput = this.OnElementChanged.bind(this);
-		ListenToInput(Input);
 		
-		Div = document.createElement('div');
+		
+		let Div = document.createElement('div');
 		SetGuiControlStyle( Div, Rect );
 		//Div.innerText = 'Pop.Gui.Slider';
 		
@@ -1000,6 +1003,13 @@ export class Slider
 		Parent.AddChildControl( this, Div );
 		
 		return Div;
+	}
+	
+	SetupEvents()
+	{
+		this.InputElement.addEventListener('input', this.OnElementChanged.bind(this) );
+		//	this is event is triggered from this.SetValue() so creates a loop
+		//InputElement.addEventListener('change', this.OnElementChanged.bind(this) );
 	}
 }
 
@@ -1012,7 +1022,7 @@ export class TickBox
 		this.InputElement = null;
 		this.LabelElement = null;
 	
-		this.Element = this.CreateElement(Parent);
+		this.Element = this.CreateElement(Parent,Rect);
 		this.RefreshLabel();
 	}
 
@@ -1035,7 +1045,8 @@ export class TickBox
 	
 	RefreshLabel()
 	{
-		this.LabelElement.innerText = this.Label;
+		if ( this.LabelElement )
+			this.LabelElement.innerText = this.Label;
 	}
 
 	OnElementChanged(Event)
@@ -1048,6 +1059,14 @@ export class TickBox
 	
 	CreateElement(Parent,Rect)
 	{
+		const ExistingCheckbox = GetExistingElement(Rect,'checkbox');
+		if ( ExistingCheckbox )
+		{
+			this.InputElement = ExistingCheckbox;
+			this.SetupEvents();
+			return;
+		}
+	
 		let Input = document.createElement('input');
 		this.InputElement = Input;
 		
@@ -1055,8 +1074,7 @@ export class TickBox
 		Input.checked = true;
 		Input.type = 'checkbox';
 		SetGuiControl_SubElementStyle( Input, 0, 50 );
-		Input.oninput = this.OnElementChanged.bind(this);
-	
+		
 		let Label = document.createElement('label');
 		this.LabelElement = Label;
 		Label.innerText = 'checkbox';
@@ -1070,7 +1088,14 @@ export class TickBox
 		Div.appendChild( Label );
 		Parent.AddChildControl( this, Div );
 
+		this.SetupEvents();
+
 		return Div;
+	}
+	
+	SetupEvents()
+	{
+		this.InputElement.oninput = this.OnElementChanged.bind(this);
 	}
 }
 
@@ -1085,7 +1110,7 @@ export class Colour
 		this.LabelTextCache = undefined;
 		this.ValueCache = undefined;
 	
-		this.Element = this.CreateElement(Parent);
+		this.Element = this.CreateElement(Parent,Rect);
 	}
 	
 	GetValue()
@@ -1121,14 +1146,22 @@ export class Colour
 	
 	CreateElement(Parent,Rect)
 	{
+		const ExistingElement = GetExistingElement(Rect,'color');
+		if ( ExistingElement )
+		{
+			this.InputElement = ExistingElement;
+			this.SetupEvents();
+			return;
+		}
+		
 		let Input = document.createElement('input');
 		this.InputElement = Input;
+		this.SetupEvents();
 		
 		//	gr: what are defaults in pop?
 		Input.checked = true;
 		Input.type = 'color';
 		SetGuiControl_SubElementStyle( Input, 0, 20 );
-		Input.oninput = this.OnElementChanged.bind(this);
 		
 		let Label = document.createElement('label');
 		this.LabelElement = Label;
@@ -1143,6 +1176,11 @@ export class Colour
 		Parent.AddChildControl( this, Div );
 		
 		return Div;
+	}
+	
+	SetupEvents()
+	{
+		this.InputElement.oninput = this.OnElementChanged.bind(this);
 	}
 }
 
@@ -1208,17 +1246,12 @@ export class TextBox extends BaseControl
 	CreateElement(Parent,Rect)
 	{
 		//	if it already exists, need to work out if it's an input or container
-		const ExistingElement = GetExistingElement(Parent);
+		const ExistingElement = GetExistingElement(Parent,'text');
 		if (ExistingElement)
 		{
-			//	existing
-			if (ExistingElement.type == "text")
-			{
-				ExistingElement.InputElement = ExistingElement;
-				ExistingElement.LabelElement = {};//	dummy
-				return ExistingElement;
-			}
-			throw `Handle existing element for label`;
+			ExistingElement.InputElement = ExistingElement;
+			ExistingElement.LabelElement = {};//	dummy
+			return ExistingElement;
 		}
 
 		const ElementType = 'span';//'input';

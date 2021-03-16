@@ -261,7 +261,7 @@ export class ParamsWindow
 			}
 			catch(e)
 			{
-				return new Type(Window,[LabelLeft,LabelTop,LabelWidth,LabelHeight]);
+				return new Type(Window,Rect);
 			}
 		}
 
