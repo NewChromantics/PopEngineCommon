@@ -116,7 +116,7 @@ function RefactorGlslShader(Source)
 {
 	if ( !Source.startsWith('#version ') )
 	{
-		Source = '#version ' + Pop.GlslVersion + '\n' + Source;
+		Source = '#version ' + GlslVersion + '\n' + Source;
 	}
 	
 	//Source = 'precision mediump float;\n' + Source;
@@ -166,12 +166,12 @@ function RefactorFragShader(Source)
 	let Match = 'texture(';
 	Source = Source.replace(Match,'texture2D(');
 
-	if ( Pop.GlslVersion == 100 )
+	if ( GlslVersion == 100 )
 	{
 		//	in but only at the start of line (well, after the end of prev line)
 		Source = Source.replace(/\nin /gi,'\nvarying ');
 	}
-	else if ( Pop.GlslVersion >= 300 )
+	else if ( GlslVersion >= 300 )
 	{
 		Source = Source.replace(/varying /gi,'in ');
 		//Source = Source.replace(/gl_FragColor/gi,'FragColor');
