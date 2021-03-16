@@ -42,6 +42,9 @@ function SetGuiControlStyle(Element,Rect)
 {
 	if ( !Rect )
 		return;
+	//	assume this is a element id and not configuration
+	if ( typeof Rect == 'string' )
+		return;
 	
 	//	to allow vw/% etc, we're using w/h now
 	//	also, if you have bottom, but no height,
@@ -806,6 +809,11 @@ export class Label extends BaseControl
 		return this.Element;
 	}
 	
+	SetText()
+	{
+		this.SetValue(...arguments);
+	}
+	
 	SetValue(Value)
 	{
 		//	avoid DOM changes as much as possible
@@ -822,13 +830,12 @@ export class Label extends BaseControl
 
 	CreateElement(Parent,Rect)
 	{
-		let Div = GetExistingElement(Parent);
+		let Div = GetExistingElement(Rect);
 		if ( Div )
 			return Div;
 		
 		Div = document.createElement('div');
-		if ( Rect )
-			SetGuiControlStyle( Div, Rect );
+		SetGuiControlStyle( Div, Rect );
 		
 		Div.innerText = 'Pop.Gui.Label';
 		Parent.AddChildControl( Parent, Div );
@@ -910,8 +917,7 @@ export class Button extends BaseControl
 		//	gr: hard to style buttons/inputs, no benefit afaik, but somehow we shoulld make this an option
 		const ElementType = 'input';
 		Div = document.createElement(ElementType);
-		if ( Rect )
-			SetGuiControlStyle( Div, Rect );
+		SetGuiControlStyle( Div, Rect );
 		Div.type = 'button';
 		
 		Div.innerText = 'Pop.Gui.Button innertext';
@@ -928,7 +934,7 @@ export class Slider
 		this.InputElement = null;
 		this.ValueCache = undefined;
 	
-		this.Element = this.CreateElement(Parent);
+		this.Element = this.CreateElement(Parent,Rect);
 	}
 	
 	SetMinMax(Min,Max)
@@ -957,7 +963,7 @@ export class Slider
 		this.OnChanged( Value );
 	}
 	
-	CreateElement(Parent)
+	CreateElement(Parent,Rect)
 	{
 		const ListenToInput = function(InputElement)
 		{
@@ -1040,7 +1046,7 @@ export class TickBox
 		this.OnChanged( Value );
 	}
 	
-	CreateElement(Parent)
+	CreateElement(Parent,Rect)
 	{
 		let Input = document.createElement('input');
 		this.InputElement = Input;
@@ -1113,7 +1119,7 @@ export class Colour
 		this.OnChanged( Value );
 	}
 	
-	CreateElement(Parent)
+	CreateElement(Parent,Rect)
 	{
 		let Input = document.createElement('input');
 		this.InputElement = Input;
@@ -1217,8 +1223,7 @@ export class TextBox extends BaseControl
 
 		const ElementType = 'span';//'input';
 		const Div = document.createElement(ElementType);
-		if (Rect)
-			SetGuiControlStyle(Div,Rect);
+		SetGuiControlStyle(Div,Rect);
 		Parent.AddChildControl(Parent,Div);
 
 		const Input = document.createElement('input');

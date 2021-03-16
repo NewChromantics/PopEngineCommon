@@ -1,4 +1,5 @@
 import PromiseQueue from './PromiseQueue.js'
+import * as PopMath from './Math.js'
 
 //	gr: need to sort a dependency system
 //		PopEngineCommon/PopMath.js
@@ -135,22 +136,17 @@ export class ParamsWindow
 {
 	constructor(Params,OnAnyChanged,WindowRect,WindowName="Params")
 	{
-		OnAnyChanged = OnAnyChanged || function(){};
+		this.OnAnyChanged = OnAnyChanged || function(){};
+		
+		this.Params = Params;
 
 		//	if the window rect is a string, then it's for gui/form/div mapping
 		//	but to layout the controls, we still want some value
 		const DefaultWidth = 600;
 		WindowRect = WindowRect || [800,20,DefaultWidth,300];
 		const WindowWidth = !isNaN(WindowRect[2]) ? WindowRect[2] : DefaultWidth;
+		this.WindowWidth = WindowWidth;
 		this.ControlTop = 10;
-
-		const LabelLeft = 10;
-		const LabelWidth = WindowWidth * 0.3;
-		const LabelHeight = 18;
-		const ControlLeft = LabelLeft + LabelWidth + 10;
-		const ControlWidth = WindowWidth - ControlLeft - 40;
-		const ControlHeight = LabelHeight;
-		const ControlSpacing = 10;
 
 		this.Window = new Pop.Gui.Window(WindowName,WindowRect,false);
 		this.Window.EnableScrollbars(false,true);
@@ -203,7 +199,18 @@ export class ParamsWindow
 	
 	AddParamUnsafe(Name,Min,Max,CleanValue,TreatAsType)
 	{
-		this.ParamMetas[Name] = GetMetaFromArguments(Array.from(arguments));
+		const Params = this.Params;
+		const WindowWidth = this.WindowWidth;
+		const LabelLeft = 10;
+		const LabelWidth = WindowWidth * 0.3;
+		const LabelHeight = 18;
+		const ControlLeft = LabelLeft + LabelWidth + 10;
+		const ControlWidth = WindowWidth - ControlLeft - 40;
+		const ControlHeight = LabelHeight;
+		const ControlSpacing = 10;
+
+
+		this.ParamMetas[Name] = this.GetMetaFromArguments(Array.from(arguments));
 
 		//	AddParam('x',Math.floor)
 		if (isFunction(Min) && CleanValue === undefined)
@@ -237,7 +244,7 @@ export class ParamsWindow
 		let SetValue = function (Value,IsFinalValue)
 		{
 			Params[Name] = Value;
-			OnAnyChanged(Params,Name,Value,IsFinalValue);
+			this.OnAnyChanged(Params,Name,Value,IsFinalValue);
 			this.WaitForParamsChangedPromiseQueue.Push([Params,Name,Value,IsFinalValue]);
 		}.bind(this);
 		let IsValueSignificantChange = function (Old,New)
@@ -458,21 +465,21 @@ export class ParamsWindow
 			GetValue = function ()
 			{
 				const RealValue = RealGetValue();
-				const NormValue = Math.Range(Min,Max,RealValue);
-				const ControlValue = Math.Lerp(TickMin,TickMax,NormValue);
+				const NormValue = PopMath.Range(Min,Max,RealValue);
+				const ControlValue = PopMath.Lerp(TickMin,TickMax,NormValue);
 				return ControlValue;
 			}
 			SetValue = function (ControlValue,IsFinalValue)
 			{
-				const NormValue = Math.Range(TickMin,TickMax,ControlValue);
-				const RealValue = Math.Lerp(Min,Max,NormValue);
+				const NormValue = PopMath.Range(TickMin,TickMax,ControlValue);
+				const RealValue = PopMath.Lerp(Min,Max,NormValue);
 				//	this should have been cleaned, but maybe needs it agian?
 				RealSetValue(RealValue,IsFinalValue);
 			}
 			GetLabelForValue = function (ControlValue)
 			{
-				const NormValue = Math.Range(TickMin,TickMax,ControlValue);
-				const RealValue = Math.Lerp(Min,Max,NormValue);
+				const NormValue = PopMath.Range(TickMin,TickMax,ControlValue);
+				const RealValue = PopMath.Lerp(Min,Max,NormValue);
 				let Value = RealCleanValue(RealValue);
 				if (IsEnum)
 				{
@@ -484,11 +491,11 @@ export class ParamsWindow
 			}
 			CleanValue = function (ControlValue)
 			{
-				let NormValue = Math.Range(TickMin,TickMax,ControlValue);
-				let RealValue = Math.Lerp(Min,Max,NormValue);
+				let NormValue = PopMath.Range(TickMin,TickMax,ControlValue);
+				let RealValue = PopMath.Lerp(Min,Max,NormValue);
 				let Value = RealCleanValue(RealValue);
-				NormValue = Math.Range(Min,Max,RealValue);
-				ControlValue = Math.Lerp(TickMin,TickMax,NormValue);
+				NormValue = PopMath.Range(Min,Max,RealValue);
+				ControlValue = PopMath.Lerp(TickMin,TickMax,NormValue);
 				return ControlValue;
 			}
 		}
