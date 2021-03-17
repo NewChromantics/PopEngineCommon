@@ -1,7 +1,11 @@
 export default class Pool
 {
-	constructor(AllocItem,OnWarning,FindBestFree)
+	constructor(Name,AllocItem,OnWarning,FindBestFree)
 	{
+		if ( typeof Name != 'string' )
+			throw `New constructor for pool, first argument should be name, not ${Name}`;
+		this.Name = Name;
+		
 		if ( !OnWarning )
 			OnWarning = function(){};
 		
@@ -22,7 +26,7 @@ export default class Pool
 		//	this lets us filter & add new pool items based on arguments
 		let BestFreeIndex = this.FindBestFree(this.FreeItems,...arguments);
 		if ( BestFreeIndex === undefined )
-			throw `Pool FindBestFree() should not return undefined`;
+			throw `Pool ${this.Name} FindBestFree() should not return undefined`;
 
 		//	add a new item if we know there's none availible
 		if ( BestFreeIndex < 0 || BestFreeIndex === false || BestFreeIndex === null )
@@ -30,12 +34,13 @@ export default class Pool
 			const NewItem = this.AllocItem(...arguments);
 			this.FreeItems.push(NewItem);
 			BestFreeIndex = this.FreeItems.length-1;
+			this.DebugPoolSize();
 		}
 
 		//	splice returns array of cut items
 		const Item = this.FreeItems.splice(BestFreeIndex,1)[0];
 		if ( Item === undefined )
-			throw `No free items to allocate from`;
+			throw `No free items to allocate from in pool ${this.Name}`;
 		this.UsedItems.push(Item);
 		
 		return Item;
@@ -47,11 +52,16 @@ export default class Pool
 		const UsedIndex = this.UsedItems.indexOf(Item);
 		if ( UsedIndex < 0 )
 		{
-			this.OnWarning(`Releasing item ${Item} back into pool, but missing from Used Items list`);
+			this.OnWarning(`Pool ${this.Name} Releasing item ${Item} back into pool, but missing from Used Items list`);
 			return;
 		}
 		this.UsedItems = this.UsedItems.filter( i => i != Item );
 		this.FreeItems.push( Item );
+	}
+	
+	DebugPoolSize()
+	{
+		this.OnWarning(`Pool ${this.Name} size now x${this.UsedItems.length} Used, x${this.FreeItems.length} free`);
 	}
 }
 
