@@ -1,7 +1,7 @@
 import PopImage from './PopWebImageApi.js'
 import FileCache_t from './FileCache.js'
 import PromiseQueue from './PromiseQueue.js'
-import {Debug,Warning,CreatePromise} from './PopWebApiCore.js'
+import {Debug,Warning,CreatePromise,Yield} from './PopWebApiCore.js'
 
 const Default = 'FileSystem.js Module';
 export default Default;

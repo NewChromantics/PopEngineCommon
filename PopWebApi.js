@@ -78,12 +78,6 @@ window.addEventListener('visibilitychange',function () { SetIsForeground(!docume
 
 
 
-export function GetPlatform()
-{
-	return 'Web';
-}
-
-
 //	computer name wants to be some kind of unique, but not-neccessarily unique name
 //	this doesn't really exist, so store & retrieve a random string in the session
 //	storage, so we can at least have unique tabs
@@ -164,14 +158,6 @@ export function GetExeArguments()
 	return UrlParams;
 }
 
-
-export function GetTimeNowMs()
-{
-	//	this returns a float, even though it's in ms,
-	//	so round to integer
-	const Now = performance.now();
-	return Math.floor(Now);
-}
 
 export function ShowWebPage(Url)
 {
@@ -406,13 +392,6 @@ export function CompileAndRun(Source,Filename)
 	//	note: normal API returns evaluation result here, not that we usually use it...
 }
 
-
-export async function Yield(Milliseconds)
-{
-	const Promise = CreatePromise();
-	setTimeout( Promise.Resolve, Milliseconds );
-	return Promise;
-}
 
 /*
 Pop.LeapMotion = {};
