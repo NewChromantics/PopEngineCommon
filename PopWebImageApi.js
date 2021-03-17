@@ -615,7 +615,9 @@ export default class PopImage
 		//	non-power of 2 must be clamp to edge
 		const RepeatMode = gl.CLAMP_TO_EDGE;
 		//const RepeatMode = gl.MIRRORED_REPEAT;
-		const FilterMode = this.LinearFilter ? gl.LINEAR : gl.NEAREST;
+		//	gr: check support of FloatLinearTextureSupported before allowing linear
+		//const FilterMode = this.LinearFilter ? gl.LINEAR : gl.NEAREST;
+		const FilterMode = gl.NEAREST;
 		
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, RepeatMode);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, RepeatMode);

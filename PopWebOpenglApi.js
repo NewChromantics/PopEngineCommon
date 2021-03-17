@@ -654,8 +654,11 @@ export class Window
 		this.ScreenRectCache = null;
 		this.TextureHeap = new HeapMeta("Opengl Textures");
 		this.GeometryHeap = new HeapMeta("Opengl Geometry");
-
+	
+	
+		//	by default these are off in webgl1, enabled via extensions
 		this.FloatTextureSupported = false;
+		this.FloatLinearTextureSupported = false;
 		this.Int32TextureSupported = false;	//	depth texture 24,8
 		
 		this.ActiveTextureIndex = 0;
@@ -734,6 +737,12 @@ export class Window
 		//	resize to original rect
 		const Canvas = this.GetCanvasElement();
 		this.RefreshCanvasResolution();
+	}
+	
+	ResetActiveTextureSlots()
+	{
+		this.ActiveTextureIndex = 0;
+		//	clear entries?
 	}
 	
 	AllocTextureIndex(Image)
@@ -1029,6 +1038,14 @@ export class Window
 			Context.FloatTextureSupported = true;
 			
 		}.bind(this);
+		
+		const InitFloatLinearTexture = function(Context)
+		{
+			//	gl.Float already exists, but this now allows it for texImage
+			this.FloatLinearTextureSupported = true;
+			Context.FloatLinearTextureSupported = true;
+			
+		}.bind(this);
 
 		const InitDepthTexture = function(Context,Extension)
 		{
@@ -1056,7 +1073,10 @@ export class Window
 		};
 		
 		if ( AllowFloatTextures )
+		{
 			EnableExtension('OES_texture_float',InitFloatTexture);
+			EnableExtension('OES_texture_float_linear',InitFloatLinearTexture);
+		}
 		EnableExtension('WEBGL_depth_texture',InitDepthTexture);
 		EnableExtension('EXT_blend_minmax');
 		EnableExtension('OES_vertex_array_object', this.InitVao.bind(this) );
@@ -1390,8 +1410,8 @@ export class RenderTarget
 			const GlTextureNames = [ gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7 ];
 			function UnbindTextureSlot(SlotName)
 			{
-				gl.activeTexture(SlotName);
-				gl.bindTexture(gl.TEXTURE_2D, null );
+				//gl.activeTexture(SlotName);
+				//gl.bindTexture(gl.TEXTURE_2D, null );
 			}
 			GlTextureNames.forEach(UnbindTextureSlot);
 		}
@@ -1500,6 +1520,8 @@ export class RenderTarget
 		}
 		
 		const gl = this.GetGlContext();
+		
+		RenderContext.ResetActiveTextureSlots();
 		
 		//	this doesn't make any difference
 		if ( gl.CurrentBoundShaderHash != GetUniqueHash(Shader) )
@@ -1622,7 +1644,7 @@ class TextureRenderTarget extends RenderTarget
 			const Image = this.Images[0];
 			const AttachmentPoint = gl.COLOR_ATTACHMENT0;
 			const Texture = Image.GetOpenglTexture( RenderContext );
-			gl.bindTexture(gl.TEXTURE_2D, null);
+			//gl.bindTexture(gl.TEXTURE_2D, null);
 			gl.framebufferTexture2D(gl.FRAMEBUFFER, AttachmentPoint, gl.TEXTURE_2D, Texture, Level );
 		}
 		else
@@ -1685,9 +1707,13 @@ class TextureRenderTarget extends RenderTarget
 				throw "Is not frame buffer!";
 
 		//	gr: chrome on mac; linear filter doesn't error, but renders black, force it off
+		//	gr: this may be more to do with the extension OES_texture_float_linear
+		//		so we should check for support and make sure it never gets set in the opengl image
 		let PreviousFilter = null;
 		if ( this.Images )
 		{
+			//	gr: this is changing the active texture binding... but does it matter?
+			/*
 			const ImageTarget = this.Images[0];
 			const Texture = ImageTarget.OpenglTexture;
 			gl.bindTexture(gl.TEXTURE_2D,Texture);
@@ -1699,7 +1725,7 @@ class TextureRenderTarget extends RenderTarget
 			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, RepeatMode);
 			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, RepeatMode);
 			//gl.bindTexture(gl.TEXTURE_2D,null);
-			
+			*/
 		}
 		
 		const FrameBuffer = this.GetFrameBuffer();
@@ -1733,7 +1759,7 @@ class TextureRenderTarget extends RenderTarget
 				const FilterMode = gl.LINEAR;
 				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, FilterMode);
 				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, FilterMode);
-				gl.bindTexture(gl.TEXTURE_2D,null);
+				//gl.bindTexture(gl.TEXTURE_2D,null);
 			}
 		}
 		
