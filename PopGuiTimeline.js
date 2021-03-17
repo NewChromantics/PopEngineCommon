@@ -1,5 +1,6 @@
-//	depends on Pop.Gui.ImageMap
-Pop.Gui.Timeline = class
+//	gr: this should be importing gui, image
+
+export default class TimelineViewer
 {
 	constructor(Name,Rect,GetData)
 	{
@@ -51,7 +52,7 @@ Pop.Gui.Timeline = class
 		const Height = 7;
 		const Pixels = new Uint8Array(Width*Height*Components);
 		Pixels.fill(255);
-		this.ViewImage = new Pop.Image('Timeline data');
+		this.ViewImage = new Pop.Image('Timeline No Data');
 		this.ViewImage.WritePixels( Width, Height, Pixels, Format );
 		function Write(x,y,Colour)
 		{
