@@ -1,6 +1,7 @@
 const Default = 'PopWebApiCore.js module';
 export default Default;
 export * from './PopApi.js'
+import {CreatePromise} from './PopApi.js'
 
 //	The only things that should be in this module are;
 //	- dependency free
