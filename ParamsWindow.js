@@ -157,7 +157,7 @@ export class ParamsWindow
 	
 	async WaitForParamsChanged()
 	{
-		return WaitForParamsChangedPromiseQueue.WaitForNext();
+		return this.WaitForParamsChangedPromiseQueue.WaitForNext();
 	}
 
 	GetParamMetas()
