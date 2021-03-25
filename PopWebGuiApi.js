@@ -595,16 +595,17 @@ function GetButtonFromMouseEventButton(MouseButton,AlternativeButton)
 	{
 		switch ( MouseButton )
 		{
-			case BrowserMouseLeft:	return Pop.SoyMouseButton.Back;
-			case BrowserMouseRight:	return Pop.SoyMouseButton.Forward;
+			case BrowserMouseLeft:	return 'Back';
+			case BrowserMouseRight:	return 'Forward';
 		}
 	}
-	
+		
+	//	gr: where is back and forward mouse buttons??
 	switch ( MouseButton )
 	{
-		case BrowserMouseLeft:		return Pop.SoyMouseButton.Left;
-		case BrowserMouseMiddle:	return Pop.SoyMouseButton.Middle;
-		case BrowserMouseRight:		return Pop.SoyMouseButton.Right;
+		case BrowserMouseLeft:		return 'Left';
+		case BrowserMouseMiddle:	return 'Middle';
+		case BrowserMouseRight:		return 'Right';
 	}
 	throw "Unhandled MouseEvent.button (" + MouseButton + ")";
 }
@@ -721,6 +722,7 @@ Pop.Gui.BaseControl = class
 		async function LoadFilesAsync(Files)
 		{
 			const NewFilenames = this.GetDragDropFilenames(Files);
+			const FinalAddedFiles = [];
 			async function LoadFile(File,FileIndex)
 			{
 				const Filename = NewFilenames[FileIndex];
@@ -729,7 +731,7 @@ Pop.Gui.BaseControl = class
 				const FileArray = await File.arrayBuffer();
 				const File8 = new Uint8Array(FileArray);
 				Pop.SetFileCache(Filename,File8);
-				NewFilenames.push(Filename);
+				FinalAddedFiles.push(Filename);
 			}
 			//	make a promise for each file
 			const LoadPromises = Files.map(LoadFile.bind(this));
@@ -737,7 +739,7 @@ Pop.Gui.BaseControl = class
 			await Promise.all(LoadPromises);
 
 			//	now notify with new filenames
-			this.OnDragDropQueue.Push(NewFilenames);
+			this.OnDragDropQueue.Push(FinalAddedFiles);
 		}
 
 		Event.preventDefault();

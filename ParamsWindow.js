@@ -94,13 +94,14 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 		//	set label (always!)
 		if (LabelControl)
 		{
-			LabelControl.SetValue(Label);
-			if (Control.SetLabel)
-				Control.SetLabel("");
+			LabelControl.SetText(Label);
+			/*
+			if (Control.SetText)
+				Control.SetText("");*/
 		}
-		else if (Control.SetLabel)
+		else if (Control.SetText)
 		{
-			Control.SetLabel(Label);
+			Control.SetText(Label);
 		}
 	}
 	
@@ -181,6 +182,18 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 	//		AddParam('Port',0,1,Math.floor,'String')
 	this.AddParam = function (Name,Min,Max,CleanValue,TreatAsType)
 	{
+		try
+		{
+			this.AddParamUnsafe(...arguments);
+		}
+		catch(e)
+		{
+			Pop.Warning(e);
+		}
+	}
+	
+	this.AddParamUnsafe = function (Name,Min,Max,CleanValue,TreatAsType)
+	{
 		this.ParamMetas[Name] = GetMetaFromArguments(Array.from(arguments));
 
 		//	AddParam('x',Math.floor)
@@ -224,16 +237,29 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 		}
 		let GetLabelForValue = undefined;
 
+		function MakeControl(Type,Rect,Suffix='')
+		{
+			try
+			{
+				return new Type(Window,`${Name}${Suffix}`);
+			}
+			catch(e)
+			{
+				return new Type(Window,[LabelLeft,LabelTop,LabelWidth,LabelHeight]);
+			}
+		}
+
+
 		let Window = this.Window;
 		let ControlTop = this.ControlTop;
 		const LabelTop = ControlTop;
-		const LabelControl = new Pop.Gui.Label(Window,[LabelLeft,LabelTop,LabelWidth,LabelHeight]);
-		LabelControl.SetValue(Name);
+		const LabelControl = MakeControl(Pop.Gui.Label,[LabelLeft,LabelTop,LabelWidth,LabelHeight],'Label');
+		LabelControl.SetText(Name);
 		let Control = null;
 
 		if (TreatAsType == 'Button' && Pop.Gui.Button !== undefined)
 		{
-			Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.Button,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			Control.OnClicked = function ()
 			{
 				//	call the control's OnChanged func
@@ -245,12 +271,12 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 		}
 		else if (typeof Params[Name] === 'boolean')
 		{
-			Control = new Pop.Gui.TickBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.TickBox,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			CleanValue = function (Value) { return Value == true; }
 		}
 		else if (isString(Params[Name]))
 		{
-			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.TextBox,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 		}
 		else if (TreatAsType == 'Colour' && Pop.Gui.Colour === undefined)
 		{
@@ -259,7 +285,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 			//	todo: swap tickbox for a button when we have one
 			//	gr: lets use a text box for now
 			//	gr: could make 3 text boxes here
-			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.TextBox,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			const ColourDecimals = 3;
 			function StringToColourfff(String)
 			{
@@ -342,7 +368,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 		}
 		else if (TreatAsType == 'Colour' && Pop.Gui.Colour !== undefined)
 		{
-			Control = new Pop.Gui.Colour(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.Colour,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			CleanValue = function (Valuefff)
 			{
 				Pop.Debug(`CleanValue(${Valuefff}) for colour`);
@@ -362,7 +388,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 			if (!CleanValue)
 				CleanValue = function (v) { return Number(v); };
 
-			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.TextBox,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 
 			const RealGetValue = GetValue;
 			const RealSetValue = SetValue;
@@ -414,7 +440,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 			const TickMin = 0;
 			const TickMax = (CleanValue === Math.floor) ? (Max - Min) : 1000;
 			const Notches = (CleanValue === Math.floor) ? (Max - Min) : 10;
-			Control = new Pop.Gui.Slider(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.Slider,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			Control.SetMinMax(TickMin,TickMax,Notches);
 
 			const RealGetValue = GetValue;
@@ -520,7 +546,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 
 function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
 {
-	Pop.Warn("Using deprecated CreateParamsWindow(), switch to new Pop.TParamsWindow");
+	Pop.Warning("Using deprecated CreateParamsWindow(), switch to new Pop.TParamsWindow");
 	const Window = new Pop.ParamsWindow(Params,OnAnyChanged,WindowRect);
 	return Window;
 }

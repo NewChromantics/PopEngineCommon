@@ -2,7 +2,7 @@
 //	gr: safari scopes const & let away from modules,
 //		so if this file is loaded outside a module, Pop isn't availible
 //		to modules in safari. So fully-global/singletons need to be var.
-var Pop = {};
+var Pop = Pop || {};
 
 
 
@@ -335,7 +335,7 @@ Pop.WebApi.TFileCache = class
 			{
 				if ( this.Cache[Filename] === false )
 					throw `We have chunks, but cache is false (error), shouldn't hit this combination, something has errored but we still have chunks (still downloading?)`;
-				Pop.Debug(`Skipping chunk resolve of ${Filename} x${Meta.ContentChunks.length} chunks`);
+				//Pop.Debug(`Skipping chunk resolve of ${Filename} x${Meta.ContentChunks.length} chunks`);
 				return Meta.ContentChunks;
 			}
 		}		
@@ -361,7 +361,7 @@ Pop.WebApi.TFileCache = class
 			{
 				if ( this.Cache[Filename] === false )
 					throw `We have chunks, but cache is false (error), shouldn't hit this combination, something has errored but we still have chunks (still downloading?)`;
-				Pop.Debug(`Skipping chunk resolve of ${Filename} x${Meta.ContentChunks.length} chunks`);
+				//Pop.Debug(`Skipping chunk resolve of ${Filename} x${Meta.ContentChunks.length} chunks`);
 				return Meta.ContentChunks;
 			}
 		}		
@@ -406,9 +406,8 @@ Pop.SetFileCache = Pop.WebApi.FileCache.Set.bind(Pop.WebApi.FileCache);
 Pop.SetFileCacheError = Pop.WebApi.FileCache.SetError.bind(Pop.WebApi.FileCache);
 
 //	simple aliases
-Pop.Debug = console.log;
-Pop.Warn = console.warn;
-Pop.Warning = console.warn;
+Pop.Debug = Pop.Debug || console.log;
+Pop.Warning = Pop.Warning || console.warn;
 
 Pop.GetPlatform = function()
 {
@@ -499,9 +498,16 @@ Pop.GetExeArguments = function()
 
 Pop.GetTimeNowMs = function()
 {
-	return performance.now();
+	//	this returns a float, even though it's in ms,
+	//	so round to integer
+	const Now = performance.now();
+	return Math.floor(Now);
 }
 
+Pop.ShowWebPage = function(Url)
+{
+	window.open( Url, '_blank');
+}
 
 //	gr: if we call fetch() 100 times for the same url, we make 100 requests
 //		quick fix, have a cache of pending fetch() requests
@@ -523,6 +529,32 @@ class AbortControllerStub
 };
 window.AbortController = window.AbortController || AbortControllerStub;
 
+//	gr: hack for kandinsky;
+//		if any fetch's fail
+Pop.WebApi.InternetStatus = true;	//	we can pretty safely assume it's initially fine
+Pop.WebApi.InternetStatusChangedQueue = new WebApi_PromiseQueue('InternetStatusChangedQueue');
+
+Pop.WebApi.WaitForInternetStatusChange = async function()
+{
+	//	wait for a change (dirty) and then return latest status 
+	await Pop.WebApi.InternetStatusChangedQueue.WaitForNext();
+	return Pop.WebApi.InternetStatus;
+}
+
+//	call this when any kind of download gets new information
+function OnInternetGood()
+{
+	Pop.WebApi.InternetStatus = true;
+	Pop.WebApi.InternetStatusChangedQueue.PushUnique();
+}
+//	call when any fetch fails (not due to 404 or anything with a response)
+function OnInternetBad()
+{
+	Pop.WebApi.InternetStatus = false;
+	Pop.WebApi.InternetStatusChangedQueue.PushUnique();
+}
+
+
 async function CreateFetch(Url)
 {
 	//	gr: check for not a string?
@@ -542,9 +574,21 @@ async function CreateFetch(Url)
 	//method: 'get',
 	Params.signal = Signal;
 
-	const Fetched = await fetch(Url,Params);
-	if (!Fetched.ok)
-		throw `Failed to fetch(${Url}) ${Fetched.statusText}`;
+	//	fetch() throws when disconnected, catch it
+	let Fetched = null;
+	try
+	{
+		Fetched = await fetch(Url,Params);
+		if (!Fetched.ok)
+			throw `fetch result not ok, status=${Fetched.statusText}`;
+		OnInternetGood();
+	}
+	catch(e)
+	{
+		//	gr; need to check for 404 here
+		OnInternetBad();
+		throw `Fetch error with ${Url}; ${e}`;
+	}
 	Fetched.Cancel = Cancel;
 
 	return Fetched;
@@ -614,6 +658,7 @@ async function FetchArrayBufferStream(Url,OnProgress)
 			}
 			*/
 			const Chunk = await Reader.read();
+			OnInternetGood();
 			const Finished = Chunk.done;
 			const ChunkContents = Chunk.value;
 			//	chunk is undefined on last (finished)read
@@ -635,8 +680,17 @@ async function FetchArrayBufferStream(Url,OnProgress)
 		return true;
 	}
 	
-	const Contents8 = await ReaderThread();
-	return Contents8;
+	try
+	{
+		const Contents8 = await ReaderThread();
+		return Contents8;
+	}
+	catch(e)
+	{
+		Pop.Warning(`Reader thread error; ${e}`);
+		OnInternetBad();
+		throw e;
+	}
 }
 
 async function FetchOnce(Url,FetchFunc,OnProgress)
@@ -644,12 +698,9 @@ async function FetchOnce(Url,FetchFunc,OnProgress)
 	if ( FetchCache.hasOwnProperty(Url) )
 		return FetchCache[Url];
 	
-	//	gr: we happily want FetchFunc to throw, but just calling it here and throwing, chrome considers it
-	//		"uncaught" as it's not pre-setup. Put try/catch around and throw it anyway
-	//		we should hope FetchCache[Url] still has a rejected promise, but for now this gets rid of the incorrect exception
+	//	run the fetch, wait for it to finish, then clear the cache
 	try
 	{
-		//	run the fetch, wait for it to finish, then clear the cache
 		FetchCache[Url] = FetchFunc(Url,OnProgress);
 		const Contents = await FetchCache[Url];
 		delete FetchCache[Url];
@@ -657,6 +708,16 @@ async function FetchOnce(Url,FetchFunc,OnProgress)
 	}
 	catch(e)
 	{
+		//	gr: to make the app retry (because of the internet-bad stuff)
+		//		delete the fetch cache
+		//		the point of this was originally to stop multiple fetch()s
+		//		previously, if it failed, we ended up with a dangling [rejected] fetch cache
+		//	gr: to avoid CPU hammering, we delay this so if something is trying to fetch
+		//		every frame, we don't constantly fetch & fail
+		//		the downside is we POSSIBLY start a successfull one here and this fetch cache
+		//		gets deleted (can that happen? there's a check before... maybe in multithreaded app it would happen)
+		await Pop.Yield(1000); 
+		delete FetchCache[Url];
 		throw e;
 	}
 }
@@ -682,16 +743,18 @@ Pop.LoadFileAsImageAsync = async function(Filename)
 	{
 		let Promise = Pop.CreatePromise();
 		const HtmlImage = new Image();
-		HtmlImage.crossOrigin = "anonymous";
 		HtmlImage.onload = function ()
 		{
 			Promise.Resolve(HtmlImage);
 		};
+		HtmlImage.addEventListener('load', HtmlImage.onload, false);
 		HtmlImage.onerror = function (Error)
 		{
 			Promise.Reject(Error);
 		}
+		HtmlImage.crossOrigin = "anonymous";
 		//  trigger load
+		HtmlImage.src = '';
 		HtmlImage.src = Filename;
 		return Promise;
 	}

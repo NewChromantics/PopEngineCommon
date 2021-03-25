@@ -19,6 +19,8 @@ Pop.GlslVersion = 100;
 //		(and we typically want to know it without a render context)
 //		set to false to force it off (eg. for testing on desktop against
 //		ios which doesn't support it [as of 13]
+//	gr: mac safari 14.0.3 seems to not error at float texture support, but just writes zeroes
+//		tested filters, clamping, POW sizes...
 Pop.Opengl.CanRenderToFloat = undefined;
 
 //	allow turning off float support
@@ -59,6 +61,9 @@ const TestFrameBuffer = false;
 const TestAttribLocation = false;
 const DisableOldVertexAttribArrays = false;
 const AllowVao = !Pop.GetExeArguments().DisableVao;
+//	I was concerned active texture was being used as render target and failing to write
+const CheckActiveTexturesBeforeRenderTargetBind = false;	
+const UnbindActiveTexturesBeforeRenderTargetBind = false;
 
 //	if we fail to get a context (eg. lost context) wait this long before restarting the render loop (where it tries again)
 //	this stops thrashing cpu/system whilst waiting
@@ -640,7 +645,8 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 	this.FloatTextureSupported = false;
 	this.Int32TextureSupported = false;	//	depth texture 24,8
 	
-	this.ActiveTexureIndex = 0;
+	this.ActiveTextureIndex = 0;
+	this.ActiveTextureRef = {};
 	this.TextureRenderTargets = [];	//	this is a context asset, so maybe it shouldn't be kept here
 
 	this.Close = function ()
@@ -688,12 +694,17 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		this.RefreshCanvasResolution();
 	}
 	
-	this.AllocTexureIndex = function()
+	this.AllocTextureIndex = function(Image)
 	{
 		//	gr: make a pool or something
 		//		we fixed this on desktop, so take same model
-		const Index = (this.ActiveTexureIndex % 8);
-		this.ActiveTexureIndex++;
+		const Index = (this.ActiveTextureIndex % 8);
+		this.ActiveTextureIndex++;
+	
+		//	gr: only keep image reference for debugging!
+		if ( CheckActiveTexturesBeforeRenderTargetBind )
+			this.ActiveTextureRef[Index] = Image;	//	for debugging, check if any active textures are our target
+			
 		return Index;
 	}
 	
@@ -708,7 +719,26 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		//	if we're fitting inside a div, then Parent should be the name of a div
 		//	we could want a situation where we want a rect inside a parent? but then
 		//	that should be configured by css?
+
 		let Element = document.getElementById(Name);
+
+		// Check IFrames for Canvas Elements
+		if (!Element)
+		{
+			let IFrames = document.getElementsByTagName("iframe")
+			let IframeCanvases = Object.keys(IFrames).map((key) =>
+			{
+				let iframe = IFrames[key];
+				let iframe_document = iframe.contentDocument || iframe.contentWindow.document;
+				return iframe_document.getElementById(Name);
+			});
+
+			if(IframeCanvases.length > 1)
+				throw `More than one Canvas with the name ${Name} found`
+
+			Element = IframeCanvases[0]
+		}
+
 		if ( Element )
 		{
 			//	https://stackoverflow.com/questions/254302/how-can-i-determine-the-type-of-an-html-element-in-javascript
@@ -717,6 +747,10 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 				throw `Pop.Opengl.Window ${Name} needs to be a canvas, is ${Element.nodeName}`;
 			return Element;
 		}
+
+		// if Rect is passed in as an object assume it is the canvas
+		if (typeof Rect === 'object' && Rect !== null)
+			return Rect;
 		
 		//	create new canvas
 		this.NewCanvasElement = document.createElement('canvas');
@@ -852,7 +886,8 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 	this.ResetContextAssets = function()
 	{
 		//	dont need to reset this? but we will anyway
-		this.ActiveTexureIndex = 0;
+		this.ActiveTextureIndex = 0;
+		this.ActiveTextureRef = {};
 		
 		//	todo: proper cleanup
 		this.TextureRenderTargets = [];
@@ -1005,11 +1040,13 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		try
 		{
 			const FloatTexture = new Pop.Image([1,1],'Float4');
+			FloatTexture.Name = 'IsFloatRenderTargetSupported';
 			const RenderTarget = new Pop.Opengl.TextureRenderTarget( [FloatTexture] );
 			const RenderContext = this;
-			RenderTarget.BindRenderTarget( RenderContext );
+			const Unbind = RenderTarget.BindRenderTarget( RenderContext );
 			//	cleanup!
 			//	todo: restore binding, viewports etc
+			Unbind();
 			return true;
 		}
 		catch(e)
@@ -1091,12 +1128,15 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			const RenderContext = this;
 			if ( !this.RenderTarget )
 				this.RenderTarget = new WindowRenderTarget(this);
-			this.RenderTarget.BindRenderTarget( RenderContext );
+			const Unbind = this.RenderTarget.BindRenderTarget( RenderContext );
 
 			//	request next frame, before any render fails, so we will get exceptions thrown for debugging, but recover
 			window.requestAnimationFrame( Render.bind(this) );
 
 			this.OnRender( this.RenderTarget );
+			
+			Unbind();
+			
 			Pop.Opengl.Stats.Renders++;
 		}
 		window.requestAnimationFrame( Render.bind(this) );
@@ -1143,10 +1183,8 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		this.GeometryHeap.OnDeallocated( Geometry.OpenglByteSize );
 	}
 	
-	this.GetTextureRenderTarget = function(Textures)
+	this.GetRenderTargetIndex = function(Textures)
 	{
-		if ( !Array.isArray(Textures) )
-			Textures = [Textures];
 		function MatchRenderTarget(RenderTarget)
 		{
 			const RTTextures = RenderTarget.Images;
@@ -1163,16 +1201,43 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			return true;
 		}
 		
-		let RenderTarget = this.TextureRenderTargets.find(MatchRenderTarget);
-		if ( RenderTarget )
-			return RenderTarget;
+		const RenderTargetIndex = this.TextureRenderTargets.findIndex(MatchRenderTarget);
+		if ( RenderTargetIndex < 0 )
+			return false;
+		return RenderTargetIndex;
+	}
+	
+	this.GetTextureRenderTarget = function(Textures)
+	{
+		if ( !Array.isArray(Textures) )
+			Textures = [Textures];
+		
+		const RenderTargetIndex = this.GetRenderTargetIndex(Textures);
+		if ( RenderTargetIndex !== false )
+			return this.TextureRenderTargets[RenderTargetIndex];
 		
 		//	make a new one
-		RenderTarget = new Pop.Opengl.TextureRenderTarget( Textures );
+		const RenderTarget = new Pop.Opengl.TextureRenderTarget( Textures );
 		this.TextureRenderTargets.push( RenderTarget );
-		if ( !this.TextureRenderTargets.find(MatchRenderTarget) )
+		if ( this.GetRenderTargetIndex(Textures) === false )
 			throw "New render target didn't re-find";
 		return RenderTarget;
+	}
+	
+	this.FreeRenderTarget = function(Textures)
+	{
+		if ( !Array.isArray(Textures) )
+			Textures = [Textures];
+		
+		//	in case there's more than one!
+		while(true)
+		{
+			const TargetIndex = this.GetRenderTargetIndex(Textures);
+			if ( TargetIndex === false )
+				break;
+				
+			this.TextureRenderTargets.splice(TargetIndex,1);
+		}
 	}
 	
 	this.ReadPixels = function(Image,ReadBackFormat)
@@ -1180,7 +1245,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 		const RenderContext = this;
 		const gl = this.GetGlContext();
 		const RenderTarget = this.GetTextureRenderTarget(Image);
-		RenderTarget.BindRenderTarget( RenderContext );
+		const Unbind = RenderTarget.BindRenderTarget( RenderContext );
 		const Pixels = {};
 		Pixels.Width = RenderTarget.GetRenderTargetRect()[2];
 		Pixels.Height = RenderTarget.GetRenderTargetRect()[3];
@@ -1190,6 +1255,7 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			Pixels.Channels = 4;
 			Pixels.Data = new Uint8Array(Pixels.Width * Pixels.Height * Pixels.Channels);
 			gl.readPixels(0,0,Pixels.Width,Pixels.Height,gl.RGBA,gl.UNSIGNED_BYTE,Pixels.Data);
+			Unbind();
 			return Pixels;
 		}
 		else if ( ReadBackFormat == 'Float4' )
@@ -1197,10 +1263,12 @@ Pop.Opengl.Window = function(Name,Rect,CanvasOptions)
 			Pixels.Channels = 4;
 			Pixels.Data = new Float32Array(Pixels.Width * Pixels.Height * Pixels.Channels);
 			gl.readPixels(0,0,Pixels.Width,Pixels.Height,gl.RGBA,gl.FLOAT,Pixels.Data);
+			Unbind();
 			return Pixels;
 		}
 		//	this needs to restore bound rendertarget, really
 		//	although any renders should be binding render target explicitly
+		Unbind();
 	}
 
 	this.IsFullscreenSupported = function()
@@ -1292,10 +1360,31 @@ Pop.Opengl.RenderTarget = function()
 	this.RenderToRenderTarget = function(TargetTexture,RenderFunction,ReadBackFormat,ReadTargetTexture)
 	{
 		const RenderContext = this.GetRenderContext();
+
+		if ( CheckActiveTexturesBeforeRenderTargetBind )
+		{
+			const CurrentActiveTextureIndex =  (RenderContext.ActiveTextureIndex-1) % 8;
+			const ActiveTexture = RenderContext.ActiveTextureRef[CurrentActiveTextureIndex];
+			const ActiveTextureName = ActiveTexture ? ActiveTexture.Name : `<null ${CurrentActiveTextureIndex}>`;
+			Pop.Debug(`BindRenderTarget to ${TargetTexture.Name} active=${ActiveTextureName}`);
+		}
+		//	unbind all texture units
+		if ( UnbindActiveTexturesBeforeRenderTargetBind )
+		{
+			const gl = RenderContext.GetGlContext();
+			const GlTextureNames = [ gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7 ];
+			function UnbindTextureSlot(SlotName)
+			{
+				gl.activeTexture(SlotName);
+				gl.bindTexture(gl.TEXTURE_2D, null );
+			}
+			GlTextureNames.forEach(UnbindTextureSlot);
+		}
 		
 		//	setup render target
 		let RenderTarget = RenderContext.GetTextureRenderTarget( TargetTexture );
-		RenderTarget.BindRenderTarget( RenderContext );
+		const Unbind = RenderTarget.BindRenderTarget( RenderContext );
+		
 		
 		RenderFunction( RenderTarget );
 		
@@ -1310,6 +1399,8 @@ Pop.Opengl.RenderTarget = function()
 			const target = ReadTargetTexture !== undefined ? ReadTargetTexture : TargetTexture
 			target.WritePixels(Width,Height,Pixels,'RGBA');
 		}
+		
+		Unbind();
 		
 		//	todo: restore previously bound, not this.
 		//	restore rendertarget
@@ -1572,6 +1663,20 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 			if ( !gl.isFramebuffer( this.FrameBuffer ) )
 				throw "Is not frame buffer!";
 
+		//	gr: chrome on mac; linear filter doesn't error, but renders black, force it off
+		let PreviousFilter = null;
+		if ( this.Images )
+		{
+			const ImageTarget = this.Images[0];
+			const Texture = ImageTarget.OpenglTexture;
+			gl.bindTexture(gl.TEXTURE_2D,Texture);
+			PreviousFilter = ImageTarget.LinearFilter;
+			const FilterMode = gl.NEAREST;
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, FilterMode);
+			gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, FilterMode);
+			gl.bindTexture(gl.TEXTURE_2D,null);
+		}
+		
 		const FrameBuffer = this.GetFrameBuffer();
 		
 		//	todo: make this common code
@@ -1591,11 +1696,28 @@ Pop.Opengl.TextureRenderTarget = function(Images)
 		gl.scissor( ...Viewport );
 		
 		this.ResetState();
+		
+		function Unbind()
+		{
+			if ( this.Images )
+			{
+				const ImageTarget = this.Images[0];
+				const Texture = ImageTarget.OpenglTexture;
+				gl.bindTexture(gl.TEXTURE_2D,Texture);
+				PreviousFilter = ImageTarget.LinearFilter;
+				const FilterMode = gl.LINEAR;
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, FilterMode);
+				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, FilterMode);
+				gl.bindTexture(gl.TEXTURE_2D,null);
+			}
+		}
+		
+		return Unbind;
 	}
 	
-	this.AllocTexureIndex = function()
+	this.AllocTextureIndex = function()
 	{
-		return this.RenderContext.AllocTexureIndex();
+		return this.RenderContext.AllocTextureIndex();
 	}
 	
 	//	verify each image is same dimensions (and format?)
@@ -1619,9 +1741,9 @@ function WindowRenderTarget(Window)
 		return RenderContext;
 	}
 	
-	this.AllocTexureIndex = function()
+	this.AllocTextureIndex = function()
 	{
-		return Window.AllocTexureIndex();
+		return Window.AllocTextureIndex();
 	}
 
 	this.GetScreenRect = function()
@@ -1658,6 +1780,11 @@ function WindowRenderTarget(Window)
 		gl.scissor( ...Viewport );
 		
 		this.ResetState();
+		
+		function Unbind()
+		{
+		}
+		return Unbind;
 	}
 	
 	this.GetViewportWidth = function()
@@ -1671,7 +1798,8 @@ function WindowRenderTarget(Window)
 		const RenderRect = this.GetRenderTargetRect();
 		return RenderRect[3] * (this.ViewportMinMax[3]-this.ViewportMinMax[1]);
 	}
-	
+
+	this.FreeRenderTarget = RenderContext.FreeRenderTarget.bind(RenderContext);
 }
 
 
@@ -1783,6 +1911,7 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 		if ( !CompileStatus )
 		{
 			let Error = gl.getShaderInfoLog(Shader);
+			console.error(`Failed to compile ${this.Name}(${TypeName}): ${Error}`);
 			throw `Failed to compile ${this.Name}(${TypeName}): ${Error}`;
 		}
 		return Shader;
@@ -1820,7 +1949,7 @@ Pop.Opengl.Shader = function(RenderContext,Name,VertShaderSource,FragShaderSourc
 			return;
 		if( Array.isArray(Value) )					this.SetUniformArray( Uniform, UniformMeta, Value );
 		else if( Value instanceof Float32Array )	this.SetUniformArray( Uniform, UniformMeta, Value );
-		else if ( Value instanceof Pop.Image )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTexureIndex() );
+		else if ( Value instanceof Pop.Image )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTextureIndex(Value) );
 		else if ( typeof Value === 'number' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else if ( typeof Value === 'boolean' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else
@@ -2014,7 +2143,7 @@ Pop.Opengl.TriangleBuffer = class
 		//	backwards compatibility
 		if ( typeof Attribs == 'string' )
 		{
-			Pop.Warn("[deprecated] Old TriangleBuffer constructor, use a keyed object");
+			Pop.Warning("[deprecated] Old TriangleBuffer constructor, use a keyed object");
 			const VertexAttributeName = arguments[1];
 			const VertexData = arguments[2];
 			const VertexSize = arguments[3];
@@ -2043,7 +2172,7 @@ Pop.Opengl.TriangleBuffer = class
 	{
 		if ( this.BufferContextVersion !== RenderContext.ContextVersion )
 		{
-			Pop.Warn("Buffer context version changed",this.BufferContextVersion,RenderContext.ContextVersion);
+			Pop.Warning("Buffer context version changed",this.BufferContextVersion,RenderContext.ContextVersion);
 			this.CreateBuffer(RenderContext);
 		}
 		return this.Buffer;

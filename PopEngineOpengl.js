@@ -132,6 +132,7 @@ export class Shader
 		if ( !CompileStatus )
 		{
 			let Error = gl.getShaderInfoLog(Shader);
+			console.error(`Failed to compile ${this.Name}(${TypeName}): ${Error}`);
 			throw `Failed to compile ${this.Name}(${TypeName}): ${Error}`;
 		}
 		return Shader;
@@ -169,7 +170,7 @@ export class Shader
 			return;
 		if( Array.isArray(Value) )					this.SetUniformArray( Uniform, UniformMeta, Value );
 		else if( Value instanceof Float32Array )	this.SetUniformArray( Uniform, UniformMeta, Value );
-		else if ( Value instanceof Pop.Image )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTexureIndex() );
+		else if ( Value instanceof Pop.Image )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTextureIndex() );
 		else if ( typeof Value === 'number' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else if ( typeof Value === 'boolean' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else
@@ -355,7 +356,7 @@ class TriangleBuffer
 		//	backwards compatibility
 		if ( typeof Attribs == 'string' )
 		{
-			Pop.Warn("[deprecated] Old TriangleBuffer constructor, use a keyed object");
+			Pop.Warning("[deprecated] Old TriangleBuffer constructor, use a keyed object");
 			const VertexAttributeName = arguments[1];
 			const VertexData = arguments[2];
 			const VertexSize = arguments[3];
@@ -384,7 +385,7 @@ class TriangleBuffer
 	{
 		if ( this.BufferContextVersion !== RenderContext.ContextVersion )
 		{
-			Pop.Warn("Buffer context version changed",this.BufferContextVersion,RenderContext.ContextVersion);
+			Pop.Warning("Buffer context version changed",this.BufferContextVersion,RenderContext.ContextVersion);
 			this.CreateBuffer(RenderContext);
 		}
 		return this.Buffer;
