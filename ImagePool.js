@@ -5,7 +5,7 @@ import { GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
 
 export class ImagePool extends Pool
 {
-	constructor(Name,OnWarning)
+	constructor(Name,OnWarning=function(){})
 	{
 		let Debug_AllocatedImageCounter = 0;
 
