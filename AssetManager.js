@@ -8,11 +8,13 @@ import {GetUniqueHash} from './Hash.js'
 
 //	AssetCacheContexts[ContextHash][AssetName] = CachedAsset
 PopAssetManager.AssetCacheContexts = {};
+PopAssetManager.AssetPendingContexts = {};	//	promises of pending loads
 
 //	put this somewhere else
 //		AssetFetchFunctions[Name] = function(Context)
 //	where the function takes a context (eg. render context) and returns the apporiate asset or throws if not loaded
 PopAssetManager.AssetFetchFunctions = {};
+PopAssetManager.AssetFetchAsyncFunctions = {};
 
 //	for shaders (later more files?) multiple-filenames => asset name need to be identifiable/split/joined but we
 //	need to distinguish them from valid filename chars. Not much in unix/osx is invalid...
@@ -22,12 +24,27 @@ PopAssetManager.AssetFilenameJoinString = ':';
 PopAssetManager.GetAsset = GetAsset;
 PopAssetManager.RegisterShaderAssetFilename = RegisterShaderAssetFilename;
 PopAssetManager.RegisterAssetFetchFunction = RegisterAssetFetchFunction;
-
+PopAssetManager.RegisterAssetAsyncFetchFunction = RegisterAssetAsyncFetchFunction;
 
 export function RegisterAssetFetchFunction(Filename,FetchFunction)
 {
 	PopAssetManager.AssetFetchFunctions[Filename] = FetchFunction;
 
+	//	auto invalidate the old asset, we're assuming there's a change
+	InvalidateAsset(Filename);
+	
+	return Filename;
+}
+
+export function RegisterAssetAsyncFetchFunction(Filename,FetchFunction)
+{
+	PopAssetManager.AssetFetchAsyncFunctions[Filename] = FetchFunction;
+	/*
+	if ( PopAssetManager.AssetFetchAsyncPending.hasOwnProperty(Filename) )
+	{
+		Pop.Warning(`Async asset function registered, and a load is pending, we need to handle this`);
+	}
+*/
 	//	auto invalidate the old asset, we're assuming there's a change
 	InvalidateAsset(Filename);
 	
@@ -43,31 +60,71 @@ function OnAssetChanged()
 export function GetAsset(Name,RenderContext)
 {
 	const Assets = PopAssetManager.AssetCacheContexts;
+	const Pendings = PopAssetManager.AssetPendingContexts;
 	const AssetFetchFunctions = PopAssetManager.AssetFetchFunctions;
+	const AssetFetchAsyncFunctions = PopAssetManager.AssetFetchAsyncFunctions;
 	
-	let ContextKey = GetUniqueHash( RenderContext );
+	const ContextKey = GetUniqueHash( RenderContext );
 	if ( !Assets.hasOwnProperty(ContextKey) )
 		Assets[ContextKey] = {};
+	if ( !Pendings.hasOwnProperty(ContextKey) )
+		Pendings[ContextKey] = {};
 	
-	let ContextAssets = Assets[ContextKey];
+	const ContextAssets = Assets[ContextKey];
+	const ContextPendings = Pendings[ContextKey];
 	
+	//	already loaded, return cached asset
 	if ( ContextAssets.hasOwnProperty(Name) )
 		return ContextAssets[Name];
 	
-	if ( !AssetFetchFunctions.hasOwnProperty(Name) )
-		throw "No known asset named "+ Name;
+	if ( !AssetFetchAsyncFunctions.hasOwnProperty(Name) )
+		if ( !AssetFetchFunctions.hasOwnProperty(Name) )
+			throw `No known asset named ${Name} registered`;
 	
-	Pop.Debug("Generating asset "+Name+"...");
+	Pop.Debug(`Generating asset ${Name}...`);
 	const Timer_Start = Pop.GetTimeNowMs();
-	ContextAssets[Name] = AssetFetchFunctions[Name]( RenderContext );
 	
-	if ( ContextAssets[Name] === undefined )
-		throw `Asset created for ${Name} is undefined`;
+	//	check if an async load is pending
+	if ( ContextPendings.hasOwnProperty(Name) )
+		throw `Asset ${Name} is async loading still...`;
 	
-	const Timer_Duration = Math.floor(Pop.GetTimeNowMs() - Timer_Start);
-	Pop.Debug("Generating asset "+Name+" took "+Timer_Duration + "ms");
-	OnAssetChanged( Name );
-	return ContextAssets[Name];
+	function OnLoadedAsset(Asset)
+	{
+		//	set cache
+		ContextAssets[Name] = Asset;
+		
+		//	delete pending
+		delete ContextPendings[Name];
+		
+		if ( Asset === undefined )
+			throw `Asset created for ${Name} is undefined`;
+		
+		const Timer_Duration = Math.floor(Pop.GetTimeNowMs() - Timer_Start);
+		Pop.Debug(`Generating asset ${Name} took ${Timer_Duration}ms`);
+		OnAssetChanged( Name );
+	}
+	
+	function OnFailedToLoadAsset(Error)
+	{
+		Pop.Warning(`todo: handle failed async loading of ${Name}! ${Error}`);
+		delete ContextPendings[Name];
+	}
+	
+	//	start async load
+	if ( AssetFetchAsyncFunctions.hasOwnProperty(Name) )
+	{
+		const LoadFunc = AssetFetchAsyncFunctions[Name];
+		ContextPendings[Name] = LoadFunc( RenderContext );
+		ContextPendings[Name].then( OnLoadedAsset ).catch( OnFailedToLoadAsset );
+		throw `Asset ${Name} is now async loading...`;
+	}
+	else
+	{
+		//	immediate load
+		const Asset = AssetFetchFunctions[Name]( RenderContext );
+		OnLoadedAsset(Asset);
+		return ContextAssets[Name];
+	}
 }
 
 
