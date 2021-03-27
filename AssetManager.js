@@ -2,7 +2,9 @@ const PopAssetManager = {};
 export default PopAssetManager;
 
 import {GetUniqueHash} from './Hash.js'
-import * as Opengl from './PopWebOpenglApi.js'
+//	gr:this import is crashing native
+//	need to fix this. Shaders or any type-specific asset stuff shouldn't really be in here anyway
+//import * as Opengl from './PopWebOpenglApi.js'
 
 //	AssetCacheContexts[ContextHash][AssetName] = CachedAsset
 PopAssetManager.AssetCacheContexts = {};
@@ -73,8 +75,6 @@ export function GetAsset(Name,RenderContext)
 //	gr: should this be somewhere else, not in the core asset manager?
 export function RegisterShaderAssetFilename(FragFilename,VertFilename)
 {
-	const AssetFetchFunctions = PopAssetManager.AssetFetchFunctions;
-
 	//	we use / as its not a valid filename char
 	const AssetName = FragFilename+PopAssetManager.AssetFilenameJoinString+VertFilename;
 	
@@ -83,7 +83,7 @@ export function RegisterShaderAssetFilename(FragFilename,VertFilename)
 		const ShaderName = AssetName;
 		const FragSource = Pop.LoadFileAsString(FragFilename);
 		const VertSource = Pop.LoadFileAsString(VertFilename);
-		const Shader = new Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
+		const Shader = new Pop.Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
 		return Shader;
 	}
 
