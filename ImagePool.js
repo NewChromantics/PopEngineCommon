@@ -1,6 +1,6 @@
 import Pool from './Pool.js'
 import PopImage from './PopWebImageApi.js'
-import { GetChannelsFromPixelFormat,IsFloatFormat } from './PopWebImageApi.js'
+import { GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
 
 
 export class ImagePool extends Pool

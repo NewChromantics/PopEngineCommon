@@ -1,24 +1,10 @@
+import { GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
+
 
 //	gr: I forget what browser this was for! add comments when we know!
 const WebApi_HtmlImageElement = window.hasOwnProperty('HTMLImageElement') ? window['HTMLImageElement'] : null;
 const WebApi_HtmlCanvasElement = window.hasOwnProperty('HTMLCanvasElement') ? window['HTMLCanvasElement'] : null;
 
-
-//	in c++ this is SoyPixelsFormat namespace
-export function GetChannelsFromPixelFormat(PixelFormat)
-{
-	switch(PixelFormat)
-	{
-		case 'Greyscale':	return 1;
-		case 'RGBA':		return 4;
-		case 'RGB':			return 3;
-		case 'Float3':		return 3;
-		case 'Float4':		return 4;
-		case 'ChromaU':		return 1;
-		case 'ChromaV':		return 1;
-	}
-	throw `unhandled GetChannelsFromPixelFormat(${PixelFormat})`;
-}
 
 
 function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
@@ -66,19 +52,6 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	throw "PixelFormatToOpenglFormat: Unhandled pixel format " + PixelFormat;
 }
 
-export function IsFloatFormat(Format)
-{
-	switch(Format)
-	{
-		case 'Float1':
-		case 'Float2':
-		case 'Float3':
-		case 'Float4':
-			return true;
-		default:
-			return false;
-	}
-}
 
 function GetTextureFormatPixelByteSize(OpenglContext,Format,Type)
 {
