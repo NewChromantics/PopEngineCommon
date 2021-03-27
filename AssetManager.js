@@ -81,12 +81,12 @@ export function GetAsset(Name,RenderContext)
 		if ( !AssetFetchFunctions.hasOwnProperty(Name) )
 			throw `No known asset named ${Name} registered`;
 	
-	Pop.Debug(`Generating asset ${Name}...`);
+	Pop.Debug(`Generating asset ${Name} on context ${ContextKey}...`);
 	const Timer_Start = Pop.GetTimeNowMs();
 	
 	//	check if an async load is pending
-	if ( ContextPendings.hasOwnProperty(Name) )
-		throw `Asset ${Name} is async loading still...`;
+	if ( ContextPendings[Name] )
+		throw `Asset ${Name} on context ${ContextKey} is async-loading still...`;
 	
 	function OnLoadedAsset(Asset)
 	{
@@ -94,13 +94,14 @@ export function GetAsset(Name,RenderContext)
 		ContextAssets[Name] = Asset;
 		
 		//	delete pending
-		delete ContextPendings[Name];
+		ContextPendings[Name] = null;
 		
 		if ( Asset === undefined )
-			throw `Asset created for ${Name} is undefined`;
+			throw `Asset created for ${Name} on context ${ContextKey} is undefined`;
 		
 		const Timer_Duration = Math.floor(Pop.GetTimeNowMs() - Timer_Start);
-		Pop.Debug(`Generating asset ${Name} took ${Timer_Duration}ms`);
+		Pop.Debug(`Generating asset ${Name}(${typeof Asset}) on context ${ContextKey} took ${Timer_Duration}ms`);
+		Pop.Debug(`Completed asset=${ContextAssets[Name]}`);
 		OnAssetChanged( Name );
 	}
 	
@@ -116,7 +117,7 @@ export function GetAsset(Name,RenderContext)
 		const LoadFunc = AssetFetchAsyncFunctions[Name];
 		ContextPendings[Name] = LoadFunc( RenderContext );
 		ContextPendings[Name].then( OnLoadedAsset ).catch( OnFailedToLoadAsset );
-		throw `Asset ${Name} is now async loading...`;
+		throw `Asset ${Name} on context ${ContextKey} is now async loading...`;
 	}
 	else
 	{
@@ -179,7 +180,7 @@ export function InvalidateAsset(Filename,ForceInvalidation=false,NewFileMeta=und
 
 	if ( !Filename )
 		throw `InvalidateAsset(${Filename}) invalid filename`;
-	// Pop.Debug(`InvalidateAsset ${Filename}`);
+	Pop.Debug(`InvalidateAsset ${Filename}`);
 	
 	function InvalidateAssetInContext(Context)
 	{
