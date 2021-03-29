@@ -14,7 +14,7 @@ export function CreateRandomImage(Width,Height)
 	for ( let i=0;	i<Pixels.length;	i++ )
 		Pixels[i] = Math.random();
 	
-	let Texture = new Pop.Image(`Pop.CreateRandomImage`);
+	let Texture = new Pop.Image(`Pop_CreateRandomImage`);
 	Texture.WritePixels( Width, Height, Pixels, Format );
 	return Texture;
 }
