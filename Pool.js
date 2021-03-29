@@ -52,7 +52,8 @@ export default class Pool
 		const UsedIndex = this.UsedItems.indexOf(Item);
 		if ( UsedIndex < 0 )
 		{
-			this.OnWarning(`Pool ${this.Name} Releasing item ${Item} back into pool, but missing from Used Items list`);
+			const Name = Item.Name ? `(.Name=${Item.Name})` : '';
+			this.OnWarning(`Pool ${this.Name} Releasing item ${Item}${Name} back into pool, but missing from Used Items list`);
 			return;
 		}
 		this.UsedItems = this.UsedItems.filter( i => i != Item );
