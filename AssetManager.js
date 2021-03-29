@@ -134,14 +134,18 @@ export function GetAsset(Name,RenderContext)
 //	gr: should this be somewhere else, not in the core asset manager?
 export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUniforms,ShaderAttribs)
 {
+	//	maybe we can regex these!
+	if ( !ShaderUniforms )	throw `RegisterShaderAssetFilename(${FragFilename}) missing ShaderUniforms`;
+	if ( !ShaderAttribs )	throw `RegisterShaderAssetFilename(${FragFilename}) missing ShaderAttribs`;
+		
 	//	we use / as its not a valid filename char
 	const AssetName = FragFilename+PopAssetManager.AssetFilenameJoinString+VertFilename;
 
 	async function LoadAndCompileShader(RenderContext)
 	{
 		const ShaderName = AssetName;
-		let FragSource = Pop.LoadFileAsString(FragFilename);
-		let VertSource = Pop.LoadFileAsString(VertFilename);
+		let FragSource = await Pop.LoadFileAsStringAsync(FragFilename);
+		let VertSource = await Pop.LoadFileAsStringAsync(VertFilename);
 
 		FragSource = RefactorFragShader(FragSource);
 		VertSource = RefactorVertShader(VertSource);
