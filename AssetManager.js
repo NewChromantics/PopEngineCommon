@@ -128,26 +128,33 @@ export function GetAsset(Name,RenderContext)
 	}
 }
 
-
 //	this returns the "asset name"
 //	gr: should this be somewhere else, not in the core asset manager?
-export function RegisterShaderAssetFilename(FragFilename,VertFilename)
+export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUniforms,ShaderAttribs)
 {
 	//	we use / as its not a valid filename char
 	const AssetName = FragFilename+PopAssetManager.AssetFilenameJoinString+VertFilename;
-	
-	function LoadAndCompileShader(RenderContext)
+
+	async function LoadAndCompileShader(RenderContext)
 	{
 		const ShaderName = AssetName;
-		const FragSource = Pop.LoadFileAsString(FragFilename);
-		const VertSource = Pop.LoadFileAsString(VertFilename);
-		const Shader = new Pop.Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
+		let FragSource = Pop.LoadFileAsString(FragFilename);
+		let VertSource = Pop.LoadFileAsString(VertFilename);
+
+		FragSource = RefactorFragShader(FragSource);
+		VertSource = RefactorVertShader(VertSource);
+
+		//const Shader = new Pop.Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
+		//const Shader = new Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
+		Pop.Debug(`LoadAndCompileShader ${AssetName}`);
+		const Shader = await RenderContext.CreateShader( VertSource, FragSource, ShaderUniforms, ShaderAttribs );
 		return Shader;
 	}
 
-	RegisterAssetFetchFunction(AssetName,LoadAndCompileShader);
+	RegisterAssetAsyncFetchFunction(AssetName,LoadAndCompileShader);
 	return AssetName;
 }
+
 
 
 //	modify object, but don't store a reference to it! otherwise it wont garbage collect
