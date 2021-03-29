@@ -1,7 +1,9 @@
+import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
+import {GetUniqueHash} from './Hash.js'
+
 const PopAssetManager = {};
 export default PopAssetManager;
 
-import {GetUniqueHash} from './Hash.js'
 //	gr:this import is crashing native
 //	need to fix this. Shaders or any type-specific asset stuff shouldn't really be in here anyway
 //import * as Opengl from './PopWebOpenglApi.js'
