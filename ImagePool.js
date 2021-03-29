@@ -22,7 +22,16 @@ export class ImagePool extends Pool
 					continue;
 				return i;
 			}
-			OnWarning(`No pool image matching ${Width}x${Height}_${Format}`);
+			
+			let First = '';
+			if ( FreeImages.length )
+			{
+				const fw = FreeImages[0].GetWidth();
+				const fh = FreeImages[0].GetHeight();
+				const ff = FreeImages[0].GetFormat();
+				First = `${fw}x${fh}_${ff}`;
+			}
+			OnWarning(`No pool image matching ${Width}x${Height}_${Format} FirstFree=${First}`);
 			return false;
 		}
 		
