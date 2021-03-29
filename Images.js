@@ -41,6 +41,7 @@ export function GetChannelsFromPixelFormat(PixelFormat)
 		case 'Float4':		return 4;
 		case 'ChromaU':		return 1;
 		case 'ChromaV':		return 1;
+		case 'Depth16mm':	return 2;	//	RG
 	}
 	throw `unhandled GetChannelsFromPixelFormat(${PixelFormat})`;
 }
