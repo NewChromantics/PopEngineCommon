@@ -46,7 +46,12 @@ export class Camera
 		this.NearDistance = 0.01;
 		this.FarDistance = 100;
 
-		this.FocalCenter = [0,0];		//	cx & cy for projection matrix
+		//	gr: to be clear, this is an offset from the center
+		//		which will usually be middle of the viewrect of the projection matrix
+		//		so we just add this on.
+		//		maybe this shouldn't be here any more and provided with the viewrect
+		this.FocalCenterOffset = [0,0];
+		this.FocalCenter = false;	//	old api, null to catch anyone setting it
 
 		if ( CopyCamera instanceof Camera )
 		{
@@ -172,6 +177,9 @@ export class Camera
 	
 	GetOpenglFocalLengths(ViewRect)
 	{
+		if ( this.FocalCenter !== false )
+			throw `Something is changing the .FocalCenter which is old API`;
+		
 		/*
 		const Focal = this.GetPixelFocalLengths();
 		//	image size from calibrated focal lengths
@@ -179,18 +187,35 @@ export class Camera
 		const ImageHeight = 800;
 		const OpenglFocal = this.PixelToOpenglFocalLengths( Focal, [ImageWidth, ImageHeight] );
 		*/
-		
-		const Aspect = ViewRect[2] / ViewRect[3];
+
+
+		const OpenglFocal = {};
+
+		const Width = ViewRect[2];
+		const Height = ViewRect[3];
+		const Aspect = Width / Height;
 		const FovVertical = this.FovVertical;
 		//const FovHorizontal = FovVertical * Aspect;
 		
-		const OpenglFocal = {};
-		OpenglFocal.fy = 1.0 / Math.tan( PopMath.radians(FovVertical) / 2);
+		//	width * fov
+		//	 was 1/tan
+		OpenglFocal.fy = Math.tan( PopMath.radians(FovVertical) / 2) / Width;
 		//OpenglFocal.fx = 1.0 / Math.tan( PopMath.radians(FovHorizontal) / 2);
 		OpenglFocal.fx = OpenglFocal.fy / Aspect;
-		OpenglFocal.cx = this.FocalCenter[0];
-		OpenglFocal.cy = this.FocalCenter[1];
+		//	gr: half because fx/fy is goes either side... when -1..1
+		OpenglFocal.fy *= 2;
+		OpenglFocal.fx *= 2;
+		
+		//	focal center is middle of viewport
+		let Centerxf = 0.5;
+		let Centeryf = 0.5;
+		OpenglFocal.cx = PopMath.lerp( ViewRect[0], ViewRect[0]+ViewRect[2], Centerxf );
+		OpenglFocal.cx += this.FocalCenterOffset[0];
+		OpenglFocal.cy = PopMath.lerp( ViewRect[1], ViewRect[1]+ViewRect[3], Centeryf );
+		OpenglFocal.cy += this.FocalCenterOffset[1];
+		
 		OpenglFocal.s = 0;
+		
 		return OpenglFocal;
 	}
 	
