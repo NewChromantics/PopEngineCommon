@@ -36,6 +36,7 @@ export class Camera
 	constructor(CopyCamera)
 	{
 		this.FovVertical = 45;
+		this.FovHorizontal = null;	//	if not set, we use fov vertical * aspect of viewport
 
 		this.Up = [0,1,0];
 		this.Position = [ 0,2,20 ];
@@ -56,6 +57,7 @@ export class Camera
 		if ( CopyCamera instanceof Camera )
 		{
 			this.FovVertical = CopyCamera.FovVertical;
+			this.FovHorizontal = CopyCamera.FovHorizontal;
 			this.Position = CopyCamera.Position.slice();
 			this.LookAt = CopyCamera.LookAt.slice();
 			this.NearDistance = CopyCamera.NearDistance;
@@ -119,7 +121,7 @@ export class Camera
 	{
 		let Fov = {};
 		let Aspect = ViewRect[2] / ViewRect[3];
-		Fov.Horz = this.FovVertical / Aspect;
+		Fov.Horz = this.FovHorizontal || (this.FovVertical / Aspect);
 		Fov.Vert = this.FovVertical;
 		return Fov;
 	}
@@ -175,7 +177,11 @@ export class Camera
 		return OpenglFocal;
 	}
 	
-	GetOpenglFocalLengths(ViewRect)
+	//	ViewRect is the input to the projection matrix
+	//	so typically this might be the pixel-coords (0...640 -> projected)
+	//	or -1...1
+	//	
+	GetOpenglIntrinsics(ViewRect)
 	{
 		if ( this.FocalCenter !== false )
 			throw `Something is changing the .FocalCenter which is old API`;
@@ -188,31 +194,32 @@ export class Camera
 		const OpenglFocal = this.PixelToOpenglFocalLengths( Focal, [ImageWidth, ImageHeight] );
 		*/
 
+		const Fov = this.GetFieldOfView(ViewRect);
 
 		const OpenglFocal = {};
 
 		const Width = ViewRect[2];
 		const Height = ViewRect[3];
-		const Aspect = Width / Height;
-		const FovVertical = this.FovVertical;
-		//const FovHorizontal = FovVertical * Aspect;
+		
+		//	gr: this is what we use in panopoly for intrinsics to 
+		//		camera-to-local
+		//	our GetProjectionMatrix should probably be doing this inversing
+		
+		//let CameraToLocalRow0 = [1.0 / fx, 0, -cx / fx, 0]; //	opposite of (fx, 0, -cx, 0)
+		//let CameraToLocalRow1 = [0, 1.0 / fy, -cy / fy, 0];
+		
 		
 		//	width * fov
 		//	 was 1/tan
-		OpenglFocal.fy = Math.tan( PopMath.radians(FovVertical) / 2) / Width;
-		//OpenglFocal.fx = 1.0 / Math.tan( PopMath.radians(FovHorizontal) / 2);
-		OpenglFocal.fx = OpenglFocal.fy / Aspect;
+		OpenglFocal.fx = Math.tan( PopMath.radians(Fov.Horz) / 2) / Width;
+		OpenglFocal.fy = Math.tan( PopMath.radians(Fov.Vert) / 2) / Height;
 		//	gr: half because fx/fy is goes either side... when -1..1
 		OpenglFocal.fy *= 2;
 		OpenglFocal.fx *= 2;
 		
-		//	focal center is middle of viewport
-		let Centerxf = 0.5;
-		let Centeryf = 0.5;
-		OpenglFocal.cx = PopMath.lerp( ViewRect[0], ViewRect[0]+ViewRect[2], Centerxf );
-		OpenglFocal.cx += this.FocalCenterOffset[0];
-		OpenglFocal.cy = PopMath.lerp( ViewRect[1], ViewRect[1]+ViewRect[3], Centeryf );
-		OpenglFocal.cy += this.FocalCenterOffset[1];
+		//	gr: is this an OFFSET(0) or absolute(w/2)
+		OpenglFocal.cx = 0;
+		OpenglFocal.cy = 0;
 		
 		OpenglFocal.s = 0;
 		
@@ -262,17 +269,32 @@ export class Camera
 		if ( this.ProjectionMatrix )
 			return this.ProjectionMatrix;
 		
-		const OpenglFocal = this.GetOpenglFocalLengths( ViewRect );
+		//	gr: this is what we use in panopoly for intrinsics to 
+		//		camera-to-local
+		//	our GetProjectionMatrix should probably be doing this inversing
+		
+		//let CameraToLocalRow0 = [1.0 / fx, 0, -cx / fx, 0]; //	opposite of (fx, 0, -cx, 0)
+		//let CameraToLocalRow1 = [0, 1.0 / fy, -cy / fy, 0];
+		
+		const Intrinsics = this.GetOpenglIntrinsics( ViewRect );
 		
 		let Matrix = [];
-		Matrix[0] = OpenglFocal.fx;
-		Matrix[1] = OpenglFocal.s;
-		Matrix[2] = OpenglFocal.cx;
+		//Matrix[0] = 1 / Intrinsics.fx;
+		//Matrix[1] = Intrinsics.s;
+		//Matrix[2] = -Intrinsics.cx / Intrinsics.fx;
+		//Matrix[3] = 0;
+		Matrix[0] = Intrinsics.fx;
+		Matrix[1] = Intrinsics.s;
+		Matrix[2] = Intrinsics.cx;
 		Matrix[3] = 0;
 		
+		//Matrix[4] = 0;
+		//Matrix[5] = 1 / Intrinsics.fy;
+		//Matrix[6] = -Intrinsics.cy / Intrinsics.fy;
+		//Matrix[7] = 0;
 		Matrix[4] = 0;
-		Matrix[5] = OpenglFocal.fy;
-		Matrix[6] = OpenglFocal.cy;
+		Matrix[5] = Intrinsics.fy;
+		Matrix[6] = Intrinsics.cy;
 		Matrix[7] = 0;
 		
 		const Far = this.FarDistance;
