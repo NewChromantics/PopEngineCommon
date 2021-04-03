@@ -3,6 +3,29 @@ import Pool from './Pool.js'
 import { GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
 const PopImage = Pop.Image;
 
+
+function GetTypedArrayConstructor(Format)
+{
+	if ( IsFloatFormat(Format) )
+		return Float32Array;
+	else
+		return Uint8Array;
+}
+	
+	
+const DummyBuffers = {};	//	[200x100xRGBA] = typedarray
+function GetDummyBuffer(Width,Height,Format)
+{
+	const Key = `${Width}x${Height}x${Format}`;
+	if ( !DummyBuffers.hasOwnProperty(Key) )
+	{
+		const Constructor = GetTypedArrayConstructor(Format);
+		const Channels = GetChannelsFromPixelFormat(Format);
+		DummyBuffers[Key] = new Constructor( Width * Height * Channels );
+	}
+	return DummyBuffers[Key];
+}
+
 export class ImagePool extends Pool
 {
 	constructor(Name,OnWarning=function(){})
@@ -39,10 +62,14 @@ export class ImagePool extends Pool
 		{
 			const Image = new PopImage(`ImagePool#${Debug_AllocatedImageCounter} ${Width}x${Height}_${Format} `);
 			Debug_AllocatedImageCounter++;
+			
 			//	gr: we do need a pixel array. Maybe can update the image -> opengl texture process to not need it
 			const Channels = GetChannelsFromPixelFormat(Format);
 			const TypedArrayType = IsFloatFormat(Format) ? Float32Array : Uint8Array;
 			const Pixels = new TypedArrayType( Width * Height * Channels );
+			//	gr: not helping with mem leak
+			//const Pixels = GetDummyBuffer(Width,Height,Format);
+			
 			Image.WritePixels( Width, Height, Pixels, Format );
 			return Image;
 		}
