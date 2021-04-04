@@ -63,14 +63,10 @@ export class ImagePool extends Pool
 			const Image = new PopImage(`ImagePool#${Debug_AllocatedImageCounter} ${Width}x${Height}_${Format} `);
 			Debug_AllocatedImageCounter++;
 			
-			//	gr: we do need a pixel array. Maybe can update the image -> opengl texture process to not need it
-			const Channels = GetChannelsFromPixelFormat(Format);
-			const TypedArrayType = IsFloatFormat(Format) ? Float32Array : Uint8Array;
-			const Pixels = new TypedArrayType( Width * Height * Channels );
-			//	gr: not helping with mem leak
-			//const Pixels = GetDummyBuffer(Width,Height,Format);
-			
-			Image.WritePixels( Width, Height, Pixels, Format );
+			//	gr: don't allocate a pixel array, let the image object
+			//		handle that. if we need pixels, and there isn't a buffer, it should
+			//		allocate it itself (this is to handle Yuv_8_88 easily)
+			Image.WritePixels( Width, Height, null, Format );
 			return Image;
 		}
 	
