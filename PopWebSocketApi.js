@@ -1,5 +1,7 @@
-Pop.Websocket = {};
+import PromiseQueue from './PromiseQueue.js'
 
+const Default = 'Websocket API';
+export default Default;
 
 function GetWebsocketError(Event)
 {
@@ -17,16 +19,16 @@ function GetWebsocketError(Event)
 
 
 //	wrapper for websocket
-Pop.Websocket.Client = class
+export class Client
 {
 	constructor(Hostname,Port=80,Path='')
 	{
-		this.OnConnectPromises = new Pop.PromiseQueue('WebsocketClient Connects');
-		this.OnMessagePromises = new Pop.PromiseQueue('WebsocketClient Messages');
+		this.OnConnectPromises = new PromiseQueue('WebsocketClient Connects');
+		this.OnMessagePromises = new PromiseQueue('WebsocketClient Messages');
 	
 		//	because we need messages to stay in order, but blobs(binary) needs to be async processed
 		//	we need to keep the data in order and process the data seperately on a thread
-		this.PendingMessageData = new Pop.PromiseQueue('WebsocketClient PendingMessages');
+		this.PendingMessageData = new PromiseQueue('WebsocketClient PendingMessages');
 		
 		this.ProcessPendingMessageDataThread().catch(this.OnError.bind(this));
 						
@@ -190,7 +192,7 @@ Pop.Websocket.Client = class
 }
 
 //	asynchronously returns a websocket client once it connects
-Pop.Websocket.Connect = async function(Hostname,Port=80)
+export async function Connect(Hostname,Port=80)
 {
 	const Socket = new Pop.Websocket.Client(Hostname,Port);
 	await Socket.WaitForConnect();

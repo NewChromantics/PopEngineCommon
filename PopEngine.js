@@ -28,6 +28,9 @@ Pop.Assets = Assets;
 import * as Gui from './PopWebGuiApi.js'
 Pop.Gui = Gui;
 
+import * as Websocket from './PopWebSocketApi.js'
+Pop.Websocket = Websocket;
+
 import * as FileSystem from './FileSystem.js'
 //	gr: hmm these are root functions, so they need to go into PopWebApi?
 Pop.FileSystem = FileSystem;
