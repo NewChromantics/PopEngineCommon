@@ -37,6 +37,11 @@ export class ImagePool extends Pool
 			for ( let i=0;	i<FreeImages.length;	i++ )
 			{
 				const FreeImage = FreeImages[i];
+				if ( !FreeImage )
+				{
+					Pop.Warning(`Null${FreeImage} image in image pool`);
+					continue;
+				}
 				if ( FreeImage.GetWidth() != Width )
 					continue;
 				if ( FreeImage.GetHeight() != Height )
