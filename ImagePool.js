@@ -14,12 +14,19 @@ export class ImagePool extends Pool
 			for ( let i=0;	i<FreeImages.length;	i++ )
 			{
 				const FreeImage = FreeImages[i];
+				if ( !FreeImage )
+				{
+					Pop.Warning(`Null${FreeImage} image in image pool`);
+					continue;
+				}
 				if ( FreeImage.GetWidth() != Width )
 					continue;
 				if ( FreeImage.GetHeight() != Height )
 					continue;
 				if ( FreeImage.GetFormat() != Format )
 					continue;
+					
+				Pop.Debug(`Found pool match ${Width},${Height},${Format} name=${FreeImage.Name}`);
 				return i;
 			}
 			OnWarning(`No pool image matching ${Width}x${Height}_${Format}`);
