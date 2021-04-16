@@ -42,12 +42,17 @@ export class ImagePool extends Pool
 					Pop.Warning(`Null${FreeImage} image in image pool`);
 					continue;
 				}
-				if ( FreeImage.GetWidth() != Width )
+				const fw = FreeImage.GetWidth();
+				const fh = FreeImage.GetHeight();
+				const ff = FreeImage.GetFormat();
+				if ( fw != Width )
 					continue;
-				if ( FreeImage.GetHeight() != Height )
+				if ( fh != Height )
 					continue;
-				if ( FreeImage.GetFormat() != Format )
+				if ( ff != Format )
 					continue;
+				
+				Pop.Debug(`Found pool match ${Width},${Height},${Format} (Image=${fw},${fh},${ff}`);
 				return i;
 			}
 			

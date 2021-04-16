@@ -10,7 +10,9 @@ export default class Pool
 			OnWarning = function(){};
 		
 		if ( !FindBestFree )
-			FindBestFree = function(){	return 0;	};
+		{
+			FindBestFree = function(){	Pop.Debug(`Default find best free`);	return 0;	};
+		}
 		
 		this.AllocItem = AllocItem;
 		this.UsedItems = [];
