@@ -31,8 +31,9 @@ export class ImagePool extends Pool
 	constructor(Name,OnWarning=function(){})
 	{
 		let Debug_AllocatedImageCounter = 0;
+		const OnDebug = function(){};//OnWarning;
 
-		function FindBestMatchingImage(FreeImages,Width,Height,Format)
+		function PopFromFreeList(FreeImages,Width,Height,Format)
 		{
 			for ( let i=0;	i<FreeImages.length;	i++ )
 			{
@@ -42,35 +43,25 @@ export class ImagePool extends Pool
 					Pop.Warning(`Null${FreeImage} image in image pool`);
 					continue;
 				}
-				const fw = FreeImage.GetWidth();
-				const fh = FreeImage.GetHeight();
-				const ff = FreeImage.GetFormat();
-				if ( fw != Width )
+				if ( FreeImage.GetWidth() != Width )
 					continue;
-				if ( fh != Height )
+				if ( FreeImage.GetHeight() != Height )
 					continue;
-				if ( ff != Format )
+				if ( FreeImage.GetFormat() != Format )
 					continue;
-				
-				Pop.Debug(`Found pool match ${Width},${Height},${Format} (Image=${fw},${fh},${ff}`);
-				return i;
+					
+				OnDebug(`A) Found pool (${this.Name}) match ${Width},${Height},${Format} name=${FreeImage.Name}`);
+				FreeImages.splice(i,1);
+				return FreeImage;
 			}
-			
-			let First = '';
-			if ( FreeImages.length )
-			{
-				const fw = FreeImages[0].GetWidth();
-				const fh = FreeImages[0].GetHeight();
-				const ff = FreeImages[0].GetFormat();
-				First = `${fw}x${fh}_${ff}`;
-			}
-			OnWarning(`No pool image matching ${Width}x${Height}_${Format} FirstFree=${First}`);
+			OnWarning(`A) No pool(${this.Name}) image matching ${Width}x${Height}_${Format}`);
 			return false;
 		}
 		
 		function AllocImage(Width,Height,Format)
 		{
 			const Image = new PopImage(`ImagePool#${Debug_AllocatedImageCounter} ${Width}x${Height}_${Format} `);
+			Image.PoolAllocatedIndex = Debug_AllocatedImageCounter;
 			Debug_AllocatedImageCounter++;
 			
 			//	gr: don't allocate a pixel array, let the image object
@@ -80,7 +71,7 @@ export class ImagePool extends Pool
 			return Image;
 		}
 	
-		super( Name, AllocImage, OnWarning, FindBestMatchingImage );
+		super( Name, AllocImage, OnWarning, PopFromFreeList );
 	}
 }
 
