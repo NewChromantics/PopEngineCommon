@@ -9,7 +9,7 @@ export class ImagePool extends Pool
 	{
 		let Debug_AllocatedImageCounter = 0;
 
-		function FindBestMatchingImage(FreeImages,Width,Height,Format)
+		function PopFromFreeList(FreeImages,Width,Height,Format)
 		{
 			for ( let i=0;	i<FreeImages.length;	i++ )
 			{
@@ -26,26 +26,32 @@ export class ImagePool extends Pool
 				if ( FreeImage.GetFormat() != Format )
 					continue;
 					
-				Pop.Debug(`Found pool match ${Width},${Height},${Format} name=${FreeImage.Name}`);
-				return i;
+				Pop.Debug(`B) Found imagepool (${this.Name}) match ${Width},${Height},${Format} name=${FreeImage.Name} index=${i}`);
+				const Spliced = FreeImages.splice(i,1)[0];
+				if ( Spliced != FreeImage )
+				{
+					Pop.Warning(`B) image pool spliced ${i} different to freeimage in loop`);
+				}
+				return Spliced;
 			}
-			OnWarning(`No pool image matching ${Width}x${Height}_${Format}`);
+			OnWarning(`B) No image pool(${this.Name}) image matching ${Width}x${Height}_${Format}`);
 			return false;
 		}
 		
 		function AllocImage(Width,Height,Format)
 		{
-			const Image = new PopImage(`ImagePool#${Debug_AllocatedImageCounter} ${Width}x${Height}_${Format} `);
+			const Image = new PopImage(`B)ImagePool#${Debug_AllocatedImageCounter} ${Width}x${Height}_${Format} `);
+			Image.PoolAllocatedIndex = Debug_AllocatedImageCounter;
 			Debug_AllocatedImageCounter++;
-			//	gr: we do need a pixel array. Maybe can update the image -> opengl texture process to not need it
-			const Channels = GetChannelsFromPixelFormat(Format);
-			const TypedArrayType = IsFloatFormat(Format) ? Float32Array : Uint8Array;
-			const Pixels = new TypedArrayType( Width * Height * Channels );
-			Image.WritePixels( Width, Height, Pixels, Format );
+			
+			//	gr: don't allocate a pixel array, let the image object
+			//		handle that. if we need pixels, and there isn't a buffer, it should
+			//		allocate it itself (this is to handle Yuv_8_88 easily)
+			Image.WritePixels( Width, Height, null, Format );
 			return Image;
 		}
 	
-		super( Name, AllocImage, OnWarning, FindBestMatchingImage );
+		super( Name, AllocImage, OnWarning, PopFromFreeList );
 	}
 }
 
