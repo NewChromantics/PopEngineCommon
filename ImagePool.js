@@ -54,7 +54,7 @@ export class ImagePool extends Pool
 				FreeImages.splice(i,1);
 				return FreeImage;
 			}
-			OnWarning(`A) No pool(${this.Name}) image matching ${Width}x${Height}_${Format}`);
+			OnWarning(`A) No pool(${this.Name}) image matching ${Width}x${Height}_${Format} (free=x${FreeImages.length})`);
 			return false;
 		}
 		
