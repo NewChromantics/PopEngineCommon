@@ -1,29 +1,34 @@
 // This relies on the NPM package https://github.com/nika-begiashvili/libarchivejs
-import { Archive } from '../node_modules/libarchive.js/main.js';
+//	gr: moved this to be a submodule... but the worker url isn't relative to the module!
+import { Archive } from './libarchive.js/main.js';
+import {LoadFileAsArrayBufferAsync} from './FileSystem.js'
 
 Archive.init( {
-	workerUrl: '../node_modules/libarchive.js/dist/worker-bundle.js'
+	workerUrl: './PopEngine/libarchive.js/dist/worker-bundle.js'
 } );
 
-//	namespace
-export const PopZip = {};
 
-PopZip.Archive = class
+export default class ZipArchive
 {
-	constructor( ZipFile )
+	constructor(ZipFilenameOrBytes)
 	{
-		this.OpenPromise = this.Open( ZipFile );
+		this.OpenPromise = this.Open(ZipFilenameOrBytes);
 		this.archive = null;
 	}
 
-	async Open( ZipFile )
+	async Open(ZipFilenameOrBytes)
 	{
-		const Contents = await Pop.LoadFileAsArrayBufferAsync(ZipFile)
-		const ContentsBlob = new Blob([Contents],
-			{
-				type: "application/zip"
-			}
-		);
+		let Contents;
+		
+		//	load the file if it's a string
+		if ( typeof ZipFilenameOrBytes == typeof '' )
+			Contents = await LoadFileAsArrayBufferAsync(ZipFilenameOrBytes);
+		else
+			Contents = ZipFilenameOrBytes;
+		
+		const BlobParams = {};
+		BlobParams.type = "application/zip";
+		const ContentsBlob = new Blob([Contents],BlobParams);
 
 		this.archive = await Archive.open( ContentsBlob );
 	}
@@ -32,8 +37,17 @@ PopZip.Archive = class
 	{
 		await this.OpenPromise;
 		await this.ExtractFiles();
+
+		//	get the fulle path of a file entry
+		function FileToFilePath(File)
+		{
+			const CompressedFilename = `${File.path}${File.file.name}`;
+			return CompressedFilename;
+		}
+		
 		const DecompressedArray = await this.archive.getFilesArray()
-		return DecompressedArray.map(DecompressedFile => DecompressedFile.file.name);
+		const Filenames = DecompressedArray.map(FileToFilePath);
+		return Filenames;
 	}
 
 	async ExtractFiles()
@@ -43,7 +57,7 @@ PopZip.Archive = class
 
 	async LoadFileAsStringAsync( FilenameInsideZip )
 	{
-		const File = await this.ValidateFileExists( FilenameInsideZip )
+		const File = await this.LoadFileAsync( FilenameInsideZip )
 
 		async function LoadStringFromReaderAsync()
 		{
@@ -61,7 +75,7 @@ PopZip.Archive = class
 
 	async LoadFileAsImageAsync( FilenameInsideZip )
 	{
-		const File = await this.ValidateFileExists( FilenameInsideZip )
+		const File = await this.LoadFileAsync( FilenameInsideZip )
 
 		async function LoadDataURLFromReaderAsync()
 		{
@@ -76,18 +90,35 @@ PopZip.Archive = class
 		const FileReaderDataURL = await LoadDataURLFromReaderAsync();
 		const Img = await Pop.LoadFileAsImageAsync(FileReaderDataURL);
 		return Img;
-
+	}
+	
+	
+	async LoadFileAsArrayBufferAsync(FilenameInsideZip)
+	{
+		const File = await this.LoadFileAsync( FilenameInsideZip )
+		const Buffer = await File.arrayBuffer();
+		return Buffer;
 	}
 
-	async ValidateFileExists( Filename )
+	//	returns a File object
+	//	expects full path inside archive
+	async LoadFileAsync(Filename)
 	{
 		await this.OpenPromise;
-		const Filenames = await this.GetFilenames();
-		if ( !Filenames.includes(Filename ) )
-			throw `${Filename} missing`;
+		
+		function FileMatch(File)
+		{
+			const CompressedFilename = `${File.path}${File.file.name}`;
+			if ( CompressedFilename != Filename )
+				return false;
+			return true;
+		}
 
 		const FileArray = await this.archive.getFilesArray()
-		return FileArray.find(ExtractedFile => ExtractedFile.file.name === Filename ).file
+		const Match = FileArray.find(FileMatch);
+		if ( !Match )
+			throw `Failed to find ${Filename} in archive`;
+		return Match.file;
 	}
 }
 
