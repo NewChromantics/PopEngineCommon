@@ -7,6 +7,3 @@
 [submodule "libarchive.js"]
 	path = libarchive.js
 	url = https://github.com/nika-begiashvili/libarchivejs.git
-[submodule "fflate.js"]
-	path = fflate.js
-	url = https://github.com/101arrowz/fflate.git
