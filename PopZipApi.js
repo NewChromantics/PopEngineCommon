@@ -1,13 +1,50 @@
 // This relies on the NPM package https://github.com/nika-begiashvili/libarchivejs
 //	gr: moved this to be a submodule... but the worker url isn't relative to the module!
 import { Archive as LibArchive } from './libarchive.js/main.js';
-import {LoadFileAsArrayBufferAsync} from './FileSystem.js'
+import {LoadFileAsArrayBufferAsync} from './FileSystem.js';
 
+//	gr: I hate not having the source to hand, but this is the fix for now
+//		until I can figure out how to get these ES modules out of the damned repos :)
+//	https://github.com/101arrowz/fflate
+import * as fflate from 'https://cdn.skypack.dev/fflate?min';
 
 
 LibArchive.init( {
 	workerUrl: './PopEngine/libarchive.js/dist/worker-bundle.js'
 } );
+
+
+//	todo: merge these together!
+export class NewZipArchive
+{
+	constructor()
+	{
+		//	fflate uses keys for directory structure
+		this.Files = {};
+	}
+	
+	AddFile(Filename,Contents)
+	{
+		const FileOptions = {};
+		//FileOptions.level = 8;
+		//FileOptions.mtime = new Date('10/20/2020')
+		const NewFile = [ Contents, FileOptions ];
+		this.Files[Filename] = NewFile;
+	}
+	
+	//	return arraybuffer of the compressed archive
+	GetZipFileData()
+	{
+		//	there are some async calls, but they need a worker and aren't async/await
+		//	so for now, just using blocking
+		const Options = {};
+		const Zipped = fflate.zipSync( this.Files, Options );
+		const ArchiveData = Zipped;
+		return ArchiveData;
+	}
+}
+
+
 
 
 export default class ZipArchive
