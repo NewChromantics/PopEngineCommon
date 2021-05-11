@@ -1,6 +1,6 @@
 // This relies on the NPM package https://github.com/nika-begiashvili/libarchivejs
 //	gr: moved this to be a submodule... but the worker url isn't relative to the module!
-import { LibArchive } from './libarchive.js/main.js';
+import { Archive as LibArchive } from './libarchive.js/main.js';
 import {LoadFileAsArrayBufferAsync} from './FileSystem.js'
 
 
