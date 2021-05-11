@@ -1,9 +1,11 @@
 // This relies on the NPM package https://github.com/nika-begiashvili/libarchivejs
 //	gr: moved this to be a submodule... but the worker url isn't relative to the module!
-import { Archive } from './libarchive.js/main.js';
+import { LibArchive } from './libarchive.js/main.js';
 import {LoadFileAsArrayBufferAsync} from './FileSystem.js'
 
-Archive.init( {
+
+
+LibArchive.init( {
 	workerUrl: './PopEngine/libarchive.js/dist/worker-bundle.js'
 } );
 
@@ -30,7 +32,7 @@ export default class ZipArchive
 		BlobParams.type = "application/zip";
 		const ContentsBlob = new Blob([Contents],BlobParams);
 
-		this.archive = await Archive.open( ContentsBlob );
+		this.archive = await LibArchive.open( ContentsBlob );
 	}
 
 	async GetFilenames()
