@@ -4,3 +4,6 @@
 [submodule "Tarball.js"]
 	path = Tarball.js
 	url = https://github.com/ankitrohatgi/tarballjs.git
+[submodule "libarchive.js"]
+	path = libarchive.js
+	url = https://github.com/nika-begiashvili/libarchivejs.git
