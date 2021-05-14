@@ -1,4 +1,5 @@
 import PromiseQueue from './PromiseQueue.js'
+import * as Pop from './PopWebApiCore.js'
 
 const Default = 'Pop Gui module';
 export default Default;
@@ -797,6 +798,26 @@ export class BaseControl
 	SetVisible(Visible)
 	{
 		this.SetStyle('visibility', Visible ? 'visible' : 'hidden' );
+	}
+}
+
+
+export class RenderView extends BaseControl
+{
+	constructor(Parent,Rect)
+	{
+		super(...arguments);
+
+		if ( !Rect instanceof HTMLCanvasElement )
+			throw `Currently require rect to be a canvas`;
+
+		this.Element = Rect;
+		this.BindEvents();
+	}
+	
+	GetElement()
+	{
+		return this.Element;
 	}
 }
 

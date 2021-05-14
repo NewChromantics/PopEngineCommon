@@ -3,6 +3,7 @@ import * as Pop from './PopWebApi.js'
 const Default = 'Pop Opengl module';
 export default Default;
 import {GetUniqueHash} from './Hash.js'
+import {CreatePromise} from './PopApi.js'
 
 
 
@@ -623,38 +624,50 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 }
 
 
-export class Window
+//	this is just an array of commands, but holds the promise to resolve once it's rendered
+class RenderCommands_t
 {
-	constructor(Name,Rect,CanvasOptions)
+	constructor(Commands)
 	{
-		//	things to overload
-		this.OnRender = function(RenderTarget)					{	Pop.Warning(`OnRender not overloaded`);	};
-		this.OnMouseDown = function(x,y,Button)					{	DebugMouseEvent('OnMouseDown',...arguments);		};
-		this.OnMouseMove = function(x,y,Button)					{	DebugMouseEvent("OnMouseMove",...arguments);		};
-		this.OnMouseUp = function(x,y,Button)					{	DebugMouseEvent('OnMouseUp',...arguments);		};
-		this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	DebugMouseEvent('OnMouseScroll',...arguments);	};
-		this.OnKeyDown = function(Key)							{	DebugMouseEvent('OnKeyDown',...arguments);		};
-		this.OnKeyUp = function(Key)							{	DebugMouseEvent('OnKeyUp',...arguments);			};
+		if ( !Array.isArray(Commands) )
+			throw `Render commands expecting an array of commands`;
+		this.Commands = Commands;
+		this.Promise = CreatePromise();
+	}
+	
+	OnRendered()
+	{
+		this.Promise.Resolve();
+	}	
+	
+	OnError(Error)
+	{
+		this.Promise.Reject(Error);
+	}
+}
 
-		//	treat minimised and foreground as the same on web;
-		//	todo: foreground state for multiple windows on one page
-		this.IsForeground = function () { return Pop.WebApi.IsForeground(); }
-		this.IsMinimised = function () { return Pop.WebApi.IsForeground(); }
-
-		this.IsOpen = true;	//	renderloop stops if false
-		this.NewCanvasElement = null;	//	canvas we created
-		this.CanvasElement = null;		//	cached element pointer
-		this.CanvasOptions = CanvasOptions || {};
+//	this was formely Pop.Opengl.Window
+//	but now it's a render context. It expects a canvas to be provided (always via a RenderView?)
+//	and all the gui/interaction is handled by a Pop.Gui.RenderView
+//	this should match the new Sokol context, and async-renders RenderCommands
+export class Context
+{
+	constructor(Canvas,ContextOptions={})
+	{
+		if ( !(Canvas instanceof HTMLCanvasElement) )
+			throw `First element of Opengl.Context now expected to be a canvas`;
+			
+		this.CanvasElement = Canvas;		//	cached element pointer
+		this.ContextOptions = ContextOptions || {};
 
 		this.Context = null;
 		this.ContextVersion = 0;	//	used to tell if resources are out of date
+
 		this.RenderTarget = null;
-		this.CanvasMouseHandler = null;
-		this.CanvasKeyHandler = null;
 		this.ScreenRectCache = null;
+		
 		this.TextureHeap = new HeapMeta("Opengl Textures");
 		this.GeometryHeap = new HeapMeta("Opengl Geometry");
-	
 	
 		//	by default these are off in webgl1, enabled via extensions
 		this.FloatTextureSupported = false;
@@ -665,31 +678,12 @@ export class Window
 		this.ActiveTextureRef = {};
 		this.TextureRenderTargets = [];	//	this is a context asset, so maybe it shouldn't be kept here
 		
-
-		//	gr: this class needs to re-organise into a "opengl view" to go inside a gui window
-		//		native API also needs to do this
-		//	like Pop.Gui controls;
-		//		if Name==Canvas.id, then it should initialise there
-		//		else if rect is a string (or direct element) we should create a new canvas inside
-		//			that element
-		//		else if rect is a number, we should create a canvas in the body at the specified size
-		//		if name is canvas.id and rect==parent, then we have to ignore the rect
-		let Parent = document.body;
-		if ( typeof Rect == 'string' )
-		{
-			Parent = document.getElementById(Rect);
-		}
-		else if ( Rect instanceof HTMLElement )
-		{
-			Parent = Rect;
-			Rect = Parent.id;
-		}
-		
-		//	gr: this was context before canvas??
-		this.CanvasElement = this.InitCanvasElement( Name, Parent, Rect );
+		this.BindEvents();
 		
 		this.RefreshCanvasResolution();
 		this.InitialiseContext();
+
+		this.PendingRenderCommands = [];	//	RenderCommands_t
 
 		this.RenderLoop();
 	}
@@ -819,27 +813,8 @@ export class Window
 		return Element;
 	}
 	
-	InitCanvasElement(Name,Parent,Rect)
+	BindEvents()
 	{
-		const Element = this.CreateCanvasElement(Name,Parent,Rect);
-		
-		if ( Rect == Parent.id )
-			Pop_Opengl_SetGuiControl_SubElementStyle(Element);
-		else
-			Pop_Opengl_SetGuiControlStyle( Element, Rect );
-		
-		//	setup event bindings
-		//	gr: can't bind here as they may change later, so relay (and error if not setup)
-		let OnMouseDown = function()	{	return this.OnMouseDown.apply( this, arguments );	}.bind(this);
-		let OnMouseMove = function()	{	return this.OnMouseMove.apply( this, arguments );	}.bind(this);
-		let OnMouseUp = function()		{	return this.OnMouseUp.apply( this, arguments );	}.bind(this);
-		let OnMouseScroll = function()	{	return this.OnMouseScroll.apply( this, arguments );	}.bind(this);
-		let OnKeyDown = function()		{	return this.OnKeyDown.apply( this, arguments );	}.bind(this);
-		let OnKeyUp = function()		{	return this.OnKeyUp.apply( this, arguments );	}.bind(this);
-		
-		this.CanvasMouseHandler = new TElementMouseHandler( Element, OnMouseDown, OnMouseMove, OnMouseUp, OnMouseScroll );
-		this.CanvasKeyHandler = new TElementKeyHandler( Element, OnKeyDown, OnKeyUp );
-
 		//	catch window resize
 		//	gr: replace with specific dom watcher
 		//	https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver
@@ -856,8 +831,8 @@ export class Window
 		*/
 
 		//	catch fullscreen state change
+		const Element = this.GetCanvasElement();
 		Element.addEventListener('fullscreenchange', this.OnFullscreenChanged.bind(this) );
-		return Element;
 	}
 	
 	GetScreenRect()
@@ -1165,14 +1140,21 @@ export class Window
 		}
 	}
 	
-	//	we could make this async for some more control...
+	//	render some commands, (parse here)
+	//	queue up, and return their promise so caller knows when it's rendered
+	async Render(Commands)
+	{
+		const RenderCommands = new RenderCommands_t(Commands);
+		return RenderCommands.Promise;
+	}
+	
 	RenderLoop()
 	{
+		//	wait for new paint event ("render thread")
+		//	process all queued render-submissions (which resolve a promise)
+		
 		let Render = function(Timestamp)
 		{
-			if (!this.IsOpen)
-				return;
-
 			//	try and get the context, if this fails, it may be temporary
 			try
 			{
@@ -1186,22 +1168,44 @@ export class Window
 				return;
 			}
 			
-			//	now render and let it throw (user error presumably)
-			const RenderContext = this;
-			if ( !this.RenderTarget )
-				this.RenderTarget = new WindowRenderTarget(this);
-			const Unbind = this.RenderTarget.BindRenderTarget( RenderContext );
+			//	pop all the commands so we don't get stuck in an infinite loop if a command queues more commands
+			const PendingRenderCommands = this.PendingRenderCommands;
+			this.PendingRenderCommands = [];
 
+			for ( let RenderCommands of PendingRenderCommands )
+			{
+				try
+				{
+					this.ProcessRenderCommands(RenderCommands);
+					RenderCommands.OnRendered();
+				}
+				catch(e)
+				{
+					RenderCommands.OnError(e);
+				}
+			}
+			
 			//	request next frame, before any render fails, so we will get exceptions thrown for debugging, but recover
 			window.requestAnimationFrame( Render.bind(this) );
 
-			this.OnRender( this.RenderTarget );
-			
-			Unbind();
-			
 			Stats.Renders++;
 		}
 		window.requestAnimationFrame( Render.bind(this) );
+	}
+	
+	ProcessRenderCommands(RenderCommands)
+	{
+		//	current state
+		let RenderTarget = null;
+		
+		//	handle each command
+		for ( let RenderCommand of RenderCommands )
+		{
+			console.log(`Process RenderCommand ${RenderCommand[0]}`);
+			//	if setrendertarget
+			//	if update texture
+			//	if draw
+		}
 	}
 
 	GetGlContext()
