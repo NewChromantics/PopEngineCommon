@@ -624,6 +624,111 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 }
 
 
+class RenderCommand_Base
+{
+	//get Name()	{	return this.Params[0];	}
+}
+
+class RenderCommand_SetRenderTarget extends RenderCommand_Base
+{
+	static Name = 'SetRenderTarget';
+
+	constructor()
+	{
+		super();
+		this.ReadBack = false;
+		this.TargetImages = [];	//	if none then renders to screen
+		this.ClearColour = null;
+	}
+	
+	static ParseCommand(Params,PushCommand)
+	{
+		const SetRenderTarget = new RenderCommand_SetRenderTarget();
+		
+		//	targets can be null (screen), image, or array of images
+		let Targets = Params[1];
+		if ( Targets === null )
+		{
+			//	must not have readback format
+			if ( Params[3] != undefined )
+				throw `Render-to-screen(null) target must not have read-back format`;
+		}
+		else
+		{
+			if ( !Array.isArray(Targets) )
+				Targets = [Targets];
+			
+			//	need to make sure these are all images
+			SetRenderTarget.TargetImages.push(...Targets);
+		}
+		
+		SetRenderTarget.ReadBack = (Params[3] === true);
+		
+		//	make update commands for any render targets
+		for ( let Image of SetRenderTarget.TargetImages )
+		{
+			const UpdateImageCommand = new RenderCommand_UpdateImage();
+			UpdateImageCommand.Image = Image;
+			UpdateImageCommand.IsRenderTarget = true;
+			PushCommand( UpdateImageCommand );
+		}
+		
+		//	arg 2 is clear colour, or if none provided (or zero alpha), no clear
+		SetRenderTarget.ClearColour = Params[2];
+		if ( SetRenderTarget.ClearColour && SetRenderTarget.ClearColour.length < 3 )
+		{
+			throw `Clear colour provided ${Command.ClearColour.length} colours, expecting RGB or RGBA`;
+		}
+		if ( SetRenderTarget.ClearColour.length < 4 )
+			SetRenderTarget.ClearColour.push(1);
+		
+		PushCommand(SetRenderTarget);
+	}
+}
+
+class RenderCommand_UpdateImage extends RenderCommand_Base
+{
+	static Name = 'UpdateImage';
+	
+	static ParseCommand(Params,PushDependentCommand)
+	{
+	}
+	
+	constructor()
+	{
+		this.Image = null;
+		this.IsRenderTarget = false;
+	}
+}
+
+class RenderCommand_Draw extends RenderCommand_Base
+{
+	static Name = 'Draw';
+}
+
+class RenderCommand_ReadPixels extends RenderCommand_Base
+{
+	static Name = 'ReadPixels';
+}
+
+const RenderCommandTypeMap = {};
+RenderCommandTypeMap[RenderCommand_SetRenderTarget.Name] = RenderCommand_SetRenderTarget;
+RenderCommandTypeMap[RenderCommand_UpdateImage.Name] = RenderCommand_UpdateImage;
+RenderCommandTypeMap[RenderCommand_Draw.Name] = RenderCommand_Draw;
+RenderCommandTypeMap[RenderCommand_ReadPixels.Name] = RenderCommand_ReadPixels;
+
+function ParseRenderCommand(PushCommand,CommandParams)
+{
+	const Name = CommandParams[0];//.shift();
+	const Type = RenderCommandTypeMap[Name];
+	if ( !Type )
+		throw `Unknown render command ${Name}`;
+	
+	Type.ParseCommand(CommandParams,PushCommand);
+}		
+		
+
+
 //	this is just an array of commands, but holds the promise to resolve once it's rendered
 class RenderCommands_t
 {
@@ -631,9 +736,18 @@ class RenderCommands_t
 	{
 		if ( !Array.isArray(Commands) )
 			throw `Render commands expecting an array of commands`;
-		this.Commands = Commands;
+
+		//	iterate through provided commands to verify and 
+		//	generate dependent commands (eg. update texture before usage)
+		const NewCommands = [];
+		function PushCommand(NewCommand)
+		{
+			NewCommands.push(NewCommand);
+		}
+		Commands.forEach( CommandParams => ParseRenderCommand(PushCommand,CommandParams) );
+		this.Commands = NewCommands;
 		this.Promise = CreatePromise();
-	}
+	}	
 	
 	OnRendered()
 	{
@@ -1145,6 +1259,7 @@ export class Context
 	async Render(Commands)
 	{
 		const RenderCommands = new RenderCommands_t(Commands);
+		this.PendingRenderCommands.push(RenderCommands);
 		return RenderCommands.Promise;
 	}
 	
@@ -1196,15 +1311,98 @@ export class Context
 	ProcessRenderCommands(RenderCommands)
 	{
 		//	current state
-		let RenderTarget = null;
-		
-		//	handle each command
-		for ( let RenderCommand of RenderCommands )
+		let PassRenderTargets = [];
+		let PassTargetUnbinds = [];
+		let InsidePass = false;
+		const EndPass = function()
 		{
-			console.log(`Process RenderCommand ${RenderCommand[0]}`);
-			//	if setrendertarget
-			//	if update texture
-			//	if draw
+			if ( InsidePass )
+			{
+				//	endpass()
+				//	unbind targets?
+				PassTargetUnbinds.forEach( Unbind => Unbind() );
+				PassRenderTargets = [];
+				InsidePass = false;
+			}
+		}.bind(this);
+		
+		const NewPass = function(TargetImages,ClearColour)
+		{
+			//	zero alpha = no clear so we just load old contents
+			if ( ClearColour && ClearColour[3] <= 0.0 )
+				ClearColour = null;
+				
+			EndPass();
+			if ( !TargetImages.length )
+			{
+				//	bind to screen
+				const Target = new WindowRenderTarget(this);
+				const Unbind = Target.BindRenderTarget(this);
+				PassRenderTargets.push(Target);
+				PassTargetUnbinds.push(Unbind);
+			}
+			else
+			{
+				//	get texture target
+				throw `todo; texture render target pass`;
+			}
+			if ( ClearColour )
+			{
+				PassRenderTargets[0].ClearColour(...ClearColour);
+			}
+			PassRenderTargets[0].ResetState();
+		}.bind(this);
+		
+		//	run each command
+		try
+		{
+			for ( let RenderCommand of RenderCommands.Commands )
+			{
+				if ( RenderCommand instanceof RenderCommand_UpdateImage )
+				{
+					//	get image
+					//	get/create opengl texture
+					//	update pixels if out of date
+				}
+				else if ( RenderCommand instanceof RenderCommand_Draw ) 
+				{
+					//	get geometry
+					//	get shader
+					//	bind geo
+					//	bind shader
+					//	bind uniforms
+					//	draw polygons
+				}
+				else if ( RenderCommand instanceof RenderCommand_SetRenderTarget ) 
+				{
+					//	get all target texture[s]/null
+					//	get clear colour
+					//	fetch opengl render targets/screen target
+					//	bind target[s]
+					//	clear
+					NewPass( RenderCommand.TargetImages, RenderCommand.ClearColour );
+				}
+				else if ( RenderCommand instanceof RenderCommand_ReadPixels )
+				{
+					//	get image
+					//	bind render target
+					//	bind PBO etc
+					//	read into buffer
+					//	update image contents
+				}
+				else
+				{
+					throw `Unknown render command type ${typeof RenderCommand}`;
+				}
+			}
+		}
+		/*
+		catch(e)
+		{
+		}*/
+		finally
+		{
+			EndPass();
 		}
 	}
 
