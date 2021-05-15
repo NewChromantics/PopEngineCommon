@@ -633,7 +633,7 @@ class TCreateGeometry
 //	return TCreateGeometry from geo VertexAttribute descriptions
 function ParseGeometryObject(VertexAttributesObject)
 {
-	//return VertexAttributesObject;
+	return VertexAttributesObject;
 	throw `todo: ParseGeometryObject()`;
 }
 
@@ -719,6 +719,32 @@ class RenderCommand_UpdateImage extends RenderCommand_Base
 class RenderCommand_Draw extends RenderCommand_Base
 {
 	static Name = 'Draw';
+	
+	constructor()
+	{
+		super();
+		this.TriangleBuffer = null;
+		this.Shader = null;
+		this.Uniforms = {};
+	}
+	
+	static ParseCommand(Params,PushCommand)
+	{
+		const Draw = new RenderCommand_Draw();
+		
+		//	get all images used in uniforms and push an update image command
+		Draw.TriangleBuffer = Params[1];
+		Draw.Shader = Params[2];
+		Draw.Uniforms = Params[3];
+		
+		if ( !(Draw.TriangleBuffer instanceof TriangleBuffer ) )
+			throw `First param isn't a triangle buffer; ${Draw.TriangleBuffer}`;
+		if ( !(Draw.Shader instanceof Shader ) )
+			throw `First param isn't a shader; ${Draw.Shader}`;
+		
+		PushCommand(Draw);
+	}
+		
 }
 
 class RenderCommand_ReadPixels extends RenderCommand_Base
@@ -1378,6 +1404,7 @@ export class Context
 					//	get image
 					//	get/create opengl texture
 					//	update pixels if out of date
+					throw `Handle RenderCommand_UpdateImage`; 
 				}
 				else if ( RenderCommand instanceof RenderCommand_Draw ) 
 				{
@@ -1387,6 +1414,7 @@ export class Context
 					//	bind shader
 					//	bind uniforms
 					//	draw polygons
+					throw `Handle RenderCommand_Draw`; 
 				}
 				else if ( RenderCommand instanceof RenderCommand_SetRenderTarget ) 
 				{
@@ -1404,6 +1432,7 @@ export class Context
 					//	bind PBO etc
 					//	read into buffer
 					//	update image contents
+					throw `Handle RenderCommand_ReadPixels`; 
 				}
 				else
 				{
@@ -1602,6 +1631,9 @@ export class Context
 	async CreateShader(VertSource,FragSource,UniformDescriptions,AttribDescriptions)
 	{
 		//	gr: I think this can be synchronous in webgl
+		const ShaderObject = new Shader(this, VertSource, FragSource );
+		//	gr: this needs to be managed so it's freed when no longer needed!
+		return ShaderObject;
 		throw `Todo; CreateShader`;
 	}
 	
@@ -1610,7 +1642,9 @@ export class Context
 	{
 		//	gr: I think this can be synchronous in webgl
 		const Geometry = ParseGeometryObject(VertexAttributes);
-		throw `Todo; CreateGeometry`;
+		const TriBuffer = new TriangleBuffer(this,Geometry,TriangleIndexes);
+		//	gr: this needs to be managed so it's freed when no longer needed!
+		return TriBuffer;
 	}
 }
 
