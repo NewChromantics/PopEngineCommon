@@ -624,6 +624,21 @@ function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
 }
 
 
+//	parsed geometry info
+class TCreateGeometry
+{
+}
+
+//	matching native workflow
+//	return TCreateGeometry from geo VertexAttribute descriptions
+function ParseGeometryObject(VertexAttributesObject)
+{
+	//return VertexAttributesObject;
+	throw `todo: ParseGeometryObject()`;
+}
+
+
+
 class RenderCommand_Base
 {
 	//get Name()	{	return this.Params[0];	}
@@ -1583,7 +1598,22 @@ export class Context
 		//Element.requestFullscreen().then( OnFullscreenSuccess ).catch( OnFullscreenError );
 	}
 	
+	
+	async CreateShader(VertSource,FragSource,UniformDescriptions,AttribDescriptions)
+	{
+		//	gr: I think this can be synchronous in webgl
+		throw `Todo; CreateShader`;
+	}
+	
+	
+	async CreateGeometry(VertexAttributes,TriangleIndexes)
+	{
+		//	gr: I think this can be synchronous in webgl
+		const Geometry = ParseGeometryObject(VertexAttributes);
+		throw `Todo; CreateGeometry`;
+	}
 }
+
 
 
 //	base class with generic opengl stuff
