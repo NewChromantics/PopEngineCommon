@@ -723,7 +723,7 @@ class RenderCommand_Draw extends RenderCommand_Base
 	constructor()
 	{
 		super();
-		this.TriangleBuffer = null;
+		this.Geometry = null;
 		this.Shader = null;
 		this.Uniforms = {};
 	}
@@ -733,11 +733,11 @@ class RenderCommand_Draw extends RenderCommand_Base
 		const Draw = new RenderCommand_Draw();
 		
 		//	get all images used in uniforms and push an update image command
-		Draw.TriangleBuffer = Params[1];
+		Draw.Geometry = Params[1];
 		Draw.Shader = Params[2];
 		Draw.Uniforms = Params[3];
 		
-		if ( !(Draw.TriangleBuffer instanceof TriangleBuffer ) )
+		if ( !(Draw.Geometry instanceof TriangleBuffer ) )
 			throw `First param isn't a triangle buffer; ${Draw.TriangleBuffer}`;
 		if ( !(Draw.Shader instanceof Shader ) )
 			throw `First param isn't a shader; ${Draw.Shader}`;
@@ -1408,13 +1408,27 @@ export class Context
 				}
 				else if ( RenderCommand instanceof RenderCommand_Draw ) 
 				{
+					const RenderContext = this;
+					const Geometry = RenderCommand.Geometry;
+					const Shader = RenderCommand.Shader;
+					
 					//	get geometry
 					//	get shader
 					//	bind geo
+					Geometry.Bind( RenderContext );
 					//	bind shader
-					//	bind uniforms
+					Shader.Bind( RenderContext );
+					//	set uniforms
+					for ( let UniformKey in RenderCommand.Uniforms )
+					{
+						const UniformValue = RenderCommand.Uniforms[UniformKey];
+						Shader.SetUniform( UniformKey, UniformValue );
+					}
+										
 					//	draw polygons
-					throw `Handle RenderCommand_Draw`; 
+					const TriangleCount = Geometry.IndexCount/3;
+					const gl = RenderContext.GetGlContext();
+					gl.drawArrays( Geometry.PrimitiveType, 0, TriangleCount * 3 );
 				}
 				else if ( RenderCommand instanceof RenderCommand_SetRenderTarget ) 
 				{
@@ -1630,8 +1644,9 @@ export class Context
 	
 	async CreateShader(VertSource,FragSource,UniformDescriptions,AttribDescriptions)
 	{
+		const ShaderName = `A shader`;
 		//	gr: I think this can be synchronous in webgl
-		const ShaderObject = new Shader(this, VertSource, FragSource );
+		const ShaderObject = new Shader(this, ShaderName, VertSource, FragSource );
 		//	gr: this needs to be managed so it's freed when no longer needed!
 		return ShaderObject;
 		throw `Todo; CreateShader`;
