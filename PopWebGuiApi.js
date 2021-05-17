@@ -562,12 +562,23 @@ function GetExistingElement(Name,ExpectedType=null)
 {
 	if ( Name == null )
 		return null;
-	if ( typeof Name != 'string' )
+		
+	//	search for element
+	let Element;
+	if ( typeof Name == 'string' )
+	{
+		Element = document.getElementById(Name);
+		if ( !Element )
+			throw `No existing element named ${Name}`;
+	}
+	else if ( Name instanceof HTMLElement )
+	{
+		Element = Name;
+	}
+	else
+	{
 		return null;
-	
-	let Element = document.getElementById(Name);
-	if ( !Element )
-		throw `No existing element named ${Name}`;
+	}	
 		
 	//	verify (input) type
 	if ( ExpectedType )
