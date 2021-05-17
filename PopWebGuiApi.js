@@ -839,7 +839,7 @@ export class Label extends BaseControl
 
 	CreateElement(Parent,Rect)
 	{
-		let Div = GetExistingElement(Rect);
+		let Div = GetExistingElement(Rect) || GetExistingElement(Parent);
 		if ( Div )
 			return Div;
 		
