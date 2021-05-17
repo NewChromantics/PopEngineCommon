@@ -3,6 +3,7 @@ import * as Pop from './PopWebApi.js'
 const Default = 'Pop Opengl module';
 export default Default;
 import {GetUniqueHash} from './Hash.js'
+import {CreatePromise} from './PopApi.js'
 
 
 
@@ -34,7 +35,6 @@ export let CanRenderToFloat = undefined;
 //	allow turning off float support
 export let AllowFloatTextures = !Pop.GetExeArguments().DisableFloatTextures;
 
-export let DebugMouseEvent = function(){};	//	Pop.Debug;
 
 function GetString(Context,Enum)
 {
@@ -218,443 +218,208 @@ function Pop_Opengl_SetGuiControl_SubElementStyle(Element,LeftPercent=0,RightPer
 }
 
 
-//	wrapper for a generic element which converts input (touch, mouse etc) into
-//	our mouse functions
-function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseScroll)
+
+
+
+//	parsed geometry info
+class TCreateGeometry
 {
-	//	touchend doesn't tell us what touches were released;
-	//	so call this function to keep track of them
-	let LastTouches = [];
-	//	gr: touch identifier is unique, so not persistent. Whilst this would be better, (returning TouchXXX for button)
-	//		we cannot detect say, double-tap from the same source, so we still need to use the tracked "names" (indexes)
-	let RegisteredTouchButtons = {};	//	[Identifier] = TouchIndexWhenActivated = ButtonIndex
-	let ArchiveRegisteredTouchButtons = {};
-	
-	
-	function UpdateTouches(MouseEvent)
-	{
-		function TouchIdentifierPresent(Identifier,TouchArray)
-		{
-			const Match = TouchArray.find( t => t.identifier == Identifier );
-			return Match!=null;
-		}
-	
-		//	not a touch device
-		if ( !MouseEvent.touches )
-			return;
-		
-		//	turn touches into array
-		const NewTouches = Array.from( MouseEvent.touches );
-		
-		function GetNextUnassignedButtonIndex()
-		{
-			//	shouldn't have 1000 touch buttons, loop for safety
-			const UsedButtonIndexes = Object.values(RegisteredTouchButtons);
-			for ( let bi=0;	bi<1000;	bi++ )
-			{
-				const Match = UsedButtonIndexes.find( Value => Value===bi );
-				if ( Match !== undefined )
-					continue;
-				return bi;
-			}
-			throw `Failed to find /1000 a free button index`;
-		}
-		
-		function UpdateIdentifierButton(Touch)
-		{
-			if ( RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
-				return;
-			
-			const ButtonIndex = GetNextUnassignedButtonIndex();
-			DebugMouseEvent(`New touch ${Touch.identifier} = Button ${ButtonIndex}`);
-			RegisteredTouchButtons[Touch.identifier] = ButtonIndex;
-			ArchiveRegisteredTouchButtons[Touch.identifier] = ButtonIndex;
-		}
-		function UnregisterTouch(Touch)
-		{
-			//	gr: we cannot unregister, as some things use the identifer later
-			if ( !RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
-			{
-				DebugMouseEvent(`UnregisterTouch ${Touch.identifier} but not registered`);
-				return;
-			}
-			const Button = RegisteredTouchButtons[Touch.identifier];
-			DebugMouseEvent(`UnregisterTouch ${Touch.identifier} button was ${Button}`);
-			delete RegisteredTouchButtons[Touch.identifier];
-		}
+}
 
-		//	assign button indexes for new touches
-		NewTouches.forEach(UpdateIdentifierButton);
-	
-		//	find changes
-		const RemovedTouches = LastTouches.filter( t => !TouchIdentifierPresent(t.identifier,NewTouches) );
-		const AddedTouches = NewTouches.filter( t => !TouchIdentifierPresent(t.identifier,LastTouches) );
-		
-		//	removed button assignments for deleted touches
-		RemovedTouches.forEach(UnregisterTouch);		
-		
-		MouseEvent.Touches = NewTouches;
-		MouseEvent.RemovedTouches = RemovedTouches;
-		MouseEvent.AddedTouches = AddedTouches;
-		LastTouches = NewTouches;
-	}
-	
-	function GetButtonNameFromTouch(Touch)
-	{
-		//	can't use unique identifier (safari) as we need to track buttons between touches
-		//return `Touch${Touch.identifier}`;
-
-		//	gr: registered = active
-		function GetButtonIndexFromTouch(Touch)
-		{
-			if ( !ArchiveRegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
-			{
-				Pop.Warning(`Touch ${Touch.identifier} has no registered button. Returning 0`);
-				return 0;
-			}
-			return ArchiveRegisteredTouchButtons[Touch.identifier];
-		}
-		const ButtonIndex = GetButtonIndexFromTouch(Touch);
-		return `Touch${ButtonIndex}`;
-	}
-	
-	function GetPositionFromTouch(Touch)
-	{
-		return GetMousePos(Touch,null);
-	}
-
-	//	annoying distinctions
-	let GetButtonFromMouseEventButton = function(MouseButton,AlternativeButton,TouchArray)
-	{
-		//	html/browser definitions
-		const BrowserMouseLeft = 0;
-		const BrowserMouseMiddle = 1;
-		const BrowserMouseRight = 2;
-
-		//	handle event & button arg
-		if ( typeof MouseButton == "object" )
-		{
-			let MouseEvent = MouseButton;
-			
-			//	gr: still needs re-working for touches
-			//	look at specific touch list
-			if ( TouchArray )
-			{
-				//	have to assume there's always one?
-				return GetButtonNameFromTouch(TouchArray[0]);
-			}
-			//	this needs a fix for touches
-			else if ( MouseEvent.Touches )
-			{
-				return GetButtonNameFromTouch(MouseEvent.Touches[0]);
-			}
-			else
-			{
-				MouseButton = MouseEvent.button;
-				AlternativeButton = (MouseEvent.ctrlKey == true);
-			}
-		}
-		
-		if ( AlternativeButton )
-		{
-			switch ( MouseButton )
-			{
-				case BrowserMouseLeft:	return 'Back';
-				case BrowserMouseRight:	return 'Forward';
-			}
-		}
-		
-		//	gr: where is back and forward mouse buttons??
-		switch ( MouseButton )
-		{
-			case BrowserMouseLeft:		return 'Left';
-			case BrowserMouseMiddle:	return 'Middle';
-			case BrowserMouseRight:		return 'Right';
-		}
-		throw "Unhandled MouseEvent.button (" + MouseButton + ")";
-	}
-	
-	let GetButtonsFromMouseEventButtons = function(MouseEvent,IncludeTouches)
-	{
-		//	note: button bits don't match mousebutton!
-		//	https://www.w3schools.com/jsref/event_buttons.asp
-		//	https://www.w3schools.com/jsref/event_button.asp
-		//	index = 0 left, 1 middle, 2 right (DO NOT MATCH the bits!)
-		//	gr: ignore back and forward as they're not triggered from mouse down, just use the alt mode
-		//let ButtonMasks = [ 1<<0, 1<<2, 1<<1, 1<<3, 1<<4 ];
-		const ButtonMasks = [ 1<<0, 1<<2, 1<<1 ];
-		const ButtonMask = MouseEvent.buttons || 0;	//	undefined if touches
-		const AltButton = (MouseEvent.ctrlKey==true);
-		const Buttons = [];
-		
-		for ( let i=0;	i<ButtonMasks.length;	i++ )
-		{
-			if ( ( ButtonMask & ButtonMasks[i] ) == 0 )
-				continue;
-			let ButtonIndex = i;
-			let ButtonName = GetButtonFromMouseEventButton( ButtonIndex, AltButton );
-			if ( ButtonName === null )
-				continue;
-			Buttons.push( ButtonName );
-		}
-
-		//	mobile
-		if ( IncludeTouches && MouseEvent.Touches )
-		{
-			function PushTouch(Touch,Index)
-			{
-				const ButtonName = GetButtonNameFromTouch( Touch );
-				if ( ButtonName === null )
-					return;
-				Buttons.push( ButtonName );
-			}
-			MouseEvent.Touches.forEach( PushTouch );
-		}
-
-		return Buttons;
-	}
-	
-	//	gr: should api revert to uv?
-	let GetMousePos = function(MouseEvent,TouchArray)
-	{
-		const Rect = Element.getBoundingClientRect();
-		
-		//	touch event, need to handle multiple touch states
-		if ( TouchArray )
-			MouseEvent = TouchArray[0];
-		else if ( MouseEvent.Touches )
-			MouseEvent = MouseEvent.Touches[0];
-		
-		const ClientX = MouseEvent.pageX || MouseEvent.clientX;
-		const ClientY = MouseEvent.pageY || MouseEvent.clientY;
-		const x = ClientX - Rect.left;
-		const y = ClientY - Rect.top;
-		return [x,y];
-	}
-	
-	function ReportTouches(MouseEvent)
-	{
-		if ( MouseEvent.AddedTouches )
-		{
-			function ReportNewTouch(Touch)
-			{
-				const Button = GetButtonNameFromTouch(Touch);
-				const Position = GetPositionFromTouch(Touch);
-				DebugMouseEvent(`Touch MouseDown ${Position} button ${Button}`);
-				OnMouseDown(...Position,Button);
-			}
-			MouseEvent.AddedTouches.forEach(ReportNewTouch);
-		}
-		
-		//	update positions
-		if ( MouseEvent.Touches )
-		{
-			function ReportTouchMove(Touch)
-			{
-				const Button = GetButtonNameFromTouch(Touch);
-				const Position = GetPositionFromTouch(Touch);
-				DebugMouseEvent(`Touch MouseMove ${Position} button ${Button}`);
-				OnMouseMove(...Position,Button);
-			}
-			MouseEvent.Touches.forEach(ReportTouchMove);
-		}
-		
-		if ( MouseEvent.RemovedTouches )
-		{
-			function ReportOldTouch(Touch)
-			{
-				const Button = GetButtonNameFromTouch(Touch);
-				const Position = GetPositionFromTouch(Touch);
-				DebugMouseEvent(`Touch MouseUp ${Position} button ${Button}`);
-				OnMouseUp(...Position,Button);
-			}
-			MouseEvent.RemovedTouches.forEach(ReportOldTouch);
-		}
-		
-	}
-	
-	let MouseMove = function(MouseEvent)
-	{
-		UpdateTouches(MouseEvent);
-		ReportTouches(MouseEvent);
-		
-		if ( !MouseEvent.changedTouches )
-		{
-			const Pos = GetMousePos(MouseEvent);
-			const Buttons = GetButtonsFromMouseEventButtons( MouseEvent, false );
-			
-			if ( Buttons.length == 0 )
-			{
-				DebugMouseEvent(`MouseMove ${Pos} zero buttons ${Buttons}`);
-				Buttons.push(null);
-			}
-			
-			//	report each button as its own mouse move
-			DebugMouseEvent(`MouseMove ${Pos} buttons ${Buttons}`);
-			for ( let Button of Buttons )
-				OnMouseMove( Pos[0], Pos[1], Button );
-		}
-		MouseEvent.preventDefault();
-	}
-	
-	let MouseDown = function(MouseEvent)
-	{
-		UpdateTouches(MouseEvent);
-		ReportTouches(MouseEvent);
-		
-		if ( !MouseEvent.changedTouches )
-		{
-			const Pos = GetMousePos(MouseEvent);
-			const Button = GetButtonFromMouseEventButton(MouseEvent);
-			DebugMouseEvent(`MouseDown ${Pos} ${Button}`);
-			OnMouseDown( Pos[0], Pos[1], Button );
-		}
-		MouseEvent.preventDefault();
-	}
-	
-	let MouseUp = function(MouseEvent)
-	{
-		UpdateTouches(MouseEvent);
-		ReportTouches(MouseEvent);
-		
-		if ( !MouseEvent.changedTouches )
-		{
-			//	todo: trigger multiple buttons (for multiple touches)
-			const Pos = GetMousePos(MouseEvent,MouseEvent.RemovedTouches);
-			const Button = GetButtonFromMouseEventButton(MouseEvent,null,MouseEvent.RemovedTouches);
-		
-			//	gr: hack for kandinsky, i need to know when touches are (all) released to turn off "hover"
-			//		this will probably change again, as this is probably a common thing
-			//		plus its at this level we should deal with touch+mouse cursor (desktop touchscreen, or ipad+mouse)
-			//		and maybe XR's touching-button, but not pressing-button 
-			const Meta = {};
-			Meta.IsTouch = MouseEvent.touches != undefined;	//	gr: this will break on screens with a touch screen
-		
-			DebugMouseEvent(`MouseUp ${Pos} ${Button} ${JSON.stringify(Meta)}`);
-			OnMouseUp( Pos[0], Pos[1], Button, Meta );
-		}
-		MouseEvent.preventDefault();
-	}
-	
-	let MouseWheel = function(MouseEvent)
-	{
-		UpdateTouches(MouseEvent);
-		ReportTouches(MouseEvent);
-		
-		const Pos = GetMousePos(MouseEvent);
-		const Button = GetButtonFromMouseEventButton(MouseEvent);
-		
-		//	gr: maybe change scale based on
-		//WheelEvent.deltaMode = DOM_DELTA_PIXEL, DOM_DELTA_LINE, DOM_DELTA_PAGE
-		const DeltaScale = 0.01;
-		const WheelDelta = [ MouseEvent.deltaX * DeltaScale, MouseEvent.deltaY * DeltaScale, MouseEvent.deltaZ * DeltaScale ];
-		OnMouseScroll( Pos[0], Pos[1], Button, WheelDelta );
-		MouseEvent.preventDefault();
-	}
-	
-	let ContextMenu = function(MouseEvent)
-	{
-		//	allow use of right mouse down events
-		//MouseEvent.stopImmediatePropagation();
-		MouseEvent.preventDefault();
-		return false;
-	}
-	
-	//	use add listener to allow pre-existing canvas elements to retain any existing callbacks
-	Element.addEventListener('mousemove', MouseMove );
-	Element.addEventListener('wheel', MouseWheel, false );
-	Element.addEventListener('contextmenu', ContextMenu, false );
-	Element.addEventListener('mousedown', MouseDown, false );
-	Element.addEventListener('mouseup', MouseUp, false );
-	
-	Element.addEventListener('touchmove', MouseMove );
-	Element.addEventListener('touchstart', MouseDown, false );
-	Element.addEventListener('touchend', MouseUp, false );
-	Element.addEventListener('touchcancel', MouseUp, false );
-	//	not currently handling up
-	//this.Element.addEventListener('mouseup', MouseUp, false );
-	//this.Element.addEventListener('mouseleave', OnDisableDraw, false );
-	//this.Element.addEventListener('mouseenter', OnEnableDraw, false );
-	
-
+//	matching native workflow
+//	return TCreateGeometry from geo VertexAttribute descriptions
+function ParseGeometryObject(VertexAttributesObject)
+{
+	return VertexAttributesObject;
+	throw `todo: ParseGeometryObject()`;
 }
 
 
-//	wrapper for a generic element which converts input (touch, mouse etc) into
-//	our mouse functions
-function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
-{
-	function GetKeyFromKeyEventButton(KeyEvent)
-	{
-		// DebugMouseEvent("KeyEvent",KeyEvent);
-		return KeyEvent.key;
-	}
-	
-	const KeyDown = function(KeyEvent)
-	{
-		//	if an input element has focus, ignore event
-		if ( KeyEvent.srcElement instanceof HTMLInputElement )
-		{
-			DebugMouseEvent("Ignoring OnKeyDown as input has focus",KeyEvent);
-			return false;
-		}
-		//Pop.Debug("OnKey down",KeyEvent);
-		
-		const Key = GetKeyFromKeyEventButton(KeyEvent);
-		const Handled = OnKeyDown( Key );
-		if ( Handled === true )
-			KeyEvent.preventDefault();
-	}
-	
-	const KeyUp = function(KeyEvent)
-	{
-		const Key = GetKeyFromKeyEventButton(KeyEvent);
-		const Handled = OnKeyUp( Key );
-		if ( Handled === true )
-			KeyEvent.preventDefault();
-	}
-	
 
-	Element = document;
-	
-	//	use add listener to allow pre-existing canvas elements to retain any existing callbacks
-	Element.addEventListener('keydown', KeyDown );
-	Element.addEventListener('keyup', KeyUp );
+class RenderCommand_Base
+{
+	//get Name()	{	return this.Params[0];	}
 }
 
-
-export class Window
+class RenderCommand_SetRenderTarget extends RenderCommand_Base
 {
-	constructor(Name,Rect,CanvasOptions)
+	static Name = 'SetRenderTarget';
+
+	constructor()
 	{
-		//	things to overload
-		this.OnRender = function(RenderTarget)					{	Pop.Warning(`OnRender not overloaded`);	};
-		this.OnMouseDown = function(x,y,Button)					{	DebugMouseEvent('OnMouseDown',...arguments);		};
-		this.OnMouseMove = function(x,y,Button)					{	DebugMouseEvent("OnMouseMove",...arguments);		};
-		this.OnMouseUp = function(x,y,Button)					{	DebugMouseEvent('OnMouseUp',...arguments);		};
-		this.OnMouseScroll = function(x,y,Button,WheelDelta)	{	DebugMouseEvent('OnMouseScroll',...arguments);	};
-		this.OnKeyDown = function(Key)							{	DebugMouseEvent('OnKeyDown',...arguments);		};
-		this.OnKeyUp = function(Key)							{	DebugMouseEvent('OnKeyUp',...arguments);			};
+		super();
+		this.ReadBack = false;
+		this.TargetImages = [];	//	if none then renders to screen
+		this.ClearColour = null;
+	}
+	
+	static ParseCommand(Params,PushCommand)
+	{
+		const SetRenderTarget = new RenderCommand_SetRenderTarget();
+		
+		//	targets can be null (screen), image, or array of images
+		let Targets = Params[1];
+		if ( Targets === null )
+		{
+			//	must not have readback format
+			if ( Params[3] != undefined )
+				throw `Render-to-screen(null) target must not have read-back format`;
+		}
+		else
+		{
+			if ( !Array.isArray(Targets) )
+				Targets = [Targets];
+			
+			//	need to make sure these are all images
+			SetRenderTarget.TargetImages.push(...Targets);
+		}
+		
+		SetRenderTarget.ReadBack = (Params[3] === true);
+		
+		//	make update commands for any render targets
+		for ( let Image of SetRenderTarget.TargetImages )
+		{
+			const UpdateImageCommand = new RenderCommand_UpdateImage();
+			UpdateImageCommand.Image = Image;
+			UpdateImageCommand.IsRenderTarget = true;
+			PushCommand( UpdateImageCommand );
+		}
+		
+		//	arg 2 is clear colour, or if none provided (or zero alpha), no clear
+		SetRenderTarget.ClearColour = Params[2];
+		if ( SetRenderTarget.ClearColour && SetRenderTarget.ClearColour.length < 3 )
+		{
+			throw `Clear colour provided ${Command.ClearColour.length} colours, expecting RGB or RGBA`;
+		}
+		if ( SetRenderTarget.ClearColour.length < 4 )
+			SetRenderTarget.ClearColour.push(1);
+		
+		PushCommand(SetRenderTarget);
+	}
+}
 
-		//	treat minimised and foreground as the same on web;
-		//	todo: foreground state for multiple windows on one page
-		this.IsForeground = function () { return Pop.WebApi.IsForeground(); }
-		this.IsMinimised = function () { return Pop.WebApi.IsForeground(); }
+class RenderCommand_UpdateImage extends RenderCommand_Base
+{
+	static Name = 'UpdateImage';
+	
+	static ParseCommand(Params,PushDependentCommand)
+	{
+	}
+	
+	constructor()
+	{
+		this.Image = null;
+		this.IsRenderTarget = false;
+	}
+}
 
-		this.IsOpen = true;	//	renderloop stops if false
-		this.NewCanvasElement = null;	//	canvas we created
-		this.CanvasElement = null;		//	cached element pointer
-		this.CanvasOptions = CanvasOptions || {};
+class RenderCommand_Draw extends RenderCommand_Base
+{
+	static Name = 'Draw';
+	
+	constructor()
+	{
+		super();
+		this.Geometry = null;
+		this.Shader = null;
+		this.Uniforms = {};
+	}
+	
+	static ParseCommand(Params,PushCommand)
+	{
+		const Draw = new RenderCommand_Draw();
+		
+		//	get all images used in uniforms and push an update image command
+		Draw.Geometry = Params[1];
+		Draw.Shader = Params[2];
+		Draw.Uniforms = Params[3];
+		
+		if ( !(Draw.Geometry instanceof TriangleBuffer ) )
+			throw `First param isn't a triangle buffer; ${Draw.TriangleBuffer}`;
+		if ( !(Draw.Shader instanceof Shader ) )
+			throw `First param isn't a shader; ${Draw.Shader}`;
+		
+		PushCommand(Draw);
+	}
+		
+}
+
+class RenderCommand_ReadPixels extends RenderCommand_Base
+{
+	static Name = 'ReadPixels';
+}
+
+const RenderCommandTypeMap = {};
+RenderCommandTypeMap[RenderCommand_SetRenderTarget.Name] = RenderCommand_SetRenderTarget;
+RenderCommandTypeMap[RenderCommand_UpdateImage.Name] = RenderCommand_UpdateImage;
+RenderCommandTypeMap[RenderCommand_Draw.Name] = RenderCommand_Draw;
+RenderCommandTypeMap[RenderCommand_ReadPixels.Name] = RenderCommand_ReadPixels;
+
+function ParseRenderCommand(PushCommand,CommandParams)
+{
+	const Name = CommandParams[0];//.shift();
+	const Type = RenderCommandTypeMap[Name];
+	if ( !Type )
+		throw `Unknown render command ${Name}`;
+	
+	Type.ParseCommand(CommandParams,PushCommand);
+}		
+		
+
+
+//	this is just an array of commands, but holds the promise to resolve once it's rendered
+class RenderCommands_t
+{
+	constructor(Commands)
+	{
+		if ( !Array.isArray(Commands) )
+			throw `Render commands expecting an array of commands`;
+
+		//	iterate through provided commands to verify and 
+		//	generate dependent commands (eg. update texture before usage)
+		const NewCommands = [];
+		function PushCommand(NewCommand)
+		{
+			NewCommands.push(NewCommand);
+		}
+		Commands.forEach( CommandParams => ParseRenderCommand(PushCommand,CommandParams) );
+		this.Commands = NewCommands;
+		this.Promise = CreatePromise();
+	}	
+	
+	OnRendered()
+	{
+		this.Promise.Resolve();
+	}	
+	
+	OnError(Error)
+	{
+		this.Promise.Reject(Error);
+	}
+}
+
+//	this was formely Pop.Opengl.Window
+//	but now it's a render context. It expects a canvas to be provided (always via a RenderView?)
+//	and all the gui/interaction is handled by a Pop.Gui.RenderView
+//	this should match the new Sokol context, and async-renders RenderCommands
+export class Context
+{
+	constructor(Canvas,ContextOptions={})
+	{
+		if ( !(Canvas instanceof HTMLCanvasElement) )
+			throw `First element of Opengl.Context now expected to be a canvas`;
+			
+		this.CanvasElement = Canvas;		//	cached element pointer
+		this.ContextOptions = ContextOptions || {};
 
 		this.Context = null;
 		this.ContextVersion = 0;	//	used to tell if resources are out of date
+
 		this.RenderTarget = null;
-		this.CanvasMouseHandler = null;
-		this.CanvasKeyHandler = null;
 		this.ScreenRectCache = null;
+		
 		this.TextureHeap = new HeapMeta("Opengl Textures");
 		this.GeometryHeap = new HeapMeta("Opengl Geometry");
-	
 	
 		//	by default these are off in webgl1, enabled via extensions
 		this.FloatTextureSupported = false;
@@ -665,31 +430,12 @@ export class Window
 		this.ActiveTextureRef = {};
 		this.TextureRenderTargets = [];	//	this is a context asset, so maybe it shouldn't be kept here
 		
-
-		//	gr: this class needs to re-organise into a "opengl view" to go inside a gui window
-		//		native API also needs to do this
-		//	like Pop.Gui controls;
-		//		if Name==Canvas.id, then it should initialise there
-		//		else if rect is a string (or direct element) we should create a new canvas inside
-		//			that element
-		//		else if rect is a number, we should create a canvas in the body at the specified size
-		//		if name is canvas.id and rect==parent, then we have to ignore the rect
-		let Parent = document.body;
-		if ( typeof Rect == 'string' )
-		{
-			Parent = document.getElementById(Rect);
-		}
-		else if ( Rect instanceof HTMLElement )
-		{
-			Parent = Rect;
-			Rect = Parent.id;
-		}
-		
-		//	gr: this was context before canvas??
-		this.CanvasElement = this.InitCanvasElement( Name, Parent, Rect );
+		this.BindEvents();
 		
 		this.RefreshCanvasResolution();
 		this.InitialiseContext();
+
+		this.PendingRenderCommands = [];	//	RenderCommands_t
 
 		this.RenderLoop();
 	}
@@ -819,27 +565,8 @@ export class Window
 		return Element;
 	}
 	
-	InitCanvasElement(Name,Parent,Rect)
+	BindEvents()
 	{
-		const Element = this.CreateCanvasElement(Name,Parent,Rect);
-		
-		if ( Rect == Parent.id )
-			Pop_Opengl_SetGuiControl_SubElementStyle(Element);
-		else
-			Pop_Opengl_SetGuiControlStyle( Element, Rect );
-		
-		//	setup event bindings
-		//	gr: can't bind here as they may change later, so relay (and error if not setup)
-		let OnMouseDown = function()	{	return this.OnMouseDown.apply( this, arguments );	}.bind(this);
-		let OnMouseMove = function()	{	return this.OnMouseMove.apply( this, arguments );	}.bind(this);
-		let OnMouseUp = function()		{	return this.OnMouseUp.apply( this, arguments );	}.bind(this);
-		let OnMouseScroll = function()	{	return this.OnMouseScroll.apply( this, arguments );	}.bind(this);
-		let OnKeyDown = function()		{	return this.OnKeyDown.apply( this, arguments );	}.bind(this);
-		let OnKeyUp = function()		{	return this.OnKeyUp.apply( this, arguments );	}.bind(this);
-		
-		this.CanvasMouseHandler = new TElementMouseHandler( Element, OnMouseDown, OnMouseMove, OnMouseUp, OnMouseScroll );
-		this.CanvasKeyHandler = new TElementKeyHandler( Element, OnKeyDown, OnKeyUp );
-
 		//	catch window resize
 		//	gr: replace with specific dom watcher
 		//	https://developer.mozilla.org/en-US/docs/Web/API/MutationObserver
@@ -856,8 +583,8 @@ export class Window
 		*/
 
 		//	catch fullscreen state change
+		const Element = this.GetCanvasElement();
 		Element.addEventListener('fullscreenchange', this.OnFullscreenChanged.bind(this) );
-		return Element;
 	}
 	
 	GetScreenRect()
@@ -1165,14 +892,22 @@ export class Window
 		}
 	}
 	
-	//	we could make this async for some more control...
+	//	render some commands, (parse here)
+	//	queue up, and return their promise so caller knows when it's rendered
+	async Render(Commands)
+	{
+		const RenderCommands = new RenderCommands_t(Commands);
+		this.PendingRenderCommands.push(RenderCommands);
+		return RenderCommands.Promise;
+	}
+	
 	RenderLoop()
 	{
+		//	wait for new paint event ("render thread")
+		//	process all queued render-submissions (which resolve a promise)
+		
 		let Render = function(Timestamp)
 		{
-			if (!this.IsOpen)
-				return;
-
 			//	try and get the context, if this fails, it may be temporary
 			try
 			{
@@ -1186,22 +921,144 @@ export class Window
 				return;
 			}
 			
-			//	now render and let it throw (user error presumably)
-			const RenderContext = this;
-			if ( !this.RenderTarget )
-				this.RenderTarget = new WindowRenderTarget(this);
-			const Unbind = this.RenderTarget.BindRenderTarget( RenderContext );
+			//	pop all the commands so we don't get stuck in an infinite loop if a command queues more commands
+			const PendingRenderCommands = this.PendingRenderCommands;
+			this.PendingRenderCommands = [];
 
+			for ( let RenderCommands of PendingRenderCommands )
+			{
+				try
+				{
+					this.ProcessRenderCommands(RenderCommands);
+					RenderCommands.OnRendered();
+				}
+				catch(e)
+				{
+					RenderCommands.OnError(e);
+				}
+			}
+			
 			//	request next frame, before any render fails, so we will get exceptions thrown for debugging, but recover
 			window.requestAnimationFrame( Render.bind(this) );
 
-			this.OnRender( this.RenderTarget );
-			
-			Unbind();
-			
 			Stats.Renders++;
 		}
 		window.requestAnimationFrame( Render.bind(this) );
+	}
+	
+	ProcessRenderCommands(RenderCommands)
+	{
+		//	current state
+		let PassRenderTargets = [];
+		let PassTargetUnbinds = [];
+		let InsidePass = false;
+		const EndPass = function()
+		{
+			if ( InsidePass )
+			{
+				//	endpass()
+				//	unbind targets?
+				PassTargetUnbinds.forEach( Unbind => Unbind() );
+				PassRenderTargets = [];
+				InsidePass = false;
+			}
+		}.bind(this);
+		
+		const NewPass = function(TargetImages,ClearColour)
+		{
+			//	zero alpha = no clear so we just load old contents
+			if ( ClearColour && ClearColour[3] <= 0.0 )
+				ClearColour = null;
+				
+			EndPass();
+			if ( !TargetImages.length )
+			{
+				//	bind to screen
+				const Target = new WindowRenderTarget(this);
+				const Unbind = Target.BindRenderTarget(this);
+				PassRenderTargets.push(Target);
+				PassTargetUnbinds.push(Unbind);
+			}
+			else
+			{
+				//	get texture target
+				throw `todo; texture render target pass`;
+			}
+			if ( ClearColour )
+			{
+				PassRenderTargets[0].ClearColour(...ClearColour);
+			}
+			PassRenderTargets[0].ResetState();
+		}.bind(this);
+		
+		//	run each command
+		try
+		{
+			for ( let RenderCommand of RenderCommands.Commands )
+			{
+				if ( RenderCommand instanceof RenderCommand_UpdateImage )
+				{
+					//	get image
+					//	get/create opengl texture
+					//	update pixels if out of date
+					throw `Handle RenderCommand_UpdateImage`; 
+				}
+				else if ( RenderCommand instanceof RenderCommand_Draw ) 
+				{
+					const RenderContext = this;
+					const Geometry = RenderCommand.Geometry;
+					const Shader = RenderCommand.Shader;
+					
+					//	get geometry
+					//	get shader
+					//	bind geo
+					Geometry.Bind( RenderContext );
+					//	bind shader
+					Shader.Bind( RenderContext );
+					//	set uniforms
+					for ( let UniformKey in RenderCommand.Uniforms )
+					{
+						const UniformValue = RenderCommand.Uniforms[UniformKey];
+						Shader.SetUniform( UniformKey, UniformValue );
+					}
+										
+					//	draw polygons
+					const TriangleCount = Geometry.IndexCount/3;
+					const gl = RenderContext.GetGlContext();
+					gl.drawArrays( Geometry.PrimitiveType, 0, TriangleCount * 3 );
+				}
+				else if ( RenderCommand instanceof RenderCommand_SetRenderTarget ) 
+				{
+					//	get all target texture[s]/null
+					//	get clear colour
+					//	fetch opengl render targets/screen target
+					//	bind target[s]
+					//	clear
+					NewPass( RenderCommand.TargetImages, RenderCommand.ClearColour );
+				}
+				else if ( RenderCommand instanceof RenderCommand_ReadPixels )
+				{
+					//	get image
+					//	bind render target
+					//	bind PBO etc
+					//	read into buffer
+					//	update image contents
+					throw `Handle RenderCommand_ReadPixels`; 
+				}
+				else
+				{
+					throw `Unknown render command type ${typeof RenderCommand}`;
+				}
+			}
+		}
+		/*
+		catch(e)
+		{
+		}*/
+		finally
+		{
+			EndPass();
+		}
 	}
 
 	GetGlContext()
@@ -1381,7 +1238,28 @@ export class Window
 		//Element.requestFullscreen().then( OnFullscreenSuccess ).catch( OnFullscreenError );
 	}
 	
+	
+	async CreateShader(VertSource,FragSource,UniformDescriptions,AttribDescriptions)
+	{
+		const ShaderName = `A shader`;
+		//	gr: I think this can be synchronous in webgl
+		const ShaderObject = new Shader(this, ShaderName, VertSource, FragSource );
+		//	gr: this needs to be managed so it's freed when no longer needed!
+		return ShaderObject;
+		throw `Todo; CreateShader`;
+	}
+	
+	
+	async CreateGeometry(VertexAttributes,TriangleIndexes)
+	{
+		//	gr: I think this can be synchronous in webgl
+		const Geometry = ParseGeometryObject(VertexAttributes);
+		const TriBuffer = new TriangleBuffer(this,Geometry,TriangleIndexes);
+		//	gr: this needs to be managed so it's freed when no longer needed!
+		return TriBuffer;
+	}
 }
+
 
 
 //	base class with generic opengl stuff
