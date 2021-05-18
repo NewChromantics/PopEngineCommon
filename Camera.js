@@ -451,6 +451,17 @@ export class Camera
 		
 	}
 	
+	//	move only position, not lookat, clamps zoom in
+	OnCameraZoom(Delta)
+	{
+		const Pyrd = this.GetPitchYawRollDistance();
+		Pyrd[3] -= Delta;
+		this.SetOrbit( ...Pyrd );
+		
+		//	prevent an orbit from using old distance
+		this.Last_OrbitPos = null;
+	}
+	
 	OnCameraOrbit(x,y,z,FirstClick)
 	{
 		//	remap input from xy to yaw, pitch
