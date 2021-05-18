@@ -432,9 +432,15 @@ export class Context
 		
 		this.BindEvents();
 		
-		this.RefreshCanvasResolution();
-		this.InitialiseContext();
-
+		try
+		{
+			this.RefreshCanvasResolution();
+			this.InitialiseContext();
+		}
+		catch(e)
+		{
+			console.warn(`Error during render context construction; ${e}`);
+		}
 		this.PendingRenderCommands = [];	//	RenderCommands_t
 
 		this.RenderLoop();
