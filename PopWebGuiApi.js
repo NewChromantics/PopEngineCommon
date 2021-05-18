@@ -1108,10 +1108,10 @@ export class BaseControl
 		//	gr: is this all the new input system, which does
 		//		multitouch, XR, mouse
 		//		Name,[x,y,z]
-		const OnMouseDown = function(){	this.OnMouseDown(...arguments);	};
-		const OnMouseMove = function(){	this.OnMouseMove(...arguments);	};
-		const OnMouseUp = function(){	this.OnMouseUp(...arguments);	};
-		const OnMouseScroll = function(){	this.OnMouseScroll(...arguments);	};
+		const OnMouseDown = function()	{	return this.OnMouseDown ? this.OnMouseDown(...arguments) : false;	};
+		const OnMouseMove = function()	{	return this.OnMouseMove ? this.OnMouseMove(...arguments) : false;	};
+		const OnMouseUp = function()	{	return this.OnMouseUp ? this.OnMouseUp(...arguments) : false;	};
+		const OnMouseScroll = function(){	return this.OnMouseScroll ? this.OnMouseScroll(...arguments) : false;	};
 		
 		TElementMouseHandler( Element, OnMouseDown.bind(this), OnMouseMove.bind(this), OnMouseUp.bind(this) , OnMouseScroll.bind(this) );
 
