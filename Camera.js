@@ -432,6 +432,10 @@ export class Camera
 	
 	SetOrbit(Pitch,Yaw,Roll,Distance)
 	{
+		//	don't allow zero or negative distance
+		//	need some arbritry epsilon, so use the clipping distance
+		Distance = Math.max( this.NearDistance, Distance ); 
+		
 		let Pitchr = PopMath.radians(Pitch);
 		let Yawr = PopMath.radians(Yaw);
 		//Pop.Debug("SetOrbit()", ...arguments );
