@@ -7,9 +7,6 @@
 [submodule "libarchive.js"]
 	path = libarchive.js
 	url = https://github.com/nika-begiashvili/libarchivejs.git
-[submodule "minimal-gltf-loader.js"]
-	path = minimal-gltf-loader.js
-	url = https://github.com/shrekshao/minimal-gltf-loader.git
 [submodule "PopGltf.js"]
 	path = PopGltf.js
 	url = https://github.com/NewChromantics/PopGltf.js.git
