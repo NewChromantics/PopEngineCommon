@@ -1023,9 +1023,7 @@ export class Context
 					}
 										
 					//	draw polygons
-					const TriangleCount = Geometry.IndexCount/3;
-					const gl = RenderContext.GetGlContext();
-					gl.drawArrays( Geometry.PrimitiveType, 0, TriangleCount * 3 );
+					Geometry.Draw(RenderContext);
 				}
 				else if ( RenderCommand instanceof RenderCommand_SetRenderTarget ) 
 				{
@@ -2076,8 +2074,10 @@ export class TriangleBuffer
 {
 	constructor(RenderContext,Attribs,TriangleIndexes)
 	{
-		this.BufferContextVersion = null;
-		this.Buffer = null;
+		this.VertexBufferContextVersion = null;
+		this.IndexBufferContextVersion = null;
+		this.VertexBuffer = null;
+		this.IndexBuffer = null;
 		this.Vao = null;
 		this.TriangleIndexes = TriangleIndexes;
 		this.Attribs = Attribs;
@@ -2110,14 +2110,24 @@ export class TriangleBuffer
 		Object.keys(this.Attribs).forEach(VerifyAttrib.bind(this));
 	}
 	
-	GetBuffer(RenderContext)
+	GetVertexBuffer(RenderContext)
 	{
-		if ( this.BufferContextVersion !== RenderContext.ContextVersion )
+		if ( this.VertexBufferContextVersion !== RenderContext.ContextVersion )
 		{
-			Pop.Warning("Buffer context version changed",this.BufferContextVersion,RenderContext.ContextVersion);
-			this.CreateBuffer(RenderContext);
+			Pop.Warning("Vertex Buffer context version changed",this.VertexBufferContextVersion,RenderContext.ContextVersion);
+			this.CreateVertexBuffer(RenderContext);
 		}
-		return this.Buffer;
+		return this.VertexBuffer;
+	}
+	
+	GetIndexBuffer(RenderContext)
+	{
+		if ( this.IndexBufferContextVersion !== RenderContext.ContextVersion )
+		{
+			Pop.Warning("IndexBuffer context version changed",this.IndexBufferContextVersion,RenderContext.ContextVersion);
+			this.CreateIndexBuffer(RenderContext);
+		}
+		return this.IndexBuffer;
 	}
 	
 	DeleteBuffer(RenderContext)
@@ -2146,8 +2156,10 @@ export class TriangleBuffer
 			this.Vao = gl.createVertexArray();
 			//	setup buffer & bind stuff in the vao
 			gl.bindVertexArray( this.Vao );
-			let Buffer = this.GetBuffer( RenderContext );
-			gl.bindBuffer( gl.ARRAY_BUFFER, Buffer );
+			let VertexBuffer = this.GetVertexBuffer( RenderContext );
+			let IndexBuffer = this.GetIndexBuffer( RenderContext );
+			gl.bindBuffer( gl.ARRAY_BUFFER, VertexBuffer );
+			gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, IndexBuffer );
 			//	we'll need this if we start having multiple attributes
 			if ( DisableOldVertexAttribArrays )
 				for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
@@ -2160,13 +2172,13 @@ export class TriangleBuffer
 	}
 			
 	
-	CreateBuffer(RenderContext)
+	CreateVertexBuffer(RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
 		
 		const Attribs = this.Attribs;
-		this.Buffer = gl.createBuffer();
-		this.BufferContextVersion = RenderContext.ContextVersion;
+		this.VertexBuffer = gl.createBuffer();
+		this.VertexBufferContextVersion = RenderContext.ContextVersion;
 		
 		this.PrimitiveType = gl.TRIANGLES;
 		if ( this.TriangleIndexes )
@@ -2232,7 +2244,7 @@ export class TriangleBuffer
 		}
 		
 		//	set the total buffer data
-		gl.bindBuffer( gl.ARRAY_BUFFER, this.Buffer );
+		gl.bindBuffer( gl.ARRAY_BUFFER, this.VertexBuffer );
 		if ( TotalData )
 		{
 			gl.bufferData( gl.ARRAY_BUFFER, TotalData, gl.STATIC_DRAW );
@@ -2258,6 +2270,26 @@ export class TriangleBuffer
 		RenderContext.OnAllocatedGeometry( this );
 		
 		this.BindVertexPointers( RenderContext );
+	}
+	
+	
+	CreateIndexBuffer(RenderContext)
+	{
+		const gl = RenderContext.GetGlContext();
+		
+		if ( !this.TriangleIndexes )
+		{
+			this.IndexBuffer = null;
+			this.IndexBufferContextVersion = RenderContext.ContextVersion;
+			return;
+		}
+			 
+		this.IndexBuffer = gl.createBuffer();
+		this.IndexBufferContextVersion = RenderContext.ContextVersion;
+		this.PrimitiveType = gl.TRIANGLES;
+		//	set the total buffer data
+		gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, this.IndexBuffer );
+		gl.bufferData( gl.ELEMENT_ARRAY_BUFFER, this.TriangleIndexes, gl.STATIC_DRAW );
 	}
 	
 	
@@ -2301,8 +2333,10 @@ export class TriangleBuffer
 		}
 		else
 		{
-			const Buffer = this.GetBuffer(RenderContext);
-			gl.bindBuffer( gl.ARRAY_BUFFER, Buffer );
+			const VertexBuffer = this.GetVertexBuffer(RenderContext);
+			const IndexBuffer = this.GetIndexBuffer(RenderContext);
+			gl.bindBuffer( gl.ARRAY_BUFFER, VertexBuffer );
+			gl.bindBuffer( gl.ELEMENTS_ARRAY_BUFFER, IndexBuffer );
 			
 			//	we'll need this if we start having multiple attributes
 			if ( DisableOldVertexAttribArrays )
@@ -2311,6 +2345,20 @@ export class TriangleBuffer
 			//	gr: we get glDrawArrays: attempt to access out of range vertices in attribute 0, if we dont update every frame (this seems wrong)
 			//		even if we call gl.enableVertexAttribArray
 			this.BindVertexPointers( RenderContext, Shader );
+		}
+	}
+	
+	Draw(RenderContext)
+	{
+		const gl = RenderContext.GetGlContext();
+		if ( this.TriangleIndexes )
+		{
+			const Offset = 0;
+			gl.drawElements( this.PrimitiveType, this.IndexCount, gl.UNSIGNED_SHORT, Offset );
+		}
+		else
+		{
+			gl.drawArrays( this.PrimitiveType, 0, this.IndexCount );
 		}
 	}
 	
