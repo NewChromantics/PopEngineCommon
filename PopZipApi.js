@@ -2,6 +2,7 @@
 //	gr: moved this to be a submodule... but the worker url isn't relative to the module!
 import { Archive as LibArchive } from './libarchive.js/main.js';
 import {LoadFileAsArrayBufferAsync} from './FileSystem.js';
+import {CreatePromise} from './PopApi.js'
 
 //	gr: I hate not having the source to hand, but this is the fix for now
 //		until I can figure out how to get these ES modules out of the damned repos :)
@@ -100,7 +101,7 @@ export default class ZipArchive
 
 		async function LoadStringFromReaderAsync()
 		{
-			let Promise = Pop.CreatePromise();
+			let Promise = CreatePromise();
 			const reader = new FileReader();
 			reader.onload = () => Promise.Resolve(reader.result)
 			reader.onerror = (Error) => Promise.Reject(Error)
@@ -118,7 +119,7 @@ export default class ZipArchive
 
 		async function LoadDataURLFromReaderAsync()
 		{
-			let Promise = Pop.CreatePromise();
+			let Promise = CreatePromise();
 			const reader = new FileReader();
 			reader.onload = () => Promise.Resolve( reader.result)
 			reader.onerror = (Error) => Promise.Reject(Error)
