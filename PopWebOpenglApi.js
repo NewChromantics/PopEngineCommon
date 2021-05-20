@@ -2335,7 +2335,7 @@ export class TriangleBuffer
 			const VertexBuffer = this.GetVertexBuffer(RenderContext);
 			const IndexBuffer = this.GetIndexBuffer(RenderContext);
 			gl.bindBuffer( gl.ARRAY_BUFFER, VertexBuffer );
-			gl.bindBuffer( gl.ELEMENTS_ARRAY_BUFFER, IndexBuffer );
+			gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, IndexBuffer );
 			
 			//	we'll need this if we start having multiple attributes
 			if ( DisableOldVertexAttribArrays )
