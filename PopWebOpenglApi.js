@@ -716,7 +716,7 @@ export class Context
 		
 		const gl = Context;
 		
-		//	debug capabilities
+		//	debug these capabilities
 		const CapabilityNames =
 		[
 			'MAX_VERTEX_UNIFORM_VECTORS',
@@ -739,7 +739,9 @@ export class Context
 			Capabilities[CapName] = Value;
 		}
 		CapabilityNames.forEach(GetCapability);
-		Pop.Debug(`Created new ${ContextMode} context. Capabilities; ${JSON.stringify(Capabilities)}`);
+		const Extensions = gl.getSupportedExtensions();
+		
+		Pop.Debug(`Created new ${ContextMode} context. Capabilities ${JSON.stringify(Capabilities)}; Extensions ${Extensions}`);
 		
 		
 		//	handle losing context
@@ -807,6 +809,7 @@ export class Context
 		EnableExtension('EXT_blend_minmax');
 		EnableExtension('OES_vertex_array_object', this.InitVao.bind(this) );
 		EnableExtension('WEBGL_draw_buffers', this.InitMultipleRenderTargets.bind(this) );
+		EnableExtension('OES_element_index_uint', this.Init32BitBufferIndexes.bind(this) );
 		
 		//	texture load needs extension in webgl1
 		//	in webgl2 it's built in, but requires #version 300 es
@@ -872,6 +875,14 @@ export class Context
 		{
 			Context.drawBuffers = Extension.drawBuffersWEBGL.bind(Extension);
 		}
+	}
+	
+	Init32BitBufferIndexes(Context,Extension)
+	{
+		const gl = Context;
+		Pop.Debug(`OES_element_index_uint gl.UNSIGNED_INT=${gl.UNSIGNED_INT}`);
+		if ( !gl.UNSIGNED_INT )
+			throw `Missing gl.UNSIGNED_INT`;
 	}
 	
 	
@@ -2078,7 +2089,8 @@ export class TriangleBuffer
 		this.VertexBuffer = null;
 		this.IndexBuffer = null;
 		this.Vao = null;
-		this.TriangleIndexes = TriangleIndexes;
+		this.TriangleIndexes = null;
+		this.TriangleIndexesType = null;	//	gl.UNSIGNED_INT or gl.UNSIGNED_SHORT, but require OES_element_index_uint for 32bit
 		this.Attribs = Attribs;
 		
 		//	backwards compatibility
@@ -2107,6 +2119,43 @@ export class TriangleBuffer
 				throw `Attrib ${AttribName} data(${typeof Attrib.Data}) not an array`;
 		}
 		Object.keys(this.Attribs).forEach(VerifyAttrib.bind(this));
+		
+		//	check triangle indexes
+		if ( TriangleIndexes )
+		{
+			const gl = RenderContext.GetGlContext();
+			//	convert array to a typed array
+			//	todo: detect >16bit values
+			if ( Array.isArray(TriangleIndexes) )
+			{
+				TriangleIndexes = new Uint32Array(TriangleIndexes);
+			}
+			
+			//	 use of gl.UNSIGNED_INT needs OES_element_index_uint support (missing on safari, and some other machines)
+			if ( TriangleIndexes instanceof Uint32Array )
+			{
+				//	if we don't support 32bit, convert to 16bit and throw if some vertexes out of bouds
+				//	todo: split mesh?
+				//if ( !gl.UNSIGNED_INT )
+				{
+					Pop.Debug(`32bit indexes not supported, converting to 16 bit...`);
+					const TriangleIndexes16 = new Uint16Array(TriangleIndexes.length);
+					for ( let i=0;	i<TriangleIndexes.length;	i++ )
+						TriangleIndexes16[i] = TriangleIndexes[i];
+					TriangleIndexes = TriangleIndexes16;
+				}
+			}
+			else if ( TriangleIndexes instanceof Uint16Array )
+			{
+			}
+			else
+			{
+				throw `Triangle indexes provided is not an array, or 16/32bit typed array`;
+			}
+			this.TriangleIndexes = TriangleIndexes;
+			this.TriangleIndexesType = (TriangleIndexes instanceof Uint32Array) ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+		}
+		
 	}
 	
 	GetVertexBuffer(RenderContext)
@@ -2353,7 +2402,7 @@ export class TriangleBuffer
 		if ( this.TriangleIndexes )
 		{
 			const Offset = 0;
-			gl.drawElements( this.PrimitiveType, this.IndexCount, gl.UNSIGNED_SHORT, Offset );
+			gl.drawElements( this.PrimitiveType, this.IndexCount, this.TriangleIndexesType, Offset );
 		}
 		else
 		{
