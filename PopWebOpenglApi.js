@@ -66,9 +66,12 @@ function GetString(Context,Enum)
 
 //	gl.isFrameBuffer is expensive! probably flushing
 const TestFrameBuffer = false;
-const TestAttribLocation = false;
-const DisableOldVertexAttribArrays = false;
-const AllowVao = !Pop.GetExeArguments().DisableVao;
+
+//	gr; VAO's are current disabled whilst attrib locations are fixed.
+//		and now we're using attribs properly, disable before enable!
+const DisableOldVertexAttribArrays = true;
+const AllowVao = false;//!Pop.GetExeArguments().DisableVao;
+
 //	I was concerned active texture was being used as render target and failing to write
 const CheckActiveTexturesBeforeRenderTargetBind = false;	
 const UnbindActiveTexturesBeforeRenderTargetBind = false;
@@ -1019,13 +1022,12 @@ export class Context
 					const Geometry = RenderCommand.Geometry;
 					const Shader = RenderCommand.Shader;
 					
-					//	get geometry
-					//	get shader
-					//	bind geo
-					Geometry.Bind( RenderContext );
-					//	bind shader
+					//	bind geo & shader (these are intrinsicly linked by attribs, we should change code
+					//	so they HAVE to be bound together)
 					Shader.Bind( RenderContext );
-					//	set uniforms
+					Geometry.Bind( RenderContext, Shader );
+
+					//	set uniforms on shader
 					for ( let UniformKey in RenderCommand.Uniforms )
 					{
 						const UniformValue = RenderCommand.Uniforms[UniformKey];
@@ -2254,7 +2256,7 @@ export class TriangleBuffer
 		}		
 		
 		let TotalByteLength = 0;
-		const GetOpenglAttribute = function(Name,Floats,Location,Size)
+		const GetOpenglAttribute = function(Name,Floats,AttribIndex,Size)
 		{
 			let Type = GetOpenglElementType( gl, Floats );
 			
@@ -2263,16 +2265,18 @@ export class TriangleBuffer
 			Attrib.Floats = Floats;
 			Attrib.Size = Size;
 			Attrib.Type = Type;
-			Attrib.Location = Location;
+			Attrib.DataIndex = AttribIndex;
+			//	null means we haven't assigned it from the shader
+			//	note; this means we really need a location PER shader, change this to {}[Shader.UniqueHash] = Location
+			Attrib.Location = null;	
 			return Attrib;
 		}
 		function AttribNameToOpenglAttrib(Name,Index)
 		{
 			//	should get location from shader binding!
-			const Location = Index;
 			const Attrib = Attribs[Name];
 			CleanupAttrib(Attrib);
-			const OpenglAttrib = GetOpenglAttribute( Name, Attrib.Data, Location, Attrib.Size );
+			const OpenglAttrib = GetOpenglAttribute( Name, Attrib.Data, Index, Attrib.Size );
 			TotalByteLength += Attrib.Data.byteLength;
 			return OpenglAttrib;
 		}
@@ -2316,8 +2320,6 @@ export class TriangleBuffer
 		}
 		
 		RenderContext.OnAllocatedGeometry( this );
-		
-		this.BindVertexPointers( RenderContext );
 	}
 	
 	
@@ -2349,17 +2351,18 @@ export class TriangleBuffer
 		//	setup offset in buffer
 		let InitAttribute = function(Attrib)
 		{
-			let Location = Attrib.Location;
-			
-			if ( Shader && TestAttribLocation )
+			//	not yet fetched attrib location from shader
+			if ( Attrib.Location === null )
 			{
-				let ShaderLocation = gl.getAttribLocation( Shader.Program, Attrib.Name );
-				if ( ShaderLocation != Location )
-				{
-					Pop.Debug("Warning, shader assigned location (" + ShaderLocation +") different from predefined location ("+ Location + ")");
-					Location = ShaderLocation;
-				}
+				if ( !Shader )
+					throw `Unknown location for attrib ${Attrib.Name} but no shader provided`;
+					
+				Attrib.Location = gl.getAttribLocation( Shader.Program, Attrib.Name );
 			}
+			
+			//	this shader doesn't use this attrib
+			if ( Attrib.Location == -1 )
+				return;
 			
 			let Normalised = false;
 			let StrideBytes = 0;
