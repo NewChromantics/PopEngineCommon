@@ -70,7 +70,7 @@ const TestFrameBuffer = false;
 //	gr; VAO's are current disabled whilst attrib locations are fixed.
 //		and now we're using attribs properly, disable before enable!
 const DisableOldVertexAttribArrays = true;
-const AllowVao = false;//!Pop.GetExeArguments().DisableVao;
+const AllowVao = !Pop.GetExeArguments().DisableVao;
 
 //	I was concerned active texture was being used as render target and failing to write
 const CheckActiveTexturesBeforeRenderTargetBind = false;	
