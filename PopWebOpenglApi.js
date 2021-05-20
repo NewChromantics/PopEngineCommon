@@ -2138,7 +2138,7 @@ export class TriangleBuffer
 			{
 				//	if we don't support 32bit, convert to 16bit and throw if some vertexes out of bouds
 				//	todo: split mesh?
-				//if ( !gl.UNSIGNED_INT )
+				if ( !gl.UNSIGNED_INT )
 				{
 					Pop.Debug(`32bit indexes not supported, converting to 16 bit...`);
 					const TriangleIndexes16 = new Uint16Array(TriangleIndexes.length);
