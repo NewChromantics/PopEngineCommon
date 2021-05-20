@@ -243,8 +243,6 @@ class RenderCommand_Base
 
 class RenderCommand_SetRenderTarget extends RenderCommand_Base
 {
-	static Name = 'SetRenderTarget';
-
 	constructor()
 	{
 		super();
@@ -300,8 +298,6 @@ class RenderCommand_SetRenderTarget extends RenderCommand_Base
 
 class RenderCommand_UpdateImage extends RenderCommand_Base
 {
-	static Name = 'UpdateImage';
-	
 	static ParseCommand(Params,PushDependentCommand)
 	{
 	}
@@ -315,8 +311,6 @@ class RenderCommand_UpdateImage extends RenderCommand_Base
 
 class RenderCommand_Draw extends RenderCommand_Base
 {
-	static Name = 'Draw';
-	
 	constructor()
 	{
 		super();
@@ -346,14 +340,13 @@ class RenderCommand_Draw extends RenderCommand_Base
 
 class RenderCommand_ReadPixels extends RenderCommand_Base
 {
-	static Name = 'ReadPixels';
 }
 
 const RenderCommandTypeMap = {};
-RenderCommandTypeMap[RenderCommand_SetRenderTarget.Name] = RenderCommand_SetRenderTarget;
-RenderCommandTypeMap[RenderCommand_UpdateImage.Name] = RenderCommand_UpdateImage;
-RenderCommandTypeMap[RenderCommand_Draw.Name] = RenderCommand_Draw;
-RenderCommandTypeMap[RenderCommand_ReadPixels.Name] = RenderCommand_ReadPixels;
+RenderCommandTypeMap['SetRenderTarget'] = RenderCommand_SetRenderTarget;
+RenderCommandTypeMap['UpdateImage'] = RenderCommand_UpdateImage;
+RenderCommandTypeMap['Draw'] = RenderCommand_Draw;
+RenderCommandTypeMap['ReadPixels'] = RenderCommand_ReadPixels;
 
 function ParseRenderCommand(PushCommand,CommandParams)
 {
