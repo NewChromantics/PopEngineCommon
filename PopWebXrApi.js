@@ -175,7 +175,11 @@ Pop.Xr.Device = class
 		
 		//	bind to device
 		this.ReferenceSpace.onreset = this.OnSpaceChanged.bind(this);
-		this.ReferenceSpace.addEventListener('reset', this.OnSpaceChanged.bind(this) );
+		
+		//	some implementations are missing addEventListener
+		if ( this.ReferenceSpace.addEventListener )
+			this.ReferenceSpace.addEventListener('reset', this.OnSpaceChanged.bind(this) );
+			
 		Session.addEventListener('end', this.OnSessionEnded.bind(this) );
 		this.InitLayer( RenderContext );
 		
