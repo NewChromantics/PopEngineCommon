@@ -373,7 +373,8 @@ Pop.Xr.Device = class
 				const InputName = Input.handedness;
 
 				//	treat joints as individual inputs as they all have their own pos
-				if (Input.hand!==null)
+				//	gr: this was !== null, does that mean in the past hand===0 ?
+				if (Input.hand!==null && Input.hand!==undefined)
 				{
 					const ThumbToJointMaxDistance = 0.03;
 					//	for hands, if a finger tip touches the thumb tip, its a button press
