@@ -1434,6 +1434,7 @@ Pop.Opengl.RenderTarget = function()
 		gl.disable(gl.BLEND);
 		gl.enable(gl.DEPTH_TEST);
 		gl.enable(gl.SCISSOR_TEST);
+		gl.disable(gl.SCISSOR_TEST);
 		//	to make blending work well, don't reject things on same plane
 		gl.depthFunc(gl.LEQUAL);
 	}

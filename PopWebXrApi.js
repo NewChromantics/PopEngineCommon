@@ -30,7 +30,7 @@ function RenderTargetFrameBufferProxy(OpenglFrameBuffer,Viewport,RenderContext)
 		
 		const Viewport = this.GetRenderTargetRect();
 		gl.viewport( ...Viewport );
-		gl.scissor( ...Viewport );
+		//gl.scissor( ...Viewport );
 		
 		this.ResetState();
 	}
