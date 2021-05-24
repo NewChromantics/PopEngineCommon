@@ -404,9 +404,17 @@ export class Context
 	{
 		if ( !(Canvas instanceof HTMLCanvasElement) )
 			throw `First element of Opengl.Context now expected to be a canvas`;
-			
+		
+		
+		//	todo: rename this, leftover naming from when this was a window
+		//		now it needs to be set(to false) when we want to shutdown
+		this.IsOpen = true;
+		
 		this.CanvasElement = Canvas;		//	cached element pointer
 		this.ContextOptions = ContextOptions || {};
+		//	proper way to detect when canvas is removed from the dom (and our context should die)
+		this.CanvasObserver = new MutationObserver( this.OnCanvasObservation.bind(this) );
+		this.CanvasObserver.observe( this.CanvasElement, { childList: true } );
 
 		this.Context = null;
 		this.ContextVersion = 0;	//	used to tell if resources are out of date
@@ -441,6 +449,12 @@ export class Context
 
 		this.RenderLoop();
 	}
+	
+	OnCanvasObservation(Event)
+	{
+		Pop.Debug(`Something happened to canvas; ${Event}`);
+		this.Close();
+	}
 
 	Close()
 	{
@@ -458,6 +472,9 @@ export class Context
 			this.NewCanvasElement.parent.removeChild(this.NewCanvasElement);
 			this.NewCanvasElement = null;
 		}
+		
+		this.CanvasElement = null;
+		this.CanvasObserver.disconnect();
 	}
 
 	OnOrientationChange(ResizeEvent)
@@ -696,6 +713,8 @@ export class Context
 	{
 		const ContextMode = "webgl";
 		const Canvas = this.GetCanvasElement();
+		if ( !Canvas )
+			throw `RenderContext has no canvas`;
 		//this.RefreshCanvasResolution();
 		this.OnResize();
 		const Options = Object.assign({}, this.CanvasOptions);
@@ -921,6 +940,12 @@ export class Context
 		
 		let Render = function(Timestamp)
 		{
+			if ( !this.IsOpen )
+			{
+				console.warn(`RenderContext.IsOpen=${this.IsOpen}; ending render loop`);
+				return;
+			}
+			
 			//	try and get the context, if this fails, it may be temporary
 			try
 			{
