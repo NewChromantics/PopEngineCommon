@@ -460,6 +460,8 @@ export class Context
 	{
 		Pop.Debug(`Opengl.Window.Close`);
 
+		this.UnbindEvents();
+
 		//	stop render loop
 		this.IsOpen = false;
 
@@ -474,7 +476,7 @@ export class Context
 		}
 		
 		this.CanvasElement = null;
-		this.CanvasObserver.disconnect();
+		this.CanvasObserver.disconnect();		
 	}
 
 	OnOrientationChange(ResizeEvent)
@@ -604,6 +606,15 @@ export class Context
 		//	catch fullscreen state change
 		const Element = this.GetCanvasElement();
 		Element.addEventListener('fullscreenchange', this.OnFullscreenChanged.bind(this) );
+	}
+	
+	UnbindEvents()
+	{
+		window.removeEventListener('resize',this.OnResize.bind(this));
+		window.removeEventListener('orientationchange',this.OnOrientationChange.bind(this));
+		const Element = this.GetCanvasElement();
+		if ( Element )
+			Element.removeEventListener('fullscreenchange', this.OnFullscreenChanged.bind(this) );
 	}
 	
 	GetScreenRect()
