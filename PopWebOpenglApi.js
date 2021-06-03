@@ -2153,6 +2153,10 @@ export class TriangleBuffer
 			if ( typeof Attrib.Size != 'number' )
 				throw `Attrib ${AttribName} size(${Attrib.Size}) not a number`;
 			
+			//	https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/vertexAttribPointer
+			if ( Attrib.Size < 1 || Attrib.Size > 4 )
+				throw `Attrib ${AttribName} size(${Attrib.Size}) should be between 1 and 4`;
+				
 			if ( !Array.isArray(Attrib.Data) && !Pop.IsTypedArray(Attrib.Data) )
 				throw `Attrib ${AttribName} data(${typeof Attrib.Data}) not an array`;
 		}
