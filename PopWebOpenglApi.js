@@ -2232,7 +2232,8 @@ export class TriangleBuffer
 	
 	GetVao(RenderContext,Shader)
 	{
-		if ( this.BufferContextVersion !== RenderContext.ContextVersion )
+		//	only checking vertex buffer context version as we may not have an index one
+		if ( this.VertexBufferContextVersion !== RenderContext.ContextVersion )
 		{
 			this.DeleteVao();
 		}
