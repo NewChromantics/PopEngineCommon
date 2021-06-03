@@ -53,10 +53,19 @@ export function ArrayIsMatch(a,b)
 }
 
 
+
 //	maybe better named as BufferToString? but this should be clear its "text vs binary"
 //	this is for ascii, NOT UTF16 (hence bytes, not shorts)
 export function BytesToString(Bytes)
 {
+	//	https://stackoverflow.com/questions/6965107/converting-between-strings-and-arraybuffers
+	if ( TextDecoder !== undefined )
+	{
+		const Decoder = new TextDecoder("utf-8");
+		const String = Decoder.decode(Bytes);
+		return String;
+	}
+	
 	let Str = "";
 	for ( let i=0;	i<Bytes.length;	i++ )
 	{
@@ -69,6 +78,14 @@ export function BytesToString(Bytes)
 
 export function StringToBytes(Str,AsArrayBuffer=false)
 {
+	//	https://stackoverflow.com/questions/6965107/converting-between-strings-and-arraybuffers
+	if ( TextEncoder !== undefined )
+	{
+		const Encoder = new TextEncoder("utf-8");
+		const Bytes = Encoder.encode(Str);
+		return Bytes;
+	}
+	
 	let Bytes = [];
 	for ( let i=0;	i<Str.length;	i++ )
 	{
@@ -84,6 +101,19 @@ export function StringToBytes(Str,AsArrayBuffer=false)
 }
 
 
+export function Base64ToBytes(Base64)
+{
+	if ( typeof Base64 != typeof '' )
+		throw `Base64ToBytes expects a string (not ${typeof Base64}), need to handle another type?`;
+		
+	//	gr: is this a js built-in (for native), or web only?
+	//		in which case we need an alternative maybe
+	const DataString = atob(Base64);
+	//	convert from the char-data-string to u8 array
+	const Data = StringToBytes(DataString);
+	//const Data = Uint8Array.from(DataString, c => c.charCodeAt(0));
+	return Data;
+}
 
 //	gr: this is to deal with
 //	SomeThing.constructor == Pop.Image <-- chrome/v8
