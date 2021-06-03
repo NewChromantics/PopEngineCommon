@@ -2200,7 +2200,9 @@ export class TriangleBuffer
 	{
 		if ( this.VertexBufferContextVersion !== RenderContext.ContextVersion )
 		{
-			Pop.Warning("Vertex Buffer context version changed",this.VertexBufferContextVersion,RenderContext.ContextVersion);
+			//	don't warn on first creation
+			if ( this.VertexBufferContextVersion!==null )
+				Pop.Warning("Vertex Buffer context version changed",this.VertexBufferContextVersion,RenderContext.ContextVersion);
 			this.CreateVertexBuffer(RenderContext);
 		}
 		return this.VertexBuffer;
@@ -2210,7 +2212,9 @@ export class TriangleBuffer
 	{
 		if ( this.IndexBufferContextVersion !== RenderContext.ContextVersion )
 		{
-			Pop.Warning("IndexBuffer context version changed",this.IndexBufferContextVersion,RenderContext.ContextVersion);
+			//	don't warn on first creation
+			if ( this.IndexBufferContextVersion!==null )
+				Pop.Warning("IndexBuffer context version changed",this.IndexBufferContextVersion,RenderContext.ContextVersion);
 			this.CreateIndexBuffer(RenderContext);
 		}
 		return this.IndexBuffer;
