@@ -7,6 +7,7 @@ export class ImagePool extends Pool
 {
 	constructor(Name,OnWarning)
 	{
+		OnWarning = OnWarning || function(){};
 		let Debug_AllocatedImageCounter = 0;
 
 		function FindBestMatchingImage(FreeImages,Width,Height,Format)
