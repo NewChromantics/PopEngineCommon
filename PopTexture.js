@@ -1,7 +1,9 @@
-//	texture stuff
+import PopImage from './PopWebImageApi.js'
+const Default = 'Image utilities';
+export default Default;
 
 //	gr: should change this to specific noise algos
-Pop.CreateRandomImage = function(Width,Height)
+export function CreateRandomImage(Width,Height)
 {
 	let Channels = 4;
 	let Format = 'Float4';
@@ -10,15 +12,15 @@ Pop.CreateRandomImage = function(Width,Height)
 	for ( let i=0;	i<Pixels.length;	i++ )
 		Pixels[i] = Math.random();
 	
-	let Texture = new Pop.Image(`Pop.CreateRandomImage`);
+	let Texture = new PopImage(`CreateRandomImage()`);
 	Texture.WritePixels( Width, Height, Pixels, Format );
 	return Texture;
 }
 
 
-Pop.CreateColourTexture = function(Colour4)
+export function CreateColourTexture(Colour4)
 {
-	let NewTexture = new Pop.Image(`Colour ${Colour4}`);
+	let NewTexture = new PopImage(`Colour ${Colour4}`);
 	if ( Array.isArray(Colour4) )
 		Colour4 = new Float32Array(Colour4);
 	NewTexture.WritePixels( 1, 1, Colour4, 'Float4' );
