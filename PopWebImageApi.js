@@ -1,3 +1,4 @@
+import {LoadFileAsImageAsync} from './FileSystem.js'
 
 //	gr: I forget what browser this was for! add comments when we know!
 const WebApi_HtmlImageElement = window.hasOwnProperty('HTMLImageElement') ? window['HTMLImageElement'] : null;
@@ -150,23 +151,22 @@ function GetPixelsFromHtmlImageElement(Img)
 	}
 }
 
-async function PngBytesToPixels(PngBytes)
+export async function PngBytesToImage(PngBytes)
 {
 	//	re-using browser's loader
 	const PngBlob = new Blob( [ PngBytes ], { type: "image/png" } );
 	const ImageUrl = URL.createObjectURL( PngBlob );
-	const Image = await Pop.LoadFileAsImageAsync(ImageUrl);
-	const Pixels = GetPixelsFromHtmlImageElement(Image.Pixels);
-/*
-	const Pixels = {};
-	Pixels.Width = 1;
-	Pixels.Height = 1;
-	Pixels.Buffer = new Uint8Array( [0,255,0,255] );
-	Pixels.Format = 'RGBA';
- */
-	return Pixels;
+	const Image = await LoadFileAsImageAsync(ImageUrl);
+	return Image;
 }
 
+
+export async function PngBytesToPixels(PngBytes)
+{
+	const Image = await PngBytesToImage(PngBytes);
+	const Pixels = GetPixelsFromHtmlImageElement(Image.Pixels);
+	return Pixels;
+}
 
 
 Math.Abs3 = function(xyz)
