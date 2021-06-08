@@ -288,12 +288,14 @@ class RenderCommand_SetRenderTarget extends RenderCommand_Base
 		
 		//	arg 2 is clear colour, or if none provided (or zero alpha), no clear
 		SetRenderTarget.ClearColour = Params[2];
-		if ( SetRenderTarget.ClearColour && SetRenderTarget.ClearColour.length < 3 )
+		if ( SetRenderTarget.ClearColour )
 		{
-			throw `Clear colour provided ${Command.ClearColour.length} colours, expecting RGB or RGBA`;
+			if ( SetRenderTarget.ClearColour.length < 3 )
+				throw `Clear colour provided ${Command.ClearColour.length} colours, expecting RGB or RGBA`;
+
+			if ( SetRenderTarget.ClearColour.length < 4 )
+				SetRenderTarget.ClearColour.push(1);
 		}
-		if ( SetRenderTarget.ClearColour.length < 4 )
-			SetRenderTarget.ClearColour.push(1);
 		
 		PushCommand(SetRenderTarget);
 	}
@@ -307,6 +309,7 @@ class RenderCommand_UpdateImage extends RenderCommand_Base
 	
 	constructor()
 	{
+		super();
 		this.Image = null;
 		this.IsRenderTarget = false;
 	}
@@ -998,8 +1001,8 @@ export class Context
 	ProcessRenderCommands(RenderCommands)
 	{
 		//	current state
-		let PassRenderTargets = [];
-		let PassTargetUnbinds = [];
+		let PassRenderTarget = null;	//	MRT is still one target, so this is nice and simple
+		let PassTargetUnbind = null;
 		let InsidePass = false;
 		const EndPass = function()
 		{
@@ -1007,8 +1010,9 @@ export class Context
 			{
 				//	endpass()
 				//	unbind targets?
-				PassTargetUnbinds.forEach( Unbind => Unbind() );
-				PassRenderTargets = [];
+				PassTargetUnbind();
+				PassTargetUnbind = null;
+				PassRenderTargets = null;
 				InsidePass = false;
 			}
 		}.bind(this);
@@ -1020,24 +1024,28 @@ export class Context
 				ClearColour = null;
 				
 			EndPass();
+			let Target;
 			if ( !TargetImages.length )
 			{
 				//	bind to screen
-				const Target = new WindowRenderTarget(this);
-				const Unbind = Target.BindRenderTarget(this);
-				PassRenderTargets.push(Target);
-				PassTargetUnbinds.push(Unbind);
+				Target = new WindowRenderTarget(this);
 			}
 			else
 			{
 				//	get texture target
-				throw `todo; texture render target pass`;
+				Target = this.GetTextureRenderTarget(TargetImages);
 			}
+			
+			const Unbind = Target.BindRenderTarget(this);
+			PassRenderTarget = Target;
+			PassTargetUnbind = Unbind;
+			
 			if ( ClearColour )
 			{
-				PassRenderTargets[0].ClearColour(...ClearColour);
+				PassRenderTarget.ClearColour(...ClearColour);
 			}
-			PassRenderTargets[0].ResetState();
+			PassRenderTarget.ResetState();
+			PassRenderTarget.SetBlendModeAlpha();
 		}.bind(this);
 		
 		//	run each command
@@ -1047,10 +1055,8 @@ export class Context
 			{
 				if ( RenderCommand instanceof RenderCommand_UpdateImage )
 				{
-					//	get image
-					//	get/create opengl texture
-					//	update pixels if out of date
-					throw `Handle RenderCommand_UpdateImage`; 
+					const RenderContext = this;
+					RenderCommand.Image.UpdateTexturePixels(RenderContext);
 				}
 				else if ( RenderCommand instanceof RenderCommand_Draw ) 
 				{
