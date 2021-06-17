@@ -151,6 +151,12 @@ export function GetExeArguments()
 				Value = true;
 			else if ( Value == 'false' )
 				Value = false;
+			else
+			{
+				//	value is a string, decode any url encoding like %10
+				Value = decodeURIComponent(Value);
+			}
+				
 		}
 		UrlParams[Key] = Value;
 	}
