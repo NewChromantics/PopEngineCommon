@@ -55,12 +55,12 @@ function IsForeground()
 
 function SetIsForeground(NowIsForeground)
 {
-	Pop.Debug(`Foreground changed from ,${ForegroundState} to ${NowIsForeground}. Document.hidden=${document.hidden}`);
+	//Pop.Debug(`Foreground changed from ,${ForegroundState} to ${NowIsForeground}. Document.hidden=${document.hidden}`);
 	if (NowIsForeground!==undefined)
 		ForegroundState = NowIsForeground;
 
 	const Foreground = IsForeground();
-	Pop.Debug(`IsForeground state = ${IsForeground()}`);
+	//Pop.Debug(`IsForeground state = ${IsForeground()}`);
 	ForegroundChangePromises.Push(Foreground);
 }
 
