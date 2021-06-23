@@ -238,8 +238,10 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 			{
 				//	call the control's OnChanged func
 				const Value = GetValue();
-				Control.OnChanged(Value,true);
+				Value();
+				//Control.OnChanged(Value,true);
 			}
+			GetLabelForValue = () => {	return Name;	};
 			//const Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			//Control.SetLabel(Name);
 		}
