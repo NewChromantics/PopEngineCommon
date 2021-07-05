@@ -1,6 +1,6 @@
 import PromiseQueue from './PromiseQueue.js'
 
-const Default = 'Websocket Api';
+const Default = 'Websocket API';
 export default Default;
 
 function GetWebsocketError(Event)
