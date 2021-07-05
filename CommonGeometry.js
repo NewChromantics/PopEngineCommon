@@ -4,26 +4,28 @@ export default Default;
 
 export function CreateCubeGeometry(Min=-1,Max=1)
 {
-	let VertexSize = 3;
-	let VertexData = [];
+	let PositionData = [];
+	let UvData = [];
 	
 	let AddTriangle = function(a,b,c)
 	{
-		let FirstTriangleIndex = VertexData.length / VertexSize;
-		
-		a.forEach( v => VertexData.push(v) );
-		b.forEach( v => VertexData.push(v) );
-		c.forEach( v => VertexData.push(v) );
+		PositionData.push( ...a.slice(0,3) );
+		PositionData.push( ...b.slice(0,3) );
+		PositionData.push( ...c.slice(0,3) );
+		UvData.push( ...a.slice(3,5) );
+		UvData.push( ...b.slice(3,5) );
+		UvData.push( ...c.slice(3,5) );
 	}
 	
-	let tln = [Min,Min,Min];
-	let trn = [Max,Min,Min];
-	let brn = [Max,Max,Min];
-	let bln = [Min,Max,Min];
-	let tlf = [Min,Min,Max];
-	let trf = [Max,Min,Max];
-	let brf = [Max,Max,Max];
-	let blf = [Min,Max,Max];
+	//	top left near bottom right far
+	let tln = [Min,Min,Min,		0,0];
+	let trn = [Max,Min,Min,		1,0];
+	let brn = [Max,Max,Min,		1,1];
+	let bln = [Min,Max,Min,		0,1];
+	let tlf = [Min,Min,Max,		0,0];
+	let trf = [Max,Min,Max,		1,0];
+	let brf = [Max,Max,Max,		1,1];
+	let blf = [Min,Max,Max,		0,1];
 	
 	
 	//	near
@@ -47,17 +49,14 @@ export function CreateCubeGeometry(Min=-1,Max=1)
 	AddTriangle( trn, trf, brf );
 	AddTriangle( brf, brn, trn );
 	
-	//	loads much faster as a typed array
-	VertexData = new Float32Array( VertexData );
-	
 	const Attributes = {};
 	Attributes.LocalPosition = {};
-	Attributes.LocalPosition.Size = VertexSize;
-	Attributes.LocalPosition.Data = VertexData;
+	Attributes.LocalPosition.Size = 3;
+	Attributes.LocalPosition.Data = new Float32Array(PositionData);
 
 	Attributes.LocalUv = {};
-	Attributes.LocalUv.Size = VertexSize;
-	Attributes.LocalUv.Data = VertexData;
+	Attributes.LocalUv.Size = 2;
+	Attributes.LocalUv.Data = new Float32Array(UvData);
 	
 	return Attributes;
 }
