@@ -1,14 +1,22 @@
-Pop.Aruco = {};
+import PopImage from './PopWebImageApi.js'
 
-Pop.Aruco.GetMarkerImage = function(Width,Height,Number,Border=1)
+export function GetMarkerImage(Width,Height,Number,Border=1)
 {
-	const Matrix = Pop.Aruco.GetMarkerMatrix( Width, Height, Number );
-	const Image = new Pop.Image();
-	const Channels = 3;
+	const Matrix = GetMarkerMatrix( Width, Height, Number );
+	const Image = new PopImage(`AurcoMarker #${Number} ${Width}x${Height}`);
+	const Channels = 4;
 	Border = (Border===true) ? 1 : (Border===false) ? 0 : Border;
 	const ImageWidth = Width + Border + Border;
 	const ImageHeight = Height + Border + Border;
 	const Pixels = new Uint8Array( ImageWidth * ImageHeight * Channels );
+
+	//	set border (background)
+	const BorderRgba = [0,0,0,255];
+	for ( let p=0;	p<Pixels.length;	p++ )
+	{
+		const rgbaindex = p % Channels;
+		Pixels[p] = BorderRgba[rgbaindex];
+	}
 
 	let SetPixel = function(x,y,Value)
 	{
@@ -17,7 +25,9 @@ Pop.Aruco.GetMarkerImage = function(Width,Height,Number,Border=1)
 		let Index = (imgy * ImageWidth) + imgx;
 		Index *= Channels;
 		for ( let i=0;	i<Channels;	i++ )
-			Pixels[Index+i] = Value ? 255 : 0;
+		{
+			Pixels[Index+i] = (Value==1||i==3) ? 255 : 0;	//	on || alpha channel
+		}
 	}
 	
 	for ( let y=0;	y<Height;	y++ )
@@ -37,10 +47,10 @@ Pop.Aruco.GetMarkerImage = function(Width,Height,Number,Border=1)
 	return Image;
 }
 
-Pop.Aruco.GetMarkerMatrix = function(Width,Height,Number)
+function GetMarkerMatrix(Width,Height,Number)
 {
-	const DictionaryName = Width +'x'+Height+'_1000';
-	const Dictionary = Pop.Aruco.MarkerDictionarys[DictionaryName];
+	const DictionaryName = `${Width}x${Height}_1000`;
+	const Dictionary = MarkerDictionarys[DictionaryName];
 	if ( !Dictionary )
 		throw "No Aruco dictionary named " + DictionaryName;
 
@@ -60,12 +70,13 @@ Pop.Aruco.GetMarkerMatrix = function(Width,Height,Number)
 	return bits;
 }
 
-Pop.Aruco.GetMarkerDictionaryNames = function()
+function GetMarkerDictionaryNames()
 {
-	return Object.keys( Pop.Aruco.MarkerDictionarys );
+	return Object.keys( MarkerDictionarys );
 }
 
-Pop.Aruco.MarkerDictionarys =
+//	4x4_1000 5x5_1000
+const MarkerDictionarys =
 {
 	"aruco":[
 		[

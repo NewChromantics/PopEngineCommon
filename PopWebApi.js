@@ -55,12 +55,12 @@ function IsForeground()
 
 function SetIsForeground(NowIsForeground)
 {
-	Pop.Debug(`Foreground changed from ,${ForegroundState} to ${NowIsForeground}. Document.hidden=${document.hidden}`);
+	//Pop.Debug(`Foreground changed from ,${ForegroundState} to ${NowIsForeground}. Document.hidden=${document.hidden}`);
 	if (NowIsForeground!==undefined)
 		ForegroundState = NowIsForeground;
 
 	const Foreground = IsForeground();
-	Pop.Debug(`IsForeground state = ${IsForeground()}`);
+	//Pop.Debug(`IsForeground state = ${IsForeground()}`);
 	ForegroundChangePromises.Push(Foreground);
 }
 
@@ -151,6 +151,12 @@ export function GetExeArguments()
 				Value = true;
 			else if ( Value == 'false' )
 				Value = false;
+			else
+			{
+				//	value is a string, decode any url encoding like %10
+				Value = decodeURIComponent(Value);
+			}
+				
 		}
 		UrlParams[Key] = Value;
 	}
