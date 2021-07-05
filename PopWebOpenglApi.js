@@ -204,6 +204,8 @@ class RenderCommand_SetRenderTarget extends RenderCommand_Base
 		}
 		
 		SetRenderTarget.ReadBack = (Params[3] === true);
+		if ( Params[3] && Params[3] !== true )
+			throw `Readback format ${Params[3]} now expected to be true, not a format, to match MRT formats`;
 		
 		//	make update commands for any render targets
 		for ( let Image of SetRenderTarget.TargetImages )
@@ -216,12 +218,14 @@ class RenderCommand_SetRenderTarget extends RenderCommand_Base
 		
 		//	arg 2 is clear colour, or if none provided (or zero alpha), no clear
 		SetRenderTarget.ClearColour = Params[2];
-		if ( SetRenderTarget.ClearColour && SetRenderTarget.ClearColour.length < 3 )
+		if ( SetRenderTarget.ClearColour )
 		{
-			throw `Clear colour provided ${Command.ClearColour.length} colours, expecting RGB or RGBA`;
+			if ( SetRenderTarget.ClearColour.length < 3 )
+				throw `Clear colour provided ${Command.ClearColour.length} colours, expecting RGB or RGBA`;
+
+			if ( SetRenderTarget.ClearColour.length < 4 )
+				SetRenderTarget.ClearColour.push(1);
 		}
-		if ( SetRenderTarget.ClearColour.length < 4 )
-			SetRenderTarget.ClearColour.push(1);
 		
 		PushCommand(SetRenderTarget);
 	}
@@ -235,6 +239,7 @@ class RenderCommand_UpdateImage extends RenderCommand_Base
 	
 	constructor()
 	{
+		super();
 		this.Image = null;
 		this.IsRenderTarget = false;
 	}
@@ -926,46 +931,73 @@ export class Context
 	ProcessRenderCommands(RenderCommands)
 	{
 		//	current state
-		let PassRenderTargets = [];
-		let PassTargetUnbinds = [];
+		let PassRenderTarget = null;	//	MRT is still one target, so this is nice and simple
+		let PassTargetUnbind = null;
+		let ReadBackPass = false;
 		let InsidePass = false;
+		
 		const EndPass = function()
 		{
 			if ( InsidePass )
 			{
+				if ( ReadBackPass )
+				{
+					try
+					{
+						const TargetImage0 = PassRenderTarget.Images[0];
+						const ReadFormat = TargetImage0.GetFormat();
+						const Pixels = PassRenderTarget.ReadPixels(ReadFormat);
+						//	gr: need to set gl version to match pixels version here
+						TargetImage0.WritePixels(Pixels.Width,Pixels.Height,Pixels.Data,Pixels.Format);
+					}
+					catch(e)
+					{
+						console.error(`Error reading back texture in pass; ${e}`);
+					}
+				}
+			
 				//	endpass()
 				//	unbind targets?
-				PassTargetUnbinds.forEach( Unbind => Unbind() );
-				PassRenderTargets = [];
+				PassTargetUnbind();
+				PassTargetUnbind = null;
+				PassRenderTarget = null;
 				InsidePass = false;
 			}
 		}.bind(this);
 		
-		const NewPass = function(TargetImages,ClearColour)
+		const NewPass = function(TargetImages,ClearColour,ReadBack)
 		{
 			//	zero alpha = no clear so we just load old contents
 			if ( ClearColour && ClearColour[3] <= 0.0 )
 				ClearColour = null;
 				
 			EndPass();
+			let Target;
 			if ( !TargetImages.length )
 			{
 				//	bind to screen
-				const Target = new WindowRenderTarget(this);
-				const Unbind = Target.BindRenderTarget(this);
-				PassRenderTargets.push(Target);
-				PassTargetUnbinds.push(Unbind);
+				Target = new WindowRenderTarget(this);
+				if ( ReadBack )
+					throw `ReadBack not currently supported to screen. Need to allow user to pass in a texture instead of true/format here`;
 			}
 			else
 			{
 				//	get texture target
-				throw `todo; texture render target pass`;
+				Target = this.GetTextureRenderTarget(TargetImages);
 			}
+			
+			const Unbind = Target.BindRenderTarget(this);
+			PassRenderTarget = Target;
+			PassTargetUnbind = Unbind;
+			ReadBackPass = ReadBack;
+			InsidePass = true;
+			
 			if ( ClearColour )
 			{
-				PassRenderTargets[0].ClearColour(...ClearColour);
+				PassRenderTarget.ClearColour(...ClearColour);
 			}
-			PassRenderTargets[0].ResetState();
+			PassRenderTarget.ResetState();
+			//PassRenderTarget.SetBlendModeAlpha();
 		}.bind(this);
 		
 		//	run each command
@@ -975,10 +1007,8 @@ export class Context
 			{
 				if ( RenderCommand instanceof RenderCommand_UpdateImage )
 				{
-					//	get image
-					//	get/create opengl texture
-					//	update pixels if out of date
-					throw `Handle RenderCommand_UpdateImage`; 
+					const RenderContext = this;
+					RenderCommand.Image.UpdateTexturePixels(RenderContext);
 				}
 				else if ( RenderCommand instanceof RenderCommand_Draw ) 
 				{
@@ -1008,7 +1038,7 @@ export class Context
 					//	fetch opengl render targets/screen target
 					//	bind target[s]
 					//	clear
-					NewPass( RenderCommand.TargetImages, RenderCommand.ClearColour );
+					NewPass( RenderCommand.TargetImages, RenderCommand.ClearColour, RenderCommand.ReadBack );
 				}
 				else if ( RenderCommand instanceof RenderCommand_ReadPixels )
 				{
@@ -1139,29 +1169,12 @@ export class Context
 		const gl = this.GetGlContext();
 		const RenderTarget = this.GetTextureRenderTarget(Image);
 		const Unbind = RenderTarget.BindRenderTarget( RenderContext );
-		const Pixels = {};
-		Pixels.Width = RenderTarget.GetRenderTargetRect()[2];
-		Pixels.Height = RenderTarget.GetRenderTargetRect()[3];
-		Pixels.Format = ReadBackFormat;
-		if ( ReadBackFormat == 'RGBA' )
-		{
-			Pixels.Channels = 4;
-			Pixels.Data = new Uint8Array(Pixels.Width * Pixels.Height * Pixels.Channels);
-			gl.readPixels(0,0,Pixels.Width,Pixels.Height,gl.RGBA,gl.UNSIGNED_BYTE,Pixels.Data);
-			Unbind();
-			return Pixels;
-		}
-		else if ( ReadBackFormat == 'Float4' )
-		{
-			Pixels.Channels = 4;
-			Pixels.Data = new Float32Array(Pixels.Width * Pixels.Height * Pixels.Channels);
-			gl.readPixels(0,0,Pixels.Width,Pixels.Height,gl.RGBA,gl.FLOAT,Pixels.Data);
-			Unbind();
-			return Pixels;
-		}
+		
+		const Pixels = RenderTarget.ReadPixels(ReadBackFormat);
 		//	this needs to restore bound rendertarget, really
 		//	although any renders should be binding render target explicitly
 		Unbind();
+		return Pixels;
 	}
 
 	IsFullscreenSupported()
@@ -1278,13 +1291,10 @@ export class RenderTarget
 		//	gr: merge this with ReadPixels()
 		if (ReadBackFormat === true)
 		{
-			const gl = RenderContext.GetGlContext();
-			const Width = RenderTarget.GetRenderTargetRect()[2];
-			const Height = RenderTarget.GetRenderTargetRect()[3];
-			const Pixels = new Uint8Array(Width * Height * 4);
-			gl.readPixels(0,0,Width,Height,gl.RGBA,gl.UNSIGNED_BYTE,Pixels);
+			const ReadFormat = 'RGBA';
+			const Pixels = RenderTarget.ReadPixels(ReadFormat);
 			const target = ReadTargetTexture !== undefined ? ReadTargetTexture : TargetTexture
-			target.WritePixels(Width,Height,Pixels,'RGBA');
+			target.WritePixels(Pixels.Width,Pixels.Height,Pixels.Data,Pixels.Format);
 		}
 		
 		Unbind();
@@ -1413,6 +1423,35 @@ export class RenderTarget
 		gl.drawArrays( Geometry.PrimitiveType, 0, TriangleCount * 3 );
 	}
 	
+	//	returns a {} struct with pixel data
+	//	gr: this should return pixel data for each texture in MRT...
+	ReadPixels(ReadBackFormat)
+	{
+		//	todo: check is bound
+		const gl = this.GetGlContext();
+		const TargetRect = this.GetRenderTargetRect();
+
+		const Pixels = {};
+		Pixels.Width = TargetRect[2];
+		Pixels.Height = TargetRect[3]
+		Pixels.Format = ReadBackFormat;
+		if ( ReadBackFormat == 'RGBA' )
+		{
+			Pixels.Channels = 4;
+			Pixels.Data = new Uint8Array(Pixels.Width * Pixels.Height * Pixels.Channels);
+			gl.readPixels(0,0,Pixels.Width,Pixels.Height,gl.RGBA,gl.UNSIGNED_BYTE,Pixels.Data);
+			return Pixels;
+		}
+		else if ( ReadBackFormat == 'Float4' )
+		{
+			Pixels.Channels = 4;
+			Pixels.Data = new Float32Array(Pixels.Width * Pixels.Height * Pixels.Channels);
+			gl.readPixels(0,0,Pixels.Width,Pixels.Height,gl.RGBA,gl.FLOAT,Pixels.Data);
+			return Pixels;
+		}
+		
+		throw `ReadPixels() Unhandled readback format ${ReadBackFormat}`;
+	}
 }
 
 

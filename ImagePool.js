@@ -30,6 +30,7 @@ export class ImagePool extends Pool
 {
 	constructor(Name,OnWarning=function(){})
 	{
+		OnWarning = OnWarning || function(){};
 		let Debug_AllocatedImageCounter = 0;
 		const OnDebug = function(){};//OnWarning;
 
