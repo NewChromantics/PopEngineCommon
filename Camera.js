@@ -44,7 +44,7 @@ export class Camera
 		this.ProjectionMatrix = undefined;	//	override projection matrix
 		
 		this.NearDistance = 0.01;
-		this.FarDistance = 100;
+		this.FarDistance = 1000;
 
 		//	gr: to be clear, this is an offset from the center
 		//		which will usually be middle of the viewrect of the projection matrix
@@ -349,6 +349,7 @@ export class Camera
 
 	
 	//	camera's modelview transform
+	//	gr: this should be renamed WorldToLocal
 	GetWorldToCameraMatrix()
 	{
 		//	https://stackoverflow.com/questions/349050/calculating-a-lookat-matrix
