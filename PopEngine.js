@@ -21,6 +21,7 @@ Pop.Math = PopMath;
 
 import * as Opengl from './PopWebOpenglApi.js'
 Pop.Opengl = Opengl;
+Pop.Sokol = Opengl;	//	native name. Should rename both of these to Renderer?
 
 import * as Assets from './AssetManager.js'
 Pop.Assets = Assets;
