@@ -638,7 +638,8 @@ export class Camera
 
 		this.LastPos_PanLocalPos = [x,y,z];
 	}
-										
+
+	//	maybe rename to GetWorldRay
 	GetScreenRay(u,v,ScreenRect)
 	{
 		let Aspect = ScreenRect[2] / ScreenRect[3];
@@ -669,7 +670,8 @@ export class Camera
 		//		I think the Z dir is backwards in the projection hence why it renders correctly, but maths is backwards
 		//		the raymarch dir is also backwards, which matches this backwards
 		Ray.Direction = PopMath.Normalise3( PopMath.Subtract3( Ray.Start, Ray.End ) );
-										
+		Ray.Position = Ray.Start;
+		
 		return Ray;
 	}
 	
