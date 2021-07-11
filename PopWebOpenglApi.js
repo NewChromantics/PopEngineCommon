@@ -333,11 +333,11 @@ class RenderCommands_t
 //	this should match the new Sokol context, and async-renders RenderCommands
 export class Context
 {
-	constructor(Canvas,ContextOptions={})
+	constructor(RenderView,ContextOptions={})
 	{
+		const Canvas = RenderView.GetElement();
 		if ( !(Canvas instanceof HTMLCanvasElement) )
 			throw `First element of Opengl.Context now expected to be a canvas`;
-		
 		
 		//	todo: rename this, leftover naming from when this was a window
 		//		now it needs to be set(to false) when we want to shutdown
