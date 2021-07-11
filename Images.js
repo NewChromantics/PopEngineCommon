@@ -1,5 +1,7 @@
 //	web api needs to import PopImageWebApi here...
 //	this might be where we need generic import names and ignore them natively
+import Pop from './PopEngine.js'
+
 
 const Default = 'Image utility module';
 export default Default;
