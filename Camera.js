@@ -207,8 +207,9 @@ export class Camera
 		OpenglFocal.fx *= 2;
 		
 		//	focal center is middle of viewport
-		let Centerxf = 0.5;
-		let Centeryf = 0.5;
+		//	gr: 0.5 is making projection clip in corners...
+		let Centerxf = 0.0;
+		let Centeryf = 0.0;
 		OpenglFocal.cx = PopMath.lerp( ViewRect[0], ViewRect[0]+ViewRect[2], Centerxf );
 		OpenglFocal.cx += this.FocalCenterOffset[0];
 		OpenglFocal.cy = PopMath.lerp( ViewRect[1], ViewRect[1]+ViewRect[3], Centeryf );
