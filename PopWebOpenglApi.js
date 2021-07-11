@@ -1796,8 +1796,9 @@ export class Shader
 		
 		const gl = RenderContext.GetGlContext();
 		
-		const RefactorFunc = ( Type == gl.FRAGMENT_SHADER ) ? RefactorFragShader : RefactorVertShader;
-		Source = RefactorFunc(Source);
+		//	gr: removed this for now as we dont have it native
+		//const RefactorFunc = ( Type == gl.FRAGMENT_SHADER ) ? RefactorFragShader : RefactorVertShader;
+		//Source = RefactorFunc(Source);
 		
 		const Shader = gl.createShader(Type);
 		gl.shaderSource( Shader, Source );
