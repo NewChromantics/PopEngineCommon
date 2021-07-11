@@ -245,6 +245,21 @@ class RenderCommand_UpdateImage extends RenderCommand_Base
 	}
 }
 
+//	defaults, make sure this matches native
+class StateParams_t
+{
+	constructor(Params)
+	{
+		Params = Params || {};
+		
+		this.DepthRead = 'LessEqual';	//	need to turn true into this default
+		this.DepthWrite = true;
+		this.CullMode = null;	//	null = none
+		
+		Object.assign( this, Params );
+	}
+}
+
 class RenderCommand_Draw extends RenderCommand_Base
 {
 	constructor()
@@ -253,6 +268,7 @@ class RenderCommand_Draw extends RenderCommand_Base
 		this.Geometry = null;
 		this.Shader = null;
 		this.Uniforms = {};
+		this.StateParams = null;
 	}
 	
 	static ParseCommand(Params,PushCommand)
@@ -263,6 +279,7 @@ class RenderCommand_Draw extends RenderCommand_Base
 		Draw.Geometry = Params[1];
 		Draw.Shader = Params[2];
 		Draw.Uniforms = Params[3];
+		Draw.StateParams = new StateParams_t( Params[4] );
 		
 		if ( !(Draw.Geometry instanceof TriangleBuffer ) )
 			throw `First param isn't a triangle buffer; ${Draw.TriangleBuffer}`;
@@ -1015,6 +1032,7 @@ export class Context
 					const RenderContext = this;
 					const Geometry = RenderCommand.Geometry;
 					const Shader = RenderCommand.Shader;
+					const StateParams = RenderCommand.StateParams;
 					
 					//	bind geo & shader (these are intrinsicly linked by attribs, we should change code
 					//	so they HAVE to be bound together)
@@ -1028,6 +1046,9 @@ export class Context
 						Shader.SetUniform( UniformKey, UniformValue );
 					}
 										
+					//	sokol sets state every frame, we should too
+					PassRenderTarget.SetState(StateParams);
+
 					//	draw polygons
 					Geometry.Draw(RenderContext);
 				}
@@ -1333,6 +1354,39 @@ export class RenderTarget
 		gl.enable(gl.SCISSOR_TEST);
 		//	to make blending work well, don't reject things on same plane
 		gl.depthFunc(gl.LEQUAL);
+	}
+	
+	SetState(StateParams)
+	{
+		const gl = this.GetGlContext();
+		
+		if ( StateParams.CullMode )
+		{
+			throw `Currently not handling CullMode=${StateParams.CullMode}`;
+		}
+		else
+		{
+			gl.disable(gl.CULL_FACE);
+		}
+		
+		if ( StateParams.DepthWrite )
+		{
+			gl.depthMask(true);
+		}
+		else
+		{
+			gl.depthMask(false);
+		}
+
+		if ( StateParams.DepthRead )
+		{
+			gl.enable(gl.DEPTH_TEST);
+			gl.depthFunc(gl.LEQUAL);	//	todo: get proper mode
+		}
+		else
+		{
+			gl.disable(gl.DEPTH_TEST);
+		}
 	}
 	
 	SetBlendModeBlit()
