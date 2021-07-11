@@ -2208,36 +2208,35 @@ export class TriangleBuffer
 			//	gldrawarrays attempt to access out of range vertices in attribute 0
 			if ( Array.isArray(Attrib.Data) )
 				Attrib.Data = new Float32Array( Attrib.Data );
+				
+			Attrib.Stride = Attrib.Stride || 0;
 		}		
 		
 		let TotalByteLength = 0;
-		const GetOpenglAttribute = function(Name,Floats,AttribIndex,Size)
-		{
-			let Type = GetOpenglElementType( gl, Floats );
-			
-			let Attrib = {};
-			Attrib.Name = Name;
-			Attrib.Floats = Floats;
-			Attrib.Size = Size;
-			Attrib.Type = Type;
-			Attrib.DataIndex = AttribIndex;
-			//	null means we haven't assigned it from the shader
-			//	note; this means we really need a location PER shader, change this to {}[Shader.UniqueHash] = Location
-			Attrib.Location = null;	
-			return Attrib;
-		}
 		function AttribNameToOpenglAttrib(Name,Index)
 		{
 			//	should get location from shader binding!
 			const Attrib = Attribs[Name];
 			CleanupAttrib(Attrib);
-			const OpenglAttrib = GetOpenglAttribute( Name, Attrib.Data, Index, Attrib.Size );
+			
+			const OpenglAttrib = {};
+			OpenglAttrib.Name = Name;
+			OpenglAttrib.Floats = Attrib.Data;
+			OpenglAttrib.Size = Attrib.Size;
+			OpenglAttrib.Type = GetOpenglElementType( gl, Attrib.Data );
+			OpenglAttrib.DataIndex = Index;
+			OpenglAttrib.Stride = Attrib.Stride;
+			//	null means we haven't assigned it from the shader
+			//	note; this means we really need a location PER shader, change this to {}[Shader.UniqueHash] = Location
+			OpenglAttrib.Location = null;
+
 			TotalByteLength += Attrib.Data.byteLength;
 			return OpenglAttrib;
 		}
 		
 		this.Attributes = Object.keys( Attribs ).map( AttribNameToOpenglAttrib );
 		
+		//	todo: detect when attribs all use same buffer and have a stride (interleaved data)
 		//	concat data
 		let TotalData = new Float32Array( TotalByteLength / 4 );//Float32Array.BYTES_PER_ELEMENT );
 		
@@ -2320,7 +2319,7 @@ export class TriangleBuffer
 				return;
 			
 			let Normalised = false;
-			let StrideBytes = 0;
+			let StrideBytes = Attrib.Stride;
 			let OffsetBytes = Attrib.ByteOffset;
 			gl.vertexAttribPointer( Attrib.Location, Attrib.Size, Attrib.Type, Normalised, StrideBytes, OffsetBytes );
 			gl.enableVertexAttribArray( Attrib.Location );
