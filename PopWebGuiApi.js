@@ -1243,9 +1243,18 @@ export class RenderView extends BaseControl
 	{
 		super(...arguments);
 
-		if ( !Rect instanceof HTMLCanvasElement )
-			throw `Currently require rect to be a canvas`;
+		//	native is expecting a named element
+		if ( typeof Rect == typeof '' )
+			Rect = document.getElementById(Rect);
 
+		if ( Rect instanceof HTMLCanvasElement )
+		{
+		}
+		else
+		{
+			throw `Currently require rect(${Rect}) to be a canvas`;
+		}
+		
 		this.Element = Rect;
 		this.BindEvents();
 	}
