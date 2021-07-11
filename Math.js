@@ -738,9 +738,9 @@ export function SetMatrixTranslation(Matrix,x,y,z,w=1)
 	Matrix[15] = w;
 }
 
-export function CreateTranslationMatrix(x,y,z)
+export function CreateTranslationMatrix(x,y,z,w=1)
 {
-	return [ 1,0,0,0,	0,1,0,0,	0,0,1,0,	x,y,z,1	];
+	return [ 1,0,0,0,	0,1,0,0,	0,0,1,0,	x,y,z,w	];
 }
 
 export function CreateScaleMatrix(x,y,z)
