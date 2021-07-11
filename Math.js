@@ -1558,28 +1558,39 @@ export function GetMatrixTransposed(Matrix4x4)
 	return Transposed;
 }
 
-/*
-bool GetPlaneIntersection(TRay Ray,float4 Plane,out vec3 IntersectionPos)
+
+//	expecting direction to be normalised
+export function GetRayPositionAtTime(Position,Direction,Time)
+{
+	let Offset = Multiply3( Direction, [Time,Time,Time] );
+	let RayPos = Add3( Position, Offset );
+	return RayPos; 
+}
+
+//	expecting ray & plane to be in same space
+//	expecting dir to be normalised
+//	returns null or intersection position
+export function GetPlaneIntersection(RayPosition,RayDirection,Plane)
 {
 	//	https://gist.github.com/doxas/e9a3d006c7d19d2a0047
-	float PlaneOffset = Plane.w;
-	float3 PlaneNormal = Plane.xyz;
-	float PlaneDistance = -PlaneOffset;
-	float Denom = dot( Ray.Dir, PlaneNormal);
-	float t = -(dot( Ray.Pos, PlaneNormal) + PlaneDistance) / Denom;
+	let PlaneOffset = Plane[3];
+	let PlaneNormal = Plane.slice(0,3);
+	let PlaneDistance = -PlaneOffset;
+	let Denom = Dot3( RayDirection, PlaneNormal);
+	let t = -( Dot3( RayPosition, PlaneNormal ) + PlaneDistance) / Denom;
 	
 	//	wrong side, enable for 2 sided
-	bool DoubleSided = false;
+	let DoubleSided = true;//false;
 	
-	float Min = 0.01;
+	let Min = 0.01;
 	
 	if ( t <= Min && !DoubleSided )
 		return false;
 	
-	IntersectionPos = GetRayPositionAtTime( Ray, t );
-	return true;
+	const IntersectionPos = GetRayPositionAtTime( RayPosition, RayDirection, t );
+	return IntersectionPos;
 }
-*/
+
 export function GetIntersectionRayTriangle3(RayStart,RayDirection,a,b,c)
 {
 	//	https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
