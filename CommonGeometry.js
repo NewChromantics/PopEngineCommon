@@ -62,6 +62,46 @@ export function CreateCubeGeometry(Min=-1,Max=1)
 }
 
 
+export function CreateQuad3Geometry(Min=-1,Max=1)
+{
+	let PositionData = [];
+	let UvData = [];
+	
+	let AddTriangle = function(a,b,c)
+	{
+		PositionData.push( ...a.slice(0,3) );
+		PositionData.push( ...b.slice(0,3) );
+		PositionData.push( ...c.slice(0,3) );
+		UvData.push( ...a.slice(3,5) );
+		UvData.push( ...b.slice(3,5) );
+		UvData.push( ...c.slice(3,5) );
+	}
+	
+	const y = 0;
+	
+	//	top left near bottom right far
+	let tln = [Min,y,Min,		0,0];
+	let trn = [Max,y,Min,		1,0];
+	let tlf = [Min,y,Max,		0,0];
+	let trf = [Max,y,Max,		1,0];
+	
+	//	top
+	AddTriangle( tln, tlf, trf );
+	AddTriangle( trf, trn, tln );
+	
+	const Attributes = {};
+	Attributes.LocalPosition = {};
+	Attributes.LocalPosition.Size = 3;
+	Attributes.LocalPosition.Data = new Float32Array(PositionData);
+
+	Attributes.LocalUv = {};
+	Attributes.LocalUv.Size = 2;
+	Attributes.LocalUv.Data = new Float32Array(UvData);
+	
+	return Attributes;
+}
+
+
 export function CreateBlitQuadGeometry()
 {
 	let l = 0;
