@@ -82,8 +82,8 @@ export function CreateQuad3Geometry(Min=-1,Max=1)
 	//	top left near bottom right far
 	let tln = [Min,y,Min,		0,0];
 	let trn = [Max,y,Min,		1,0];
-	let tlf = [Min,y,Max,		0,0];
-	let trf = [Max,y,Max,		1,0];
+	let tlf = [Min,y,Max,		0,1];
+	let trf = [Max,y,Max,		1,1];
 	
 	//	top
 	AddTriangle( tln, tlf, trf );
