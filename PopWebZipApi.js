@@ -48,7 +48,7 @@ export class NewZipArchive
 
 
 
-export default class ZipArchive
+export class Archive
 {
 	constructor(ZipFilenameOrBytes)
 	{
@@ -161,4 +161,7 @@ export default class ZipArchive
 		return Match.file;
 	}
 }
+
+
+export default Archive;
 
