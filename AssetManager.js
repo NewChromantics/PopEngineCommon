@@ -1,5 +1,7 @@
 import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
 import {GetUniqueHash} from './Hash.js'
+import {ExtractShaderUniforms} from './Shaders.js'
+import Pop from './PopEngine.js'
 
 const PopAssetManager = {};
 export default PopAssetManager;
@@ -135,7 +137,9 @@ export function GetAsset(Name,RenderContext)
 export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUniforms,ShaderAttribs)
 {
 	//	maybe we can regex these!
-	if ( !ShaderUniforms )	throw `RegisterShaderAssetFilename(${FragFilename}) missing ShaderUniforms`;
+	if ( ShaderUniforms )	
+		Pop.Debug(`RegisterShaderAssetFilename: ShaderUniforms (${ShaderUniforms}) no longer need to be supplied`);
+		
 	if ( !ShaderAttribs )	throw `RegisterShaderAssetFilename(${FragFilename}) missing ShaderAttribs`;
 		
 	//	we use / as its not a valid filename char
@@ -149,6 +153,8 @@ export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUnif
 
 		FragSource = RefactorFragShader(FragSource);
 		VertSource = RefactorVertShader(VertSource);
+
+		const ShaderUniforms = ExtractShaderUniforms( FragSource, VertSource );
 
 		//const Shader = new Pop.Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
 		//const Shader = new Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
