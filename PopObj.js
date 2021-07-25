@@ -1,71 +1,13 @@
-Pop.Obj = {};
-
-Pop.Obj.Parse = function(Contents,OnVertex)
-{
-	let Obj = {};
-	Obj.Prefix_Comment = '#';
-	Obj.Prefix_Position = 'v ';
-	Obj.Prefix_Normal = 'vn ';
-	Obj.Prefix_TexCoord = 'vt ';
-	Obj.Prefix_Material = 'mtllib ';
-	Obj.Prefix_Object = 'o ';
-	Obj.Prefix_Face = 'f ';
-	Obj.Prefix_SmoothShading = 's ';
-	Obj.Prefix_Scale = '# Scale ';
-
-	Pop.Debug("Contents.length",Contents.length);
-	const Lines = Contents.split('\n');
-
-	let Scale = 1.0;
-
-	const ParsePositionFloat = function(FloatStr)
-	{
-		let f = parseFloat( FloatStr );
-		f *= Scale;
-		return f;
-	}
-	
-	
-	const ParseLine = function(Line)
-	{
-		Line = Line.trim();
-		
-		//	gr: added a scale key
-		if ( Line.startsWith(Obj.Prefix_Scale) )
-		{
-			Line = Line.replace( Obj.Prefix_Scale,'');
-			Scale = parseFloat( Line );
-			Pop.Debug("Found scale in obj: ",Scale);
-			return;
-		}
-
-		if ( !Line.startsWith(Obj.Prefix_Position) )
-			return;
-
-		let pxyx = Line.split(' ');
-		if ( pxyx.length != 4 )
-		{
-			Pop.Debug("ignoring line", Line, pxyx.length);
-			return;
-		}
-		let x = ParsePositionFloat( pxyx[1] );
-		let y = ParsePositionFloat( pxyx[2] );
-		let z = ParsePositionFloat( pxyx[3] );
-		OnVertex( x,y,z );
-	}
-	
-	Lines.forEach( ParseLine );
-}
-
-
-//	new Object{} output
-//	.Positions
+//	new PopEngine style geometry Object{} output
+//	.Positions = {.Data=float32array .Size=int_length_of_each_element}
 //	.Normals
 //	.Uv0
-//	.Triangles
-Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
+//	.Triangles = int array of indexes
+export default function ParseObjGeometry(Contents,OnGeometry,OnDebug)
 {
-	Pop.Debug("Contents.length",Contents.length);
+	OnDebug = OnDebug || function(){};
+	
+	//Pop.Debug("Contents.length",Contents.length);
 	const Lines = Contents.split('\n');
 	
 	let Scale = 1.0;
@@ -140,7 +82,7 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 			}
 			else
 			{
-				//Pop.Debug(`Warning OBJ Texcoord Index (${TexCoordIndex}) out of bounds(${TexCoords.length})`);
+				OnDebug(`Warning OBJ Texcoord Index (${TexCoordIndex}) out of bounds(${TexCoords.length})`);
 				VertexTexCoords.push( undefined,undefined,undefined );
 			}
 		}
@@ -185,7 +127,7 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 		//	tri strip?
 		if ( Face.length != 3 )
 		{
-			Pop.Warning(`Skipping OBJ face with ${Face.length} points`);
+			OnDebug(`Skipping OBJ face with ${Face.length} points`);
 			//throw `OBJ face with ${Face.length} != 3 points`;
 			return;
 		}
@@ -224,7 +166,7 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 	function OnScale()
 	{
 		Scale = parseFloat( Line );
-		Pop.Debug("Found scale in obj: ",Scale);
+		//Pop.Debug("Found scale in obj: ",Scale);
 	}
 	
 	function OnMaterialAsset()
@@ -296,7 +238,7 @@ Pop.Obj.ParseGeometry = function(Contents,OnGeometry)
 
 		if ( !ParseFunc )
 		{
-			Pop.Debug("OBJ skipping unknown prefixed line", Line );
+			OnDebug("OBJ skipping unknown prefixed line", Line );
 			return;
 		}
 		
