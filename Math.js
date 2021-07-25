@@ -1921,3 +1921,50 @@ export function GetDistanceToPolygon2(Position,Corners,Center)
 	return MinDistance;
 }
 
+
+export function GetRayRayIntersection3(StartA,DirA,StartB,DirB)
+{
+	//	must be normalised to match c# version
+	const da = Normalise3(DirA);
+	const db = Normalise3(DirB);
+
+	const dc = Subtract3(StartB,StartA);
+
+	const dadb_cross = Cross3(da, db);
+	const dcdb_cross = Cross3(dc, db);
+	const dcda_cross = Cross3(dc, da);
+
+	const sa = Dot3(dcdb_cross, dadb_cross) / LengthSq3(dadb_cross);
+	const sb = Dot3(dcda_cross, dadb_cross) / LengthSq3(dadb_cross);
+
+	const Result = {};
+	Result.IntersectionTimeA = sa;
+	Result.IntersectionTimeB = sb;
+	return Result;
+}
+/*
+
+void GetLineLineIntersection3(float3 StartA,float3 EndA,float3 StartB,float3 EndB,out float IntersectionTimeA,out float IntersectionTimeB)
+{
+	float LengthA = length(EndA - StartA);
+	float LengthB = length(EndB - StartB);
+		
+	float3 DirA = (EndA - StartA);
+	float3 DirB = (EndB - StartB);
+	GetRayRayIntersection3( StartA, DirA, StartB, DirB, IntersectionTimeA, IntersectionTimeB );
+
+	//	Intersection time is along ray in world units, even though we normalised the dir. 
+	//	if they cross at ita=2 then thats still 2 in world space
+	//	so divide to get it relative to the line
+	IntersectionTimeA /= LengthA;
+	IntersectionTimeB /= LengthB;
+}
+
+
+void GetLineLineIntersection3Clamped(float3 StartA,float3 EndA,float3 StartB,float3 EndB,out float IntersectionTimeA,out float IntersectionTimeB)
+{
+	GetLineLineIntersection3( StartA, EndA, StartB, EndB, IntersectionTimeA, IntersectionTimeB);
+	IntersectionTimeA = Clamp01(IntersectionTimeA);
+	IntersectionTimeB = Clamp01(IntersectionTimeB);
+}
+*/
