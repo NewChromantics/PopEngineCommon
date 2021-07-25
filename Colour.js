@@ -1,5 +1,21 @@
+import {lerp} from './Math.js'
+
 const Default = 'Pop Colour.js module';
 export default Default;
+
+
+
+
+export function GetRandomColour()
+{
+	//	random... NICE colour
+	const r = lerp( 0.4, 0.9, Math.random() );
+	const b = lerp( 0.4, 0.9, Math.random() );
+	const g = 0.2;
+	return [r,g,b];
+}
+
+
 
 function Range(Min,Max,Value)
 {
