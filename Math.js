@@ -575,8 +575,8 @@ export function GetOverlapArea(Recta,Rectb)
 
 export function GetSphereSphereIntersection(Sphere4a,Sphere4b)
 {
-	let Delta = Math.Subtract3( Sphere4b, Sphere4a );
-	let Distance = Math.Length3( Delta );
+	let Delta = Subtract3( Sphere4b, Sphere4a );
+	let Distance = Length3( Delta );
 	let RadiusA = Sphere4a[3];
 	let RadiusB = Sphere4b[3];
 	if ( Distance > RadiusA + RadiusB )
@@ -1017,12 +1017,12 @@ export function GetFrustumPlanes(ProjectionMatrix4x4,Normalised=true)
 	
 	if ( Normalised )
 	{
-		Math.NormalisePlane( left );
-		Math.NormalisePlane( right );
-		Math.NormalisePlane( top );
-		Math.NormalisePlane( bottom );
-		Math.NormalisePlane( near );
-		Math.NormalisePlane( far );
+		NormalisePlane( left );
+		NormalisePlane( right );
+		NormalisePlane( top );
+		NormalisePlane( bottom );
+		NormalisePlane( near );
+		NormalisePlane( far );
 	}
 	
 	const Planes = {};
@@ -1694,10 +1694,10 @@ export function GetIntersectionRayTriangle3(RayStart,RayDirection,a,b,c)
 {
 	//	https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
 	//	get plane normal
-	const ab = Math.Subtract3(b,a);
-	const ac = Math.Subtract3(c,a);
+	const ab = Subtract3(b,a);
+	const ac = Subtract3(c,a);
 	//	dont need to normalise?
-	let Normal = Math.Cross3(ab,ac);
+	let Normal = Cross3(ab,ac);
 	//const Area = Math.Length3(Normal);
 	
 	//	find intersection on plane
@@ -1713,17 +1713,17 @@ export function GetIntersectionRayTriangle3(RayStart,RayDirection,a,b,c)
 	/*if ( NormalDotRayDirection > 0 )
 	{
 		Normal = Math.Cross3(ac,ab);
-		NormalDotRayDirection = Math.Dot3( Normal, RayDirection );
+		NormalDotRayDirection = Dot3( Normal, RayDirection );
 	}*/
 	
 	//	get plane distance (origin to plane, its the length a-0 along the normal)
-	const TrianglePlaneDistance = Math.Dot3( Normal, a );
+	const TrianglePlaneDistance = Dot3( Normal, a );
 	
 	//	solve
 	//	intersection = start + (dir*t)
 	//	get plane intersection time
 	//	RayToPlaneDistance is plane's D for the ray (compared to triangle plane distance)
-	const RayToPlaneDistance = Math.Dot3( Normal, RayStart);
+	const RayToPlaneDistance = Dot3( Normal, RayStart);
 	
 	//	therefore distance from ray origin to triangle is
 	//	RayToPlaneDistance + TrianglePlaneDistance
@@ -1741,7 +1741,7 @@ export function GetIntersectionRayTriangle3(RayStart,RayDirection,a,b,c)
 	}
 	
 	//	get the plane intersection pos
-	const IntersectionPosition = Math.Add3( RayStart, Math.Multiply3( RayDirection, [IntersectionTime,IntersectionTime,IntersectionTime] ) );
+	const IntersectionPosition = Add3( RayStart, Multiply3( RayDirection, [IntersectionTime,IntersectionTime,IntersectionTime] ) );
 	//Pop.Debug(`IntersectionTime=${IntersectionTime}`);
 	//return IntersectionPosition;
 	
@@ -1749,10 +1749,10 @@ export function GetIntersectionRayTriangle3(RayStart,RayDirection,a,b,c)
 	let TotalSign = 0;
 	{
 		const p = IntersectionPosition;
-		const ab = Math.Subtract3( b, a );
-		const pa = Math.Subtract3( p, a );
-		const cross = Math.Cross3( ab, pa );
-		const nc = Math.Dot3( Normal, cross );
+		const ab = Subtract3( b, a );
+		const pa = Subtract3( p, a );
+		const cross = Cross3( ab, pa );
+		const nc = Dot3( Normal, cross );
 		if ( nc < 0 )
 			return false;
 		TotalSign += nc;
@@ -1760,10 +1760,10 @@ export function GetIntersectionRayTriangle3(RayStart,RayDirection,a,b,c)
 	
 	{
 		const p = IntersectionPosition;
-		const bc = Math.Subtract3( c, b );
-		const pb = Math.Subtract3( p, b );
-		const cross = Math.Cross3( bc, pb );
-		const nc = Math.Dot3( Normal, cross );
+		const bc = Subtract3( c, b );
+		const pb = Subtract3( p, b );
+		const cross = Cross3( bc, pb );
+		const nc = Dot3( Normal, cross );
 		if ( nc < 0 )
 			return false;
 		TotalSign += nc;
@@ -1771,10 +1771,10 @@ export function GetIntersectionRayTriangle3(RayStart,RayDirection,a,b,c)
 
 	{
 		const p = IntersectionPosition;
-		const ca = Math.Subtract3( a, c );
-		const pc = Math.Subtract3( p, c );
-		const cross = Math.Cross3( ca, pc );
-		const nc = Math.Dot3( Normal, cross );
+		const ca = Subtract3( a, c );
+		const pc = Subtract3( p, c );
+		const cross = Cross3( ca, pc );
+		const nc = Dot3( Normal, cross );
 		if ( nc < 0 )
 			return false;
 		TotalSign += nc;
@@ -1788,7 +1788,7 @@ export function GetIntersectionRayTriangle3(RayStart,RayDirection,a,b,c)
 }
 
 /*	get SDF distance, merge with above
-Math.DistanceToTriangle3 = function(Position,a,b,c)
+DistanceToTriangle3 = function(Position,a,b,c)
 {
 	const p = Position;
 	const ba = Math.Subtract3(b, a);
@@ -1929,23 +1929,23 @@ export function GetDistanceToPolygon2(Position,Corners,Center)
 	//	float sdSegment( in vec2 p, in vec2 a, in vec2 b )
 	function sdSegment(p,a,b)
 	{
-		const pa = Math.Subtract2(p,a);
-		const ba = Math.Subtract2(b,a);
-		const delta = Math.Dot2(ba,ba);
-		const h = (delta == 0) ? 0 : clamp( Math.Dot2(pa,ba)/delta, 0.0, 1.0 );
-		const baScaled = Math.Multiply2( ba, [h,h] );
-		return Math.Distance2( pa, baScaled );
+		const pa = Subtract2(p,a);
+		const ba = Subtract2(b,a);
+		const delta = Dot2(ba,ba);
+		const h = (delta == 0) ? 0 : clamp( Dot2(pa,ba)/delta, 0.0, 1.0 );
+		const baScaled = Multiply2( ba, [h,h] );
+		return Distance2( pa, baScaled );
 	}
 	
 	function sdTriangle(p,p0,p1,p2 )
 	{
 		//	get edges/deltas
-		const e0 = Math.Subtract2(p1,p0);
-		const e1 = Math.Subtract2(p2,p1);
-		const e2 = Math.Subtract2(p0,p2);
-		const v0 = Math.Subtract2(p ,p0);
-		const v1 = Math.Subtract2(p ,p1);
-		const v2 = Math.Subtract2(p ,p2);
+		const e0 = Subtract2(p1,p0);
+		const e1 = Subtract2(p2,p1);
+		const e2 = Subtract2(p0,p2);
+		const v0 = Subtract2(p ,p0);
+		const v1 = Subtract2(p ,p1);
+		const v2 = Subtract2(p ,p2);
 		const e0_x = e0[0];
 		const e0_y = e0[1];
 		const e1_x = e1[0];
@@ -1953,17 +1953,17 @@ export function GetDistanceToPolygon2(Position,Corners,Center)
 		const e2_x = e2[0];
 		const e2_y = e2[1];
 		
-		const e0_LocalScale = clamp( Math.Dot2(v0,e0)/Math.Dot2(e0,e0), 0.0, 1.0 );
-		const e1_LocalScale = clamp( Math.Dot2(v1,e1)/Math.Dot2(e1,e1), 0.0, 1.0 );
-		const e2_LocalScale = clamp( Math.Dot2(v2,e2)/Math.Dot2(e2,e2), 0.0, 1.0 );
-		const pq0 = Math.Subtract2(v0,Math.Multiply2(e0,[e0_LocalScale,e0_LocalScale]));
-		const pq1 = Math.Subtract2(v1,Math.Multiply2(e1,[e1_LocalScale,e1_LocalScale]));
-		const pq2 = Math.Subtract2(v2,Math.Multiply2(e2,[e2_LocalScale,e2_LocalScale]));
+		const e0_LocalScale = clamp( Dot2(v0,e0)/Dot2(e0,e0), 0.0, 1.0 );
+		const e1_LocalScale = clamp( Dot2(v1,e1)/Dot2(e1,e1), 0.0, 1.0 );
+		const e2_LocalScale = clamp( Dot2(v2,e2)/Dot2(e2,e2), 0.0, 1.0 );
+		const pq0 = Subtract2(v0,Multiply2(e0,[e0_LocalScale,e0_LocalScale]));
+		const pq1 = Subtract2(v1,Multiply2(e1,[e1_LocalScale,e1_LocalScale]));
+		const pq2 = Subtract2(v2,Multiply2(e2,[e2_LocalScale,e2_LocalScale]));
 		const s = sign( e0_x*e2_y - e0_y*e2_x );
 		
-		const pq0_lengthsq = Math.Dot2(pq0,pq0);
-		const pq1_lengthsq = Math.Dot2(pq1,pq1);
-		const pq2_lengthsq = Math.Dot2(pq2,pq2);
+		const pq0_lengthsq = Dot2(pq0,pq0);
+		const pq1_lengthsq = Dot2(pq1,pq1);
+		const pq2_lengthsq = Dot2(pq2,pq2);
 		
 		const v0_x = v0[0];
 		const v0_y = v0[1];
@@ -1976,7 +1976,7 @@ export function GetDistanceToPolygon2(Position,Corners,Center)
 		const pq1_signeddistance2 = [pq1_lengthsq, s*(v1_x*e1_y-v1_y*e1_x)];
 		const pq2_signeddistance2 = [pq2_lengthsq, s*(v2_x*e2_y-v2_y*e2_x)];
 		
-		const d = Math.min2( pq0_signeddistance2, pq1_signeddistance2, pq2_signeddistance2 );
+		const d = min2( pq0_signeddistance2, pq1_signeddistance2, pq2_signeddistance2 );
 		return -Math.sqrt(d[0]) * sign(d[1]);
 	}
 	
