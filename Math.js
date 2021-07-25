@@ -1051,6 +1051,105 @@ export function GetBox3Corners(BoxMin,BoxMax)
 	return BoxCorners;
 }
 
+export function GetBoundingBoxsBoundingBox(BoundingBoxs)
+{
+	//	extract all positions
+	const Mins = BoundingBoxs.map( bb => bb.Min );
+	const Maxs = BoundingBoxs.map( bb => bb.Max );
+	const Positions = Mins.concat(Maxs);
+	return GetBoundingBox(Positions);
+}
+
+
+//	get [min,max] returned from a large set of values
+export function GetMinMax(Values)
+{
+	//	this will crash (too many args) after a certain size
+	//return Math.min( ...Values );
+	
+	const InitalValues = [Number.POSITIVE_INFINITY,Number.NEGATIVE_INFINITY];
+	const MinMax = Values.reduce( ([min, max], val) => [Math.min(min, val), Math.max(max, val)], InitalValues );
+	return MinMax;
+}
+
+export function GetBoundingBox(Positions)
+{
+	//	gr: faster if we can use min(...)
+	let xs,ys,zs;
+	
+	//	array of xyz's
+	if ( Array.isArray(Positions[0]) )
+	{
+		xs = Positions.map( Position => Position[0] );
+		ys = Positions.map( Position => Position[1] );
+		zs = Positions.map( Position => Position[2] );
+	}
+	else
+	{
+		//	can we make this faster by preallocating?
+		let xyzs = [ [], [], [] ];
+		//	gr: tighter loop, but adds modulus...
+		for ( let i=0;	i<Positions.length;	i++ )
+			xyzs[i%3].push( Positions[i] );
+		
+		xs = xyzs[0];
+		ys = xyzs[1];
+		zs = xyzs[2];
+		/*
+		for ( let i=0;	i<Positions.length;	i+=3 )
+		{
+			const x = Positions[i+0];
+			const y = Positions[i+1];
+			const z = Positions[i+2];
+			xs.push(x);
+			ys.push(y);
+			zs.push(z);
+		}
+		*/
+	}
+	
+	//	then get the min/max of each set
+	const MinMaxx = GetMinMax(xs);
+	const MinMaxy = GetMinMax(ys);
+	const MinMaxz = GetMinMax(zs);
+	
+	const BoundingBox = {};
+	BoundingBox.Min =
+	[
+		MinMaxx[0],
+		MinMaxy[0],
+		MinMaxy[0],
+	];
+	BoundingBox.Max =
+	[
+		MinMaxx[1],
+		MinMaxy[1],
+		MinMaxz[1],
+	];
+	return BoundingBox;
+/*
+	//	positions are striped xyz
+	let Min = Positions.slice(0,3);
+	let Max = Min.slice();
+	for ( let i=0;	i<Positions.length;	i+=3 )
+	{
+		const x = Positions[i+0];
+		const y = Positions[i+1];
+		const z = Positions[i+2];
+		Min[0] = Math.min( Min[0], x );
+		Min[1] = Math.min( Min[1], y );
+		Min[2] = Math.min( Min[2], z );
+		Max[0] = Math.max( Max[0], x );
+		Max[1] = Math.max( Max[1], y );
+		Max[2] = Math.max( Max[2], z );
+	}
+	const Bounds = {};
+	Bounds.Min = Min;
+	Bounds.Max = Max;
+	return Bounds;
+	*/
+}
+
 export function IsBoundingBoxIntersectingFrustumPlanes(Box,Planes)
 {
 	//	convert to list of planes from .Left .Near .Far etc
