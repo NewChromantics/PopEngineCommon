@@ -9,9 +9,19 @@ import {CreatePromise} from './PopApi.js'
 //	https://github.com/101arrowz/fflate
 import * as fflate from 'https://cdn.skypack.dev/fflate?min';
 
+function GetLibArchiveWorkerUrl()
+{
+	let ModuleUrl = import.meta.url;	//	this is full http://xxx/x.js url
+	const ThisUrl = new URL( import.meta.url );	//	convert to URL object so it's parsed
+	let ThisPath = ThisUrl.pathname;
+	let LastSlash = ThisPath.lastIndexOf('/');
+	ThisPath = ThisPath.slice(0, LastSlash);
+	return `${ThisPath}/libarchive.js/dist/worker-bundle.js`;
+}
 
+const WorkerUrl = GetLibArchiveWorkerUrl();
 LibArchive.init( {
-	workerUrl: './PopEngine/libarchive.js/dist/worker-bundle.js'
+	workerUrl: WorkerUrl
 } );
 
 
