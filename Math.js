@@ -1118,7 +1118,7 @@ export function GetBoundingBox(Positions)
 	[
 		MinMaxx[0],
 		MinMaxy[0],
-		MinMaxy[0],
+		MinMaxz[0],
 	];
 	BoundingBox.Max =
 	[
