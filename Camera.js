@@ -641,21 +641,28 @@ export class Camera
 	}
 
 	//	maybe rename to GetWorldRay
-	GetScreenRay(u,v,ScreenRect)
+	GetScreenRay(u,v,ScreenRect,RayDistance=null)
 	{
 		let Aspect = ScreenRect[2] / ScreenRect[3];
+
+		//let x = PopMath.lerp( -1, 1, u );
+		//let y = PopMath.lerp( 1, -1, v );
+		//const ViewRect = ScreenRect;
+
 		let x = PopMath.lerp( -Aspect, Aspect, u );
 		let y = PopMath.lerp( 1, -1, v );
-		const ViewRect = [-1,-1,1,1];
+		const ViewRect = [0,0,1,1];
 		
 		const Camera = this;
-		const RayDistance = 1000;
+		
+		const RayNear = this.NearDistance;
+		const RayFar = RayDistance || this.FarDistance;
 		
 		let ScreenToCameraTransform = Camera.GetProjectionMatrix( ViewRect );
 		ScreenToCameraTransform = PopMath.MatrixInverse4x4( ScreenToCameraTransform );
 		
-		let StartMatrix = PopMath.CreateTranslationMatrix( x, y, 0.1 );
-		let EndMatrix = PopMath.CreateTranslationMatrix( x, y, RayDistance );
+		let StartMatrix = PopMath.CreateTranslationMatrix( x, y, RayNear );
+		let EndMatrix = PopMath.CreateTranslationMatrix( x, y, RayFar );
 		StartMatrix = PopMath.MatrixMultiply4x4( ScreenToCameraTransform, StartMatrix );
 		EndMatrix = PopMath.MatrixMultiply4x4( ScreenToCameraTransform, EndMatrix );
 		
@@ -663,14 +670,25 @@ export class Camera
 		EndMatrix = PopMath.MatrixMultiply4x4( Camera.GetLocalToWorldMatrix(), EndMatrix );
 
 		const Ray = {};
+		
+		//	gr: these positions are wrong, they're scaled completley wrong
+		//		maybe theyre scaled in camera's z (near/far), but... im pretty sure they should be in world space...
 		Ray.Start = PopMath.GetMatrixTranslation( StartMatrix, true );
 		Ray.End = PopMath.GetMatrixTranslation( EndMatrix, true );
+		//	...so we're gonna rescale for now
+		
+		//	ray dir seems to be right, so get new world positions from that
+		Ray.Position = Camera.Position.slice();
 		
 		//	gr: this ray is BACKWARDS
 		//		but this is working for world-space math checks
 		//		I think the Z dir is backwards in the projection hence why it renders correctly, but maths is backwards
 		//		the raymarch dir is also backwards, which matches this backwards
 		Ray.Direction = PopMath.Normalise3( PopMath.Subtract3( Ray.Start, Ray.End ) );
+		//Ray.Position = Ray.Start;
+		
+		Ray.Start = PopMath.GetRayPositionAtTime( Ray.Position, Ray.Direction, RayNear );
+		Ray.End = PopMath.GetRayPositionAtTime( Ray.Position, Ray.Direction, RayFar );
 		Ray.Position = Ray.Start;
 		
 		return Ray;
