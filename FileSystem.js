@@ -359,13 +359,14 @@ export async function LoadFileAsArrayBufferAsync(Filename)
 }
 
 
-export async function LoadFileAsArrayBufferStreamAsync(Filename,ResolveChunks=true)
+export async function LoadFileAsArrayBufferStreamAsync(Filename,ResolveChunks=true,OnNewChunk)
 {
 	//	return cache if availible, if it failed before, try and load again
 	const Cache = FileCache.GetOrFalse(Filename,ResolveChunks);
 	if (Cache !== false)
 		return Cache;
 
+	let NextChunkIndex = 0;
 	function OnStreamProgress(Contents,TotalSize)
 	{
 		//	set meta of known size if we have it, so we can work out %
@@ -373,6 +374,23 @@ export async function LoadFileAsArrayBufferStreamAsync(Filename,ResolveChunks=tr
 			FileCache.SetKnownSize(Filename,TotalSize);
 		//	keep re-writing a new file
 		FileCache.Set(Filename,null,Contents);
+		
+		//	callback with new chunks
+		if ( OnNewChunk )
+		{
+			if ( Array.isArray(Contents) )
+			{
+				while( NextChunkIndex < Contents.length )
+				{
+					OnNewChunk( Contents[NextChunkIndex] );
+					NextChunkIndex++;
+				}
+			}
+			else
+			{
+				Pop.Warning(`Expecting contents to be chunked into an array. May conflict with resolve chunks option(=${ResolveChunks})`);
+			}
+		}
 	}
 
 	const Contents = await FetchOnce(Filename,FetchArrayBufferStream,OnStreamProgress);
