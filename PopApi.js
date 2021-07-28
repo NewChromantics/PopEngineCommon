@@ -100,6 +100,26 @@ export function StringToBytes(Str,AsArrayBuffer=false)
 	return Bytes;
 }
 
+export function BytesToBigInt(Bytes)
+{
+	if ( Bytes.length != 64/8 )
+		throw `BytesToBigInt() expected to be ${64/8} bytes long (is ${Bytes.length})`;
+
+	const Hex = [];
+	function AppendHex(i) 
+	{
+		var h = i.toString(16);
+		if (h.length % 2) 
+		{
+			h = '0' + h;
+		}
+		Hex.push(h);
+	}
+	Bytes.forEach(AppendHex);
+	const HexString = `0x${Hex.join('')}`;
+	const Int = BigInt(HexString);
+}
+
 
 export function Base64ToBytes(Base64)
 {
