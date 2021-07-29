@@ -434,26 +434,45 @@ export class Mp4Decoder
 		this.PushMdat(Atom);
 	}
 	
+	async DecodeAtom_MoofHeader(Atom)
+	{
+		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
+
+		const Header = {};
+
+		const Version = await Reader.Read8();
+		const Flags = await Reader.Read24();
+		Header.SequenceNumber = await Reader.Read32();
+		
+		return Header;
+	}
+	
 	async DecodeAtom_Moof(Atom)
 	{
 		await Atom.DecodeChildAtoms();
 		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
 		
+		let Header = await this.DecodeAtom_MoofHeader( Atom.GetChildAtom('mfhd') );
+		if ( !Header )
+		{
+			Header = {};
+		}
+
 		//	gr: units are milliseconds in moof
 		//	30fps = 33.33ms = [512, 1024, 1536, 2048...]
 		//	193000ms = 2959360         
-		const TimeScale = 1.0 / 15333.4;
+		Header.TimeScale = 1.0 / 15333.4;
 		
 		const TrackFragmentAtoms = Atom.GetChildAtoms('traf');
 		for ( const TrackFragmentAtom of TrackFragmentAtoms )
 		{
 			const MdatIdent = null;
-			const Track = await this.DecodeAtom_TrackFragment( TrackFragmentAtom, Atom, TimeScale, MdatIdent );
+			const Track = await this.DecodeAtom_TrackFragment( TrackFragmentAtom, Atom, Header, MdatIdent );
 			this.PushFragmentTrack(Track);
 		}
 	}
 	
-	async DecodeAtom_TrackFragment(Atom,MoofAtom,TimeScale,MdatIdent)
+	async DecodeAtom_TrackFragment(Atom,MoofAtom,MoofHeader,MdatIdent)
 	{
 		await Atom.DecodeChildAtoms();
 		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
@@ -462,7 +481,7 @@ export class Mp4Decoder
 		const Tfdt = Atom.GetChildAtom('tfdt');	//	delta time
 		
 		const Header = await this.DecodeAtom_TrackFragmentHeader(Tfhd,Tfdt);
-		Header.TimeScale = TimeScale;
+		Header.TimeScale = MoofHeader.TimeScale;
 		
 		const Trun = Atom.GetChildAtom('trun');
 		const Samples = await this.DecodeAtom_FragmentSampleTable( Trun, MoofAtom, Header );
@@ -623,6 +642,7 @@ export class Mp4Decoder
 			Sample.IsKeyframe = false;
 			Sample.DecodeTimeMs = TimeToMs(CurrentTime);
 			Sample.PresentationTimeMs = TimeToMs(CurrentTime+SampleCompositionTimeOffset);
+			Sample.Flags = TrunBoxSampleFlags;
 			Samples.push(Sample);
 
 			CurrentTime += SampleDuration;
