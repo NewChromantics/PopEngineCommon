@@ -1,5 +1,6 @@
 import PromiseQueue from './PromiseQueue.js'
 import * as Pop from './PopWebApiCore.js'
+import * as FileSystem from './FileSystem.js'
 
 const Default = 'Pop Gui module';
 export default Default;
@@ -1184,8 +1185,7 @@ export class BaseControl
 				Pop.Debug(`Filename ${File.name}->${Filename} mime ${Mime}`);
 				const FileArray = await File.arrayBuffer();
 				const File8 = new Uint8Array(FileArray);
-				if ( Pop.SetFileCache )
-					Pop.SetFileCache(Filename,File8);
+				FileSystem.SetFileCache(Filename,File8);
 				FinalAddedFiles.push(Filename);
 			}
 			//	make a promise for each file
