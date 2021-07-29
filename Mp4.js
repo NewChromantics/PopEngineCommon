@@ -3,6 +3,7 @@ import Pop from './PopEngine.js'
 import PromiseQueue from './PromiseQueue.js'
 import {JoinTypedArrays,BytesToString,BytesToBigInt} from './PopApi.js'
 
+//	todo? specific atom type encode&decoders?
 
 //	todo: expand to allow Data to be an array of datas
 //	todo: expand to have a "wait for more data" async func, so we can replace the general mp4 reader
@@ -34,6 +35,29 @@ class DataReader
 		if ( Bytes.length != Length )
 			throw `Something gone wrong with reading ${Length} bytes`;
 		return Bytes;
+	}
+	
+	async Read8()
+	{
+		const Bytes = await this.GetBytes(this.FilePosition,1);
+		this.FilePosition += 1;
+		return Bytes[0];
+	}
+
+	async Read16()
+	{
+		const Bytes = await this.GetBytes(this.FilePosition,16/8);
+		this.FilePosition += 16/8;
+		const Int = (Bytes[0]<<8) | (Bytes[1]<<0);
+		return Int;
+	}
+	
+	async Read24()
+	{
+		const Bytes = await this.GetBytes(this.FilePosition,24/8);
+		this.FilePosition += 24/8;
+		const Int = (Bytes[0]<<16) | (Bytes[1]<<8) | (Bytes[2]<<0);
+		return Int;
 	}
 	
 	async Read32()
@@ -142,6 +166,12 @@ class Atom_t
 		return Matches[0];
 	}
 	
+	GetChildAtoms(Fourcc)
+	{
+		const Matches = this.ChildAtoms.filter( a => a.Fourcc == Fourcc );
+		return Matches;
+	}
+	
 };
 
 /*
@@ -155,6 +185,7 @@ export class Mp4Decoder
 	{
 		//	gonna end up with a bunch of different version of these for debugging
 		this.NewAtomQueue = new PromiseQueue('Mp4 decoded atoms');
+		this.NewTrackQueue = new PromiseQueue('Mpeg decoded Tracks');
 		this.RootAtoms = [];	//	trees coming off root atoms
 		
 		this.NewByteQueue = new PromiseQueue('Mp4 pending bytes');
@@ -285,8 +316,166 @@ export class Mp4Decoder
 		let MovieHeader;
 		if ( MovieHeaderAtom )
 		{
-			MovieHeader = DecodeAtom_MovieHeader(MovieHeaderAtom);
+			MovieHeader = await this.DecodeAtom_MovieHeader(MovieHeaderAtom);
 		}
+		
+		//	now go through all the trak children
+		const TrakAtoms = Atom.GetChildAtoms('trak');
+		for ( let TrakAtom of TrakAtoms )
+		{
+			const Track = await this.DecodeAtom_Trak(TrakAtom);
+			this.NewTrackQueue.Push(Track);
+		}
+	}
+	
+	//	gr; this doesn tneed to be async as we have the data, but all the reader funcs currently are
+	async DecodeAtom_MovieHeader(Atom)
+	{
+		const Reader = new DataReader(Atom.Data,0);
+		//	https://developer.apple.com/library/content/documentation/QuickTime/QTFF/art/qt_l_095.gif
+		const Version = await Reader.Read8();
+		const Flags = await Reader.Read24();
+		
+		//	hololens had what looked like 64 bit timestamps...
+		//	this is my working reference :)
+		//	https://github.com/macmade/MP4Parse/blob/master/source/MP4.MVHD.cpp#L50
+		let CreationTime,ModificationTime,Duration;	//	long
+		let TimeScale;
+		if ( Version == 0)
+		{
+			CreationTime = await Reader.Read32();
+			ModificationTime = await Reader.Read32();
+			TimeScale = await Reader.Read32();
+			Duration = await Reader.Read32();
+		}
+		else if(Version == 1)
+		{
+			CreationTime = await Reader.Read64();
+			ModificationTime = await Reader.Read64();
+			TimeScale = await Reader.Read32();
+			Duration = await Reader.Read64();
+		}
+		else
+		{
+			throw `Expected Version 0 or 1 for MVHD (Version=${Version}). If neccessary can probably continue without timing info!`;
+		}
+		
+		const PreferredRate = await Reader.Read32();
+		const PreferredVolume = await Reader.Read16();	//	8.8 fixed point volume
+		const Reserved = await Reader.ReadBytes(10);
+
+		const Matrix_a = await Reader.Read32();
+		const Matrix_b = await Reader.Read32();
+		const Matrix_u = await Reader.Read32();
+		const Matrix_c = await Reader.Read32();
+		const Matrix_d = await Reader.Read32();
+		const Matrix_v = await Reader.Read32();
+		const Matrix_x = await Reader.Read32();
+		const Matrix_y = await Reader.Read32();
+		const Matrix_w = await Reader.Read32();
+
+		const PreviewTime = await Reader.Read32();
+		const PreviewDuration = await Reader.Read32();
+		const PosterTime = await Reader.Read32();
+		const SelectionTime = await Reader.Read32();
+		const SelectionDuration = await Reader.Read32();
+		const CurrentTime = await Reader.Read32();
+		const NextTrackId = await Reader.Read32();
+
+		for ( const Zero of Reserved )
+		{
+			if (Zero != 0)
+				Pop.Warning(`Reserved value ${Zero} is not zero`);
+		}
+
+		//	actually a 3x3 matrix, but we make it 4x4 for unity
+		//	gr: do we need to transpose this? docs don't say row or column major :/
+		//	wierd element labels, right? spec uses them.
+/*
+		//	gr: matrixes arent simple
+		//		https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap4/qtff4.html#//apple_ref/doc/uid/TP40000939-CH206-18737
+		//	All values in the matrix are 32 - bit fixed-point numbers divided as 16.16, except for the { u, v, w}
+		//	column, which contains 32 - bit fixed-point numbers divided as 2.30.Figure 5 - 1 and Figure 5 - 2 depict how QuickTime uses matrices to transform displayed objects.
+		var a = Fixed1616ToFloat(Matrix_a);
+		var b = Fixed1616ToFloat(Matrix_b);
+		var u = Fixed230ToFloat(Matrix_u);
+		var c = Fixed1616ToFloat(Matrix_c);
+		var d = Fixed1616ToFloat(Matrix_d);
+		var v = Fixed230ToFloat(Matrix_v);
+		var x = Fixed1616ToFloat(Matrix_x);
+		var y = Fixed1616ToFloat(Matrix_y);
+		var w = Fixed230ToFloat(Matrix_w);
+		var MtxRow0 = new Vector4(a, b, u, 0);
+		var MtxRow1 = new Vector4(c, d, v, 0);
+		var MtxRow2 = new Vector4(x, y, w, 0);
+		var MtxRow3 = new Vector4(0, 0, 0, 1);
+*/
+		const Header = {};
+		/*
+		//var Header = new TMovieHeader();
+		Header.TimeScale = 1.0f / (float)TimeScale; //	timescale is time units per second
+		Header.VideoTransform = new Matrix4x4(MtxRow0, MtxRow1, MtxRow2, MtxRow3);
+		Header.Duration = new TimeSpan(0,0,(int)(Duration * Header.TimeScale));
+		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
+		Header.ModificationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(ModificationTime);
+		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
+		Header.PreviewDuration = PreviewDuration * Header.TimeScale;
+		*/
+		return Header;
+	}
+	
+	async DecodeAtom_Trak(Atom)
+	{
+		await Atom.DecodeChildAtoms();
+		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
+		
+		const Track = {};
+		const Medias = [];
+		
+		const MediaAtoms = Atom.GetChildAtoms('mdia');
+		for ( let MediaAtom of MediaAtoms )
+		{
+			const Media = await this.DecodeAtom_Media( MediaAtom, Track );
+			Medias.push(Media);
+		}
+		
+		Pop.Debug(`Found x${Medias.length} media atoms`);
+		return Track;
+	}
+	
+	async DecodeAtom_Media(Atom)
+	{
+		await Atom.DecodeChildAtoms();
+		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
+	
+		const Media = {};
+		
+		//	these may not exist
+		Media.MediaHeader = await this.DecodeAtom_MediaHandlerHeader( Atom.GetChildAtom('mdhd') );
+		Media.MediaInfo = await this.DecodeAtom_MediaInfo( Atom.GetChildAtom('minf') );
+		
+		return Media;
+	}
+
+	async DecodeAtom_MediaHandlerHeader(Atom)
+	{
+		if ( !Atom )
+			return null;
+		
+	}
+	
+	async DecodeAtom_MediaInfo(Atom)
+	{
+		if ( !Atom )
+			return null;
+
+		await Atom.DecodeChildAtoms();
+		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
+			
+		//	gmhd
+		//	hdlr
+		//	dinf
+		//	stbl
 	}
 }
 
