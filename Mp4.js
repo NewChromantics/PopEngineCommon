@@ -23,6 +23,31 @@ function GetDateTimeFromSecondsSinceMidnightJan1st1904(Seconds)
 }
 
 
+//	mp4 parser and ms docs contradict themselves
+//	these are bits for trun (fragment sample atoms)
+//	mp4 parser
+const TrunFlags = 
+{
+	DataOffsetPresent:			0,
+	FirstSampleFlagsPresent:	2,
+	SampleDurationPresent:		8,
+	SampleSizePresent:			9,
+	SampleFlagsPresent:			10,
+	SampleCompositionTimeOffsetPresent:	11
+};
+/*
+//	ms (matching hololens stream)
+enum TrunFlags  
+{
+	DataOffsetPresent = 0,
+	FirstSampleFlagsPresent = 3,
+	SampleDurationPresent = 9,
+	SampleSizePresent = 10,
+	SampleFlagsPresent = 11,
+	SampleCompositionTimeOffsetPresent = 12
+};
+*/
+
 //	todo? specific atom type encode&decoders?
 
 //	todo: expand to allow Data to be an array of datas
@@ -235,8 +260,10 @@ export class Mp4Decoder
 		this.NewAtomQueue = new PromiseQueue('Mp4 decoded atoms');
 		this.NewTrackQueue = new PromiseQueue('Mpeg decoded Tracks');
 		this.NewSamplesQueue = new PromiseQueue('Mpeg Decoded samples');
+		
 		this.RootAtoms = [];	//	trees coming off root atoms
 		this.Mdats = [];		//	atoms with data
+		this.Tracks = [];
 		
 		this.NewByteQueue = new PromiseQueue('Mp4 pending bytes');
 		this.FileBytes = new Uint8Array(0);	//	for now merging into one big array, but later make the read-bytes func span chunks
@@ -278,6 +305,11 @@ export class Mp4Decoder
 	PushMdat(MdatAtom)
 	{
 		this.Mdats.push(MdatAtom);
+	}
+	
+	PushFragmentTrack(Track)
+	{
+		this.Tracks.push(Track);
 	}
 	
 	//	random access, but async so if we're waiting on data, it waits
@@ -407,6 +439,197 @@ export class Mp4Decoder
 		await Atom.DecodeChildAtoms();
 		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
 		
+		//	gr: units are milliseconds in moof
+		//	30fps = 33.33ms = [512, 1024, 1536, 2048...]
+		//	193000ms = 2959360         
+		const TimeScale = 1.0 / 15333.4;
+		
+		const TrackFragmentAtoms = Atom.GetChildAtoms('traf');
+		for ( const TrackFragmentAtom of TrackFragmentAtoms )
+		{
+			const MdatIdent = null;
+			const Track = await this.DecodeAtom_TrackFragment( TrackFragmentAtom, Atom, TimeScale, MdatIdent );
+			this.PushFragmentTrack(Track);
+		}
+	}
+	
+	async DecodeAtom_TrackFragment(Atom,MoofAtom,TimeScale,MdatIdent)
+	{
+		await Atom.DecodeChildAtoms();
+		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
+		
+		const Tfhd = Atom.GetChildAtom('tfhd');	//	header
+		const Tfdt = Atom.GetChildAtom('tfdt');	//	delta time
+		
+		const Header = await this.DecodeAtom_TrackFragmentHeader(Tfhd,Tfdt);
+		Header.TimeScale = TimeScale;
+		
+		const Trun = Atom.GetChildAtom('trun');
+		const Samples = await this.DecodeAtom_FragmentSampleTable( Trun, MoofAtom, Header );
+		this.NewSamplesQueue.Push(Samples);
+	}
+	
+	async DecodeAtom_TrackFragmentDelta(Tfdt)
+	{
+		const Atom = Tfdt;
+		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
+		
+		const Version = await Reader.Read8();
+		const Flags = await Reader.Read24();
+
+		let DecodeTime;
+		if ( Version == 0 )
+		{
+			DecodeTime = await Reader.Read32(); 
+		}
+		else
+		{
+			DecodeTime = await Reader.Read64(); 
+		}
+		return DecodeTime;
+	}
+		
+	async DecodeAtom_TrackFragmentHeader(Atom,DeltaTimeAtom)
+	{
+		const Header = {};
+	
+		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
+		const Version = await Reader.Read8();
+		const Flags = await Reader.Read24();
+		Header.TrackId = await Reader.Read32();
+
+		function HasFlagBit(Bit)
+		{
+			return (Flags & (1 << Bit)) != 0;
+		}
+	
+		//	http://178.62.222.88/mp4parser/mp4.js
+		if (HasFlagBit(0))
+			Header.BaseDataOffset = await Reader.Read64();	//	unsigned
+		if (HasFlagBit(1))
+			Header.SampleDescriptionIndex = await Reader.Read32();
+		if (HasFlagBit(3))
+			Header.DefaultSampleDuration = await Reader.Read32();
+		if (HasFlagBit(4))
+			Header.DefaultSampleSize = await Reader.Read32();
+		if (HasFlagBit(5))
+			Header.DefaultSampleFlags = await Reader.Read32();
+		if (HasFlagBit(16))
+			Header.DurationIsEmpty = true;
+		if (HasFlagBit(17))
+			Header.DefaultBaseIsMoof = true;
+		
+		Header.DecodeTime = await this.DecodeAtom_TrackFragmentDelta(DeltaTimeAtom);
+		
+		return Header;
+	}
+	
+	async DecodeAtom_FragmentSampleTable(Atom,MoofAtom,TrackHeader)
+	{
+		const Header = TrackHeader;
+		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
+		//	this stsd description isn't well documented on the apple docs
+		//	http://xhelmboyx.tripod.com/formats/mp4-layout.txt
+		//	https://stackoverflow.com/a/14549784/355753
+		const Version = await Reader.Read8();
+		const Flags = await Reader.Read24();
+		const EntryCount = await Reader.Read32();
+		
+		//	gr; with a fragmented mp4 the headers were incorrect (bad sample sizes, mismatch from mp4parser's output)
+		//	ffmpeg -i cat_baseline.mp4 -c copy -movflags frag_keyframe+empty_moov cat_baseline_fragment.mp4
+		//	http://178.62.222.88/mp4parser/mp4.js
+		//	so trying this version
+		//	VERSION8
+		//	FLAGS24
+		//	SAMPLECOUNT32
+
+		//	https://msdn.microsoft.com/en-us/library/ff469478.aspx
+		//	the docs on which flags are which are very confusing (they list either 25 bits or 114 or I don't know what)
+		//	0x0800 is composition|size|duration
+		//	from a stackoverflow post, 0x0300 is size|duration
+		//	0x0001 is offset from http://mp4parser.com/
+		function IsFlagBit(Bit)	{ return (Flags & (1 << Bit)) != 0; };
+		const SampleSizePresent = IsFlagBit(TrunFlags.SampleSizePresent);
+		const SampleDurationPresent = IsFlagBit(TrunFlags.SampleDurationPresent);
+		const SampleFlagsPresent = IsFlagBit(TrunFlags.SampleFlagsPresent);
+		const SampleCompositionTimeOffsetPresent = IsFlagBit(TrunFlags.SampleCompositionTimeOffsetPresent);
+		const FirstSampleFlagsPresent = IsFlagBit(TrunFlags.FirstSampleFlagsPresent);
+		const DataOffsetPresent = IsFlagBit(TrunFlags.DataOffsetPresent);
+
+		//	This field MUST be set.It specifies the offset from the beginning of the MoofBox field(section 2.2.4.1).
+		//	gr:... to what?
+		//	If only one TrunBox is specified, then the DataOffset field MUST be the sum of the lengths of the MoofBox and all the fields in the MdatBox field(section 2.2.4.8).
+		//	basically, start of mdat data (which we know anyway)
+		if (!DataOffsetPresent)
+			throw "Expected data offset to be always set";
+		const DataOffsetFromMoof = await (DataOffsetPresent ? Reader.Read32() : 0 );
+
+		function TimeToMs(TimeUnit)
+		{
+			//	to float
+			const Timef = TimeUnit * Header.TimeScale;
+			const TimeMs = Timef * 1000.0;
+			return Math.floor(TimeMs);
+		};
+
+		//	DataOffset(4 bytes): This field MUST be set.It specifies the offset from the beginning of the MoofBox field(section 2.2.4.1).
+		//	If only one TrunBox is specified, then the DataOffset field MUST be the sum of the lengths of the MoofBo
+		//	gr: we want the offset into the mdat, but we would have to ASSUME the mdat follows this moof
+		//		just for safety, we work out the file offset instead, as we know where the start of the moof is
+		if (Header.BaseDataOffset !== undefined )
+		{
+			const HeaderPos = Header.BaseDataOffset;
+			const MoofPos = MoofAtom.FilePosition;
+			if (HeaderPos != MoofPos)
+			{
+				Debug.Log("Expected Header Pos(" + HeaderPos + ") and moof pos(" + MoofPos + ") to be the same");
+			}
+		}
+		const MoofPosition = (Header.BaseDataOffset!==undefined) ? Header.BaseDataOffset : MoofAtom.FilePosition;
+		const DataFileOffset = MoofPosition + DataOffsetFromMoof;
+
+
+		const Samples = [];	//	sample_t
+		let CurrentDataStartPosition = DataFileOffset;
+		let CurrentTime = (Header.DecodeTime!==undefined) ? Header.DecodeTime : 0;
+		let FirstSampleFlags = 0;
+		if (FirstSampleFlagsPresent )
+		{
+			FirstSampleFlags = await Reader.Read32();
+		}
+
+		//	when the fragments are really split up into 1sample:1dat a different box specifies values
+		let DefaultSampleDuration = Header.DefaultSampleDuration || 0;
+		let DefaultSampleSize = Header.DefaultSampleSize || 0;
+		let DefaultSampleFlags = Header.DefaultSampleFlags || 0;
+
+		for ( let sd=0;	sd<EntryCount;	sd++)
+		{
+			let SampleDuration = await (SampleDurationPresent ? Reader.Read32() : DefaultSampleDuration);
+			let SampleSize = await (SampleSizePresent ? Reader.Read32() : DefaultSampleSize);
+			let TrunBoxSampleFlags = await (SampleFlagsPresent ? Reader.Read32() : DefaultSampleFlags);
+			let SampleCompositionTimeOffset = await (SampleCompositionTimeOffsetPresent ? Reader.Read32() : 0 );
+
+			if (SampleCompositionTimeOffsetPresent)
+			{
+				//	correct CurrentTimeMs?
+			}
+
+			const Sample = new Sample_t();
+			//Sample.MDatIdent = MDatIdent.HasValue ? MDatIdent.Value : -1;
+			Sample.DataFilePosition = CurrentDataStartPosition;
+			Sample.DataSize = SampleSize;
+			Sample.DurationMs = TimeToMs(SampleDuration);
+			Sample.IsKeyframe = false;
+			Sample.DecodeTimeMs = TimeToMs(CurrentTime);
+			Sample.PresentationTimeMs = TimeToMs(CurrentTime+SampleCompositionTimeOffset);
+			Samples.push(Sample);
+
+			CurrentTime += SampleDuration;
+			CurrentDataStartPosition += SampleSize;
+		}
+
+		return Samples;
 	}
 	
 	async DecodeAtom_Moov(Atom)
@@ -433,7 +656,7 @@ export class Mp4Decoder
 	//	gr; this doesn tneed to be async as we have the data, but all the reader funcs currently are
 	async DecodeAtom_MovieHeader(Atom)
 	{
-		const Reader = new DataReader(Atom.Data,Atom.FilePosition);
+		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
 		//	https://developer.apple.com/library/content/documentation/QuickTime/QTFF/art/qt_l_095.gif
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
@@ -570,7 +793,7 @@ export class Mp4Decoder
 		if ( !Atom )
 			return null;
 			
-		const Reader = new DataReader(Atom.Data,Atom.FilePosition);
+		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
 		const CreationTime = await Reader.Read32();
@@ -743,7 +966,7 @@ export class Mp4Decoder
 	async DecodeAtom_ChunkMetas(Atom)
 	{
 		const Metas = [];
-		const Reader = new DataReader(Atom.Data,Atom.FilePosition);
+		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
 		
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
@@ -919,7 +1142,7 @@ export class Mp4Decoder
 		}
 		
 		const Durations = [];
-		const Reader = new DataReader(Atom.Data,Atom.FilePosition);
+		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
 		const EntryCount = await Reader.Read32();
