@@ -3,6 +3,23 @@ import Pop from './PopEngine.js'
 import PromiseQueue from './PromiseQueue.js'
 import {JoinTypedArrays,BytesToString,BytesToBigInt} from './PopApi.js'
 
+
+//	gr: copied from c#
+//		so if either gets fixed, they both need to
+//	https://github.com/NewChromantics/PopCodecs/blob/7cecd65448aa7dececf7f4216b6b195b5b77f208/PopMpeg4.cs#L164
+function GetDateTimeFromSecondsSinceMidnightJan1st1904(Seconds)
+{
+	//	todo: check this
+	//var Epoch = new DateTime(1904, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+	//Epoch.AddSeconds(Seconds);
+	const Epoch = new Date('January 1, 1904 0:0:0 GMT');
+	//	https://stackoverflow.com/questions/1197928/how-to-add-30-minutes-to-a-javascript-date-object
+	const EpochMilliSecs = Epoch.getTime();
+	const NewTime = new Date( EpochMilliSecs + (Seconds*1000) );
+	return NewTime;
+}
+
+
 //	todo? specific atom type encode&decoders?
 
 //	todo: expand to allow Data to be an array of datas
@@ -110,6 +127,7 @@ class DataReader
 	}
 	
 }
+
 
 class Atom_t
 {
@@ -411,16 +429,15 @@ export class Mp4Decoder
 		var MtxRow3 = new Vector4(0, 0, 0, 1);
 */
 		const Header = {};
-		/*
 		//var Header = new TMovieHeader();
-		Header.TimeScale = 1.0f / (float)TimeScale; //	timescale is time units per second
-		Header.VideoTransform = new Matrix4x4(MtxRow0, MtxRow1, MtxRow2, MtxRow3);
-		Header.Duration = new TimeSpan(0,0,(int)(Duration * Header.TimeScale));
+		Header.TimeScale = 1.0 / TimeScale; //	timescale is time units per second
+		//Header.VideoTransform = new Matrix4x4(MtxRow0, MtxRow1, MtxRow2, MtxRow3);
+		//Header.Duration = new TimeSpan(0,0,(int)(Duration * Header.TimeScale));
+		Header.Duration = Duration * Header.TimeScale;
 		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
 		Header.ModificationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(ModificationTime);
 		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
 		Header.PreviewDuration = PreviewDuration * Header.TimeScale;
-		*/
 		return Header;
 	}
 	
@@ -452,8 +469,15 @@ export class Mp4Decoder
 		
 		//	these may not exist
 		Media.MediaHeader = await this.DecodeAtom_MediaHandlerHeader( Atom.GetChildAtom('mdhd') );
-		Media.MediaInfo = await this.DecodeAtom_MediaInfo( Atom.GetChildAtom('minf') );
 		
+		//	defaults (this timescale should come from further up)
+		if ( !Media.MediaHeader )
+		{
+			Media.MediaHeader = {};
+			Media.MediaHeader.TimeScale = 1;
+		}
+		
+		Media.MediaInfo = await this.DecodeAtom_MediaInfo( Atom.GetChildAtom('minf'), Media.MediaHeader );
 		return Media;
 	}
 
@@ -461,22 +485,205 @@ export class Mp4Decoder
 	{
 		if ( !Atom )
 			return null;
-		
+			
+		const Reader = new DataReader(Atom.Data,0);
+		const Version = await Reader.Read8();
+		const Flags = await Reader.Read24();
+		const CreationTime = await Reader.Read32();
+		const ModificationTime = await Reader.Read32();
+		const TimeScale = await Reader.Read32();
+		const Duration =  await Reader.Read32();
+		const Language = await Reader.Read16();
+		const Quality = await Reader.Read16();
+
+		const Header = {};//new TMediaHeader();
+		Header.TimeScale = 1.0 / TimeScale; //	timescale is time units per second
+		//Header.Duration = new TimeSpan(0,0, (int)(Duration * Header.TimeScale));
+		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
+		Header.ModificationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(ModificationTime);
+		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
+		Header.LanguageId = Language;
+		Header.Quality = Quality / (1 << 16);
+		return Header;
 	}
 	
-	async DecodeAtom_MediaInfo(Atom)
+	async DecodeAtom_MediaInfo(Atom,MediaHeader)
 	{
 		if ( !Atom )
 			return null;
 
 		await Atom.DecodeChildAtoms();
 		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
-			
+		
+		const SampleTable = await this.DecodeAtom_SampleTable( Atom.GetChildAtom('stbl') );
+		
 		//	gmhd
 		//	hdlr
 		//	dinf
 		//	stbl
 	}
+	
+	async DecodeAtom_SampleTable(Atom)
+	{
+		if ( !Atom )
+			return null;
+		await Atom.DecodeChildAtoms();
+		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
+		
+		//	get all the atoms we're expecting
+		//	http://mirror.informatimago.com/next/developer.apple.com/documentation/QuickTime/REF/Streaming.35.htm
+		const ChunkOffsets32Atom = Atom.GetChildAtom('stco');
+		const ChunkOffsets64Atom = Atom.GetChildAtom('co64');
+		const SampleSizesAtom = Atom.GetChildAtom('stsz');
+		const SampleToChunkAtom = Atom.GetChildAtom('stsc');
+		const SyncSamplesAtom = Atom.GetChildAtom('stss');
+		const SampleDecodeDurationsAtom = Atom.GetChildAtom('stts');
+		const SamplePresentationTimeOffsetsAtom = Atom.GetChildAtom('ctts');
+
+		//	work out samples from atoms!
+		if (SampleSizesAtom == null)
+			throw "Track missing sample sizes atom";
+		if (ChunkOffsets32Atom == null && ChunkOffsets64Atom == null)
+			throw "Track missing chunk offset atom";
+		if (SampleToChunkAtom == null)
+			throw "Track missing sample-to-chunk table atom";
+		if (SampleDecodeDurationsAtom == null)
+			throw "Track missing time-to-sample table atom";
+		
+		const PackedChunkMetas = await this.DecodeAtom_GetChunkMetas(SampleToChunkAtom);
+		Pop.Debug(`PackedChunkMetas x${PackedChunkMetas.length}`);
+		/*
+		var ChunkOffsets = GetChunkOffsets(ChunkOffsets32Atom, ChunkOffsets64Atom, ReadData);
+		var SampleSizes = GetSampleSizes(SampleSizesAtom.Value, ReadData);
+		var SampleKeyframes = GetSampleKeyframes(SyncSamplesAtom, ReadData, SampleSizes.Count);
+		var SampleDurations = GetSampleDurations(SampleDecodeDurationsAtom.Value, ReadData, SampleSizes.Count);
+		var SamplePresentationTimeOffsets = GetSampleDurations(SamplePresentationTimeOffsetsAtom, ReadData, 0, SampleSizes.Count);
+
+		//	durations start at zero (proper time must come from somewhere else!) and just count up over durations
+		var SampleDecodeTimes = new int[SampleSizes.Count];
+		for (int i = 0; i < SampleDecodeTimes.Length;	i++)
+		{
+			var LastDuration = (i == 0) ? 0 : SampleDurations[i - 1];
+			var LastTime = (i == 0) ? 0 : SampleDecodeTimes[i - 1];
+			SampleDecodeTimes[i] = LastTime + LastDuration;
+		}
+
+		//	pad the metas to fit offset information
+		//	https://sites.google.com/site/james2013notes/home/mp4-file-format
+		var ChunkMetas = new List<ChunkMeta>();
+		//foreach ( var ChunkMeta in PackedChunkMetas )
+		for (var i = 0; i < PackedChunkMetas.Count; i++)
+		{
+			var ChunkMeta = PackedChunkMetas[i];
+			//	first begins at 1. despite being an index...
+			var FirstChunk = ChunkMeta.FirstChunk - 1;
+			//	pad previous up to here
+			while (ChunkMetas.Count < FirstChunk)
+				ChunkMetas.Add(ChunkMetas[ChunkMetas.Count - 1]);
+
+			ChunkMetas.Add(ChunkMeta);
+		}
+		//	and pad the end
+		while (ChunkMetas.Count < ChunkOffsets.Count)
+			ChunkMetas.Add(ChunkMetas[ChunkMetas.Count - 1]);
+
+		//	we're now expecting this to be here
+		var MdatStartPosition = MdatAtom.HasValue ? MdatAtom.Value.AtomDataFilePosition : (long?)null;
+
+		//	superfolous data
+		var Chunks = new List<TSample>();
+		long? MdatEnd = (MdatAtom.HasValue) ? (MdatAtom.Value.DataSize) : (long?)null;
+		for (int i = 0; i < ChunkOffsets.Count; i++)
+		{
+			var ThisChunkOffset = ChunkOffsets[i];
+			//	chunks are serial, so length is up to next
+			//	gr: mdatend might need to be +1
+			long? NextChunkOffset = (i >= ChunkOffsets.Count - 1) ? MdatEnd : ChunkOffsets[i + 1];
+			long ChunkLength = (NextChunkOffset.HasValue) ? (NextChunkOffset.Value - ThisChunkOffset) : 0;
+
+			var Chunk = new TSample();
+			Chunk.DataPosition = ThisChunkOffset;
+			Chunk.DataSize = ChunkLength;
+			Chunks.Add(Chunk);
+		}
+
+		var Samples = new List<TSample>();
+
+		System.Func<int,int> TimeToMs = (TimeUnit) =>
+		{
+			//	to float
+			var Timef = TimeUnit * TimeScale;
+			var TimeMs = Timef * 1000.0f;
+			return (int)TimeMs;
+		};
+
+		int SampleIndex = 0;
+		for (int i = 0; i < ChunkMetas.Count(); i++)
+		{
+			var SampleMeta = ChunkMetas[i];
+			var ChunkIndex = i;
+			var ChunkFileOffset = ChunkOffsets[ChunkIndex];
+
+			for (int s = 0; s < SampleMeta.SamplesPerChunk; s++)
+			{
+				var Sample = new TSample();
+
+				if (MdatStartPosition.HasValue)
+					Sample.DataPosition = ChunkFileOffset - MdatStartPosition.Value;
+				else
+					Sample.DataFilePosition = ChunkFileOffset;
+
+				Sample.DataSize = SampleSizes[SampleIndex];
+				Sample.IsKeyframe = SampleKeyframes[SampleIndex];
+				Sample.DecodeTimeMs = TimeToMs( SampleDecodeTimes[SampleIndex] );
+				Sample.DurationMs = TimeToMs( SampleDurations[SampleIndex] );
+				Sample.PresentationTimeMs = TimeToMs( SampleDecodeTimes[SampleIndex] + SamplePresentationTimeOffsets[SampleIndex] );
+				Samples.Add(Sample);
+
+				ChunkFileOffset += Sample.DataSize;
+				SampleIndex++;
+			}
+		}
+
+		if (SampleIndex != SampleSizes.Count)
+			Debug.LogWarning("Enumerated " + SampleIndex + " samples, expected " + SampleSizes.Count);
+
+		return Samples;
+		*/
+	}
+	
+	async DecodeAtom_GetChunkMetas(Atom)
+	{
+		const Metas = [];
+		const Reader = new DataReader(Atom.Data,0);
+		
+		const Version = await Reader.Read8();
+		const Flags = await Reader.Read24();
+		const EntryCount = await Reader.Read32();
+		
+		const MetaSize = 3 * 4;	//	3x32 bit
+		/*
+		const Offset = Reader.FilePosition;
+		for ( let i=Offset;	i<Atom.Data.length;	i+=MetaSize )
+		{
+			const ChunkData = Atom.Data.slice( i, i+MetaSize );
+			const Meta = new ChunkMeta_t(ChunkData);
+			Metas.Add(Meta);
+		}
+		*/
+		for ( let e=0;	e<EntryCount;	e++ )
+		{
+			const ChunkMeta = {};
+			ChunkMeta.FirstChunk = await Reader.Read32();
+			ChunkMeta.SamplesPerChunk = await Reader.Read32();
+			ChunkMeta.SampleDescriptionId = await Reader.Read32();
+			Metas.push(ChunkMeta);
+		};
+		if (Metas.length != EntryCount)
+			throw `Expected ${EntryCount} chunk metas, got ${Metas.length}`;
+		return Metas;
+	}
+	
 }
 
 
