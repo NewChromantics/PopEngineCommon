@@ -589,10 +589,10 @@ export class Mp4Decoder
 		if (SampleDecodeDurationsAtom == null)
 			throw "Track missing time-to-sample table atom";
 		
-		const PackedChunkMetas = await this.DecodeAtom_GetChunkMetas(SampleToChunkAtom);
-		Pop.Debug(`PackedChunkMetas x${PackedChunkMetas.length}`);
+		const PackedChunkMetas = await this.DecodeAtom_ChunkMetas(SampleToChunkAtom);
+		const ChunkOffsets = await this.DecodeAtom_ChunkOffsets( ChunkOffsets32Atom, ChunkOffsets64Atom );
+		const SampleSizes = await this.DecodeAtom_SampleSizes(SampleSizesAtom);
 		/*
-		var ChunkOffsets = GetChunkOffsets(ChunkOffsets32Atom, ChunkOffsets64Atom, ReadData);
 		var SampleSizes = GetSampleSizes(SampleSizesAtom.Value, ReadData);
 		var SampleKeyframes = GetSampleKeyframes(SyncSamplesAtom, ReadData, SampleSizes.Count);
 		var SampleDurations = GetSampleDurations(SampleDecodeDurationsAtom.Value, ReadData, SampleSizes.Count);
@@ -691,7 +691,7 @@ export class Mp4Decoder
 		*/
 	}
 	
-	async DecodeAtom_GetChunkMetas(Atom)
+	async DecodeAtom_ChunkMetas(Atom)
 	{
 		const Metas = [];
 		const Reader = new DataReader(Atom.Data,0);
@@ -723,6 +723,95 @@ export class Mp4Decoder
 		return Metas;
 	}
 	
+	async DecodeAtom_ChunkOffsets(ChunkOffsets32Atom,ChunkOffsets64Atom)
+	{
+		let OffsetSize,Atom;
+		if ( ChunkOffsets32Atom )
+		{
+			OffsetSize = 32 / 8;
+			Atom = ChunkOffsets32Atom;
+		}
+		else if ( ChunkOffsets64Atom )
+		{
+			OffsetSize = 64 / 8;
+			Atom = ChunkOffsets64Atom;
+		}
+		else
+		{
+			throw `Missing offset atom`;
+		}
+		
+		const Offsets = [];
+		const Reader = new DataReader( Atom.Data );
+		
+		const Version = await Reader.Read8();
+		const Flags = await Reader.Read24();
+		//var Version = AtomData[8];
+		//var Flags = Get24(AtomData[9], AtomData[10], AtomData[11]);
+		const EntryCount = await Reader.Read32();
+		for ( let e=0;	e<EntryCount;	e++ )
+		{
+			let Offset;
+			if ( OffsetSize == 32/8 )
+				Offset = await Reader.Read32();
+			if ( OffsetSize == 64/8 )
+				Offset = await Reader.Read64();
+			Offsets.push(Offset);
+		}
+	
+		//var Offset = Get32(AtomData[i + 0], AtomData[i + 1], AtomData[i + 2], AtomData[i + 3]);
+		//var Offset = Get64(AtomData[i + 0], AtomData[i + 1], AtomData[i + 2], AtomData[i + 3], AtomData[i + 4], AtomData[i + 5], AtomData[i + 6], AtomData[i + 7]);
+		return Offsets;
+	}
+	
+	async DecodeAtom_SampleSizes(Atom)
+	{
+		const Reader = new DataReader( Atom.Data );
+		const Version = await Reader.Read8();
+		const Flags = await Reader.Read24();
+		let SampleSize = await Reader.Read32();
+		const EntryCount = await Reader.Read32();
+		
+		const Sizes = [];
+		
+		//	if size specified, they're all this size
+		if (SampleSize != 0)
+		{
+			for ( let i=0;	i<EntryCount;	i++)
+				Sizes.push(SampleSize);
+			return Sizes;
+		}
+		
+		//	each entry in the table is the size of a sample (and one chunk can have many samples)
+		//const SampleSizeStart = 20;	//	Reader.FilePosition
+		const SampleSizeStart = Reader.FilePosition;
+		if ( Reader.FilePosition != SampleSizeStart )
+			throw `Offset calculation has gone wrong`;
+			
+		//	gr: docs don't say size, but this seems accurate...
+		//		but also sometimes doesnt SEEM to match the size in the header?
+		SampleSize = (Atom.Data.length - SampleSizeStart) / EntryCount;
+		//for ( let i = SampleSizeStart; i < AtomData.Length; i += SampleSize)
+		for ( let e=0;	e<EntryCount;	e++ )
+		{
+			if (SampleSize === 3)
+			{
+				const Size = await Reader.Read24();
+				//var Size = Get24(AtomData[i + 0], AtomData[i + 1], AtomData[i + 2]);
+				Sizes.push(Size);
+			}
+			else if (SampleSize === 4)
+			{
+				const Size = await Reader.Read32();
+				//var Size = Get32(AtomData[i + 0], AtomData[i + 1], AtomData[i + 2], AtomData[i + 3]);
+				Sizes.push(Size);
+			}
+			else
+				throw `Unhandled sample size ${SampleSize}`;
+		}
+		
+		return Sizes;
+	}
 }
 
 
