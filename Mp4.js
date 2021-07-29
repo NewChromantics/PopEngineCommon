@@ -208,6 +208,7 @@ export class Mp4Decoder
 		this.NewAtomQueue = new PromiseQueue('Mp4 decoded atoms');
 		this.NewTrackQueue = new PromiseQueue('Mpeg decoded Tracks');
 		this.RootAtoms = [];	//	trees coming off root atoms
+		this.Mdats = [];		//	atoms with data
 		
 		this.NewByteQueue = new PromiseQueue('Mp4 pending bytes');
 		this.FileBytes = new Uint8Array(0);	//	for now merging into one big array, but later make the read-bytes func span chunks
@@ -239,6 +240,11 @@ export class Mp4Decoder
 	PushData(Bytes)
 	{
 		this.NewByteQueue.Push(Bytes);
+	}
+	
+	PushMdat(MdatAtom)
+	{
+		this.Mdats.push(MdatAtom);
 	}
 	
 	//	random access, but async so if we're waiting on data, it waits
@@ -337,6 +343,10 @@ export class Mp4Decoder
 			{
 				await this.DecodeAtom_Moov(Atom);
 			}
+			else if ( Atom.Fourcc == 'mdat' )
+			{
+				await this.DecodeAtom_Mdat(Atom);
+			}
 			else
 			{
 				Pop.Debug(`Skipping atom ${Atom.Fourcc} x${Atom.ContentSize}`);
@@ -349,11 +359,16 @@ export class Mp4Decoder
 		Pop.Debug(`Got new tracks ${Tracks}`);
 	}
 	
+	async DecodeAtom_Mdat(Atom)
+	{
+		this.PushMdat(Atom);
+	}
+	
 	async DecodeAtom_Moov(Atom)
 	{
 		await Atom.DecodeChildAtoms();
 		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
-		
+
 		const MovieHeaderAtom = Atom.GetChildAtom("mvhd");
 		let MovieHeader;
 		if ( MovieHeaderAtom )
