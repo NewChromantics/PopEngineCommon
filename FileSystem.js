@@ -63,6 +63,12 @@ export function GetExeArguments()
 }
 
 
+//	push a file into the file system
+export function SetFileCache(Filename,Contents)
+{
+	FileCache.Set(Filename,Contents);
+}
+
 
 //	gr: if we call fetch() 100 times for the same url, we make 100 requests
 //		quick fix, have a cache of pending fetch() requests
