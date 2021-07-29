@@ -29,8 +29,9 @@ function GetDateTimeFromSecondsSinceMidnightJan1st1904(Seconds)
 //	todo: expand to have a "wait for more data" async func, so we can replace the general mp4 reader
 class DataReader
 {
-	constructor(Data,InitialPositon=0)
+	constructor(Data,ExternalFilePosition=0,InitialPositon=0)
 	{
+		this.ExternalFilePosition = ExternalFilePosition;
 		this.FilePosition = 0;
 		this.FileBytes = Data;
 	}
@@ -119,6 +120,7 @@ class DataReader
 	async ReadNextAtom()
 	{
 		const Atom = new Atom_t();
+		Atom.FilePosition = this.ExternalFilePosition + this.FilePosition;
 		Atom.Size = await this.Read32();
 		Atom.Fourcc = await this.ReadString(4);
 		
@@ -156,11 +158,17 @@ class Atom_t
 	constructor()
 	{
 		this.Size = 0;		//	total size 
+		this.FilePosition = null;
 		this.Fourcc = 'ATOM';
 		this.Size64 = null;	//	only set if Size=1
 		
 		this.Data = null;	//	raw data following this header
 		this.ChildAtoms = [];	//	more Atom_t's (key these? can there be dupliates?)
+	}
+	
+	get DataFilePosition()
+	{
+		return this.FilePosition + this.HeaderSize;
 	}
 	
 	get HeaderSize()
@@ -188,7 +196,7 @@ class Atom_t
 	//	if this is an atom with child atoms, parse the next level here
 	async DecodeChildAtoms()
 	{
-		const Reader = new DataReader(this.Data,0);
+		const Reader = new DataReader(this.Data,this.DataFilePosition);
 		while ( Reader.FilePosition < this.Data.length )
 		{
 			const Atom = await Reader.ReadNextAtom();
@@ -326,6 +334,7 @@ export class Mp4Decoder
 	async ReadNextAtom()
 	{
 		const Atom = new Atom_t();
+		Atom.FilePosition = this.FilePosition;
 		try
 		{
 			Atom.Size = await this.Read32();
@@ -368,6 +377,10 @@ export class Mp4Decoder
 			{
 				await this.DecodeAtom_Moov(Atom);
 			}
+			else if ( Atom.Fourcc == 'moof' )
+			{
+				await this.DecodeAtom_Moof(Atom);
+			}
 			else if ( Atom.Fourcc == 'mdat' )
 			{
 				await this.DecodeAtom_Mdat(Atom);
@@ -387,6 +400,13 @@ export class Mp4Decoder
 	async DecodeAtom_Mdat(Atom)
 	{
 		this.PushMdat(Atom);
+	}
+	
+	async DecodeAtom_Moof(Atom)
+	{
+		await Atom.DecodeChildAtoms();
+		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
+		
 	}
 	
 	async DecodeAtom_Moov(Atom)
@@ -413,7 +433,7 @@ export class Mp4Decoder
 	//	gr; this doesn tneed to be async as we have the data, but all the reader funcs currently are
 	async DecodeAtom_MovieHeader(Atom)
 	{
-		const Reader = new DataReader(Atom.Data,0);
+		const Reader = new DataReader(Atom.Data,Atom.FilePosition);
 		//	https://developer.apple.com/library/content/documentation/QuickTime/QTFF/art/qt_l_095.gif
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
@@ -550,7 +570,7 @@ export class Mp4Decoder
 		if ( !Atom )
 			return null;
 			
-		const Reader = new DataReader(Atom.Data,0);
+		const Reader = new DataReader(Atom.Data,Atom.FilePosition);
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
 		const CreationTime = await Reader.Read32();
@@ -723,7 +743,7 @@ export class Mp4Decoder
 	async DecodeAtom_ChunkMetas(Atom)
 	{
 		const Metas = [];
-		const Reader = new DataReader(Atom.Data,0);
+		const Reader = new DataReader(Atom.Data,Atom.FilePosition);
 		
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
@@ -771,7 +791,7 @@ export class Mp4Decoder
 		}
 		
 		const Offsets = [];
-		const Reader = new DataReader( Atom.Data );
+		const Reader = new DataReader( Atom.Data,Atom.FilePosition );
 		
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
@@ -795,7 +815,7 @@ export class Mp4Decoder
 	
 	async DecodeAtom_SampleSizes(Atom)
 	{
-		const Reader = new DataReader( Atom.Data );
+		const Reader = new DataReader( Atom.Data,Atom.FilePosition );
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
 		let SampleSize = await Reader.Read32();
@@ -855,7 +875,7 @@ export class Mp4Decoder
 		if ( !Atom )
 			return Keyframes;
 		
-		const Reader = new DataReader( Atom.Data );
+		const Reader = new DataReader( Atom.Data,Atom.FilePosition );
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
 		const EntryCount = await Reader.Read32();
@@ -899,7 +919,7 @@ export class Mp4Decoder
 		}
 		
 		const Durations = [];
-		const Reader = new DataReader(Atom.Data);
+		const Reader = new DataReader(Atom.Data,Atom.FilePosition);
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
 		const EntryCount = await Reader.Read32();
