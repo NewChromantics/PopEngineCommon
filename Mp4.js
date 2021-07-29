@@ -4,6 +4,9 @@ import PromiseQueue from './PromiseQueue.js'
 import {JoinTypedArrays,BytesToString,BytesToBigInt} from './PopApi.js'
 
 
+//	when we push this data to a decoder, it signals no more data coming
+const EndOfFileMarker = 'eof';
+
 //	gr: copied from c#
 //		so if either gets fixed, they both need to
 //	https://github.com/NewChromantics/PopCodecs/blob/7cecd65448aa7dececf7f4216b6b195b5b77f208/PopMpeg4.cs#L164
@@ -228,6 +231,11 @@ export class Mp4Decoder
 		return this.RootAtoms;
 	}
 	
+	PushEndOfFile()
+	{
+		this.PushData(EndOfFileMarker);
+	}
+	
 	PushData(Bytes)
 	{
 		this.NewByteQueue.Push(Bytes);
@@ -241,6 +249,8 @@ export class Mp4Decoder
 		{
 			Pop.Debug(`waiting for ${EndPosition-this.FileBytes.length} more bytes...`);
 			const NewBytes = await this.NewByteQueue.WaitForNext();
+			if ( NewBytes == EndOfFileMarker )
+				throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
 			Pop.Debug(`New bytes x${NewBytes.length}`);
 			this.FileBytes = JoinTypedArrays(this.FileBytes,NewBytes);
 			Pop.Debug(`File size now x${this.FileBytes.length}`);
@@ -285,7 +295,16 @@ export class Mp4Decoder
 	async ReadNextAtom()
 	{
 		const Atom = new Atom_t();
-		Atom.Size = await this.Read32();
+		try
+		{
+			Atom.Size = await this.Read32();
+		}
+		catch(e)
+		{
+			if ( e == EndOfFileMarker )
+				return null;
+			throw e;
+		}
 		Atom.Fourcc = await this.ReadString(4);
 		
 		//	size of 1 means 64 bit size
@@ -305,6 +324,11 @@ export class Mp4Decoder
 		while ( true )
 		{
 			const Atom = await this.ReadNextAtom();
+			if ( Atom === null )
+			{
+				Pop.Debug(`End of file`);
+				break;
+			}
 			
 			this.RootAtoms.push(Atom);
 			this.NewAtomQueue.Push(Atom);
