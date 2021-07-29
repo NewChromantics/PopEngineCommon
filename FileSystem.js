@@ -370,7 +370,11 @@ export async function LoadFileAsArrayBufferStreamAsync(Filename,ResolveChunks=tr
 	//	return cache if availible, if it failed before, try and load again
 	const Cache = FileCache.GetOrFalse(Filename,ResolveChunks);
 	if (Cache !== false)
+	{
+		if ( OnNewChunk )
+			OnNewChunk(Cache);
 		return Cache;
+	}
 
 	let NextChunkIndex = 0;
 	function OnStreamProgress(Contents,TotalSize)
