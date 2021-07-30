@@ -140,7 +140,8 @@ export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUnif
 	if ( ShaderUniforms )	
 		Pop.Debug(`RegisterShaderAssetFilename: ShaderUniforms (${ShaderUniforms}) no longer need to be supplied`);
 		
-	if ( !ShaderAttribs )	throw `RegisterShaderAssetFilename(${FragFilename}) missing ShaderAttribs`;
+	if ( !ShaderAttribs )
+		throw `RegisterShaderAssetFilename(${FragFilename}) missing ShaderAttribs`;
 		
 	//	we use / as its not a valid filename char
 	const AssetName = FragFilename+PopAssetManager.AssetFilenameJoinString+VertFilename;
@@ -158,7 +159,7 @@ export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUnif
 
 		//const Shader = new Pop.Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
 		//const Shader = new Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
-		Pop.Debug(`LoadAndCompileShader ${AssetName}`);
+		Pop.Debug(`LoadAndCompileShader ${AssetName}. Uniforms; ${JSON.stringify(ShaderUniforms)}`);
 		const Shader = await RenderContext.CreateShader( VertSource, FragSource, ShaderUniforms, ShaderAttribs );
 		return Shader;
 	}
