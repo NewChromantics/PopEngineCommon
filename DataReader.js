@@ -139,5 +139,55 @@ export class DataReader
 		return Atom;
 	}
 	
+	async ReadUntilMatch(MatchBytes,IncludeMatch=true)
+	{
+		const MatchLength = MatchBytes.length;
+		let Position = this.FilePosition;
+		
+		function IsMatch(Bytes)
+		{
+			for ( let i=0;	i<MatchBytes.length;	i++ )
+				if ( Bytes[i] != MatchBytes[i] )
+					return false;
+			return true;
+		}
+		
+		while( true )
+		{
+			//	potential marker ends here
+			const EndPosition = Position + MatchBytes.length;
+			
+			while ( EndPosition > this.FileBytes.length )
+			{
+				Pop.Debug(`waiting for ${EndPosition-this.FileBytes.length} more bytes...`);
+				const NewBytes = await this.WaitForMoreData();
+				if ( NewBytes == EndOfFileMarker )
+					throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
+			
+				//Pop.Debug(`New bytes x${NewBytes.length}`);
+				this.FileBytes = JoinTypedArrays(this.FileBytes,NewBytes);
+				//Pop.Debug(`File size now x${this.FileBytes.length}`);
+			}
+			
+			const TestChunk = this.FileBytes.slice( Position, EndPosition );
+			if ( TestChunk.length != MatchBytes.length )
+				throw `Something gone wrong with reading bytes`;
+			
+			//	check for match
+			if ( !IsMatch(TestChunk) )
+			{
+				Position++;
+				continue;
+			}
+			
+			//	found the marker! export data up to here
+			const ExportStart = this.FilePosition;
+			const ExportEnd = Position + (IncludeMatch ? MatchBytes.length : 0);
+			const MatchedData = this.FileBytes.slice( ExportStart, ExportEnd );
+			this.FilePosition = EndPosition;
+			return MatchedData;
+		}
+	}
+	
 }
 export default DataReader;
