@@ -1,8 +1,8 @@
 export default 'Mp4.js';
 import Pop from './PopEngine.js'
 import PromiseQueue from './PromiseQueue.js'
-import {DataReader,EndOfFileMarker} from './DataReader.js'
-
+import {DataReader,DataWriter,EndOfFileMarker} from './DataReader.js'
+import {StringToBytes} from './PopApi.js'
 
 
 class AtomDataReader extends DataReader
@@ -183,12 +183,63 @@ class Atom_t
 	//	turn atom[tree] into Uint8Array()
 	Encode()
 	{
-		//	if children, not data
-		//		bake children into data,
-		//	update size 
-		//	write head
-		//	write data
-		throw `todo`;
+		if ( this.Fourcc.length != 4 )
+			throw `Atom fourcc (${this.Fourcc}) is not 4 chars`;
+			
+		//	bake sub data
+		const SubDataWriter = new DataWriter();
+		this.EncodeData(SubDataWriter);
+		const Data = SubDataWriter.GetData();
+		
+		//	atom size includes header size
+		let AtomSize = (32/8) + 4;	//	size + fourcc
+		AtomSize += Data.length;
+		
+		if ( AtomSize > 0xffffffff )
+		{
+			AtomSize += 64/8;
+			this.Size64 = AtomSize;
+			this.Size = 1;
+		}
+		else
+		{
+			this.Size64 = null;
+			this.Size = AtomSize;
+		}
+		
+		//	write out atom header+data
+		const Writer = new DataWriter();
+		Writer.Write32(this.Size);
+		Writer.WriteStringAsBytes(this.Fourcc);
+		if ( this.Size64 !== null )
+			Writer.Write64(this.Size64);
+			
+		Writer.WriteBytes(Data);
+		
+		const AtomData = Writer.GetData();
+		return AtomData;
+	}
+	
+	//	default, overload if not writing child atoms or dumb data
+	EncodeData(DataWriter)
+	{
+		if ( this.ChildAtoms.length )
+		{
+			if ( this.Data )
+				throw `Atom has child nodes AND data, should only have one`;
+
+			for ( let ChildAtom of this.ChildAtoms )
+			{
+				const ChildAtomAsData = ChildAtom.Encode();
+				DataWriter.WriteBytes(ChildAtomAsData);
+			}
+			return;
+		}
+		
+		if ( !this.Data )
+			throw `Atom has no data`;
+
+		DataWriter.WriteBytes( this.Data );
 	}
 };
 
@@ -307,9 +358,11 @@ export class Mp4Decoder
 	
 	async DecodeAtom_MoofHeader(Atom)
 	{
-		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
-
 		const Header = {};
+		if ( !Atom )
+			return Header; 
+
+		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
 
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
@@ -361,6 +414,8 @@ export class Mp4Decoder
 	
 	async DecodeAtom_TrackFragmentDelta(Tfdt)
 	{
+		if ( !Tfdt )
+			return 0;
 		const Atom = Tfdt;
 		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
 		
@@ -1134,7 +1189,17 @@ class Atom_Mdat extends Atom_t
 	
 	PushData(Data)
 	{
+		//	gr: I was going to enforce data being bytes, but
+		//		maybe should natively support subtitles
+		if ( typeof Data == typeof '' )
+			Data = StringToBytes(Data);
+			
 		this.Datas.push(Data);
+	}
+	
+	EncodeData(DataWriter)
+	{
+		this.Datas.forEach( d => DataWriter.WriteBytes(d) );
 	}
 }
 
@@ -1186,6 +1251,7 @@ class Atom_Trun extends Atom_t
 		
 		//	setup flags
 		this.Flags |= 1<<TrunFlags.SampleSizePresent;
+		this.Flags |= 1<<TrunFlags.SampleDurationPresent;
 		this.Flags |= 1<<TrunFlags.DataOffsetPresent;
 	}
 	
@@ -1215,25 +1281,52 @@ class Atom_Trun extends Atom_t
 
 		if ( DataOffsetPresent )
 		{
-			Data.Write32(this.DataOffsetFromMoof);
+			DataWriter.Write32(this.DataOffsetFromMoof);
 		}
 		
 		if ( FirstSampleFlagsPresent )
 		{
 			const FirstSampleFlags = 0;
-			Data.Write32(FirstSampleFlags);
+			DataWriter.Write32(FirstSampleFlags);
 		}
+
+		const Header = {};
+		Header.TimeScale = 1.0 / 15333.4;
 		
-		for ( let Sample of this.Samples )
+		function MsToTime(TimeMs)
 		{
+			let Timef = TimeMs / 1000.0;
+			let TimeUnit = Timef / Header.TimeScale;
+			return Math.floor(TimeUnit);
+		};
+		
+		//	may need to do some time conversion		
+		//let CurrentTime = (Header.DecodeTime!==undefined) ? Header.DecodeTime : 0;
+		
+		//for ( let Sample of this.Samples )
+		let LastDuration = 1;
+		for ( let s=0;	s<this.Samples.length;	s++ )
+		{
+			const Sample = this.Samples[s];
+			let NextSampleTime;
+			if ( s == this.Samples.length-1 )
+			{
+				NextSampleTime = Sample.DecodeTimeMs + LastDuration;
+			}
+			else
+			{
+				NextSampleTime = this.Samples[s+1].DecodeTimeMs;
+			}
+			const DurationMs = NextSampleTime - Sample.DecodeTimeMs;
+			
 			if ( SampleDurationPresent )
-				Data.Write32(Sample.DurationMs);
+				DataWriter.Write32(DurationMs);
 			if ( SampleSizePresent )
-				Data.Write32(Sample.Size);
+				DataWriter.Write32(Sample.Size);
 			if ( SampleFlagsPresent )
-				Data.Write32(Sample.SampleFlags);
+				DataWriter.Write32(Sample.SampleFlags);
 			if ( SampleCompositionTimeOffsetPresent )
-				Data.Write32(Sample.CompositionTimeOffset);
+				DataWriter.Write32(Sample.CompositionTimeOffset);
 		}
 	}
 }
@@ -1242,6 +1335,8 @@ export class Mp4FragmentedEncoder
 {
 	constructor()
 	{
+		this.BakeFrequencyMs = 100;//1 * 1000;
+		
 		this.RootAtoms = [];
 		
 		this.EncodedAtomQueue = new PromiseQueue('Mp4FragmentedEncoder.EncodedAtomQueue');
@@ -1275,6 +1370,11 @@ export class Mp4FragmentedEncoder
 		Sample.TrackId = TrackId;
 		
 		this.PendingSampleQueue.Push(Sample);
+	}
+	
+	PushEndOfFile()
+	{
+		this.PendingSampleQueue.Push(EndOfFileMarker);
 	}
 	
 	GetPendingTrack(TrackId)
@@ -1319,27 +1419,38 @@ export class Mp4FragmentedEncoder
 	{
 		this.RootAtoms.push(Atom);
 		this.EncodedAtomQueue.Push(Atom);
+		
+		const EncodedData = Atom.Encode();
+		this.EncodedDataQueue.Push(EncodedData);
 	}
 	
 	async EncodeThread()
 	{
+		let LastBakedTimestamp = null;
 		while(true)
 		{
 			const Sample = await this.PendingSampleQueue.WaitForNext();
+			const Eof = Sample == EndOfFileMarker;
+			if ( Eof )
+				Pop.Debug(`Mp4 encoder got end of file`);
+
+			//	decide if previous data should bake
+			const TimeSinceLastBake = Sample.DecodeTimeMs - (LastBakedTimestamp||0);
+			if ( Eof || TimeSinceLastBake >= this.BakeFrequencyMs )
+			{
+				this.BakePendingTracks();
+				LastBakedTimestamp = Sample.DecodeTimeMs;
+			}
+			
+			if ( Eof )
+				break;
 			
 			//	get the track this should go into.
 			const Track = this.GetPendingTrack(Sample.TrackId);
 			Track.PushSample(Sample);
-			
-			//	decide if this track should bake
-			if ( true )
-			{
-				//	if black, finish track moof,mdat
-				this.BakePendingTracks();
-				//	output atoms
-				//	which should output data
-			}
 		}
+		
+		this.EncodedDataQueue.Push(EndOfFileMarker);
 	}
 }
 
