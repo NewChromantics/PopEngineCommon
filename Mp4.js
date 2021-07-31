@@ -53,6 +53,12 @@ function GetDateTimeFromSecondsSinceMidnightJan1st1904(Seconds)
 	return NewTime;
 }
 
+//	todo:
+function GetSecondsSinceMidnightJan1st1904(TimeStamp)
+{
+	return 0;
+}
+
 
 //	mp4 parser and ms docs contradict themselves
 //	these are bits for trun (fragment sample atoms)
@@ -701,7 +707,6 @@ export class Mp4Decoder
 		Header.Duration = Duration * Header.TimeScale;
 		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
 		Header.ModificationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(ModificationTime);
-		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
 		Header.PreviewDuration = PreviewDuration * Header.TimeScale;
 		return Header;
 	}
@@ -1143,6 +1148,210 @@ class PendingTrack_t
 }
 
 //	encoding atoms, but maybe we can merge with decode
+class Atom_Moov extends Atom_t
+{
+	constructor()
+	{
+		super('moov');
+		
+		this.mvhd = new Atom_Mvhd();
+		this.ChildAtoms.push(this.mvhd);
+	}
+	
+	GetTrakAtom(TrackId)
+	{
+		const Traks = this.GetChildAtoms('trak');
+		const Trak = Traks.find( t => t.TrackId == TrackId );
+		return Trak;
+	}
+	
+	AddTrack(TrackId)
+	{
+		//	does trak this already exist?
+		const ExistingTrack = this.GetTrakAtom(TrackId);
+		if ( ExistingTrack )
+			return;
+		
+		const Trak = new Atom_Trak(TrackId);
+		this.ChildAtoms.push(Trak);
+	}
+}
+
+class Atom_Trak extends Atom_t
+{
+	constructor(TrackId)
+	{
+		super('trak');
+		
+		this.tkhd = new Atom_Tkhd(TrackId);
+		this.ChildAtoms.push(this.tkhd);
+		//this.mdia = 
+	}
+	
+	get TrackId()
+	{
+		return this.tkhd.TrackId;
+	}	
+	
+	set TrackId(Value)
+	{
+		this.tkhd.TrackId = Value;
+	}
+}
+
+class Atom_Tkhd extends Atom_t
+{
+	constructor(TrackId=0)
+	{
+		super('tkhd');
+		
+		this.Version = 0;
+		const Flag_Enabled = 1<<0;
+		const Flag_Used = 1<<1;
+		const Flag_Preview = 1<<2;
+		const Flag_Poster = 1<<3;
+		this.Flags = Flag_Enabled | Flag_Used;
+		this.CreationTime = new Date();
+		this.ModificationTime = new Date();
+		this.TrackId = TrackId;	//	0 is invalid
+		this.Duration = 0;
+		
+		//	A 16-bit integer that indicates this track’s spatial priority in its movie. The QuickTime Movie Toolbox uses this value to determine how tracks overlay one another. Tracks with lower layer values are displayed in front of tracks with higher layer values.
+
+		this.Layer = 0;
+		this.AlternateGroup = 0;	//	zero =  not an alternative track
+		this.Volume = 0;	//	8.8 fixed
+		
+		this.Matrix = new Uint32Array(3*3);
+		this.PixelsWidth = 0;
+		this.PixelsHeight = 0;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap2/qtff2.html#//apple_ref/doc/uid/TP40000939-CH204-25550
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		
+		const CreationTime = GetSecondsSinceMidnightJan1st1904(this.CreationTime);
+		DataWriter.Write32(CreationTime);
+		const ModificationTime = GetSecondsSinceMidnightJan1st1904(this.ModificationTime);
+		DataWriter.Write32(ModificationTime);
+
+		if ( this.TrackId == 0 )
+			throw `zero is not a valid Track id number`;
+		DataWriter.Write32(this.TrackId);
+		DataWriter.Write32(0);	//	reserved
+		
+		const Duration = this.Duration;	//	 scaled to movie time scalar
+		DataWriter.Write32(Duration);
+
+		DataWriter.WriteBytes( new Uint8Array(8) );	//	reserved
+		DataWriter.Write16( this.Layer );
+		DataWriter.Write16( this.AlternateGroup );
+		DataWriter.Write16( this.Volume );
+		DataWriter.Write16( 0 );	//	reserved
+		DataWriter.WriteBytes( this.Matrix );
+		DataWriter.Write32( this.PixelsWidth );
+		DataWriter.Write32( this.PixelsHeight );
+	}
+}
+
+class Atom_Mvhd extends Atom_t
+{
+	constructor()
+	{
+		super('mvhd');
+		
+		this.Version = 0;
+		this.Flags = 0;
+		this.CreationTime = new Date();
+		this.ModificationTime = new Date();
+		this.TimeScale = 1;	//	todo: convert to scalar
+		this.Duration = 0;
+		this.PreferedRate = 0;
+		this.PreferedVolume = 0;	//	8.8 fixed
+		this.Reserved = new Uint8Array(10);
+		this.Matrix = new Uint32Array(3*3);
+		this.PreviewTime = 0;
+		this.PreviewDuration = 0;
+		this.PosterTime = 0;
+		this.SelectionTime = 0;
+		this.SelectionDuration = 0;
+		this.CurrentTime = 0;
+		this.NextTrackId = 0;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		
+		const CreationTime = GetSecondsSinceMidnightJan1st1904(this.CreationTime);
+		const ModificationTime = GetSecondsSinceMidnightJan1st1904(this.ModificationTime);
+		
+		GetDateTimeFromSecondsSinceMidnightJan1st1904
+		
+		if ( this.Version == 0 )
+		{
+			DataWriter.Write32(CreationTime);
+			DataWriter.Write32(ModificationTime);
+			DataWriter.Write32(this.TimeScale);
+			DataWriter.Write32(this.Duration);
+		}
+		else if ( this.Version == 1 )
+		{
+			DataWriter.Write64(CreationTime);
+			DataWriter.Write64(ModificationTime);
+			DataWriter.Write32(this.TimeScale);
+			DataWriter.Write64(this.Duration);
+		}
+		else
+			throw `unkown MVHD version ${this.Version}`;
+			
+		DataWriter.Write32(this.PreferedRate);
+		DataWriter.Write16(this.PreferedVolume);
+		DataWriter.WriteBytes(this.Reserved);
+		DataWriter.WriteBytes(this.Matrix);
+		DataWriter.Write32(this.PreviewTime);
+		DataWriter.Write32(this.PreviewDuration);
+		DataWriter.Write32(this.PosterTime);
+		DataWriter.Write32(this.SelectionTime);
+		DataWriter.Write32(this.SelectionDuration);
+		DataWriter.Write32(this.CurrentTime);
+		DataWriter.Write32(this.NextTrackId);
+	}
+}
+	
+class Atom_Ftyp extends Atom_t
+{
+	constructor()
+	{
+		super('ftyp');
+		
+		//	should handle array of these
+		this.Types = [];
+		this.Types.push( { Name:'qt  ', Version: 0 } );
+	}
+	
+	EncodeData(DataWriter)
+	{
+		for ( let Type of this.Types )
+		{
+			DataWriter.WriteStringAsBytes(Type.Name);
+			DataWriter.Write32(Type.Version);
+		}
+	}
+}
+
+class Atom_Free extends Atom_t
+{
+	constructor()
+	{
+		super('free');
+	}
+}
+
 class Atom_Mfhd extends Atom_t
 {
 	constructor()
@@ -1372,8 +1581,8 @@ export class Mp4FragmentedEncoder
 	
 	PushSample(Data,DecodeTimeMs,PresentationTimeMs,TrackId)
 	{
-		if ( !Number.isInteger(TrackId) && TrackId < 0 )
-			throw `Sample track id must be a positive integer`;
+		if ( !Number.isInteger(TrackId) || TrackId <= 0 )
+			throw `Sample track id must be a positive integer and above zero`;
 			
 		const Sample = new Sample_t();
 		Sample.Data = Data;
@@ -1439,6 +1648,10 @@ export class Mp4FragmentedEncoder
 	async EncodeThread()
 	{
 		let LastBakedTimestamp = null;
+		
+		this.PushAtom( new Atom_Ftyp() );
+		let PendingMoov = new Atom_Moov();
+		
 		while(true)
 		{
 			const Sample = await this.PendingSampleQueue.WaitForNext();
@@ -1446,10 +1659,23 @@ export class Mp4FragmentedEncoder
 			if ( Eof )
 				Pop.Debug(`Mp4 encoder got end of file`);
 
+			if ( PendingMoov )
+			{
+				//	need other track meta here!
+				PendingMoov.AddTrack(Sample.TrackId);
+			}
+
 			//	decide if previous data should bake
 			const TimeSinceLastBake = Sample.DecodeTimeMs - (LastBakedTimestamp||0);
 			if ( Eof || TimeSinceLastBake >= this.BakeFrequencyMs )
 			{
+				//	haven't written the Moov yet
+				if ( PendingMoov )
+				{
+					this.PushAtom( PendingMoov );
+					PendingMoov = null;
+				}
+
 				this.BakePendingTracks();
 				LastBakedTimestamp = Sample.DecodeTimeMs;
 			}
