@@ -1,5 +1,5 @@
 import Pop from './PopEngine.js'
-import {JoinTypedArrays,BytesToString,StringToBytes,BytesToBigInt} from './PopApi.js'
+import {IsTypedArray,JoinTypedArrays,BytesToString,StringToBytes,BytesToBigInt} from './PopApi.js'
 
 //	when we push this data to a decoder, it signals no more data coming
 export const EndOfFileMarker = 'eof';
@@ -219,6 +219,14 @@ export class DataWriter
 	WriteBytes(Value)
 	{
 		if ( Value === undefined )	throw `Invalid WriteBytes(${Value})`;
+		
+		//	convert to u8 array
+		if ( IsTypedArray(Value) )
+		{
+			const ArrayBuffer = Value.buffer;
+			Value = new Uint8Array(ArrayBuffer);
+		}
+		
 		this.Datas.push(Value);
 	}
 	
