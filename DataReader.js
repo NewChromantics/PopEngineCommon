@@ -110,35 +110,6 @@ export class DataReader
 		return String;
 	}
 	
-	//	gr: move this to an overloaded Atom/Mpeg DataReader
-	async ReadNextAtom()
-	{
-		const Atom = new Atom_t();
-		Atom.FilePosition = this.ExternalFilePosition + this.FilePosition;
-		//	catch EOF and return null, instead of throwing
-		try
-		{
-			Atom.Size = await this.Read32();
-		}
-		catch(e)
-		{
-			if ( e == EndOfFileMarker )
-				return null;
-			throw e;
-		}
-		Atom.Fourcc = await this.ReadString(4);
-		
-		//	size of 1 means 64 bit size
-		if ( Atom.Size == 1 )
-		{
-			Atom.Size64 = await this.Read64();
-		}
-		if ( Atom.AtomSize < 8 )
-			throw `Atom (${Atom.Fourcc}) reported size as less than 8 bytes(${Atom.AtomSize}); not possible.`;
-			
-		Atom.Data = await this.ReadBytes(Atom.ContentSize); 
-		return Atom;
-	}
 	
 	async ReadUntilMatch(MatchBytes,IncludeMatch=true)
 	{
