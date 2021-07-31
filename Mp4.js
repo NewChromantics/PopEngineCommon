@@ -100,16 +100,26 @@ class Sample_t
 		//	encoder
 		this.Data;
 		this.TrackId;
+		this.SampleFlags = 0;
+		this.CompositionTimeOffset;
 	}
+	
+	get Size()
+	{
+		if ( this.Data )
+			return this.Data.length;
+		return this.DataSize;
+	}
+		
 }
 
 class Atom_t
 {
-	constructor()
+	constructor(Fourcc=null)
 	{
 		this.Size = 0;		//	total size 
 		this.FilePosition = null;
-		this.Fourcc = null;	//	string of four chars
+		this.Fourcc = Fourcc;	//	string of four chars
 		this.Size64 = null;	//	only set if Size=1
 		
 		this.Data = null;	//	raw data following this header
@@ -1063,11 +1073,168 @@ class PendingTrack_t
 	{
 		this.Samples.push(Sample);
 	}
-	
-	//	bake data into tables & atoms
-	GetAtoms()
+}
+
+//	encoding atoms, but maybe we can merge with decode
+class Atom_Mfhd extends Atom_t
+{
+	constructor()
 	{
-		throw `todo: Track.GetAtoms()`;
+		super('mfhd');
+		this.Version = 0;
+		this.Flags = 0;
+		this.SequenceNumber = 0;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		DataWriter.Write32(this.SequenceNumber);
+	}
+}
+
+class Atom_Moof extends Atom_t
+{
+	constructor()
+	{
+		super('moof');
+		
+		const mfhd = new Atom_Mfhd();
+		this.ChildAtoms.push(mfhd);
+	}
+}
+
+
+class Atom_Traf extends Atom_t
+{
+	constructor(TrackId)
+	{
+		super('traf');
+		
+		this.Tfhd = new Atom_Tfhd(TrackId);
+		this.Trun = new Atom_Trun();
+		this.ChildAtoms.push(this.Tfhd);
+		this.ChildAtoms.push(this.Trun);
+	}
+	
+	AddSample(Sample)
+	{
+		this.Trun.AddSample(Sample);
+	}
+}
+
+class Atom_Mdat extends Atom_t
+{
+	constructor()
+	{
+		super('mdat');
+		this.Datas = [];
+	}
+	
+	PushData(Data)
+	{
+		this.Datas.push(Data);
+	}
+}
+
+class Atom_Tfhd extends Atom_t
+{
+	constructor()
+	{
+		super('tfhd');
+		this.Version = 0;
+		this.Flags = 0;
+		this.TrackId = 0;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		DataWriter.Write32(this.TrackId);
+		
+		const Flags = this.Flags;
+		function HasFlagBit(Bit)
+		{
+			return (Flags & (1 << Bit)) != 0;
+		}
+		
+		if (HasFlagBit(0))
+			DataWriter.Write64(this.BaseDataOffset);	//	unsigned
+		if (HasFlagBit(1))
+			DataWriter.Write32(this.SampleDescriptionIndex);
+		if (HasFlagBit(3))
+			DataWriter.Write32(this.DefaultSampleDuration);
+		if (HasFlagBit(4))
+			DataWriter.Write32(this.DefaultSampleSize);
+		if (HasFlagBit(5))
+			DataWriter.Write32(this.DefaultSampleFlags);
+	}
+}
+
+class Atom_Trun extends Atom_t
+{
+	constructor()
+	{
+		super('trun');
+		this.Version = 0;
+		this.Flags = 0;
+		this.DataOffsetFromMoof = 0;
+		
+		this.Samples = [];
+		
+		//	setup flags
+		this.Flags |= 1<<TrunFlags.SampleSizePresent;
+		this.Flags |= 1<<TrunFlags.DataOffsetPresent;
+	}
+	
+	AddSample(Sample)
+	{
+		this.Samples.push(Sample);
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		
+		const EntryCount = this.Samples.length;
+		DataWriter.Write32(EntryCount);
+		
+		const Flags = this.Flags;
+		function IsFlagBit(Bit)	{ return (Flags & (1 << Bit)) != 0; };
+		
+		const SampleSizePresent = IsFlagBit(TrunFlags.SampleSizePresent);
+		const SampleDurationPresent = IsFlagBit(TrunFlags.SampleDurationPresent);
+		const SampleFlagsPresent = IsFlagBit(TrunFlags.SampleFlagsPresent);
+		const SampleCompositionTimeOffsetPresent = IsFlagBit(TrunFlags.SampleCompositionTimeOffsetPresent);
+		const FirstSampleFlagsPresent = IsFlagBit(TrunFlags.FirstSampleFlagsPresent);
+		const DataOffsetPresent = IsFlagBit(TrunFlags.DataOffsetPresent);
+
+
+		if ( DataOffsetPresent )
+		{
+			Data.Write32(this.DataOffsetFromMoof);
+		}
+		
+		if ( FirstSampleFlagsPresent )
+		{
+			const FirstSampleFlags = 0;
+			Data.Write32(FirstSampleFlags);
+		}
+		
+		for ( let Sample of this.Samples )
+		{
+			if ( SampleDurationPresent )
+				Data.Write32(Sample.DurationMs);
+			if ( SampleSizePresent )
+				Data.Write32(Sample.Size);
+			if ( SampleFlagsPresent )
+				Data.Write32(Sample.SampleFlags);
+			if ( SampleCompositionTimeOffsetPresent )
+				Data.Write32(Sample.CompositionTimeOffset);
+		}
 	}
 }
 
@@ -1078,12 +1245,22 @@ export class Mp4FragmentedEncoder
 		this.RootAtoms = [];
 		
 		this.EncodedAtomQueue = new PromiseQueue('Mp4FragmentedEncoder.EncodedAtomQueue');
-		//this.EncodedDataQueue = new PromiseQueue('Mp4FragmentedEncoder.EncodedDataQueue');
+		this.EncodedDataQueue = new PromiseQueue('Mp4FragmentedEncoder.EncodedDataQueue');
 		this.PendingSampleQueue = new PromiseQueue('Mp4FragmentedEncoder.PendingSampleQueue');
 		
 		this.PendingTracks = {};	//	[TrackId]
 		
 		this.EncodeThreadPromise = this.EncodeThread();
+	}
+	
+	async WaitForNextEncodedBytes()
+	{
+		return this.EncodedDataQueue.WaitForNext();
+	}
+	
+	async WaitForNextAtom()
+	{
+		return this.EncodedAtomQueue.WaitForNext();
 	}
 	
 	PushSample(Data,DecodeTimeMs,PresentationTimeMs,TrackId)
@@ -1107,19 +1284,35 @@ export class Mp4FragmentedEncoder
 		return this.PendingTracks[TrackId];
 	}
 	
-	BakePendingTrack(TrackId)
+	BakePendingTracks()
 	{
-		if ( !this.PendingTracks.hasOwnProperty(TrackId) )
-			throw `Trying to bake track (${TrackId}) which isn't pending`;
+		const Moof = new Atom_Moof();
+		const Mdat = new Atom_Mdat();
+
+		//	pop tracks
+		const PendingTracks = this.PendingTracks;
+		this.PendingTracks = {};
+		const TrackIds = Object.keys(PendingTracks);
 		
-		//	pop track
-		const Track = this.PendingTracks[TrackId];
-		delete this.PendingTracks[TrackId];
+		for ( let TrackId of TrackIds )
+		{
+			const PendingTrack = PendingTracks[TrackId];
+			const Traf = new Atom_Traf(TrackId);
+			Moof.ChildAtoms.push(Traf);
+			
+			//	write samples to mdat and table
+			let FirstSamplePositionInMdat = null;
+			for ( let Sample of PendingTrack.Samples )
+			{
+				let MdatPosition = Mdat.PushData(Sample.Data);
+				if ( FirstSamplePositionInMdat === null )
+					FirstSamplePositionInMdat = MdatPosition;
+				Traf.AddSample(Sample);
+			}
+		}
 		
-		//	bake track to atoms
-		const TrackAtoms = Track.GetAtoms();
-		for ( let Atom of TrackAtoms )
-			this.PushAtom(Atom);
+		this.PushAtom(Moof);
+		this.PushAtom(Mdat);
 	}
 	
 	PushAtom(Atom)
@@ -1132,17 +1325,17 @@ export class Mp4FragmentedEncoder
 	{
 		while(true)
 		{
-			const NextSample = await this.PendingSampleQueue.WaitForNext();
+			const Sample = await this.PendingSampleQueue.WaitForNext();
 			
 			//	get the track this should go into.
-			const Track = this.GetPendingTrack(NextSample.TrackId);
-			Track.PushSample(Track);
+			const Track = this.GetPendingTrack(Sample.TrackId);
+			Track.PushSample(Sample);
 			
 			//	decide if this track should bake
 			if ( true )
 			{
 				//	if black, finish track moof,mdat
-				this.BakePendingTrack(NextSample.TrackId);
+				this.BakePendingTracks();
 				//	output atoms
 				//	which should output data
 			}
