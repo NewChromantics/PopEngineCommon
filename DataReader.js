@@ -1,5 +1,5 @@
 import Pop from './PopEngine.js'
-import {JoinTypedArrays,BytesToString,BytesToBigInt} from './PopApi.js'
+import {JoinTypedArrays,BytesToString,StringToBytes,BytesToBigInt} from './PopApi.js'
 
 //	when we push this data to a decoder, it signals no more data coming
 export const EndOfFileMarker = 'eof';
@@ -163,3 +163,68 @@ export class DataReader
 	
 }
 export default DataReader;
+
+export class DataWriter
+{
+	constructor()
+	{
+		this.Datas = [];	//	array of arrays of bytes, gets baked in GetData
+	}
+	
+	GetData()
+	{
+		const JoinedData = JoinTypedArrays(...this.Datas);
+		this.Datas = [JoinedData];
+		return JoinedData;
+	}
+	
+	Write8(Value)
+	{
+		if ( Value === undefined )	throw `Invalid Write8(${Value})`;
+		const Data = new Uint8Array(1);
+		Data[0] = Value;
+		this.Datas.push(Data);
+	}
+	
+	Write16(Value)
+	{
+		if ( Value === undefined )	throw `Invalid Write16(${Value})`;
+		const Data = new Uint8Array(2);
+		Data[0] = (Value >> 8) & 0xff;
+		Data[1] = (Value >> 0) & 0xff;
+		this.Datas.push(Data);
+	}
+	
+	Write24(Value)
+	{
+		if ( Value === undefined )	throw `Invalid Write24(${Value})`;
+		const Data = new Uint8Array(3);
+		Data[0] = (Value >> 16) & 0xff;
+		Data[1] = (Value >> 8) & 0xff;
+		Data[2] = (Value >> 0) & 0xff;
+		this.Datas.push(Data);
+	}
+	
+	Write32(Value)
+	{
+		if ( Value === undefined )	throw `Invalid Write32(${Value})`;
+		const Data = new Uint8Array(4);
+		Data[0] = (Value >> 24) & 0xff;
+		Data[1] = (Value >> 16) & 0xff;
+		Data[2] = (Value >> 8) & 0xff;
+		Data[3] = (Value >> 0) & 0xff;
+		this.Datas.push(Data);
+	}
+	
+	WriteBytes(Value)
+	{
+		if ( Value === undefined )	throw `Invalid WriteBytes(${Value})`;
+		this.Datas.push(Value);
+	}
+	
+	WriteStringAsBytes(String)
+	{
+		const Bytes = StringToBytes(String);
+		this.WriteBytes(Bytes);
+	}
+}
