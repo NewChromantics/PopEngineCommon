@@ -53,13 +53,19 @@ class Sample_t
 {
 	constructor()
 	{
+		this.DecodeTimeMs;
+		this.PresentationTimeMs;
+
+		//	decoder
 		this.DataSize;
 		this.IsKeyframe;
-		this.DecodeTimeMs;
 		this.DurationMs;
-		this.PresentationTimeMs;
 		this.DataPosition;
 		this.DataFilePosition;
+		
+		//	encoder
+		this.Data;
+		this.TrackId;
 	}
 }
 
@@ -69,11 +75,11 @@ class Atom_t
 	{
 		this.Size = 0;		//	total size 
 		this.FilePosition = null;
-		this.Fourcc = 'ATOM';
+		this.Fourcc = null;	//	string of four chars
 		this.Size64 = null;	//	only set if Size=1
 		
 		this.Data = null;	//	raw data following this header
-		this.ChildAtoms = [];	//	more Atom_t's (key these? can there be dupliates?)
+		this.ChildAtoms = [];	//	more Atom_t's (key these? can there be duplicates?)
 	}
 	
 	get DataFilePosition()
@@ -130,6 +136,16 @@ class Atom_t
 		return Matches;
 	}
 	
+	//	turn atom[tree] into Uint8Array()
+	Encode()
+	{
+		//	if children, not data
+		//		bake children into data,
+		//	update size 
+		//	write head
+		//	write data
+		throw `todo`;
+	}
 };
 
 /*
@@ -1001,4 +1017,102 @@ export class Mp4Decoder
 
 }
 
+
+class PendingTrack_t
+{
+	constructor()
+	{
+		this.Samples = [];
+	}
+	
+	PushSample(Sample)
+	{
+		this.Samples.push(Sample);
+	}
+	
+	//	bake data into tables & atoms
+	GetAtoms()
+	{
+		throw `todo: Track.GetAtoms()`;
+	}
+}
+
+export class Mp4FragmentedEncoder
+{
+	constructor()
+	{
+		this.RootAtoms = [];
+		
+		this.EncodedAtomQueue = new PromiseQueue('Mp4FragmentedEncoder.EncodedAtomQueue');
+		//this.EncodedDataQueue = new PromiseQueue('Mp4FragmentedEncoder.EncodedDataQueue');
+		this.PendingSampleQueue = new PromiseQueue('Mp4FragmentedEncoder.PendingSampleQueue');
+		
+		this.PendingTracks = {};	//	[TrackId]
+		
+		this.EncodeThreadPromise = this.EncodeThread();
+	}
+	
+	PushSample(Data,DecodeTimeMs,PresentationTimeMs,TrackId)
+	{
+		if ( !Number.isInteger(TrackId) && TrackId < 0 )
+			throw `Sample track id must be a positive integer`;
+			
+		const Sample = new Sample_t();
+		Sample.Data = Data;
+		Sample.DecodeTimeMs = DecodeTimeMs;
+		Sample.PresentationTimeMs = PresentationTimeMs;
+		Sample.TrackId = TrackId;
+		
+		this.PendingSampleQueue.Push(Sample);
+	}
+	
+	GetPendingTrack(TrackId)
+	{
+		if ( !this.PendingTracks.hasOwnProperty(TrackId) )
+			this.PendingTracks[TrackId] = new PendingTrack_t();
+		return this.PendingTracks[TrackId];
+	}
+	
+	BakePendingTrack(TrackId)
+	{
+		if ( !this.PendingTracks.hasOwnProperty(TrackId) )
+			throw `Trying to bake track (${TrackId}) which isn't pending`;
+		
+		//	pop track
+		const Track = this.PendingTracks[TrackId];
+		delete this.PendingTracks[TrackId];
+		
+		//	bake track to atoms
+		const TrackAtoms = Track.GetAtoms();
+		for ( let Atom of TrackAtoms )
+			this.PushAtom(Atom);
+	}
+	
+	PushAtom(Atom)
+	{
+		this.RootAtoms.push(Atom);
+		this.EncodedAtomQueue.Push(Atom);
+	}
+	
+	async EncodeThread()
+	{
+		while(true)
+		{
+			const NextSample = await this.PendingSampleQueue.WaitForNext();
+			
+			//	get the track this should go into.
+			const Track = this.GetPendingTrack(NextSample.TrackId);
+			Track.PushSample(Track);
+			
+			//	decide if this track should bake
+			if ( true )
+			{
+				//	if black, finish track moof,mdat
+				this.BakePendingTrack(NextSample.TrackId);
+				//	output atoms
+				//	which should output data
+			}
+		}
+	}
+}
 

@@ -110,6 +110,7 @@ export class DataReader
 		return String;
 	}
 	
+	//	gr: move this to an overloaded Atom/Mpeg DataReader
 	async ReadNextAtom()
 	{
 		const Atom = new Atom_t();
