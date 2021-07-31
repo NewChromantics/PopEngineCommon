@@ -327,7 +327,11 @@ export class Mp4Decoder
 			this.RootAtoms.push(Atom);
 			this.NewAtomQueue.Push(Atom);
 			
-			if ( Atom.Fourcc == 'moov' )
+			if ( Atom.Fourcc == 'ftyp' )
+			{
+				await this.DecodeAtom_Ftyp(Atom);
+			}
+			else if ( Atom.Fourcc == 'moov' )
 			{
 				await this.DecodeAtom_Moov(Atom);
 			}
@@ -576,6 +580,14 @@ export class Mp4Decoder
 		}
 
 		return Samples;
+	}
+	
+	async DecodeAtom_Ftyp(Atom)
+	{
+		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
+		const MajorBrand = await Reader.ReadString(4);
+		const MinorVersion = await Reader.Read32();
+		Pop.Debug(`ftyp ${MajorBrand} ver 0x${MinorVersion.toString(16)}`); 
 	}
 	
 	async DecodeAtom_Moov(Atom)
