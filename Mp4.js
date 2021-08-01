@@ -747,7 +747,7 @@ export class Mp4Decoder
 		if ( !Media.MediaHeader )
 		{
 			Media.MediaHeader = {};
-			Media.MediaHeader.TimeScale = 1;
+			Media.MediaHeader.TimeScale = 1000;
 		}
 		
 		Media.MediaInfo = await this.DecodeAtom_MediaInfo( Atom.GetChildAtom('minf'), Media.MediaHeader, MovieHeader );
@@ -774,7 +774,6 @@ export class Mp4Decoder
 		//Header.Duration = new TimeSpan(0,0, (int)(Duration * Header.TimeScale));
 		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
 		Header.ModificationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(ModificationTime);
-		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
 		Header.LanguageId = Language;
 		Header.Quality = Quality / (1 << 16);
 		return Header;
@@ -885,7 +884,7 @@ export class Mp4Decoder
 		*/
 		const Samples = [];	//	array of Sample_t
 
-		const TimeScale = MovieHeader ? MovieHeader.TimeScale : 1;
+		const TimeScale = MovieHeader ? MovieHeader.TimeScale : 1000;
 
 		function TimeToMs(TimeUnit)
 		{
@@ -1188,7 +1187,8 @@ class Atom_Trak extends Atom_t
 		
 		this.tkhd = new Atom_Tkhd(TrackId);
 		this.ChildAtoms.push(this.tkhd);
-		//this.mdia = 
+		this.mdia = new Atom_Mdia();
+		this.ChildAtoms.push(this.mdia);
 	}
 	
 	get TrackId()
@@ -1217,7 +1217,7 @@ class Atom_Tkhd extends Atom_t
 		this.CreationTime = new Date();
 		this.ModificationTime = new Date();
 		this.TrackId = TrackId;	//	0 is invalid
-		this.Duration = 0;
+		this.Duration = 123*1000;
 		
 		//	A 16-bit integer that indicates this track’s spatial priority in its movie. The QuickTime Movie Toolbox uses this value to determine how tracks overlay one another. Tracks with lower layer values are displayed in front of tracks with higher layer values.
 
@@ -1225,9 +1225,9 @@ class Atom_Tkhd extends Atom_t
 		this.AlternateGroup = 0;	//	zero =  not an alternative track
 		this.Volume = 0;	//	8.8 fixed
 		
-		this.Matrix = new Uint32Array(3*3);
-		this.PixelsWidth = 0;
-		this.PixelsHeight = 0;
+		this.Matrix = new Uint32Array([256,0,0,	0,65536,0,	0,0,1073741824]);
+		this.PixelsWidth = 123;
+		this.PixelsHeight = 456;
 	}
 	
 	EncodeData(DataWriter)
@@ -1260,6 +1260,346 @@ class Atom_Tkhd extends Atom_t
 	}
 }
 
+class Atom_Mdia extends Atom_t
+{
+	constructor()
+	{
+		super('mdia');
+		
+		this.mdhd = new Atom_Mdhd();
+		this.ChildAtoms.push(this.mdhd);
+		
+		//	hdlr is optional, but I think we can't decode without it
+		//	it also dictates audio/visual/subtitle, so pretty important
+		this.hdlr = new Atom_Hdlr();
+		this.ChildAtoms.push(this.hdlr);
+		this.minf = new Atom_Minf_Video();
+		this.ChildAtoms.push(this.minf);
+		//	optional
+		//hdlr
+		//minf
+		//udta
+	}
+}
+
+class Atom_Mdhd extends Atom_t
+{
+	constructor()
+	{
+		super('mdhd');
+		this.Version = 0;
+		this.Flags = 0;
+		this.CreationTime = new Date();
+		this.ModificationTime = new Date();
+		this.TimeScale = 1000;
+		this.DurationMs = 123*1000;
+		this.Language = 0;
+		this.Quality = 1;	//	0..1
+	}
+	
+	EncodeData(DataWriter)
+	{
+		const CreationTime = GetSecondsSinceMidnightJan1st1904(this.CreationTime);
+		const ModificationTime = GetSecondsSinceMidnightJan1st1904(this.ModificationTime);
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		DataWriter.Write32(CreationTime);
+		DataWriter.Write32(ModificationTime);
+		DataWriter.Write32(this.TimeScale);
+		const Duration = this.DurationMs / 1000 / this.TimeScale;
+		DataWriter.Write32(Duration);	//	need to scale this
+		DataWriter.Write16(this.Language);
+		
+		const Quality16 = this.Quality * 0xffff;
+		DataWriter.Write16(Quality16);
+	}
+};
+
+class Atom_Hdlr extends Atom_t
+{
+	constructor()
+	{
+		super('hdlr');
+		
+		this.Version = 0;
+		this.Flags = 0;
+		
+		//	'mhlr' for media handlers and 'dhlr'
+		this.Type = 'mhlr';	//	media handler
+		//this.Type = 'dhlr';	//	Data handler
+		
+		//	fourcc
+		//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-SW1
+		this.SubType = 'vide';	
+		//this.SubType = 'soun';
+		//this.SubType = 'subt';
+		//this.SubType = 'meta';	//	timed meta data
+		//this.SubType = 'text';	//	text with some formatting
+	}
+	
+	EncodeData(DataWriter)
+	{
+		if ( this.Type.length != 4 )
+			throw `Expected Track HDLR Type ($this.Type) to be 4 chars (fourcc)`;
+		if ( this.SubType.length != 4 )
+			throw `Expected Track HDLR Type ($this.SubType) to be 4 chars (fourcc)`;
+			
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		//	quicktime generated files have 0x0 here...
+		//DataWriter.WriteStringAsBytes(this.Type);//
+		DataWriter.Write32(0);
+		DataWriter.WriteStringAsBytes(this.SubType);
+		
+		DataWriter.Write32(0);	// Component manufacturer - reserved
+		DataWriter.Write32(0);	// Component flags - reserved
+		DataWriter.Write32(0);	// Component flags mask - reserved
+		DataWriter.WriteStringAsBytes('VideoHandler');	// Component name - can be empty
+		//	gr: quicktime file has one extra byte... null terminator?
+		DataWriter.Write8(0);
+	}
+}
+
+
+class Atom_Minf_Video extends Atom_t
+{
+	constructor()
+	{
+		super('minf');
+		
+		this.vmhd = new Atom_Vmhd();
+		this.ChildAtoms.push(this.vmhd);
+		//this.hdlr = new Atom_Hdlr();
+		//this.ChildAtoms.push(this.hdlr);
+		this.stbl = new Atom_Stbl();
+		this.ChildAtoms.push(this.stbl);
+	}
+}
+
+class Atom_Vmhd extends Atom_t
+{
+	constructor()
+	{
+		super('vmhd');
+		
+		this.Version = 0;
+		const Flag_NoLeanAhead = 1<<0;
+		this.Flags = Flag_NoLeanAhead;
+		
+		//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap4/qtff4.html#//apple_ref/doc/uid/TP40000939-CH206-18741
+		const GraphicsMode_Copy = 0;
+		this.GraphicsMode = GraphicsMode_Copy;
+		this.OpColour = [0,0,0];
+	}
+	
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		DataWriter.Write16(this.GraphicsMode);
+		DataWriter.Write16(this.OpColour[0]);
+		DataWriter.Write16(this.OpColour[1]);
+		DataWriter.Write16(this.OpColour[2]);
+	}
+}
+
+class Atom_Stbl extends Atom_t
+{
+	constructor()
+	{
+		super('stbl');
+		this.stsd = new Atom_Stsd();
+		this.ChildAtoms.push(this.stsd);
+	}
+}
+
+class Atom_SampleDescriptionExtension_Avcc extends Atom_t
+{
+	constructor()
+	{
+		super('avcC');
+		
+		this.Version = 1;
+
+		const Sps = [/*0,0,0,1,*/39,66,0,30,171,64,80,30,200];
+		const Pps = [/*0,0,0,1,*/40,206,60,48];
+
+		this.SpsDatas = [Sps];
+		this.PpsDatas = [Pps];
+		this.NaluSize = 4;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		if ( this.SpsDatas.length == 0 || this.PpsDatas.length == 0 )
+			throw `Missing SPS and/or PPS`;
+			 
+		DataWriter.Write8(this.Version);
+		
+		DataWriter.Write8( this.SpsDatas[0][0] );
+		DataWriter.Write8( this.SpsDatas[0][1] );
+		DataWriter.Write8( this.SpsDatas[0][2] );
+		
+		let NaluSizeByte = 1 + ((this.NaluSize-1)&0x3);
+		NaluSizeByte |= 0x0;	//	other 6 bytes reserved
+		DataWriter.Write8(NaluSizeByte);
+		
+		let NumberOfSps = (this.SpsDatas.length & 0x1f);
+		NumberOfSps |= 	0xE0;//	reserved bytes, must be 1
+		DataWriter.Write8(NumberOfSps);
+		
+		for ( let Sps of this.SpsDatas )
+		{
+			DataWriter.Write16( Sps.length );
+			DataWriter.WriteBytes( Sps );
+		}
+		
+		let NumberOfPps = (this.PpsDatas.length & 0x1f);
+		DataWriter.Write8(NumberOfPps);
+		for ( let Pps of this.PpsDatas )
+		{
+			DataWriter.Write16( Pps.length );
+			DataWriter.WriteBytes( Pps );
+		}
+	}
+}
+
+class VideoSampleDescription
+{
+	constructor()
+	{
+		this.Version = 0;
+		this.RevisionLevel = 0;
+		this.Vendor = 'avc1';
+		
+		this.TemporalQuality = 1;	//	0..1
+		this.FramesPerSample = 1;
+		this.PixelWidth = 123;
+		this.PixelHeight = 456;
+		
+		this.FramesPerSample = 1;
+
+		this.Compressor = 'The Compressor';
+		
+		//	A 16-bit integer that indicates the pixel depth of the compressed image. Values of 1, 2, 4, 8 ,16, 24, and 32 indicate the depth of color images. The value 32 should be used only if the image contains an alpha channel. Values of 34, 36, and 40 indicate 2-, 4-, and 8-bit grayscale, respectively, for grayscale images.
+		this.ColourDepth = 24;
+		this.ColourTableId = 0xffff;	//	ignored if 24 bit. -1= default table
+		
+		this.ExtensionAtoms = [];
+		
+		this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Avcc() );
+	}
+	
+	EncodeData(DataWriter)
+	{
+		if ( this.Vendor.length != 4 )
+			throw `Vendor(${this.Vendor}) needs to be 4 chars`;
+		DataWriter.Write16(this.Version);
+		DataWriter.Write16(this.RevisionLevel);
+		DataWriter.WriteStringAsBytes(this.Vendor);
+		
+		//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-74522
+		//	note: docs actually specify 1023 and 1024!
+		const TemporalQuality = this.TemporalQuality * 1023;
+		DataWriter.Write32(TemporalQuality);
+		const SpatialQuality = this.SpatialQuality * 1024;
+		DataWriter.Write32(SpatialQuality);
+		
+		DataWriter.Write16(this.PixelWidth);
+		DataWriter.Write16(this.PixelHeight);
+		
+		const HorizontalResolution = 72;//	pixels per inch 32bit fixed point
+		const VerticalResolution = 72;//	pixels per inch 32bit fixed point
+		DataWriter.Write32(HorizontalResolution);
+		DataWriter.Write32(VerticalResolution);
+
+		const DataSize = 0;	//	"A 32-bit integer that must be set to 0."
+		DataWriter.Write32(DataSize);
+		DataWriter.Write16(this.FramesPerSample);
+
+		//	compressor needs to be 32-byte
+		//	but it's a pascal string so first byte is length
+		let CompressorLength = Math.min( 31, this.Compressor.length );
+		let Compressor = this.Compressor.substring(0,31).padEnd(31,'\0');	//	pad with terminators
+		DataWriter.Write8(CompressorLength);
+		DataWriter.WriteStringAsBytes(Compressor);
+
+		DataWriter.Write16(this.ColourDepth);
+		DataWriter.Write16(this.ColourTableId);
+		//	todo: write colour table if depth != 16,24,32 or -1 (default table)
+	}
+}
+
+class Atom_Stsd extends Atom_t
+{
+	constructor()
+	{
+		super('stsd');
+		
+		this.Version = 0;
+		this.Flags = 0;
+		this.SampleDescriptions = [];
+		
+		const Avc1Data = new VideoSampleDescription();
+		this.PushSampleDescription('avc1',0,Avc1Data);
+	}
+	
+	PushSampleDescription(Name,DataReferenceIndex,Data)
+	{
+		if ( Name.length != 4 )
+			throw `Expecting sample description name (${Name}) to be 4 chars (fourcc)`;
+		const Description = {};
+		Description.Name = Name;
+		Description.DataReferenceIndex = DataReferenceIndex;
+		Description.Data = Data;
+		this.SampleDescriptions.push(Description);
+	}
+		
+	EncodeData(Writer)
+	{
+		Writer.Write8(this.Version);
+		Writer.Write24(this.Flags);
+		Writer.Write32(this.SampleDescriptions.length);
+		
+		//	now write each sample
+		for ( let Description of this.SampleDescriptions )
+		{
+			//	bake data
+			let Data = Description.Data;
+			//	if the data is an atom, encode it
+			//if ( Data instanceof Atom_t )
+			if ( typeof Data == typeof {} && Data.Encode )
+			{
+				Data = Data.Encode();
+			}
+			if ( typeof Data == typeof {} && Data.EncodeData )
+			{
+				const SubWriter = new DataWriter();
+				Data.EncodeData(SubWriter);
+				Data = SubWriter.GetData();
+			}
+			
+			//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-74522
+			//	When parsing sample descriptions in the ‘stsd’ atom, be aware of the sample description size value in order to read each table entry correctly. Some sample descriptions terminate with four zero bytes that are not otherwise indicated.
+			//	Note: Some video sample descriptions contain an optional 4-byte terminator with all bytes set to 0, 
+			//	following all other sample description and sample description extension data. If this optional terminator is present, the sample description size value will include it. 
+			//	It is important to check the sample description size when parsing: more than or fewer than these four optional bytes, if present in the size value, indicates a malformed sample description
+			let DataSize = Data.length;
+			const Last4 = Data.slice(-4);
+			if ( Last4[0]+Last4[1]+Last4[2]+Last4[3] == 0 )
+				DataSize -= 4; 
+			
+			Writer.Write32(DataSize);
+			Writer.WriteStringAsBytes(Description.Name);
+			Writer.WriteBytes( new Uint8Array(6) );	//	reserved
+			Writer.Write16( Description.DataReferenceIndex );
+			Writer.WriteBytes( Data );
+			
+		}
+	}
+}
+
 class Atom_Mvhd extends Atom_t
 {
 	constructor()
@@ -1270,12 +1610,12 @@ class Atom_Mvhd extends Atom_t
 		this.Flags = 0;
 		this.CreationTime = new Date();
 		this.ModificationTime = new Date();
-		this.TimeScale = 1;	//	todo: convert to scalar
-		this.Duration = 0;
+		this.TimeScale = 1000; 
+		this.DurationMs = 2*1000;
 		this.PreferedRate = 0;
 		this.PreferedVolume = 0;	//	8.8 fixed
 		this.Reserved = new Uint8Array(10);
-		this.Matrix = new Uint32Array(3*3);
+		this.Matrix = new Uint32Array([256,0,0,	0,65536,0,	0,0,1073741824]);
 		this.PreviewTime = 0;
 		this.PreviewDuration = 0;
 		this.PosterTime = 0;
@@ -1300,14 +1640,16 @@ class Atom_Mvhd extends Atom_t
 			DataWriter.Write32(CreationTime);
 			DataWriter.Write32(ModificationTime);
 			DataWriter.Write32(this.TimeScale);
-			DataWriter.Write32(this.Duration);
+			const Duration = this.DurationMs / 1000 / this.TimeScale;
+			DataWriter.Write32(Duration);
 		}
 		else if ( this.Version == 1 )
 		{
 			DataWriter.Write64(CreationTime);
 			DataWriter.Write64(ModificationTime);
 			DataWriter.Write32(this.TimeScale);
-			DataWriter.Write64(this.Duration);
+			const Duration = this.DurationMs / 1000 / this.TimeScale;
+			DataWriter.Write64(Duration);
 		}
 		else
 			throw `unkown MVHD version ${this.Version}`;
@@ -1334,7 +1676,8 @@ class Atom_Ftyp extends Atom_t
 		
 		//	should handle array of these
 		this.Types = [];
-		this.Types.push( { Name:'qt  ', Version: 0 } );
+		this.Types.push( { Name:'isom', Version: 512 } );
+		//this.Types.push( { Name:'qt  ', Version: 0 } );
 	}
 	
 	EncodeData(DataWriter)
@@ -1654,8 +1997,10 @@ export class Mp4FragmentedEncoder
 		
 		this.PushAtom( new Atom_Ftyp() );
 		let PendingMoov = new Atom_Moov();
+		PendingMoov.AddTrack(1);
+		this.PushAtom( PendingMoov );
 		
-		while(true)
+		while(false)
 		{
 			const Sample = await this.PendingSampleQueue.WaitForNext();
 			const Eof = Sample == EndOfFileMarker;
