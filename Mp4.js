@@ -1607,6 +1607,13 @@ class VideoSampleDescription
 		DataWriter.Write16(this.ColourDepth);
 		DataWriter.Write16(this.ColourTableId);
 		//	todo: write colour table if depth != 16,24,32 or -1 (default table)
+
+		//	write extensions
+		for ( let Extension of this.ExtensionAtoms )
+		{
+			const Data = Extension.Encode();
+			DataWriter.WriteBytes(Data);
+		}
 	}
 }
 
