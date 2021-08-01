@@ -1501,8 +1501,25 @@ class Atom_SampleDescriptionExtension_Avcc extends Atom_t
 		
 		this.Version = 1;
 
-		const Sps = [/*0,0,0,1,*/39,66,0,30,171,64,80,30,200];
-		const Pps = [/*0,0,0,1,*/40,206,60,48];
+		//const Sps = [/*0,0,0,1,*/39,66,0,30,171,64,80,30,200];
+		//const Pps = [/*0,0,0,1,*/40,206,60,48];
+		const Sps = [0x27,0x4D,0x40,0x1E,0xA9,0x18,0x3C,0x1A,0xFC,0xB8,0x0B,0x50,0x10,0x10,0x6A,0x4C,0x2B,0x5E,0xF7,0xC0,0x40];
+		const Pps = [0x28,0xFE,0x09,0xC8];
+/*
+01	version
+4D	66
+40	0
+1E	30
+
+FF	nalusize|reserved
+E1	sps|reserved
+
+0015	sps length (21)
+274D401E A9183C1A FCB80B50 10106A4C 2B5EF7C0 40
+
+01		pps count
+0004 28FE09C8 00000010
+*/
 
 		this.SpsDatas = [Sps];
 		this.PpsDatas = [Pps];
@@ -1516,16 +1533,17 @@ class Atom_SampleDescriptionExtension_Avcc extends Atom_t
 			 
 		DataWriter.Write8(this.Version);
 		
-		DataWriter.Write8( this.SpsDatas[0][0] );
-		DataWriter.Write8( this.SpsDatas[0][1] );
-		DataWriter.Write8( this.SpsDatas[0][2] );
+		const Sps0 = this.SpsDatas[0];
+		DataWriter.Write8( Sps0[1] );
+		DataWriter.Write8( Sps0[2] );
+		DataWriter.Write8( Sps0[3] );
 		
-		let NaluSizeByte = 1 + ((this.NaluSize-1)&0x3);
-		NaluSizeByte |= 0x0;	//	other 6 bytes reserved
+		let NaluSizeByte = (this.NaluSize-1)&0x3;
+		NaluSizeByte |= 0xFC;	//	other 6 bytes reserved, must be 1
 		DataWriter.Write8(NaluSizeByte);
 		
 		let NumberOfSps = (this.SpsDatas.length & 0x1f);
-		NumberOfSps |= 	0xE0;//	reserved bytes, must be 1
+		NumberOfSps |= 	0xE0;	//	reserved bytes, must be 1
 		DataWriter.Write8(NumberOfSps);
 		
 		for ( let Sps of this.SpsDatas )
