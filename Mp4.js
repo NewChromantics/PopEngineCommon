@@ -56,7 +56,10 @@ function GetDateTimeFromSecondsSinceMidnightJan1st1904(Seconds)
 //	todo:
 function GetSecondsSinceMidnightJan1st1904(TimeStamp)
 {
-	return 0;
+	const Epoch = new Date('January 1, 1904 0:0:0 GMT');
+	const DeltaMs = TimeStamp - Epoch;
+	const DeltaSecs = Math.floor(DeltaMs/1000);
+	return DeltaSecs;
 }
 
 
