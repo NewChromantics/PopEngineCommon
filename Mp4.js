@@ -246,9 +246,13 @@ class Atom_t
 		}
 		
 		if ( !this.Data )
-			throw `Atom has no data`;
-
-		DataWriter.WriteBytes( this.Data );
+		{
+			//throw `Atom has no data`;
+		}
+		else
+		{
+			DataWriter.WriteBytes( this.Data );
+		}
 	}
 };
 
