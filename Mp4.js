@@ -1283,18 +1283,18 @@ class Atom_Mdia extends Atom_t
 		
 		this.mdhd = new Atom_Mdhd();
 		this.ChildAtoms.push(this.mdhd);
-		
+
 		//	hdlr is optional, but I think we can't decode without it
 		//	it also dictates audio/visual/subtitle, so pretty important
 		this.hdlr = new Atom_Hdlr();
 		this.ChildAtoms.push(this.hdlr);
 		this.minf = new Atom_Minf_Video();
 		this.ChildAtoms.push(this.minf);
-		
+				
 		this.dinf = new Atom_Dinf();
 		this.ChildAtoms.push(this.dinf);
-		
 		this.dinf.AddData(0,'Hello!');
+		
 	}
 }
 
@@ -1422,17 +1422,22 @@ class Atom_Dref extends Atom_t
 				Data = new Uint8Array(0);
 			if ( typeof Data == typeof '' )
 				Data = StringToBytes(Data);
-				
-			DataWriter.Write32( Data.length );
-			const Type = 'url ';
+			
+			Pop.Debug(`Dref data; ${Data}`);
+			let Size = 4+4+1+3+Data.length+1;
+			DataWriter.Write32( Size );
+			const Type = 'url\0';
 			DataWriter.WriteStringAsBytes(Type);
 			const Version = 0;
 			const Flag_SelfReference = 0x1;	//	data is in same file as movie atom
-			const Flags = Flag_SelfReference;
+			const Flags = 0;//Flag_SelfReference;
 			
 			DataWriter.Write8(Version);
 			DataWriter.Write24(Flags);
+			
 			DataWriter.WriteBytes( Data );
+			//	terminator
+			DataWriter.Write8(0);
 		}
 	}
 }
@@ -1559,6 +1564,22 @@ E1	sps|reserved
 			DataWriter.Write16( Pps.length );
 			DataWriter.WriteBytes( Pps );
 		}
+		
+	}
+}
+
+
+class Atom_SampleDescriptionExtension_Pasp extends Atom_t
+{
+	constructor()
+	{
+		super('pasp');
+		this.Data = [0x00,0x00,0x00,0x01,	0x00,0x00,0x00,0x01,	0x00,0x00,0x00,0x01	];
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.WriteBytes( this.Data );
 	}
 }
 
@@ -1586,6 +1607,8 @@ class VideoSampleDescription
 		this.ExtensionAtoms = [];
 		
 		this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Avcc() );
+		//	adding this fixed "can't decode codec" error...
+		this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Pasp() );
 	}
 	
 	EncodeData(DataWriter)
@@ -1871,6 +1894,7 @@ class Atom_Ftyp extends Atom_t
 		//	should handle array of these
 		this.Types = [];
 		this.Types.push( { Name:'isom', Version: 512 } );
+		//	avc1
 		//this.Types.push( { Name:'qt  ', Version: 0 } );
 	}
 	
