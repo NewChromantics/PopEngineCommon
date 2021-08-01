@@ -789,11 +789,22 @@ export class Mp4Decoder
 		
 		const Samples = await this.DecodeAtom_SampleTable( Atom.GetChildAtom('stbl'), MovieHeader );
 		
+		const Dinfs = Atom.GetChildAtoms('dinf');
+		for ( let Dinf of Dinfs )
+			await this.DecodeAtom_Dinf(Dinf);
+		
 		this.NewSamplesQueue.Push(Samples);
 		//	gmhd
 		//	hdlr
 		//	dinf
 		//	stbl
+	}
+	
+	async DecodeAtom_Dinf(Atom)
+	{
+		await Atom.DecodeChildAtoms();
+		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
+		//	expecting this to just contain one dref
 	}
 	
 	async DecodeAtom_SampleTable(Atom,MovieHeader)
@@ -1275,10 +1286,11 @@ class Atom_Mdia extends Atom_t
 		this.ChildAtoms.push(this.hdlr);
 		this.minf = new Atom_Minf_Video();
 		this.ChildAtoms.push(this.minf);
-		//	optional
-		//hdlr
-		//minf
-		//udta
+		
+		this.dinf = new Atom_Dinf();
+		this.ChildAtoms.push(this.dinf);
+		
+		this.dinf.AddData(0,'Hello!');
 	}
 }
 
@@ -1360,6 +1372,66 @@ class Atom_Hdlr extends Atom_t
 	}
 }
 
+class Atom_Dinf extends Atom_t
+{
+	constructor()
+	{
+		super('dinf');
+		this.dref = new Atom_Dref();
+		this.ChildAtoms.push(this.dref);
+	}
+	
+	AddData(Index,Data)
+	{
+		this.dref.AddData(Index,Data);
+	}
+}
+
+
+class Atom_Dref extends Atom_t
+{
+	constructor()
+	{
+		super('dref');
+		
+		this.Version = 0;
+		this.Flags = 0;
+		this.Datas = [];
+	}
+	
+	AddData(Index,DataAtom)
+	{
+		while ( this.Datas.length < Index+1 )
+			this.Datas.push(null);
+		this.Datas[Index] = DataAtom;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		DataWriter.Write32(this.Datas.length);
+		
+		for ( let Data of this.Datas )
+		{
+			if ( Data == null )
+				Data = new Uint8Array(0);
+			if ( typeof Data == typeof '' )
+				Data = StringToBytes(Data);
+				
+			DataWriter.Write32( Data.length );
+			const Type = 'url ';
+			DataWriter.WriteStringAsBytes(Type);
+			const Version = 0;
+			const Flag_SelfReference = 0x1;	//	data is in same file as movie atom
+			const Flags = Flag_SelfReference;
+			
+			DataWriter.Write8(Version);
+			DataWriter.Write24(Flags);
+			DataWriter.WriteBytes( Data );
+		}
+	}
+}
 
 class Atom_Minf_Video extends Atom_t
 {
@@ -1409,8 +1481,11 @@ class Atom_Stbl extends Atom_t
 	constructor()
 	{
 		super('stbl');
-		this.stsd = new Atom_Stsd();
-		this.ChildAtoms.push(this.stsd);
+		this.ChildAtoms.push( new Atom_Stsd() );
+		this.ChildAtoms.push( new Atom_Stts() );
+		this.ChildAtoms.push( new Atom_Stsc() );
+		this.ChildAtoms.push( new Atom_Stsz() );
+		this.ChildAtoms.push( new Atom_Stco() );
 	}
 }
 
@@ -1597,6 +1672,96 @@ class Atom_Stsd extends Atom_t
 			Writer.WriteBytes( Data );
 			
 		}
+	}
+}
+
+
+class Atom_Stts extends Atom_t
+{
+	constructor()
+	{
+		super('stts');
+		
+		this.Version = 0;
+		this.Flags = 0;
+	}
+		
+	EncodeData(Writer)
+	{
+		Writer.Write8(this.Version);
+		Writer.Write24(this.Flags);
+		
+		
+		const EntryCount = 0;
+		Writer.Write32(EntryCount);
+	}
+}
+
+class Atom_Stsc extends Atom_t
+{
+	constructor()
+	{
+		super('stsc');
+		
+		this.Version = 0;
+		this.Flags = 0;
+	}
+		
+	EncodeData(Writer)
+	{
+		Writer.Write8(this.Version);
+		Writer.Write24(this.Flags);
+		
+		const EntryCount = 0;
+		Writer.Write32(EntryCount);
+	}
+}
+
+class Atom_Stsz extends Atom_t
+{
+	constructor()
+	{
+		super('stsz');
+		
+		this.Version = 0;
+		this.Flags = 0;
+		this.SampleSizes = [];
+	}
+		
+	EncodeData(Writer)
+	{
+		Writer.Write8(this.Version);
+		Writer.Write24(this.Flags);
+		
+		const AllSameSizes = this.SampleSizes.every( v => v==this.SampleSizes[0] );
+		const FixedSize = AllSameSizes ? (this.SampleSizes[0] || 0) : 0
+		Writer.Write32( FixedSize );
+		Writer.Write32( this.SampleSizes.length );
+
+		if ( AllSameSizes )
+			return;
+
+		throw `todo; write sample sizes (24 or 32 bit)`;
+	}
+}
+
+class Atom_Stco extends Atom_t
+{
+	constructor()
+	{
+		super('stco');
+		
+		this.Version = 0;
+		this.Flags = 0;
+	}
+		
+	EncodeData(Writer)
+	{
+		Writer.Write8(this.Version);
+		Writer.Write24(this.Flags);
+		
+		const EntryCount = 0;
+		Writer.Write32(EntryCount);
 	}
 }
 
