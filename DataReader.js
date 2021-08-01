@@ -173,6 +173,9 @@ export class DataWriter
 	
 	GetData()
 	{
+		if ( !this.Datas.length )
+			return new Uint8Array(0);
+			
 		const JoinedData = JoinTypedArrays(...this.Datas);
 		this.Datas = [JoinedData];
 		return JoinedData;
@@ -219,6 +222,11 @@ export class DataWriter
 	WriteBytes(Value)
 	{
 		if ( Value === undefined )	throw `Invalid WriteBytes(${Value})`;
+		
+		if ( Array.isArray(Value) )
+		{
+			Value = new Uint8Array(Value);
+		}
 		
 		//	convert to u8 array
 		if ( IsTypedArray(Value) )
