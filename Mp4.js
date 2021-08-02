@@ -1671,7 +1671,7 @@ class VideoSampleDescription
 	{
 		this.Version = 0;
 		this.RevisionLevel = 0;
-		this.Vendor = 'avc1';
+		this.Vendor = '\0\0\0\0';
 		
 		this.TemporalQuality = 1;	//	0..1
 		this.FramesPerSample = 1;
@@ -1808,7 +1808,7 @@ class Atom_Stsd extends Atom_t
 			Writer.WriteStringAsBytes(Description.Name);
 			Writer.WriteBytes( new Uint8Array(6) );	//	reserved
 			//	indexes starting at 1?
-			Writer.Write16( Description.DataReferenceIndex+0 );
+			Writer.Write16( Description.DataReferenceIndex+1 );
 			Writer.WriteBytes( Data );
 			
 		}
