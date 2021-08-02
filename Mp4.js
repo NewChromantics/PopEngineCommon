@@ -1900,12 +1900,12 @@ class Atom_Free extends Atom_t
 
 class Atom_Mfhd extends Atom_t
 {
-	constructor()
+	constructor(SequenceNumber=0)
 	{
 		super('mfhd');
 		this.Version = 0;
 		this.Flags = 0;
-		this.SequenceNumber = 0;
+		this.SequenceNumber = SequenceNumber;
 	}
 	
 	EncodeData(DataWriter)
@@ -1918,11 +1918,11 @@ class Atom_Mfhd extends Atom_t
 
 class Atom_Moof extends Atom_t
 {
-	constructor()
+	constructor(SequenceNumber)
 	{
 		super('moof');
 		
-		const mfhd = new Atom_Mfhd();
+		const mfhd = new Atom_Mfhd(SequenceNumber);
 		this.ChildAtoms.push(mfhd);
 	}
 }
@@ -1935,8 +1935,10 @@ class Atom_Traf extends Atom_t
 		super('traf');
 		
 		this.Tfhd = new Atom_Tfhd(TrackId);
+		this.Tfdt = new Atom_Tfdt();
 		this.Trun = new Atom_Trun();
 		this.ChildAtoms.push(this.Tfhd);
+		this.ChildAtoms.push(this.Tfdt);
 		this.ChildAtoms.push(this.Trun);
 	}
 	
@@ -2200,6 +2202,7 @@ export class Mp4FragmentedEncoder
 	constructor()
 	{
 		this.BakeFrequencyMs = 100;//1 * 1000;
+		this.LastMoofSequenceNumber = 0;
 		
 		this.RootAtoms = [];
 		
@@ -2250,7 +2253,8 @@ export class Mp4FragmentedEncoder
 	
 	BakePendingTracks()
 	{
-		const Moof = new Atom_Moof();
+		this.LastMoofSequenceNumber++;
+		const Moof = new Atom_Moof(this.LastMoofSequenceNumber);
 		const Mdat = new Atom_Mdat();
 
 		//	pop tracks
