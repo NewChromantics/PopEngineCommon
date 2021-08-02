@@ -1264,6 +1264,41 @@ class Atom_Trak extends Atom_t
 	}
 }
 
+function GetFixed_16_16(Float)
+{
+	const MaxIntMask = ((1<<16)-1);
+	const MaxDecMask = ((1<<16)-1);
+	let Major = Math.floor(Float) & MaxIntMask;
+	let Minor = (Float-Major) * MaxDecMask;
+	return (Major<<16) | (Minor<<0);
+}
+
+function GetFixed_2_30(Float)
+{
+	const MaxIntMask = ((1<<2)-1);
+	const MaxDecMask = ((1<<30)-1);
+	let Major = Math.floor(Float) & MaxIntMask;
+	let Minor = (Float-Major) * MaxDecMask;
+	return (Major<<30) | (Minor<<0);
+}
+
+function CreateMatrix(a,b,u,c,d,v,tx,ty,w)
+{
+	const Matrix = 
+	[
+		GetFixed_16_16(a),
+		GetFixed_16_16(b),
+		GetFixed_2_30(u),
+		GetFixed_16_16(c),
+		GetFixed_16_16(d),
+		GetFixed_2_30(v),
+		GetFixed_16_16(tx),
+		GetFixed_16_16(ty),
+		GetFixed_2_30(w)
+	];
+	return new Uint32Array(Matrix);
+}
+
 class Atom_Tkhd extends Atom_t
 {
 	constructor(TrackId=0)
@@ -1287,9 +1322,9 @@ class Atom_Tkhd extends Atom_t
 		this.AlternateGroup = 0;	//	zero =  not an alternative track
 		this.Volume = 0;	//	8.8 fixed
 		
-		this.Matrix = new Uint32Array([256,0,0,	0,65536,0,	0,0,1073741824]);
-		this.PixelsWidth = 123;
-		this.PixelsHeight = 456;
+		this.Matrix = CreateMatrix(1,0,0,	0,1,0,	0,0,1);
+		this.PixelsWidth = 640;
+		this.PixelsHeight = 480;
 	}
 	
 	EncodeData(DataWriter)
@@ -1640,8 +1675,8 @@ class VideoSampleDescription
 		
 		this.TemporalQuality = 1;	//	0..1
 		this.FramesPerSample = 1;
-		this.PixelWidth = 123;
-		this.PixelHeight = 456;
+		this.PixelWidth = 640;
+		this.PixelHeight = 480;
 		
 		this.FramesPerSample = 1;
 
@@ -1885,7 +1920,7 @@ class Atom_Mvhd extends Atom_t
 		this.PreferedRate = 0;
 		this.PreferedVolume = 0;	//	8.8 fixed
 		this.Reserved = new Uint8Array(10);
-		this.Matrix = new Uint32Array([256,0,0,	0,65536,0,	0,0,1073741824]);
+		this.Matrix = CreateMatrix(1,0,0,	0,1,0,	0,0,1);
 		this.PreviewTime = 0;
 		this.PreviewDuration = 0;
 		this.PosterTime = 0;
