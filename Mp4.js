@@ -1290,11 +1290,6 @@ class Atom_Mdia extends Atom_t
 		this.ChildAtoms.push(this.hdlr);
 		this.minf = new Atom_Minf_Video();
 		this.ChildAtoms.push(this.minf);
-				
-		this.dinf = new Atom_Dinf();
-		this.ChildAtoms.push(this.dinf);
-		this.dinf.AddData(0,'Hello!');
-		
 	}
 }
 
@@ -1454,6 +1449,12 @@ class Atom_Minf_Video extends Atom_t
 		//this.ChildAtoms.push(this.hdlr);
 		this.stbl = new Atom_Stbl();
 		this.ChildAtoms.push(this.stbl);
+		
+						
+		this.dinf = new Atom_Dinf();
+		this.ChildAtoms.push(this.dinf);
+		this.dinf.AddData(0,'Hello!');
+
 	}
 }
 
