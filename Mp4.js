@@ -124,7 +124,7 @@ class Sample_t
 
 class Atom_t
 {
-	constructor(Fourcc=null)
+	constructor(Fourcc=null,CopyAtom=null)
 	{
 		this.Size = 0;		//	total size 
 		this.FilePosition = null;
@@ -133,6 +133,14 @@ class Atom_t
 		
 		this.Data = null;	//	raw data following this header
 		this.ChildAtoms = [];	//	more Atom_t's (key these? can there be duplicates?)
+		
+		if ( CopyAtom )
+		{
+			if ( CopyAtom.Fourcc != this.Fourcc )
+				throw `Copying atom with different fourcc (${this.Fourcc} -> ${CopyAtom.Fourcc})`;
+			//	gr: do deep copy of child atoms?
+			Object.assign(this,CopyAtom);
+		}
 	}
 	
 	get DataFilePosition()
