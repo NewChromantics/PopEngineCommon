@@ -1608,8 +1608,7 @@ class VideoSampleDescription
 		this.ExtensionAtoms = [];
 		
 		this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Avcc() );
-		//	adding this fixed "can't decode codec" error...
-		this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Pasp() );
+		//this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Pasp() );
 	}
 	
 	EncodeData(DataWriter)
@@ -1716,12 +1715,18 @@ class Atom_Stsd extends Atom_t
 			let DataSize = Data.length;
 			const Last4 = Data.slice(-4);
 			if ( Last4[0]+Last4[1]+Last4[2]+Last4[3] == 0 )
-				DataSize -= 4; 
+				DataSize -= 4;
+				
+			DataSize += 4;
+			DataSize += Description.Name.length;
+			DataSize += 6;
+			DataSize += 2;
 			
 			Writer.Write32(DataSize);
 			Writer.WriteStringAsBytes(Description.Name);
 			Writer.WriteBytes( new Uint8Array(6) );	//	reserved
-			Writer.Write16( Description.DataReferenceIndex );
+			//	indexes starting at 1
+			Writer.Write16( Description.DataReferenceIndex+1 );
 			Writer.WriteBytes( Data );
 			
 		}
