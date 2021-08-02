@@ -1905,19 +1905,19 @@ class Atom_Ftyp extends Atom_t
 	{
 		super('ftyp');
 		
-		//	should handle array of these
-		this.Types = [];
-		this.Types.push( { Name:'isom', Version: 512 } );
-		//	avc1
-		//this.Types.push( { Name:'qt  ', Version: 0 } );
+		//	gr: get the proper version info etc
+		this.MajorBrand = 'isom';
+		this.MajorVersion = 512;
+		this.CompatibleBrands = ['isom','iso2','avc1','iso6','mp41'];
 	}
 	
 	EncodeData(DataWriter)
 	{
-		for ( let Type of this.Types )
+		DataWriter.WriteStringAsBytes(this.MajorBrand);
+		DataWriter.Write32(this.MajorVersion);
+		for ( let Type of this.CompatibleBrands )
 		{
-			DataWriter.WriteStringAsBytes(Type.Name);
-			DataWriter.Write32(Type.Version);
+			DataWriter.WriteStringAsBytes(Type);
 		}
 	}
 }
