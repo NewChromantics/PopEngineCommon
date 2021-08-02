@@ -5,6 +5,20 @@ import {DataReader,DataWriter,EndOfFileMarker} from './DataReader.js'
 import {StringToBytes} from './PopApi.js'
 
 
+function AnnexBToNalu4(Data)
+{
+	if ( Data[0] == 0 && Data[1] == 0 && Data[2] == 0 && Data[3] == 1 )
+	{
+		let Length = Data.length;
+		Data[0] = (Length >> 24) & 0xff;
+		Data[1] = (Length >> 16) & 0xff;
+		Data[2] = (Length >> 8) & 0xff;
+		Data[3] = (Length >> 0) & 0xff;
+		Pop.Debug(`converted to avcc`);
+	}
+	return Data;
+}
+
 class AtomDataReader extends DataReader
 {
 	//	gr: move this to an overloaded Atom/Mpeg DataReader
@@ -2229,7 +2243,9 @@ export class Mp4FragmentedEncoder
 	{
 		if ( !Number.isInteger(TrackId) || TrackId <= 0 )
 			throw `Sample track id must be a positive integer and above zero`;
-			
+
+		Data = AnnexBToNalu4(Data);
+
 		const Sample = new Sample_t();
 		Sample.Data = Data;
 		Sample.DecodeTimeMs = DecodeTimeMs;
