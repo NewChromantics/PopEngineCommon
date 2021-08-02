@@ -2008,12 +2008,12 @@ class Atom_Mdat extends Atom_t
 
 class Atom_Tfhd extends Atom_t
 {
-	constructor()
+	constructor(TrackId)
 	{
 		super('tfhd');
 		this.Version = 0;
 		this.Flags = 0;
-		this.TrackId = 0;
+		this.TrackId = TrackId;
 	}
 	
 	EncodeData(DataWriter)
