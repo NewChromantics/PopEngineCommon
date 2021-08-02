@@ -437,61 +437,25 @@ export class Mp4Decoder
 		this.NewSamplesQueue.Push(Samples);
 	}
 	
-	async DecodeAtom_TrackFragmentDelta(Tfdt)
+	async DecodeAtom_TrackFragmentDelta(Atom)
 	{
-		if ( !Tfdt )
+		if ( !Atom )
 			return 0;
-		const Atom = Tfdt;
-		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
-		
-		const Version = await Reader.Read8();
-		const Flags = await Reader.Read24();
-
-		let DecodeTime;
-		if ( Version == 0 )
-		{
-			DecodeTime = await Reader.Read32(); 
-		}
-		else
-		{
-			DecodeTime = await Reader.Read64(); 
-		}
-		return DecodeTime;
+			
+		const Tfdt = await Atom_Tfdt.Read(Atom);
+		return Tfdt.DecodeTime;
 	}
 		
 	async DecodeAtom_TrackFragmentHeader(Atom,DeltaTimeAtom)
 	{
-		const Header = {};
+		if ( !Atom )
+			return new Atom_Tfhd('tfhd');
 	
-		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
-		const Version = await Reader.Read8();
-		const Flags = await Reader.Read24();
-		Header.TrackId = await Reader.Read32();
-
-		function HasFlagBit(Bit)
-		{
-			return (Flags & (1 << Bit)) != 0;
-		}
-	
-		//	http://178.62.222.88/mp4parser/mp4.js
-		if (HasFlagBit(0))
-			Header.BaseDataOffset = await Reader.Read64();	//	unsigned
-		if (HasFlagBit(1))
-			Header.SampleDescriptionIndex = await Reader.Read32();
-		if (HasFlagBit(3))
-			Header.DefaultSampleDuration = await Reader.Read32();
-		if (HasFlagBit(4))
-			Header.DefaultSampleSize = await Reader.Read32();
-		if (HasFlagBit(5))
-			Header.DefaultSampleFlags = await Reader.Read32();
-		if (HasFlagBit(16))
-			Header.DurationIsEmpty = true;
-		if (HasFlagBit(17))
-			Header.DefaultBaseIsMoof = true;
+		const tfhd = await Atom_Tfhd.Read(Atom);
 		
-		Header.DecodeTime = await this.DecodeAtom_TrackFragmentDelta(DeltaTimeAtom);
+		//Header.DecodeTime = await this.DecodeAtom_TrackFragmentDelta(DeltaTimeAtom);
 		
-		return Header;
+		return tfhd;
 	}
 	
 	async DecodeAtom_FragmentSampleTable(Atom,MoofAtom,TrackHeader)
@@ -2006,6 +1970,57 @@ class Atom_Mdat extends Atom_t
 	}
 }
 
+class Atom_Tfdt extends Atom_t
+{
+	constructor(CopyAtom)
+	{
+		super('tfdt',CopyAtom);
+		
+		this.Version = 1;
+		this.Flags = 0;
+		this.DecodeTime = 0;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		
+		if ( this.Version == 0 )
+			DataWriter.Write32(this.DecodeTime);
+		else
+			DataWriter.Write64(this.DecodeTime);
+	}
+	
+	static async Read(AnonymousAtom)
+	{
+		const Reader = new AtomDataReader(AnonymousAtom.Data,AnonymousAtom.DataFilePosition);
+		const Atom = new Atom_Tfdt(AnonymousAtom);
+		Atom.Version = await Reader.Read8();
+		Atom.Flags = await Reader.Read24();
+		
+		if ( Atom.Version == 0 )
+		{
+			Atom.DecodeTime = await Reader.Read32();
+		}
+		else
+		{
+			Atom.DecodeTime = await Reader.Read64();
+		}
+		return Atom;
+	}
+}
+
+		const TfhdFlag_HasBaseDataOffet = 1<<0;
+		const TfhdFlag_HasSampleDescriptionIndex = 1<<1;
+		const TfhdFlag_Unknown2 = 1<<2;
+		const TfhdFlag_HasSampleDuration = 1<<3;
+		const TfhdFlag_HasSampleSize = 1<<4;
+		const TfhdFlag_HasSampleFlags = 1<<5;
+		const TfhdFlag_DurationIsEmpty = 1<<16;
+		const TfhdFlag_DefaultBaseIsMoof = 1<<17;
+
+
 class Atom_Tfhd extends Atom_t
 {
 	constructor(TrackId)
@@ -2014,6 +2029,53 @@ class Atom_Tfhd extends Atom_t
 		this.Version = 0;
 		this.Flags = 0;
 		this.TrackId = TrackId;
+		
+		this.Flags |= TfhdFlag_HasBaseDataOffet;
+		this.Flags |= TfhdFlag_HasSampleDuration;
+		this.Flags |= TfhdFlag_HasSampleSize;
+		this.Flags |= TfhdFlag_HasSampleFlags;
+		
+		//	defaults if flag not set
+		this.BaseDataOffset = 0;
+		this.SampleDescriptionIndex = 0;
+		this.DefaultSampleDuration = 1;
+		this.DefaultSampleSize = 0x000020C3;
+		this.DefaultSampleFlags = 0x01010000;
+	}
+	
+	HasFlag(Flag)
+	{
+		return (this.Flags & Flag)!=0;
+	}
+	
+	static async Read(AnonymousAtom)
+	{
+		if ( this.TrackId == 0 )
+			throw `TrackId not set in TFHD (ffmpeg/libav/ffprobe wont parse without this correct)`;
+			
+		const Reader = new AtomDataReader(AnonymousAtom.Data,AnonymousAtom.DataFilePosition);
+		const Atom = new Atom_Tfhd(AnonymousAtom);
+		Atom.Version = await Reader.Read8();
+		Atom.Flags = await Reader.Read24();
+		Atom.TrackId = await Reader.Read32();
+	
+		//	http://178.62.222.88/mp4parser/mp4.js
+		if ( Atom.HasFlag(TfhdFlag_HasBaseDataOffet) )
+			Atom.BaseDataOffset = await Reader.Read64();	//	unsigned
+		
+		if ( Atom.HasFlag(TfhdFlag_HasSampleDescriptionIndex))
+			Atom.SampleDescriptionIndex = await Reader.Read32();
+
+		if ( Atom.HasFlag(TfhdFlag_HasSampleDuration))
+			Atom.DefaultSampleDuration = await Reader.Read32();
+		
+		if ( Atom.HasFlag(TfhdFlag_HasSampleSize))
+			Atom.DefaultSampleSize = await Reader.Read32();
+		
+		if ( Atom.HasFlag(TfhdFlag_HasSampleFlags))
+			Atom.DefaultSampleFlags = await Reader.Read32();
+
+		return Atom;
 	}
 	
 	EncodeData(DataWriter)
@@ -2021,23 +2083,22 @@ class Atom_Tfhd extends Atom_t
 		DataWriter.Write8(this.Version);
 		DataWriter.Write24(this.Flags);
 		DataWriter.Write32(this.TrackId);
-		
-		const Flags = this.Flags;
-		function HasFlagBit(Bit)
-		{
-			return (Flags & (1 << Bit)) != 0;
-		}
-		
-		if (HasFlagBit(0))
+
+		if ( this.HasFlag(TfhdFlag_HasBaseDataOffet) )
 			DataWriter.Write64(this.BaseDataOffset);	//	unsigned
-		if (HasFlagBit(1))
+		
+		if ( this.HasFlag(TfhdFlag_HasSampleDescriptionIndex))
 			DataWriter.Write32(this.SampleDescriptionIndex);
-		if (HasFlagBit(3))
+		
+		if ( this.HasFlag(TfhdFlag_HasSampleDuration))
 			DataWriter.Write32(this.DefaultSampleDuration);
-		if (HasFlagBit(4))
+		
+		if ( this.HasFlag(TfhdFlag_HasSampleSize))
 			DataWriter.Write32(this.DefaultSampleSize);
-		if (HasFlagBit(5))
+		
+		if ( this.HasFlag(TfhdFlag_HasSampleFlags))
 			DataWriter.Write32(this.DefaultSampleFlags);
+		
 	}
 }
 
