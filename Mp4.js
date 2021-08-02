@@ -1711,8 +1711,8 @@ class VideoSampleDescription
 		DataWriter.Write16(this.PixelWidth);
 		DataWriter.Write16(this.PixelHeight);
 		
-		const HorizontalResolution = 72;//	pixels per inch 32bit fixed point
-		const VerticalResolution = 72;//	pixels per inch 32bit fixed point
+		const HorizontalResolution = 72<<16;//	pixels per inch 32bit fixed point
+		const VerticalResolution = 72<<16;//	pixels per inch 32bit fixed point
 		DataWriter.Write32(HorizontalResolution);
 		DataWriter.Write32(VerticalResolution);
 
