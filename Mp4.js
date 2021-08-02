@@ -816,7 +816,8 @@ export class Mp4Decoder
 		const SyncSamplesAtom = Atom.GetChildAtom('stss');
 		const SampleDecodeDurationsAtom = Atom.GetChildAtom('stts');
 		const SamplePresentationTimeOffsetsAtom = Atom.GetChildAtom('ctts');
-
+		const SampleDescriptorAtom = Atom.GetChildAtom('stsd');
+		
 		//	work out samples from atoms!
 		if (SampleSizesAtom == null)
 			throw "Track missing sample sizes atom";
@@ -833,6 +834,9 @@ export class Mp4Decoder
 		const SampleKeyframes = await this.DecodeAtom_SampleKeyframes(SyncSamplesAtom, SampleSizes.length);
 		const SampleDurations = await this.DecodeAtom_SampleDurations( SampleDecodeDurationsAtom, SampleSizes.length);
 		const SamplePresentationTimeOffsets = await this.DecodeAtom_SampleDurations(SamplePresentationTimeOffsetsAtom, SampleSizes.length, 0 );
+		
+		const SampleMeta = await this.DecodeAtom_Stsd(SampleDescriptorAtom);
+		
 		
 		//	durations start at zero (proper time must come from somewhere else!) and just count up over durations
 		const SampleDecodeTimes = [];//new int[SampleSizes.Count];
@@ -1095,6 +1099,16 @@ export class Mp4Decoder
 			Keyframes[SampleIndex] = true;
 		}
 		return Keyframes;
+	}
+
+	async DecodeAtom_Stsd(Atom)
+	{
+		if ( !Atom )
+			return;
+		
+		//const stsd = await Atom_Stsd.Read(Atom, (a) => this.NewAtomQueue.Push(a) );
+		//stsd.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
+		
 	}
 
 	async DecodeAtom_SampleDurations(Atom,SampleCount,Default=null)
@@ -1811,6 +1825,33 @@ class Atom_Stsd extends Atom_t
 			Writer.Write16( Description.DataReferenceIndex+1 );
 			Writer.WriteBytes( Data );
 			
+		}
+	}
+	
+	static async Read(AnonymousAtom,EnumChildAtom)
+	{
+		const Reader = new AtomDataReader(AnonymousAtom.Data,AnonymousAtom.DataFilePosition);
+		const Atom = new Atom_Stsd(AnonymousAtom);
+		Atom.Version = await Reader.Read8();
+		Atom.Flags = await Reader.Read24();
+		Atom.SampleDescriptionCount = await Reader.Read32();
+		
+		for ( let s=0;	s<Atom.SampleDescriptionCount;	s++ )
+		{
+			const SampleDescriptionAtom = new Atom_t();
+			SampleDescriptionAtom.Size = await Reader.Read32();
+			SampleDescriptionAtom.Fourcc = await Reader.ReadString(4);
+			SampleDescriptionAtom.Zero6 = await Reader.ReadBytes(6);
+			SampleDescriptionAtom.DataReferenceIndex = await Reader.Read16();
+			const ContentSize = SampleDescriptionAtom.Size - 4 - 6 - 2;
+			if ( ContentSize )
+			{
+				const DescAtom = await Reader.ReadNextAtom();
+				SampleDescriptionAtom.ChildAtoms.push(DescAtom);
+			}
+			Atom.ChildAtoms.push(SampleDescriptionAtom);
+			EnumChildAtom(SampleDescriptionAtom);
+			SampleDescriptionAtom.ChildAtoms.forEach( a => EnumChildAtom(a) );
 		}
 	}
 }
