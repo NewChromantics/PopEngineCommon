@@ -219,6 +219,24 @@ export class DataWriter
 		this.Datas.push(Data);
 	}
 	
+	Write64(Value)
+	{
+		//	convert into bytes
+		//	todo: handle big int
+		const Data = new Uint8Array(64/8);
+		if ( typeof Value != typeof 1 )
+			throw `todo: handle ${typeof Value} as 64bit`
+
+		if ( Value > 0xffffffff )
+			throw `todo: handle 64 bit number properly`;
+
+		Data[4] = (Value >> 24) & 0xff;
+		Data[5] = (Value >> 16) & 0xff;
+		Data[6] = (Value >> 8) & 0xff;
+		Data[7] = (Value >> 0) & 0xff;
+		this.Datas.push(Data);
+	}
+		
 	WriteBytes(Value)
 	{
 		if ( Value === undefined )	throw `Invalid WriteBytes(${Value})`;
