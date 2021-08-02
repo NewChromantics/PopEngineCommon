@@ -496,6 +496,9 @@ export class Mp4Decoder
 	
 	async DecodeAtom_FragmentSampleTable(Atom,MoofAtom,TrackHeader)
 	{
+		if ( !Atom )
+			return [];
+			
 		const Header = TrackHeader;
 		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
 		//	this stsd description isn't well documented on the apple docs
