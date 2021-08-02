@@ -1701,8 +1701,8 @@ class Atom_Stsd extends Atom_t
 			Writer.Write32(DataSize);
 			Writer.WriteStringAsBytes(Description.Name);
 			Writer.WriteBytes( new Uint8Array(6) );	//	reserved
-			//	indexes starting at 1
-			Writer.Write16( Description.DataReferenceIndex+1 );
+			//	indexes starting at 1?
+			Writer.Write16( Description.DataReferenceIndex+0 );
 			Writer.WriteBytes( Data );
 			
 		}
