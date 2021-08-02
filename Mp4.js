@@ -2298,10 +2298,10 @@ export class Mp4FragmentedEncoder
 		
 		this.PushAtom( new Atom_Ftyp() );
 		let PendingMoov = new Atom_Moov();
-		PendingMoov.AddTrack(1);
-		this.PushAtom( PendingMoov );
+		//PendingMoov.AddTrack(1);
+		//this.PushAtom( PendingMoov );
 		
-		while(false)
+		while(true)
 		{
 			const Sample = await this.PendingSampleQueue.WaitForNext();
 			const Eof = Sample == EndOfFileMarker;
