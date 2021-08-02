@@ -1162,6 +1162,10 @@ class Atom_Moov extends Atom_t
 		
 		this.mvhd = new Atom_Mvhd();
 		this.ChildAtoms.push(this.mvhd);
+		
+		//	fragment needs trex in mvex
+		this.mvex = new Atom_Mvex();
+		this.ChildAtoms.push(this.mvex);
 	}
 	
 	GetTrakAtom(TrackId)
@@ -1180,6 +1184,60 @@ class Atom_Moov extends Atom_t
 		
 		const Trak = new Atom_Trak(TrackId);
 		this.ChildAtoms.push(Trak);
+		
+		//	add a trex for every track
+		this.mvex.ChildAtoms.push( new Atom_Trex(TrackId) );
+	}
+}
+
+class Atom_Mvex extends Atom_t
+{
+	constructor()
+	{
+		super('mvex');
+	}
+}
+
+class Atom_Trex extends Atom_t
+{
+	constructor(TrackId)
+	{
+		super('trex');
+		
+		//	https://sce.umkc.edu/faculty-sites/lizhu/teaching/2018.fall.video-com/ref/mp4.pdf
+		//	This sets up default values used by the movie fragments. 
+		//	By setting defaults in this way, space and complexity can
+		//	be saved in each Track Fragment Box
+		this.Flags = 0;
+		this.TrackId = TrackId;
+		this.DefaultSampleDescriptionIndex = 0;
+		this.DefaultSampleDuration = 0;
+		this.DefaultSampleSize = 0;
+		this.DefaultSampleFlags = 0;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		if ( this.TrackId == 0 )
+			throw `Invalid Track Id ${this.TrackId} in Trex`;
+		/*
+		//	https://sce.umkc.edu/faculty-sites/lizhu/teaching/2018.fall.video-com/ref/mp4.pdf
+		gr: flags, I think signal more data
+		bit(6) reserved=0;
+		unsigned int(2) sample_depends_on;
+		unsigned int(2) sample_is_depended_on;
+		unsigned int(2) sample_has_redundancy;
+		bit(3) sample_padding_value;
+		bit(1) sample_is_difference_sample;
+		 // i.e. when 1 signals a non-key or non-sync sample
+		unsigned int(16) sample_degradation_priority
+		*/
+		DataWriter.Write32(this.Flags);
+		DataWriter.Write32(this.TrackId);
+		DataWriter.Write32(this.DefaultSampleDescriptionIndex);
+		DataWriter.Write32(this.DefaultSampleDuration);
+		DataWriter.Write32(this.DefaultSampleSize);
+		DataWriter.Write32(this.DefaultSampleFlags);
 	}
 }
 
@@ -1436,14 +1494,13 @@ class Atom_Minf_Video extends Atom_t
 		this.ChildAtoms.push(this.vmhd);
 		//this.hdlr = new Atom_Hdlr();
 		//this.ChildAtoms.push(this.hdlr);
-		this.stbl = new Atom_Stbl();
-		this.ChildAtoms.push(this.stbl);
 		
-						
 		this.dinf = new Atom_Dinf();
 		this.ChildAtoms.push(this.dinf);
 		this.dinf.AddData(0,'Hello!');
 
+		this.stbl = new Atom_Stbl();
+		this.ChildAtoms.push(this.stbl);
 	}
 }
 
