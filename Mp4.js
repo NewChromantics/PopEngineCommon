@@ -1619,7 +1619,8 @@ class VideoSampleDescription
 		this.ExtensionAtoms = [];
 		
 		this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Avcc() );
-		//this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Pasp() );
+		//	if I delete this from a valid file, quicktime doesnt play it
+		this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Pasp() );
 	}
 	
 	EncodeData(DataWriter)
