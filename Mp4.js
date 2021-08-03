@@ -2549,9 +2549,7 @@ export class Mp4FragmentedEncoder
 					keyFrame:	true,	//	helps web browser if all true
 					duration:	Sample.DurationMs,
 				});
-				Track.mp4track.len += Sample.Data.length;
 			}		
-
 
 			
 			//	gr: this bakes sample meta into track
