@@ -2475,45 +2475,8 @@ export class Mp4FragmentedEncoder
 			this.PendingTracks[TrackId] = new PendingTrack_t();
 		return this.PendingTracks[TrackId];
 	}
-	/*
-	BakePendingTracks()
-	{
 	
-		this.LastMoofSequenceNumber++;
-		const Moof = new Atom_Moof(this.LastMoofSequenceNumber);
-		const Mdat = new Atom_Mdat();
-
-		//	pop tracks
-		const PendingTracks = this.PendingTracks;
-		this.PendingTracks = {};
-		const TrackIds = Object.keys(PendingTracks);
-		
-		for ( let TrackId of TrackIds )
-		{
-			const PendingTrack = PendingTracks[TrackId];
-			const Traf = new Atom_Traf(TrackId);
-			Moof.Traf = Traf;
-			Moof.ChildAtoms.push(Traf);
-			
-			//	write samples to mdat and table
-			for ( let Sample of PendingTrack.Samples )
-			{
-				let MdatPosition = Mdat.PushData(Sample.Data);
-				Traf.AddSample(Sample,MdatPosition);
-			}
-		}
-		
-		//	now we can calc moof size, update the data inside before we encode again
-		const MoofData = Moof.Encode();
-		const MoofSize = MoofData.length;
-		Moof.GetChildAtoms('traf').forEach( traf => traf.Trun.MoofSize=MoofSize );
-		
-		this.Moof = Moof;
-		this.PushAtom(Moof);
-		this.PushAtom(Mdat);
 	
-	}
-		*/
 	PushAtom(Atom)
 	{
 		this.RootAtoms.push(Atom);
