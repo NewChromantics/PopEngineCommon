@@ -115,6 +115,21 @@ enum TrunFlags
 };
 */
 
+const SampleFlags =
+{
+	isLeading:				24+2,
+	dependsOn_keyframe:		24+2,
+	dependsOn_notkeyframe:	24+1,	//	not sure what this flag is, but set when not keyframe
+	
+	IsNotKeyframe:			0+16,
+	PaddingValue:			1+16,
+	HasRedundancy:			4+16,
+	IsDepedendedOn:			6+16,
+	
+	//	last 2 bytes of flags are priority
+	DegredationPriority0:	0xff00,
+	DegredationPriority1:	0x00ff,
+};
 //	todo? specific atom type encode&decoders?
 
 
