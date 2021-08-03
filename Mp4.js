@@ -3,7 +3,7 @@ import Pop from './PopEngine.js'
 import PromiseQueue from './PromiseQueue.js'
 import {DataReader,DataWriter,EndOfFileMarker} from './DataReader.js'
 import {StringToBytes,JoinTypedArrays} from './PopApi.js'
-
+import * as H264 from './H264.js'
 import {MP4,H264Remuxer} from './Mp4_Generator.js'
 
 
@@ -19,12 +19,16 @@ function AnnexBToNalu4(Data)
 		//	Data = Data.slice(4);	//	wrong!
 		Pop.Debug(`converted to avcc`);
 	}
+	
 	//	ignore sps & pps & sei
+	/*
+	//	gr: we dont need to ignore them, but it does slow video down (cos of timestamps)
 	if ( Data.length == 13 || Data.length == 8 )
 		return null;
 	//	ignore sei
 	if ( Data.length == 34 )
 		return null;
+	*/
 	return Data;
 }
 
@@ -2367,6 +2371,7 @@ export class Mp4FragmentedEncoder
 	{
 		this.BakeFrequencyMs = 9 * 1000;//100;//1 * 1000;
 		this.LastMoofSequenceNumber = 0;
+		this.Moov = null;	//	if non-null it's been written
 		
 		this.TrackSps = {};	//	[trackid]=sps
 		this.TrackPps = {};	//	[trackid]=sps
@@ -2397,10 +2402,12 @@ export class Mp4FragmentedEncoder
 		if ( !Number.isInteger(TrackId) || TrackId <= 0 )
 			throw `Sample track id must be a positive integer and above zero`;
 
-		//	hack!
-		if ( Data.length == 13 )
+		//	hack! update SPS && PPS for each track
+		//	would be better to keep this in the samples, then filter out?
+		//	but we do need to hold onto them in case theyre not provided regularly...(or do we?)
+		if ( H264.GetNaluType(Data) == H264.ContentTypes.SPS )
 			this.TrackSps[TrackId] = Data.slice(4);
-		if ( Data.length == 8 )
+		if ( H264.GetNaluType(Data) == H264.ContentTypes.PPS )
 			this.TrackPps[TrackId] = Data.slice(4);
 
 		Data = AnnexBToNalu4(Data);
@@ -2431,6 +2438,7 @@ export class Mp4FragmentedEncoder
 	
 	BakePendingTracks()
 	{
+	/*
 		this.LastMoofSequenceNumber++;
 		const Moof = new Atom_Moof(this.LastMoofSequenceNumber);
 		const Mdat = new Atom_Mdat();
@@ -2463,6 +2471,7 @@ export class Mp4FragmentedEncoder
 		this.Moof = Moof;
 		this.PushAtom(Moof);
 		this.PushAtom(Mdat);
+		*/
 	}
 	
 	PushAtom(Atom)
@@ -2477,45 +2486,105 @@ export class Mp4FragmentedEncoder
 	OnEncodeEof()
 	{
 		Pop.Debug(`OnEncodeEof`);
-		const Duration = 3000;
-		const Timescale = 1000;
+		const MovieDuration = 3000;
+		const MovieTimescale = 1000;
 		let SequenceNumber = 1;
-		
-		const Tracks = {};
-		Tracks.video = new H264Remuxer(Timescale);
-		const Track = Tracks.video;
-		Track.readyToDecode = true;
 
-		//	hack
-		Track.mp4track.sps = [this.TrackSps[Track.mp4track.id]]
-		Track.mp4track.pps = [this.TrackPps[Track.mp4track.id]]
+		const PendingTracks = this.PendingTracks;
+		this.PendingTracks = {};
+		const TrackIds = Object.keys(PendingTracks);
 		
-		//	fill track
-		const Samples = this.Moof.Traf.Trun.Samples;
-		for ( let Sample of Samples )
+		const Moofs = [];
+		const Mdats = [];
+		const Mp4Tracks = [];
+
+		for ( let TrackId of TrackIds )
 		{
-			const Unit = {};
-			Unit.Data = Sample.Data;
-			Unit.getData = () => {	return Sample.Data;	};
-			Unit.getSize = () => {	return Sample.Data.length;	};
+			const PendingTrack = PendingTracks[TrackId];
+			
+			const Track =  new H264Remuxer(MovieTimescale);
+			Track.readyToDecode = true;
 
-			Track.samples.push({
-				units:	[Unit],
-				size:	Sample.Data.length,
-				keyFrame:	true,	//	helps web browser if all true
-				duration:	Sample.DurationMs,
-			});
-			Track.mp4track.len += Sample.Data.length;
-		}		
+			//	hack
+			if ( !this.TrackSps[Track.mp4track.id] )
+				throw `missing SPS for track ${Track.mp4track.id}`;
+			if ( !this.TrackPps[Track.mp4track.id] )
+				throw `missing PPS for track ${Track.mp4track.id}`;
+			Track.mp4track.sps = [this.TrackSps[Track.mp4track.id]]
+			Track.mp4track.pps = [this.TrackPps[Track.mp4track.id]]
+			
+			function ShouldIncludeSample(Sample)
+			{
+				const SampleType = H264.GetNaluType(Sample.Data);
+				switch(SampleType)
+				{
+				case H264.ContentTypes.SPS:
+				case H264.ContentTypes.PPS:
+				case H264.ContentTypes.SEI:
+					return false;
+				default:
+					return true;
+				}
+			}
+			
+			//	fill track
+			//let Samples = this.Moof.Traf.Trun.Samples;
+			let Samples = PendingTrack.Samples;
+			//	filter out [mp4]redundant packets
+			Samples = Samples.filter(ShouldIncludeSample);
+			
+			
+			
+			
+			for ( let Sample of Samples )
+			{
+				const Unit = {};
+				Unit.Data = Sample.Data;
+				Unit.getData = () => {	return Sample.Data;	};
+				Unit.getSize = () => {	return Sample.Data.length;	};
+
+				Track.samples.push({
+					units:	[Unit],
+					size:	Sample.Data.length,
+					keyFrame:	true,	//	helps web browser if all true
+					duration:	Sample.DurationMs,
+				});
+				Track.mp4track.len += Sample.Data.length;
+			}		
+
+
+			
+			//	gr: this bakes sample meta into track
+			const TrackPayload = Track.getPayload();
+			
+			Mp4Tracks.push(Track.mp4track);
+
+			var moof = MP4.moof(SequenceNumber, Track.dts, Track.mp4track);
+			Moofs.push(moof);
+			
+			//var mdat = MP4.mdat(TrackPayload);
+			const mdat = new Atom_Mdat();
+			for ( let Sample of Samples )
+				mdat.PushData( Sample.Data );
+			Mdats.push(mdat);
+		}
 		
-		const TrackPayload = Track.getPayload();
-		const Movie = MP4.initSegment( [Track.mp4track], Duration, Timescale );
-		var moof = MP4.moof(SequenceNumber, Track.dts, Track.mp4track);
-		var mdat = MP4.mdat(TrackPayload);
+		//	write this once, can be done before backing moof
+		//	gr: mp4track.len doesnt matter
+		if ( !this.Moov )
+		{
+			this.Moov = MP4.initSegment( Mp4Tracks, MovieDuration, MovieTimescale );
+			this.EncodedDataQueue.Push(this.Moov);
+		}
+			
+		for ( let i=0;	i<Moofs.length;	i++ )
+		{
+			const moof = Moofs[i];
+			const mdat = Mdats[i];
+			this.EncodedDataQueue.Push(moof);
+			this.EncodedDataQueue.Push(mdat.Encode());
+		}
 		
-		this.EncodedDataQueue.Push(Movie);
-		this.EncodedDataQueue.Push(moof);
-		this.EncodedDataQueue.Push(mdat);
 		this.EncodedDataQueue.Push(EndOfFileMarker);
 	}
 

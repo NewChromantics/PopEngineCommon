@@ -735,11 +735,12 @@ export class MP4 {
         if (!MP4.types) {
             MP4.init();
         }
-        var movie = MP4.moov(tracks, duration, timescale),
-            result;
+        var movie = MP4.moov(tracks, duration, timescale);
+        var result;
         result = new Uint8Array(MP4.FTYP.byteLength + movie.byteLength);
         result.set(MP4.FTYP);
         result.set(movie, MP4.FTYP.byteLength);
         return result;
     }
 }
+MP4.init();
