@@ -38,6 +38,11 @@ export function GetNaluLength(Packet)
 	if (Data[2] == 0 && Data[3] == 1)
 		return 4;
 
+	//	detect a 4xnalu length
+	const Size = (Data[0] << 24) | (Data[1] << 16) | (Data[2] << 8) | (Data[3] << 0);
+	if ( Size+4 == Packet.length )
+		return 4; 
+
 	throw `Nalu[${Data}] != 0001|001`;
 }
 
