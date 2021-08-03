@@ -2594,11 +2594,8 @@ export class Mp4FragmentedEncoder
 
 			//	gr: this bakes sample meta into track
 			const TrackPayload = Track.getPayload();
-			
 			Mp4Tracks.push(Track.mp4track);
 
-			var moof = MP4.moof(SequenceNumber, Track.dts, Track.mp4track);
-			
 			const mdat = new Atom_Mdat();
 			
 			const Moof = new Atom_Moof(SequenceNumber);
@@ -2609,20 +2606,17 @@ export class Mp4FragmentedEncoder
 				const MdatPosition = mdat.PushData( Sample.Data );
 				Traf.AddSample(Sample,MdatPosition);
 			}
-			Traf.BaseMediaDecodeTime = Track.dts;
+			//	should this be zero, or maybe first sample's time?
+			Traf.BaseMediaDecodeTime = 0;//Track.dts;
 			
+			//	need to get data offset to mdat, but we need the moof size for that
 			{
 				const NewMoofData = Moof.Encode();
 				const MoofSize = NewMoofData.length;
 				Traf.Trun.MoofSize = MoofSize;
 			}	
 			
-			let OldMoof = moof.slice();
-			moof = Moof.Encode();
-
-			Moofs.push(moof);
-			
-			//var mdat = MP4.mdat(TrackPayload);
+			Moofs.push(Moof);
 			Mdats.push(mdat);
 		}
 		
@@ -2653,7 +2647,7 @@ export class Mp4FragmentedEncoder
 		{
 			const moof = Moofs[i];
 			const mdat = Mdats[i];
-			this.EncodedDataQueue.Push(moof);
+			this.EncodedDataQueue.Push(moof.Encode());
 			this.EncodedDataQueue.Push(mdat.Encode());
 		}
 	}
