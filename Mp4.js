@@ -2,20 +2,29 @@ export default 'Mp4.js';
 import Pop from './PopEngine.js'
 import PromiseQueue from './PromiseQueue.js'
 import {DataReader,DataWriter,EndOfFileMarker} from './DataReader.js'
-import {StringToBytes} from './PopApi.js'
+import {StringToBytes,JoinTypedArrays} from './PopApi.js'
+
+import {MP4,H264Remuxer} from './Mp4_Generator.js'
 
 
 function AnnexBToNalu4(Data)
 {
 	if ( Data[0] == 0 && Data[1] == 0 && Data[2] == 0 && Data[3] == 1 )
 	{
-		let Length = Data.length;
+		let Length = Data.length - 4;	//	ignore prefix in size
 		Data[0] = (Length >> 24) & 0xff;
 		Data[1] = (Length >> 16) & 0xff;
 		Data[2] = (Length >> 8) & 0xff;
 		Data[3] = (Length >> 0) & 0xff;
+		//	Data = Data.slice(4);	//	wrong!
 		Pop.Debug(`converted to avcc`);
 	}
+	//	ignore sps & pps & sei
+	if ( Data.length == 13 || Data.length == 8 )
+		return null;
+	//	ignore sei
+	if ( Data.length == 34 )
+		return null;
 	return Data;
 }
 
@@ -533,7 +542,7 @@ export class Mp4Decoder
 			const MoofPos = MoofAtom.FilePosition;
 			if (HeaderPos != MoofPos)
 			{
-				Debug.Log("Expected Header Pos(" + HeaderPos + ") and moof pos(" + MoofPos + ") to be the same");
+				Pop.Debug("Expected Header Pos(" + HeaderPos + ") and moof pos(" + MoofPos + ") to be the same");
 			}
 		}
 		const MoofPosition = (Header.BaseDataOffset!==undefined) ? Header.BaseDataOffset : MoofAtom.FilePosition;
@@ -1602,10 +1611,10 @@ class Atom_SampleDescriptionExtension_Avcc extends Atom_t
 		
 		this.Version = 1;
 
-		//const Sps = [/*0,0,0,1,*/39,66,0,30,171,64,80,30,200];
-		//const Pps = [/*0,0,0,1,*/40,206,60,48];
-		const Sps = [0x27,0x4D,0x40,0x1E,0xA9,0x18,0x3C,0x1A,0xFC,0xB8,0x0B,0x50,0x10,0x10,0x6A,0x4C,0x2B,0x5E,0xF7,0xC0,0x40];
-		const Pps = [0x28,0xFE,0x09,0xC8];
+		const Sps = [/*0,0,0,1,*/39,66,0,30,171,64,80,30,200];
+		const Pps = [/*0,0,0,1,*/40,206,60,48];
+		//const Sps = [0x27,0x4D,0x40,0x1E,0xA9,0x18,0x3C,0x1A,0xFC,0xB8,0x0B,0x50,0x10,0x10,0x6A,0x4C,0x2B,0x5E,0xF7,0xC0,0x40];
+		//const Pps = [0x28,0xFE,0x09,0xC8];
 /*
 01	version
 4D	66
@@ -2091,7 +2100,7 @@ class Atom_Traf extends Atom_t
 	
 	AddSample(Sample)
 	{
-		this.Trun.AddSample(Sample);
+		this.Trun.AddSample(...arguments);
 	}
 }
 
@@ -2110,7 +2119,10 @@ class Atom_Mdat extends Atom_t
 		if ( typeof Data == typeof '' )
 			Data = StringToBytes(Data);
 			
+		//	get position before we add this new data
+		const JoinedData = JoinTypedArrays( new Uint8Array(0), ...this.Datas);
 		this.Datas.push(Data);
+		return JoinedData.length;
 	}
 	
 	EncodeData(DataWriter)
@@ -2258,7 +2270,8 @@ class Atom_Trun extends Atom_t
 		super('trun');
 		this.Version = 0;
 		this.Flags = 0;
-		this.DataOffsetFromMoof = 0;
+		
+		this.MoofSize = null;	//	null if not set
 		
 		this.Samples = [];
 		
@@ -2268,8 +2281,9 @@ class Atom_Trun extends Atom_t
 		this.Flags |= 1<<TrunFlags.DataOffsetPresent;
 	}
 	
-	AddSample(Sample)
+	AddSample(Sample,MdatPosition)
 	{
+		Sample.MdatPosition = MdatPosition;
 		this.Samples.push(Sample);
 	}
 	
@@ -2294,7 +2308,10 @@ class Atom_Trun extends Atom_t
 
 		if ( DataOffsetPresent )
 		{
-			DataWriter.Write32(this.DataOffsetFromMoof);
+			let DataOffsetFromMoof = (this.MoofSize||0);
+			DataOffsetFromMoof += 8;	//	from analysing existing... this must be size+fourcc of mdat, or moof
+			DataOffsetFromMoof += this.Samples[0].MdatPosition;
+			DataWriter.Write32(DataOffsetFromMoof);
 		}
 		
 		if ( FirstSampleFlagsPresent )
@@ -2348,8 +2365,11 @@ export class Mp4FragmentedEncoder
 {
 	constructor()
 	{
-		this.BakeFrequencyMs = 100;//1 * 1000;
+		this.BakeFrequencyMs = 9 * 1000;//100;//1 * 1000;
 		this.LastMoofSequenceNumber = 0;
+		
+		this.TrackSps = {};	//	[trackid]=sps
+		this.TrackPps = {};	//	[trackid]=sps
 		
 		this.RootAtoms = [];
 		
@@ -2377,13 +2397,22 @@ export class Mp4FragmentedEncoder
 		if ( !Number.isInteger(TrackId) || TrackId <= 0 )
 			throw `Sample track id must be a positive integer and above zero`;
 
+		//	hack!
+		if ( Data.length == 13 )
+			this.TrackSps[TrackId] = Data.slice(4);
+		if ( Data.length == 8 )
+			this.TrackPps[TrackId] = Data.slice(4);
+
 		Data = AnnexBToNalu4(Data);
+		if ( !Data )
+			return;
 
 		const Sample = new Sample_t();
 		Sample.Data = Data;
 		Sample.DecodeTimeMs = DecodeTimeMs;
 		Sample.PresentationTimeMs = PresentationTimeMs;
 		Sample.TrackId = TrackId;
+		Sample.DurationMs = 33;
 		
 		this.PendingSampleQueue.Push(Sample);
 	}
@@ -2415,19 +2444,23 @@ export class Mp4FragmentedEncoder
 		{
 			const PendingTrack = PendingTracks[TrackId];
 			const Traf = new Atom_Traf(TrackId);
+			Moof.Traf = Traf;
 			Moof.ChildAtoms.push(Traf);
 			
 			//	write samples to mdat and table
-			let FirstSamplePositionInMdat = null;
 			for ( let Sample of PendingTrack.Samples )
 			{
 				let MdatPosition = Mdat.PushData(Sample.Data);
-				if ( FirstSamplePositionInMdat === null )
-					FirstSamplePositionInMdat = MdatPosition;
-				Traf.AddSample(Sample);
+				Traf.AddSample(Sample,MdatPosition);
 			}
 		}
 		
+		//	now we can calc moof size, update the data inside before we encode again
+		const MoofData = Moof.Encode();
+		const MoofSize = MoofData.length;
+		Moof.GetChildAtoms('traf').forEach( traf => traf.Trun.MoofSize=MoofSize );
+		
+		this.Moof = Moof;
 		this.PushAtom(Moof);
 		this.PushAtom(Mdat);
 	}
@@ -2435,11 +2468,57 @@ export class Mp4FragmentedEncoder
 	PushAtom(Atom)
 	{
 		this.RootAtoms.push(Atom);
-		this.EncodedAtomQueue.Push(Atom);
+		//this.EncodedAtomQueue.Push(Atom);
 		
 		const EncodedData = Atom.Encode();
-		this.EncodedDataQueue.Push(EncodedData);
+		//this.EncodedDataQueue.Push(EncodedData);
 	}
+
+	OnEncodeEof()
+	{
+		Pop.Debug(`OnEncodeEof`);
+		const Duration = 1000;
+		const Timescale = 1;
+		let SequenceNumber = 1;
+		
+		const Tracks = {};
+		Tracks.video = new H264Remuxer(Timescale);
+		const Track = Tracks.video;
+		Track.readyToDecode = true;
+
+		//	hack
+		Track.mp4track.sps = [this.TrackSps[Track.mp4track.id]]
+		Track.mp4track.pps = [this.TrackPps[Track.mp4track.id]]
+		
+		//	fill track
+		const Samples = this.Moof.Traf.Trun.Samples;
+		for ( let Sample of Samples )
+		{
+			const Unit = {};
+			Unit.Data = Sample.Data;
+			Unit.getData = () => {	return Sample.Data;	};
+			Unit.getSize = () => {	return Sample.Data.length;	};
+
+			Track.samples.push({
+				units:	[Unit],
+				size:	Sample.Data.length,
+				keyFrame:	false,
+				duration:	Sample.DurationMs,
+			});
+			Track.mp4track.len += Sample.Data.length;
+		}		
+		
+		const TrackPayload = Track.getPayload();
+		const Movie = MP4.initSegment( [Track.mp4track], Duration, Timescale );
+		var moof = MP4.moof(SequenceNumber, Track.dts, Track.mp4track);
+		var mdat = MP4.mdat(TrackPayload);
+		
+		this.EncodedDataQueue.Push(Movie);
+		this.EncodedDataQueue.Push(moof);
+		this.EncodedDataQueue.Push(mdat);
+		this.EncodedDataQueue.Push(EndOfFileMarker);
+	}
+
 	
 	async EncodeThread()
 	{
@@ -2455,9 +2534,10 @@ export class Mp4FragmentedEncoder
 			const Sample = await this.PendingSampleQueue.WaitForNext();
 			const Eof = Sample == EndOfFileMarker;
 			if ( Eof )
+			{
 				Pop.Debug(`Mp4 encoder got end of file`);
-
-			if ( PendingMoov )
+			}
+			else if ( PendingMoov )
 			{
 				//	need other track meta here!
 				PendingMoov.AddTrack(Sample.TrackId);
@@ -2486,7 +2566,7 @@ export class Mp4FragmentedEncoder
 			Track.PushSample(Sample);
 		}
 		
-		this.EncodedDataQueue.Push(EndOfFileMarker);
+		this.OnEncodeEof();
 	}
 }
 
