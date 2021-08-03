@@ -2620,10 +2620,10 @@ export class Mp4FragmentedEncoder
 				MoovMp4Tracks.push(Mp4Track);
 			}
 			
-			//this.Ftyp = new Atom_Ftyp();
-			//this.PushAtom(this.Ftyp);
-			this.Moov = MP4.initSegment( MoovMp4Tracks, MovieDuration, MovieTimescale );
-			//this.Moov = MP4.moov( MoovMp4Tracks, MovieDuration, MovieTimescale );
+			this.Ftyp = new Atom_Ftyp();
+			this.PushAtom(this.Ftyp);
+			//this.Moov = MP4.initSegment( MoovMp4Tracks, MovieDuration, MovieTimescale );
+			this.Moov = MP4.moov( MoovMp4Tracks, MovieDuration, MovieTimescale );
 
 			
 			this.EncodedDataQueue.Push(this.Moov);
@@ -2655,9 +2655,6 @@ export class Mp4FragmentedEncoder
 	{
 		let LastBakedTimestamp = null;
 		
-		this.PushAtom( new Atom_Ftyp() );
-		let PendingMoov = new Atom_Moov();
-		
 		while(true)
 		{
 			const Sample = await this.PendingSampleQueue.WaitForNext();
@@ -2666,23 +2663,12 @@ export class Mp4FragmentedEncoder
 			{
 				Pop.Debug(`Mp4 encoder got end of file`);
 			}
-			else if ( PendingMoov )
-			{
-				//	need other track meta here!
-				PendingMoov.AddTrack(Sample.TrackId);
-			}
+			
 
 			//	decide if previous data should bake
 			const TimeSinceLastBake = Sample.DecodeTimeMs - (LastBakedTimestamp||0);
 			if ( Eof || TimeSinceLastBake >= this.BakeFrequencyMs )
 			{
-				//	haven't written the Moov yet
-				if ( PendingMoov )
-				{
-					//this.PushAtom( PendingMoov );
-					PendingMoov = null;
-				}
-
 				this.BakePendingTracks();
 				LastBakedTimestamp = Sample.DecodeTimeMs;
 			}
