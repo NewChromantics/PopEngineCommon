@@ -2543,18 +2543,21 @@ export class Mp4FragmentedEncoder
 		{
 			const PendingTrack = PendingTracks[TrackIdKey];
 			const TrackId = Number(TrackIdKey);
+			PendingTrack.Sps = this.TrackSps[TrackId];
+			PendingTrack.Pps = this.TrackPps[TrackId];
+			
 			
 			const Track =  new H264Remuxer(MovieTimescale);
 			Track.mp4track.id = TrackId;
 			Track.readyToDecode = true;
 
 			//	hack
-			if ( !this.TrackSps[Track.mp4track.id] )
+			if ( !PendingTrack.Sps )
 				throw `missing SPS for track ${Track.mp4track.id}`;
-			if ( !this.TrackPps[Track.mp4track.id] )
+			if ( !PendingTrack.Pps )
 				throw `missing PPS for track ${Track.mp4track.id}`;
-			Track.mp4track.sps = [this.TrackSps[Track.mp4track.id]]
-			Track.mp4track.pps = [this.TrackPps[Track.mp4track.id]]
+			Track.mp4track.sps = [PendingTrack.Sps];
+			Track.mp4track.pps = [PendingTrack.Pps];
 			
 			function ShouldIncludeSample(Sample)
 			{
@@ -2627,20 +2630,33 @@ export class Mp4FragmentedEncoder
 		if ( !this.Moov )
 		{
 			//	replacement for mp4tracks
-			const Mp4Track = {};
-			//	tkhd
-			Mp4Track.duration = MovieDuration;//0xffffffff;
-			Mp4Track.width = 640;
-			Mp4Track.height = 480;
-			Mp4Track.volume = 0;
-			//	mdia
-			Mp4Track.timescale = MovieTimescale;
-			Mp4Track.type = 'video';
-			Mp4Track.sps = Mp4Tracks[0].sps;
-			Mp4Track.pps = Mp4Tracks[0].pps;
-			Mp4Track.id = Mp4Tracks[0].id;
-			//this.Moov = MP4.initSegment( Mp4Tracks, MovieDuration, MovieTimescale );
-			this.Moov = MP4.initSegment( [Mp4Track], MovieDuration, MovieTimescale );
+			const MoovMp4Tracks = [];
+			for ( let TrackId of TrackIds )
+			{
+				const PendingTrack = PendingTracks[TrackId];
+				
+				const Mp4Track = {};
+				//	mdia
+				Mp4Track.timescale = MovieTimescale;
+				Mp4Track.type = 'video';
+				
+				Mp4Track.sps = [PendingTrack.Sps];
+				Mp4Track.pps = [PendingTrack.Pps];
+				Mp4Track.id = Number(TrackId);//Mp4Tracks[0].id;
+
+				const ParsedSps = H264.ParseSps(PendingTrack.Sps);
+				const LastSample = PendingTrack.Samples[PendingTrack.Samples.length-1];
+				const LastSampleEndTime = LastSample.DecodeTimeMs + LastSample.DurationMs;
+				
+				//	tkhd
+				Mp4Track.duration = LastSampleEndTime;
+				Mp4Track.width = ParsedSps.width;
+				Mp4Track.height = ParsedSps.height;
+				Mp4Track.volume = 0;
+				
+				MoovMp4Tracks.push(Mp4Track);
+			}
+			this.Moov = MP4.initSegment( MoovMp4Tracks, MovieDuration, MovieTimescale );
 			
 			this.EncodedDataQueue.Push(this.Moov);
 			
