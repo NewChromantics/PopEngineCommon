@@ -2502,7 +2502,7 @@ export class Mp4FragmentedEncoder
 			Track.samples.push({
 				units:	[Unit],
 				size:	Sample.Data.length,
-				keyFrame:	true,
+				keyFrame:	true,	//	helps web browser if all true
 				duration:	Sample.DurationMs,
 			});
 			Track.mp4track.len += Sample.Data.length;
