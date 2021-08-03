@@ -2477,8 +2477,8 @@ export class Mp4FragmentedEncoder
 	OnEncodeEof()
 	{
 		Pop.Debug(`OnEncodeEof`);
-		const Duration = 1000;
-		const Timescale = 1;
+		const Duration = 3000;
+		const Timescale = 1000;
 		let SequenceNumber = 1;
 		
 		const Tracks = {};
@@ -2502,7 +2502,7 @@ export class Mp4FragmentedEncoder
 			Track.samples.push({
 				units:	[Unit],
 				size:	Sample.Data.length,
-				keyFrame:	false,
+				keyFrame:	true,
 				duration:	Sample.DurationMs,
 			});
 			Track.mp4track.len += Sample.Data.length;
