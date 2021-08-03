@@ -1636,6 +1636,21 @@ class Atom_Stbl extends Atom_t
 	}
 }
 
+class Atom_SampleDescriptionExtension_Btrt extends Atom_t
+{
+	constructor()
+	{
+		super('btrt');
+		this.Data = 
+		[
+			0x00, 0x1c, 0x9c, 0x80, // bufferSizeDB
+			0x00, 0x2d, 0xc6, 0xc0, // maxBitrate
+			0x00, 0x2d, 0xc6, 0xc0 // avgBitrate
+		];
+	}
+	
+}
+
 class Atom_SampleDescriptionExtension_Avcc extends Atom_t
 {
 	constructor()
@@ -1646,23 +1661,6 @@ class Atom_SampleDescriptionExtension_Avcc extends Atom_t
 
 		const Sps = [/*0,0,0,1,*/39,66,0,30,171,64,80,30,200];
 		const Pps = [/*0,0,0,1,*/40,206,60,48];
-		//const Sps = [0x27,0x4D,0x40,0x1E,0xA9,0x18,0x3C,0x1A,0xFC,0xB8,0x0B,0x50,0x10,0x10,0x6A,0x4C,0x2B,0x5E,0xF7,0xC0,0x40];
-		//const Pps = [0x28,0xFE,0x09,0xC8];
-/*
-01	version
-4D	66
-40	0
-1E	30
-
-FF	nalusize|reserved
-E1	sps|reserved
-
-0015	sps length (21)
-274D401E A9183C1A FCB80B50 10106A4C 2B5EF7C0 40
-
-01		pps count
-0004 28FE09C8 00000010
-*/
 
 		this.SpsDatas = [Sps];
 		this.PpsDatas = [Pps];
@@ -1729,8 +1727,8 @@ class VideoSampleDescription
 		this.RevisionLevel = 0;
 		this.Vendor = '\0\0\0\0';
 		
-		this.SpatialQuality = 1;
-		this.TemporalQuality = 1;	//	0..1
+		this.SpatialQuality = 0;
+		this.TemporalQuality = 0;	//	0..1
 		this.FramesPerSample = 1;
 		this.PixelWidth = 640;
 		this.PixelHeight = 480;
@@ -1741,19 +1739,22 @@ class VideoSampleDescription
 		
 		//	A 16-bit integer that indicates the pixel depth of the compressed image. Values of 1, 2, 4, 8 ,16, 24, and 32 indicate the depth of color images. The value 32 should be used only if the image contains an alpha channel. Values of 34, 36, and 40 indicate 2-, 4-, and 8-bit grayscale, respectively, for grayscale images.
 		this.ColourDepth = 24;
-		this.ColourTableId = 0xffff;	//	ignored if 24 bit. -1= default table
+		//	gr 0x1111 is -1?!
+		this.ColourTableId = 0x1111;//0xffff;	//	ignored if 24 bit. -1= default table
 		
 		this.ExtensionAtoms = [];
 		
 		this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Avcc() );
 		//	if I delete this from a valid file, quicktime doesnt play it
-		this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Pasp() );
+		//this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Pasp() );
+		//this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Btrt() );
 	}
 	
 	EncodeData(DataWriter)
 	{
 		if ( this.Vendor.length != 4 )
 			throw `Vendor(${this.Vendor}) needs to be 4 chars`;
+			
 		DataWriter.Write16(this.Version);
 		DataWriter.Write16(this.RevisionLevel);
 		DataWriter.WriteStringAsBytes(this.Vendor);
@@ -1827,7 +1828,7 @@ class Atom_Stsd extends Atom_t
 		Writer.Write8(this.Version);
 		Writer.Write24(this.Flags);
 		Writer.Write32(this.SampleDescriptions.length);
-		
+
 		//	now write each sample
 		for ( let Description of this.SampleDescriptions )
 		{
@@ -2065,8 +2066,9 @@ class Atom_Ftyp extends Atom_t
 		
 		//	gr: get the proper version info etc
 		this.MajorBrand = 'isom';
-		this.MajorVersion = 512;
-		this.CompatibleBrands = ['isom','iso2','avc1','iso6','mp41'];
+		this.MajorVersion = 1;
+		//this.CompatibleBrands = ['isom','iso2','avc1','iso6','mp41'];
+		this.CompatibleBrands = ['avc1'];
 	}
 	
 	EncodeData(DataWriter)
@@ -2569,14 +2571,14 @@ export class Mp4FragmentedEncoder
 			}
 			
 			//	fill track
-			//let Samples = this.Moof.Traf.Trun.Samples;
 			let Samples = PendingTrack.Samples;
 			//	filter out [mp4]redundant packets
 			Samples = Samples.filter(ShouldIncludeSample);
 			
-			
+			//	force all samples to keyframes for now, helps chrome
 			Samples.forEach( s => s.IsKeyframe=true );
 			
+			//	fill old mp4 track system
 			for ( let Sample of Samples )
 			{
 				const Unit = {};
@@ -2641,6 +2643,12 @@ export class Mp4FragmentedEncoder
 			this.Moov = MP4.initSegment( [Mp4Track], MovieDuration, MovieTimescale );
 			
 			this.EncodedDataQueue.Push(this.Moov);
+			
+			//	needs sps etc setting up properly
+			this.Moov = new Atom_Moov();
+			for ( let TrackId of TrackIds )
+				this.Moov.AddTrack(TrackId);
+			//this.EncodedDataQueue.Push(this.Moov.Encode());
 		}
 			
 		for ( let i=0;	i<Moofs.length;	i++ )
