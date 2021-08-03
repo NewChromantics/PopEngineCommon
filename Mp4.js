@@ -17,7 +17,7 @@ function AnnexBToNalu4(Data)
 		Data[2] = (Length >> 8) & 0xff;
 		Data[3] = (Length >> 0) & 0xff;
 		//	Data = Data.slice(4);	//	wrong!
-		Pop.Debug(`converted to avcc`);
+		//Pop.Debug(`converted to avcc`);
 	}
 	
 	//	ignore sps & pps & sei
@@ -2369,7 +2369,8 @@ export class Mp4FragmentedEncoder
 {
 	constructor()
 	{
-		this.BakeFrequencyMs = 9 * 1000;//100;//1 * 1000;
+		//	gr: currently not stitching moofs together properly. only one works.
+		this.BakeFrequencyMs = 999999;//200;//9 * 1000;//100;//1 * 1000;
 		this.LastMoofSequenceNumber = 0;
 		this.Moov = null;	//	if non-null it's been written
 		
@@ -2435,10 +2436,10 @@ export class Mp4FragmentedEncoder
 			this.PendingTracks[TrackId] = new PendingTrack_t();
 		return this.PendingTracks[TrackId];
 	}
-	
+	/*
 	BakePendingTracks()
 	{
-	/*
+	
 		this.LastMoofSequenceNumber++;
 		const Moof = new Atom_Moof(this.LastMoofSequenceNumber);
 		const Mdat = new Atom_Mdat();
@@ -2471,9 +2472,9 @@ export class Mp4FragmentedEncoder
 		this.Moof = Moof;
 		this.PushAtom(Moof);
 		this.PushAtom(Mdat);
-		*/
-	}
 	
+	}
+		*/
 	PushAtom(Atom)
 	{
 		this.RootAtoms.push(Atom);
@@ -2483,12 +2484,13 @@ export class Mp4FragmentedEncoder
 		//this.EncodedDataQueue.Push(EncodedData);
 	}
 
-	OnEncodeEof()
+	BakePendingTracks()
 	{
-		Pop.Debug(`OnEncodeEof`);
-		const MovieDuration = 3000;
+		Pop.Debug(`BakePendingTracks`);
+		const MovieDuration = 6000;
 		const MovieTimescale = 1000;
-		let SequenceNumber = 1;
+		this.LastMoofSequenceNumber++;
+		const SequenceNumber = this.LastMoofSequenceNumber;
 
 		const PendingTracks = this.PendingTracks;
 		this.PendingTracks = {};
@@ -2498,11 +2500,13 @@ export class Mp4FragmentedEncoder
 		const Mdats = [];
 		const Mp4Tracks = [];
 
-		for ( let TrackId of TrackIds )
+		for ( let TrackIdKey of TrackIds )
 		{
-			const PendingTrack = PendingTracks[TrackId];
+			const PendingTrack = PendingTracks[TrackIdKey];
+			const TrackId = Number(TrackIdKey);
 			
 			const Track =  new H264Remuxer(MovieTimescale);
+			Track.mp4track.id = TrackId;
 			Track.readyToDecode = true;
 
 			//	hack
@@ -2571,7 +2575,22 @@ export class Mp4FragmentedEncoder
 		//	gr: mp4track.len doesnt matter
 		if ( !this.Moov )
 		{
-			this.Moov = MP4.initSegment( Mp4Tracks, MovieDuration, MovieTimescale );
+			//	replacement for mp4tracks
+			const Mp4Track = {};
+			//	tkhd
+			Mp4Track.duration = MovieDuration;//0xffffffff;
+			Mp4Track.width = 640;
+			Mp4Track.height = 480;
+			Mp4Track.volume = 0;
+			//	mdia
+			Mp4Track.timescale = MovieTimescale;
+			Mp4Track.type = 'video';
+			Mp4Track.sps = Mp4Tracks[0].sps;
+			Mp4Track.pps = Mp4Tracks[0].pps;
+			Mp4Track.id = Mp4Tracks[0].id;
+			//this.Moov = MP4.initSegment( Mp4Tracks, MovieDuration, MovieTimescale );
+			this.Moov = MP4.initSegment( [Mp4Track], MovieDuration, MovieTimescale );
+			
 			this.EncodedDataQueue.Push(this.Moov);
 		}
 			
@@ -2582,10 +2601,13 @@ export class Mp4FragmentedEncoder
 			this.EncodedDataQueue.Push(moof);
 			this.EncodedDataQueue.Push(mdat.Encode());
 		}
-		
-		this.EncodedDataQueue.Push(EndOfFileMarker);
 	}
 
+	OnEncodeEof()
+	{
+		Pop.Debug(`OnEncodeEof`);
+		this.EncodedDataQueue.Push(EndOfFileMarker);
+	}
 	
 	async EncodeThread()
 	{
@@ -2633,6 +2655,7 @@ export class Mp4FragmentedEncoder
 			Track.PushSample(Sample);
 		}
 		
+		this.BakePendingTracks();
 		this.OnEncodeEof();
 	}
 }
