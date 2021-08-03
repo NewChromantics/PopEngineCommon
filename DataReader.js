@@ -184,6 +184,7 @@ export class DataWriter
 	Write8(Value)
 	{
 		if ( Value === undefined )	throw `Invalid Write8(${Value})`;
+		if ( isNaN(Value) )	throw `Trying to write8(Nan ${Value})`;
 		const Data = new Uint8Array(1);
 		Data[0] = Value;
 		this.Datas.push(Data);
@@ -192,6 +193,7 @@ export class DataWriter
 	Write16(Value)
 	{
 		if ( Value === undefined )	throw `Invalid Write16(${Value})`;
+		if ( isNaN(Value) )	throw `Trying to write16(Nan ${Value})`;
 		const Data = new Uint8Array(2);
 		Data[0] = (Value >> 8) & 0xff;
 		Data[1] = (Value >> 0) & 0xff;
@@ -201,6 +203,7 @@ export class DataWriter
 	Write24(Value)
 	{
 		if ( Value === undefined )	throw `Invalid Write24(${Value})`;
+		if ( isNaN(Value) )	throw `Trying to write24(Nan ${Value})`;
 		const Data = new Uint8Array(3);
 		Data[0] = (Value >> 16) & 0xff;
 		Data[1] = (Value >> 8) & 0xff;
@@ -211,6 +214,7 @@ export class DataWriter
 	Write32(Value)
 	{
 		if ( Value === undefined )	throw `Invalid Write32(${Value})`;
+		if ( isNaN(Value) )	throw `Trying to write32(Nan ${Value})`;
 		const Data = new Uint8Array(4);
 		Data[0] = (Value >> 24) & 0xff;
 		Data[1] = (Value >> 16) & 0xff;
@@ -221,6 +225,7 @@ export class DataWriter
 	
 	Write64(Value)
 	{
+		if ( isNaN(Value) )	throw `Trying to write64(Nan ${Value})`;
 		//	convert into bytes
 		//	todo: handle big int
 		const Data = new Uint8Array(64/8);
