@@ -151,9 +151,23 @@ class Sample_t
 		//	encoder
 		this.Data;
 		this.TrackId;
-		this.SampleFlags = 0;
+		this.Flags = 0;
 		this.CompositionTimeOffset;
 	}
+	
+	get IsKeyframe()
+	{
+		const NotKeyframe = (this.Flags & SampleFlags.IsNotKeyframe)!=0;
+		return !NotKeyframe;
+	}
+	
+	set IsKeyframe(IsKeyframe)
+	{
+		const NotKeyframe = !IsKeyframe;
+		this.Flags &= ~(1<<SampleFlags.IsNotKeyframe);
+		this.Flags |= NotKeyframe ? (1<<SampleFlags.IsNotKeyframe) : 0;
+	}
+		
 	
 	get Size()
 	{
@@ -2209,18 +2223,18 @@ class Atom_Tfhd extends Atom_t
 		this.Version = 0;
 		this.Flags = 0;
 		this.TrackId = TrackId;
-		
+		/*
 		this.Flags |= TfhdFlag_HasBaseDataOffet;
 		this.Flags |= TfhdFlag_HasSampleDuration;
 		this.Flags |= TfhdFlag_HasSampleSize;
 		this.Flags |= TfhdFlag_HasSampleFlags;
-		
+		*/
 		//	defaults if flag not set
 		this.BaseDataOffset = 0;
 		this.SampleDescriptionIndex = 0;
 		this.DefaultSampleDuration = 1;
-		this.DefaultSampleSize = 0x000020C3;
-		this.DefaultSampleFlags = 0x01010000;
+		this.DefaultSampleSize = 0;//0x000020C3;
+		this.DefaultSampleFlags = 0;//0x01010000;
 	}
 	
 	HasFlag(Flag)
@@ -2373,7 +2387,7 @@ class Atom_Trun extends Atom_t
 			if ( SampleSizePresent )
 				DataWriter.Write32(Sample.Size);
 			if ( SampleFlagsPresent )
-				DataWriter.Write32(Sample.SampleFlags);
+				DataWriter.Write32(Sample.Flags);
 			if ( SampleCompositionTimeOffsetPresent )
 				DataWriter.Write32(Sample.CompositionTimeOffset);
 		}
