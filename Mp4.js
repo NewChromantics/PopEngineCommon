@@ -1729,6 +1729,7 @@ class VideoSampleDescription
 		this.RevisionLevel = 0;
 		this.Vendor = '\0\0\0\0';
 		
+		this.SpatialQuality = 1;
 		this.TemporalQuality = 1;	//	0..1
 		this.FramesPerSample = 1;
 		this.PixelWidth = 640;
@@ -2111,8 +2112,8 @@ class Atom_Moof extends Atom_t
 	{
 		super('moof');
 		
-		const mfhd = new Atom_Mfhd(SequenceNumber);
-		this.ChildAtoms.push(mfhd);
+		this.mfhd = new Atom_Mfhd(SequenceNumber);
+		this.ChildAtoms.push(this.mfhd);
 	}
 }
 
@@ -2129,6 +2130,11 @@ class Atom_Traf extends Atom_t
 		this.ChildAtoms.push(this.Tfhd);
 		this.ChildAtoms.push(this.Tfdt);
 		this.ChildAtoms.push(this.Trun);
+	}
+
+	set BaseMediaDecodeTime(Value)
+	{
+		this.Tfdt.BaseMediaDecodeTime = Value;
 	}
 	
 	AddSample(Sample)
@@ -2170,9 +2176,9 @@ class Atom_Tfdt extends Atom_t
 	{
 		super('tfdt',CopyAtom);
 		
-		this.Version = 1;
+		this.Version = 0;
 		this.Flags = 0;
-		this.DecodeTime = 0;
+		this.BaseMediaDecodeTime = 0;
 	}
 	
 	EncodeData(DataWriter)
@@ -2181,9 +2187,9 @@ class Atom_Tfdt extends Atom_t
 		DataWriter.Write24(this.Flags);
 		
 		if ( this.Version == 0 )
-			DataWriter.Write32(this.DecodeTime);
+			DataWriter.Write32(this.BaseMediaDecodeTime);
 		else
-			DataWriter.Write64(this.DecodeTime);
+			DataWriter.Write64(this.BaseMediaDecodeTime);
 	}
 	
 	static async Read(AnonymousAtom)
@@ -2195,11 +2201,11 @@ class Atom_Tfdt extends Atom_t
 		
 		if ( Atom.Version == 0 )
 		{
-			Atom.DecodeTime = await Reader.Read32();
+			Atom.BaseMediaDecodeTime = await Reader.Read32();
 		}
 		else
 		{
-			Atom.DecodeTime = await Reader.Read64();
+			Atom.BaseMediaDecodeTime = await Reader.Read64();
 		}
 		return Atom;
 	}
@@ -2309,9 +2315,10 @@ class Atom_Trun extends Atom_t
 		this.Samples = [];
 		
 		//	setup flags
+		this.Flags |= 1<<TrunFlags.DataOffsetPresent;
 		this.Flags |= 1<<TrunFlags.SampleSizePresent;
 		this.Flags |= 1<<TrunFlags.SampleDurationPresent;
-		this.Flags |= 1<<TrunFlags.DataOffsetPresent;
+		this.Flags |= 1<<TrunFlags.SampleFlagsPresent;
 	}
 	
 	AddSample(Sample,MdatPosition)
@@ -2450,6 +2457,7 @@ export class Mp4FragmentedEncoder
 		Sample.PresentationTimeMs = PresentationTimeMs;
 		Sample.TrackId = TrackId;
 		Sample.DurationMs = 33;
+		Sample.Keyframe = true;
 		
 		this.PendingSampleQueue.Push(Sample);
 	}
@@ -2567,7 +2575,7 @@ export class Mp4FragmentedEncoder
 			Samples = Samples.filter(ShouldIncludeSample);
 			
 			
-			
+			Samples.forEach( s => s.IsKeyframe=true );
 			
 			for ( let Sample of Samples )
 			{
@@ -2579,24 +2587,42 @@ export class Mp4FragmentedEncoder
 				Track.samples.push({
 					units:	[Unit],
 					size:	Sample.Data.length,
-					keyFrame:	true,	//	helps web browser if all true
+					keyFrame:	Sample.IsKeyframe,	//	helps web browser if all true
 					duration:	Sample.DurationMs,
 				});
 			}		
 
-			
 			//	gr: this bakes sample meta into track
 			const TrackPayload = Track.getPayload();
 			
 			Mp4Tracks.push(Track.mp4track);
 
 			var moof = MP4.moof(SequenceNumber, Track.dts, Track.mp4track);
+			
+			const mdat = new Atom_Mdat();
+			
+			const Moof = new Atom_Moof(SequenceNumber);
+			const Traf = this.traf = new Atom_Traf(TrackId);
+			Moof.ChildAtoms.push(Traf);
+			for ( let Sample of Samples )
+			{
+				const MdatPosition = mdat.PushData( Sample.Data );
+				Traf.AddSample(Sample,MdatPosition);
+			}
+			Traf.BaseMediaDecodeTime = Track.dts;
+			
+			{
+				const NewMoofData = Moof.Encode();
+				const MoofSize = NewMoofData.length;
+				Traf.Trun.MoofSize = MoofSize;
+			}	
+			
+			let OldMoof = moof.slice();
+			moof = Moof.Encode();
+
 			Moofs.push(moof);
 			
 			//var mdat = MP4.mdat(TrackPayload);
-			const mdat = new Atom_Mdat();
-			for ( let Sample of Samples )
-				mdat.PushData( Sample.Data );
 			Mdats.push(mdat);
 		}
 		
