@@ -2480,10 +2480,10 @@ export class Mp4FragmentedEncoder
 	PushAtom(Atom)
 	{
 		this.RootAtoms.push(Atom);
-		//this.EncodedAtomQueue.Push(Atom);
+		this.EncodedAtomQueue.Push(Atom);
 		
 		const EncodedData = Atom.Encode();
-		//this.EncodedDataQueue.Push(EncodedData);
+		this.EncodedDataQueue.Push(EncodedData);
 	}
 
 	BakePendingTracks()
@@ -2605,7 +2605,7 @@ export class Mp4FragmentedEncoder
 				
 				Mp4Track.sps = [PendingTrack.Sps];
 				Mp4Track.pps = [PendingTrack.Pps];
-				Mp4Track.id = Number(TrackId);//Mp4Tracks[0].id;
+				Mp4Track.id = Number(TrackId);
 
 				const ParsedSps = H264.ParseSps(PendingTrack.Sps);
 				const LastSample = PendingTrack.Samples[PendingTrack.Samples.length-1];
@@ -2619,7 +2619,12 @@ export class Mp4FragmentedEncoder
 				
 				MoovMp4Tracks.push(Mp4Track);
 			}
+			
+			//this.Ftyp = new Atom_Ftyp();
+			//this.PushAtom(this.Ftyp);
 			this.Moov = MP4.initSegment( MoovMp4Tracks, MovieDuration, MovieTimescale );
+			//this.Moov = MP4.moov( MoovMp4Tracks, MovieDuration, MovieTimescale );
+
 			
 			this.EncodedDataQueue.Push(this.Moov);
 			
@@ -2628,14 +2633,15 @@ export class Mp4FragmentedEncoder
 			for ( let TrackId of TrackIds )
 				this.Moov.AddTrack(TrackId);
 			//this.EncodedDataQueue.Push(this.Moov.Encode());
+			
 		}
 			
 		for ( let i=0;	i<Moofs.length;	i++ )
 		{
 			const moof = Moofs[i];
 			const mdat = Mdats[i];
-			this.EncodedDataQueue.Push(moof.Encode());
-			this.EncodedDataQueue.Push(mdat.Encode());
+			this.PushAtom(moof);
+			this.PushAtom(mdat);
 		}
 	}
 
@@ -2651,8 +2657,6 @@ export class Mp4FragmentedEncoder
 		
 		this.PushAtom( new Atom_Ftyp() );
 		let PendingMoov = new Atom_Moov();
-		//PendingMoov.AddTrack(1);
-		//this.PushAtom( PendingMoov );
 		
 		while(true)
 		{
@@ -2675,7 +2679,7 @@ export class Mp4FragmentedEncoder
 				//	haven't written the Moov yet
 				if ( PendingMoov )
 				{
-					this.PushAtom( PendingMoov );
+					//this.PushAtom( PendingMoov );
 					PendingMoov = null;
 				}
 
