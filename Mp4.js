@@ -2426,6 +2426,15 @@ export class Mp4FragmentedEncoder
 		this.PendingTracks = {};	//	[TrackId]
 		
 		this.EncodeThreadPromise = this.EncodeThread();
+		this.EncodeThreadPromise.catch(this.OnError.bind(this));
+	}
+	
+	OnError(Error)
+	{
+		//	make queues fail
+		Pop.Warning(`Mp4 encode thread error ${Error}`);
+		this.EncodedAtomQueue.Reject(Error);
+		this.EncodedDataQueue.Reject(Error);
 	}
 	
 	async WaitForNextEncodedBytes()
