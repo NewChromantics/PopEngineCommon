@@ -2412,6 +2412,7 @@ export class Mp4FragmentedEncoder
 		//	gr: currently not stitching moofs together properly. only one works.
 		this.BakeFrequencyMs = 999999;//200;//9 * 1000;//100;//1 * 1000;
 		this.LastMoofSequenceNumber = 0;
+		this.Ftyp = null;
 		this.Moov = null;	//	if non-null it's been written
 		
 		this.TrackSps = {};	//	[trackid]=sps
@@ -2492,11 +2493,21 @@ export class Mp4FragmentedEncoder
 	{
 		this.RootAtoms.push(Atom);
 		this.EncodedAtomQueue.Push(Atom);
-		
+			
 		const EncodedData = Atom.Encode();
+		//Pop.Debug(`Pushing atom data ${Atom.Fourcc} x${EncodedData.length}`);
 		this.EncodedDataQueue.Push(EncodedData);
 	}
 
+	WriteFtyp()
+	{
+		if ( !this.Ftyp )
+		{
+			this.Ftyp = new Atom_Ftyp();
+			this.PushAtom(this.Ftyp);
+		}
+	}
+	
 	BakePendingTracks()
 	{
 		Pop.Debug(`BakePendingTracks`);
@@ -2599,6 +2610,8 @@ export class Mp4FragmentedEncoder
 			Mdats.push(mdat);
 		}
 		
+		this.WriteFtyp();
+		
 		//	write this once, can be done before backing moof
 		//	gr: mp4track.len doesnt matter
 		if ( !this.Moov )
@@ -2630,9 +2643,7 @@ export class Mp4FragmentedEncoder
 				
 				MoovMp4Tracks.push(Mp4Track);
 			}
-			
-			this.Ftyp = new Atom_Ftyp();
-			this.PushAtom(this.Ftyp);
+
 			//this.Moov = MP4.initSegment( MoovMp4Tracks, MovieDuration, MovieTimescale );
 			this.Moov = MP4.moov( MoovMp4Tracks, MovieDuration, MovieTimescale );
 
@@ -2669,6 +2680,8 @@ export class Mp4FragmentedEncoder
 		while(true)
 		{
 			const Sample = await this.PendingSampleQueue.WaitForNext();
+			this.WriteFtyp();
+
 			const Eof = Sample == EndOfFileMarker;
 			if ( Eof )
 			{
