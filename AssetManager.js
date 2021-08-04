@@ -136,9 +136,9 @@ export function GetAsset(Name,RenderContext)
 //	gr: should this be somewhere else, not in the core asset manager?
 export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUniforms,ShaderAttribs)
 {
-	//	maybe we can regex these!
+	//	we now extract these with regex
 	if ( ShaderUniforms )	
-		Pop.Debug(`RegisterShaderAssetFilename: ShaderUniforms (${ShaderUniforms}) no longer need to be supplied`);
+		Pop.Debug(`RegisterShaderAssetFilename: ShaderUniforms ${FragFilename}/${VertFilename}(${JSON.stringify(ShaderUniforms)}) no longer need to be supplied`);
 		
 	if ( !ShaderAttribs )
 		throw `RegisterShaderAssetFilename(${FragFilename}) missing ShaderAttribs`;
