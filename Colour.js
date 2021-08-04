@@ -129,7 +129,10 @@ export function HueToColour(Hue,Alpha=1)
 	}
 }
 
-
+export function NormalToRainbow(Normal,Alpha=1)
+{
+	return HueToColour(Normal,Alpha);
+}
 
 export function NormalToRedGreen(Normal,Alpha=1)
 {
