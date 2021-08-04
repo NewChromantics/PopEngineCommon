@@ -4,6 +4,9 @@ gr: from https://raw.githubusercontent.com/samirkumardas/jmuxer/master/src/util/
  * Generate MP4 Box
  * taken from: https://github.com/dailymotion/hls.js
  */
+const Default = 'Mp4_Generator.js';
+export default Default;
+
 class H264Parser
 {
 }

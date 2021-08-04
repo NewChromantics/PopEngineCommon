@@ -1,4 +1,6 @@
-export default 'Mp4.js';
+const Default = 'Mp4.js';
+export default Default;
+
 import Pop from './PopEngine.js'
 import PromiseQueue from './PromiseQueue.js'
 import {DataReader,DataWriter,EndOfFileMarker} from './DataReader.js'
