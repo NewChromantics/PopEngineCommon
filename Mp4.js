@@ -1,157 +1,40 @@
 export default 'Mp4.js';
 import Pop from './PopEngine.js'
 import PromiseQueue from './PromiseQueue.js'
-import {JoinTypedArrays,BytesToString,BytesToBigInt} from './PopApi.js'
+import {DataReader,DataWriter,EndOfFileMarker} from './DataReader.js'
+import {StringToBytes,JoinTypedArrays} from './PopApi.js'
+import * as H264 from './H264.js'
+import {MP4,H264Remuxer} from './Mp4_Generator.js'
 
 
-//	when we push this data to a decoder, it signals no more data coming
-const EndOfFileMarker = 'eof';
-
-//	gr: copied from c#
-//		so if either gets fixed, they both need to
-//	https://github.com/NewChromantics/PopCodecs/blob/7cecd65448aa7dececf7f4216b6b195b5b77f208/PopMpeg4.cs#L164
-function GetDateTimeFromSecondsSinceMidnightJan1st1904(Seconds)
+function AnnexBToNalu4(Data)
 {
-	//	todo: check this
-	//var Epoch = new DateTime(1904, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-	//Epoch.AddSeconds(Seconds);
-	const Epoch = new Date('January 1, 1904 0:0:0 GMT');
-	//	https://stackoverflow.com/questions/1197928/how-to-add-30-minutes-to-a-javascript-date-object
-	const EpochMilliSecs = Epoch.getTime();
-	const NewTime = new Date( EpochMilliSecs + (Seconds*1000) );
-	return NewTime;
+	if ( Data[0] == 0 && Data[1] == 0 && Data[2] == 0 && Data[3] == 1 )
+	{
+		let Length = Data.length - 4;	//	ignore prefix in size
+		Data[0] = (Length >> 24) & 0xff;
+		Data[1] = (Length >> 16) & 0xff;
+		Data[2] = (Length >> 8) & 0xff;
+		Data[3] = (Length >> 0) & 0xff;
+		//	Data = Data.slice(4);	//	wrong!
+		//Pop.Debug(`converted to avcc`);
+	}
+	
+	//	ignore sps & pps & sei
+	/*
+	//	gr: we dont need to ignore them, but it does slow video down (cos of timestamps)
+	if ( Data.length == 13 || Data.length == 8 )
+		return null;
+	//	ignore sei
+	if ( Data.length == 34 )
+		return null;
+	*/
+	return Data;
 }
 
-
-//	mp4 parser and ms docs contradict themselves
-//	these are bits for trun (fragment sample atoms)
-//	mp4 parser
-const TrunFlags = 
+class AtomDataReader extends DataReader
 {
-	DataOffsetPresent:			0,
-	FirstSampleFlagsPresent:	2,
-	SampleDurationPresent:		8,
-	SampleSizePresent:			9,
-	SampleFlagsPresent:			10,
-	SampleCompositionTimeOffsetPresent:	11
-};
-/*
-//	ms (matching hololens stream)
-enum TrunFlags  
-{
-	DataOffsetPresent = 0,
-	FirstSampleFlagsPresent = 3,
-	SampleDurationPresent = 9,
-	SampleSizePresent = 10,
-	SampleFlagsPresent = 11,
-	SampleCompositionTimeOffsetPresent = 12
-};
-*/
-
-//	todo? specific atom type encode&decoders?
-
-//	todo: expand to allow Data to be an array of datas
-//	todo: expand to have a "wait for more data" async func, so we can replace the general mp4 reader
-class DataReader
-{
-	constructor(Data,ExternalFilePosition=0,WaitForMoreData=null,InitialPositon=0)
-	{
-		if ( !WaitForMoreData )
-		{
-			WaitForMoreData = async function()
-			{
-				throw `No async WaitForMoreData function provided. No more data.`;
-			};
-		}
-		
-		this.ExternalFilePosition = ExternalFilePosition;
-		this.FilePosition = InitialPositon;
-		this.FileBytes = Data;
-		this.WaitForMoreData = WaitForMoreData;	//	async func that returns more data
-	}
-	
-	//	assuming no data to be async-read to come in
-	get BytesRemaining()
-	{
-		return this.FileBytes.length - this.FilePosition;
-	}
-	
-	//	random access, but async so if we're waiting on data, it waits
-	async GetBytes(FilePosition,Length)
-	{
-		const EndPosition = FilePosition + Length;
-		while ( EndPosition > this.FileBytes.length )
-		{
-			Pop.Debug(`waiting for ${EndPosition-this.FileBytes.length} more bytes...`);
-			
-			const NewBytes = await this.WaitForMoreData();
-			if ( NewBytes == EndOfFileMarker )
-				throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
-			
-			Pop.Debug(`New bytes x${NewBytes.length}`);
-			this.FileBytes = JoinTypedArrays(this.FileBytes,NewBytes);
-			Pop.Debug(`File size now x${this.FileBytes.length}`);
-		}
-		const Bytes = this.FileBytes.slice( FilePosition, EndPosition );
-		if ( Bytes.length != Length )
-			throw `Something gone wrong with reading ${Length} bytes`;
-		return Bytes;
-	}
-	
-	async Read8()
-	{
-		const Bytes = await this.GetBytes(this.FilePosition,1);
-		this.FilePosition += 1;
-		return Bytes[0];
-	}
-
-	async Read16()
-	{
-		const Bytes = await this.GetBytes(this.FilePosition,16/8);
-		this.FilePosition += 16/8;
-		const Int = (Bytes[0]<<8) | (Bytes[1]<<0);
-		return Int;
-	}
-	
-	async Read24()
-	{
-		const Bytes = await this.GetBytes(this.FilePosition,24/8);
-		this.FilePosition += 24/8;
-		const Int = (Bytes[0]<<16) | (Bytes[1]<<8) | (Bytes[2]<<0);
-		return Int;
-	}
-	
-	async Read32()
-	{
-		const Bytes = await this.GetBytes(this.FilePosition,32/8);
-		this.FilePosition += 32/8;
-		const Int = (Bytes[0]<<24) | (Bytes[1]<<16) | (Bytes[2]<<8) | (Bytes[3]<<0);
-		return Int;
-	}
-	
-	async Read64()
-	{
-		const Bytes = await this.GetBytes(this.FilePosition,64/8);
-		this.FilePosition += 64/8;
-		const Int = BytesToBigInt(Bytes);
-		return Int;
-	}
-	
-	async ReadBytes(Length)
-	{
-		const Bytes = await this.GetBytes(this.FilePosition,Length);
-		this.FilePosition += Length;
-		return Bytes;
-	}
-	
-	async ReadString(Length)
-	{
-		const Bytes = await this.GetBytes(this.FilePosition,Length);
-		const String = BytesToString(Bytes);
-		this.FilePosition += Length;
-		return String;
-	}
-	
+	//	gr: move this to an overloaded Atom/Mpeg DataReader
 	async ReadNextAtom()
 	{
 		const Atom = new Atom_t();
@@ -180,35 +63,140 @@ class DataReader
 		Atom.Data = await this.ReadBytes(Atom.ContentSize); 
 		return Atom;
 	}
-	
 }
+
+//	gr: copied from c#
+//		so if either gets fixed, they both need to
+//	https://github.com/NewChromantics/PopCodecs/blob/7cecd65448aa7dececf7f4216b6b195b5b77f208/PopMpeg4.cs#L164
+function GetDateTimeFromSecondsSinceMidnightJan1st1904(Seconds)
+{
+	//	todo: check this
+	//var Epoch = new DateTime(1904, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+	//Epoch.AddSeconds(Seconds);
+	const Epoch = new Date('January 1, 1904 0:0:0 GMT');
+	//	https://stackoverflow.com/questions/1197928/how-to-add-30-minutes-to-a-javascript-date-object
+	const EpochMilliSecs = Epoch.getTime();
+	const NewTime = new Date( EpochMilliSecs + (Seconds*1000) );
+	return NewTime;
+}
+
+//	todo:
+function GetSecondsSinceMidnightJan1st1904(TimeStamp)
+{
+	const Epoch = new Date('January 1, 1904 0:0:0 GMT');
+	const DeltaMs = TimeStamp - Epoch;
+	const DeltaSecs = Math.floor(DeltaMs/1000);
+	return DeltaSecs;
+}
+
+
+//	mp4 parser and ms docs contradict themselves
+//	these are bits for trun (fragment sample atoms)
+//	mp4 parser
+const TrunFlags = 
+{
+	DataOffsetPresent:			0,
+	FirstSampleFlagsPresent:	2,
+	SampleDurationPresent:		8,
+	SampleSizePresent:			9,
+	SampleFlagsPresent:			10,
+	SampleCompositionTimeOffsetPresent:	11
+};
+/*
+//	ms (matching hololens stream)
+enum TrunFlags  
+{
+	DataOffsetPresent = 0,
+	FirstSampleFlagsPresent = 3,
+	SampleDurationPresent = 9,
+	SampleSizePresent = 10,
+	SampleFlagsPresent = 11,
+	SampleCompositionTimeOffsetPresent = 12
+};
+*/
+
+const SampleFlags =
+{
+	isLeading:				24+2,
+	dependsOn_keyframe:		24+2,
+	dependsOn_notkeyframe:	24+1,	//	not sure what this flag is, but set when not keyframe
+	
+	IsNotKeyframe:			0+16,
+	PaddingValue:			1+16,
+	HasRedundancy:			4+16,
+	IsDepedendedOn:			6+16,
+	
+	//	last 2 bytes of flags are priority
+	DegredationPriority0:	0xff00,
+	DegredationPriority1:	0x00ff,
+};
+//	todo? specific atom type encode&decoders?
+
 
 
 class Sample_t
 {
 	constructor()
 	{
+		this.DecodeTimeMs;
+		this.PresentationTimeMs;
+
+		//	decoder
 		this.DataSize;
 		this.IsKeyframe;
-		this.DecodeTimeMs;
 		this.DurationMs;
-		this.PresentationTimeMs;
 		this.DataPosition;
 		this.DataFilePosition;
+		
+		//	encoder
+		this.Data;
+		this.TrackId;
+		this.Flags = 0;
+		this.CompositionTimeOffset;
 	}
+	
+	get IsKeyframe()
+	{
+		const NotKeyframe = (this.Flags & SampleFlags.IsNotKeyframe)!=0;
+		return !NotKeyframe;
+	}
+	
+	set IsKeyframe(IsKeyframe)
+	{
+		const NotKeyframe = !IsKeyframe;
+		this.Flags &= ~(1<<SampleFlags.IsNotKeyframe);
+		this.Flags |= NotKeyframe ? (1<<SampleFlags.IsNotKeyframe) : 0;
+	}
+		
+	
+	get Size()
+	{
+		if ( this.Data )
+			return this.Data.length;
+		return this.DataSize;
+	}
+		
 }
 
 class Atom_t
 {
-	constructor()
+	constructor(Fourcc=null,CopyAtom=null)
 	{
 		this.Size = 0;		//	total size 
 		this.FilePosition = null;
-		this.Fourcc = 'ATOM';
+		this.Fourcc = Fourcc;	//	string of four chars
 		this.Size64 = null;	//	only set if Size=1
 		
 		this.Data = null;	//	raw data following this header
-		this.ChildAtoms = [];	//	more Atom_t's (key these? can there be dupliates?)
+		this.ChildAtoms = [];	//	more Atom_t's (key these? can there be duplicates?)
+		
+		if ( CopyAtom )
+		{
+			if ( CopyAtom.Fourcc != this.Fourcc )
+				throw `Copying atom with different fourcc (${this.Fourcc} -> ${CopyAtom.Fourcc})`;
+			//	gr: do deep copy of child atoms?
+			Object.assign(this,CopyAtom);
+		}
 	}
 	
 	get DataFilePosition()
@@ -241,7 +229,7 @@ class Atom_t
 	//	if this is an atom with child atoms, parse the next level here
 	async DecodeChildAtoms()
 	{
-		const Reader = new DataReader(this.Data,this.DataFilePosition);
+		const Reader = new AtomDataReader(this.Data,this.DataFilePosition);
 		while ( Reader.FilePosition < this.Data.length )
 		{
 			const Atom = await Reader.ReadNextAtom();
@@ -265,6 +253,71 @@ class Atom_t
 		return Matches;
 	}
 	
+	//	turn atom[tree] into Uint8Array()
+	Encode()
+	{
+		if ( this.Fourcc.length != 4 )
+			throw `Atom fourcc (${this.Fourcc}) is not 4 chars`;
+			
+		//	bake sub data
+		const SubDataWriter = new DataWriter();
+		this.EncodeData(SubDataWriter);
+		const Data = SubDataWriter.GetData();
+		
+		//	atom size includes header size
+		let AtomSize = (32/8) + 4;	//	size + fourcc
+		AtomSize += Data.length;
+		
+		if ( AtomSize > 0xffffffff )
+		{
+			AtomSize += 64/8;
+			this.Size64 = AtomSize;
+			this.Size = 1;
+		}
+		else
+		{
+			this.Size64 = null;
+			this.Size = AtomSize;
+		}
+		
+		//	write out atom header+data
+		const Writer = new DataWriter();
+		Writer.Write32(this.Size);
+		Writer.WriteStringAsBytes(this.Fourcc);
+		if ( this.Size64 !== null )
+			Writer.Write64(this.Size64);
+			
+		Writer.WriteBytes(Data);
+		
+		const AtomData = Writer.GetData();
+		return AtomData;
+	}
+	
+	//	default, overload if not writing child atoms or dumb data
+	EncodeData(DataWriter)
+	{
+		if ( this.ChildAtoms.length )
+		{
+			if ( this.Data )
+				throw `Atom has child nodes AND data, should only have one`;
+
+			for ( let ChildAtom of this.ChildAtoms )
+			{
+				const ChildAtomAsData = ChildAtom.Encode();
+				DataWriter.WriteBytes(ChildAtomAsData);
+			}
+			return;
+		}
+		
+		if ( !this.Data )
+		{
+			//throw `Atom has no data`;
+		}
+		else
+		{
+			DataWriter.WriteBytes( this.Data );
+		}
+	}
 };
 
 /*
@@ -287,7 +340,7 @@ export class Mp4Decoder
 		
 		this.NewByteQueue = new PromiseQueue('Mp4 pending bytes');
 		
-		this.FileReader = new DataReader( new Uint8Array(0), 0, this.WaitForMoreFileData.bind(this) );
+		this.FileReader = new AtomDataReader( new Uint8Array(0), 0, this.WaitForMoreFileData.bind(this) );
 		
 		this.ParsePromise = this.ParseFileThread();
 	}
@@ -351,7 +404,11 @@ export class Mp4Decoder
 			this.RootAtoms.push(Atom);
 			this.NewAtomQueue.Push(Atom);
 			
-			if ( Atom.Fourcc == 'moov' )
+			if ( Atom.Fourcc == 'ftyp' )
+			{
+				await this.DecodeAtom_Ftyp(Atom);
+			}
+			else if ( Atom.Fourcc == 'moov' )
 			{
 				await this.DecodeAtom_Moov(Atom);
 			}
@@ -382,9 +439,11 @@ export class Mp4Decoder
 	
 	async DecodeAtom_MoofHeader(Atom)
 	{
-		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
-
 		const Header = {};
+		if ( !Atom )
+			return Header; 
+
+		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
 
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
@@ -434,65 +493,34 @@ export class Mp4Decoder
 		this.NewSamplesQueue.Push(Samples);
 	}
 	
-	async DecodeAtom_TrackFragmentDelta(Tfdt)
+	async DecodeAtom_TrackFragmentDelta(Atom)
 	{
-		const Atom = Tfdt;
-		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
-		
-		const Version = await Reader.Read8();
-		const Flags = await Reader.Read24();
-
-		let DecodeTime;
-		if ( Version == 0 )
-		{
-			DecodeTime = await Reader.Read32(); 
-		}
-		else
-		{
-			DecodeTime = await Reader.Read64(); 
-		}
-		return DecodeTime;
+		if ( !Atom )
+			return 0;
+			
+		const Tfdt = await Atom_Tfdt.Read(Atom);
+		return Tfdt.DecodeTime;
 	}
 		
 	async DecodeAtom_TrackFragmentHeader(Atom,DeltaTimeAtom)
 	{
-		const Header = {};
+		if ( !Atom )
+			return new Atom_Tfhd('tfhd');
 	
-		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
-		const Version = await Reader.Read8();
-		const Flags = await Reader.Read24();
-		Header.TrackId = await Reader.Read32();
-
-		function HasFlagBit(Bit)
-		{
-			return (Flags & (1 << Bit)) != 0;
-		}
-	
-		//	http://178.62.222.88/mp4parser/mp4.js
-		if (HasFlagBit(0))
-			Header.BaseDataOffset = await Reader.Read64();	//	unsigned
-		if (HasFlagBit(1))
-			Header.SampleDescriptionIndex = await Reader.Read32();
-		if (HasFlagBit(3))
-			Header.DefaultSampleDuration = await Reader.Read32();
-		if (HasFlagBit(4))
-			Header.DefaultSampleSize = await Reader.Read32();
-		if (HasFlagBit(5))
-			Header.DefaultSampleFlags = await Reader.Read32();
-		if (HasFlagBit(16))
-			Header.DurationIsEmpty = true;
-		if (HasFlagBit(17))
-			Header.DefaultBaseIsMoof = true;
+		const tfhd = await Atom_Tfhd.Read(Atom);
 		
-		Header.DecodeTime = await this.DecodeAtom_TrackFragmentDelta(DeltaTimeAtom);
+		//Header.DecodeTime = await this.DecodeAtom_TrackFragmentDelta(DeltaTimeAtom);
 		
-		return Header;
+		return tfhd;
 	}
 	
 	async DecodeAtom_FragmentSampleTable(Atom,MoofAtom,TrackHeader)
 	{
+		if ( !Atom )
+			return [];
+			
 		const Header = TrackHeader;
-		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
+		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
 		//	this stsd description isn't well documented on the apple docs
 		//	http://xhelmboyx.tripod.com/formats/mp4-layout.txt
 		//	https://stackoverflow.com/a/14549784/355753
@@ -547,7 +575,7 @@ export class Mp4Decoder
 			const MoofPos = MoofAtom.FilePosition;
 			if (HeaderPos != MoofPos)
 			{
-				Debug.Log("Expected Header Pos(" + HeaderPos + ") and moof pos(" + MoofPos + ") to be the same");
+				Pop.Debug("Expected Header Pos(" + HeaderPos + ") and moof pos(" + MoofPos + ") to be the same");
 			}
 		}
 		const MoofPosition = (Header.BaseDataOffset!==undefined) ? Header.BaseDataOffset : MoofAtom.FilePosition;
@@ -598,6 +626,14 @@ export class Mp4Decoder
 		return Samples;
 	}
 	
+	async DecodeAtom_Ftyp(Atom)
+	{
+		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
+		const MajorBrand = await Reader.ReadString(4);
+		const MinorVersion = await Reader.Read32();
+		Pop.Debug(`ftyp ${MajorBrand} ver 0x${MinorVersion.toString(16)}`); 
+	}
+	
 	async DecodeAtom_Moov(Atom)
 	{
 		await Atom.DecodeChildAtoms();
@@ -622,7 +658,7 @@ export class Mp4Decoder
 	//	gr; this doesn tneed to be async as we have the data, but all the reader funcs currently are
 	async DecodeAtom_MovieHeader(Atom)
 	{
-		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
+		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
 		//	https://developer.apple.com/library/content/documentation/QuickTime/QTFF/art/qt_l_095.gif
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
@@ -709,7 +745,6 @@ export class Mp4Decoder
 		Header.Duration = Duration * Header.TimeScale;
 		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
 		Header.ModificationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(ModificationTime);
-		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
 		Header.PreviewDuration = PreviewDuration * Header.TimeScale;
 		return Header;
 	}
@@ -747,7 +782,7 @@ export class Mp4Decoder
 		if ( !Media.MediaHeader )
 		{
 			Media.MediaHeader = {};
-			Media.MediaHeader.TimeScale = 1;
+			Media.MediaHeader.TimeScale = 1000;
 		}
 		
 		Media.MediaInfo = await this.DecodeAtom_MediaInfo( Atom.GetChildAtom('minf'), Media.MediaHeader, MovieHeader );
@@ -759,7 +794,7 @@ export class Mp4Decoder
 		if ( !Atom )
 			return null;
 			
-		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
+		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
 		const CreationTime = await Reader.Read32();
@@ -774,7 +809,6 @@ export class Mp4Decoder
 		//Header.Duration = new TimeSpan(0,0, (int)(Duration * Header.TimeScale));
 		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
 		Header.ModificationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(ModificationTime);
-		Header.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904(CreationTime);
 		Header.LanguageId = Language;
 		Header.Quality = Quality / (1 << 16);
 		return Header;
@@ -790,11 +824,22 @@ export class Mp4Decoder
 		
 		const Samples = await this.DecodeAtom_SampleTable( Atom.GetChildAtom('stbl'), MovieHeader );
 		
+		const Dinfs = Atom.GetChildAtoms('dinf');
+		for ( let Dinf of Dinfs )
+			await this.DecodeAtom_Dinf(Dinf);
+		
 		this.NewSamplesQueue.Push(Samples);
 		//	gmhd
 		//	hdlr
 		//	dinf
 		//	stbl
+	}
+	
+	async DecodeAtom_Dinf(Atom)
+	{
+		await Atom.DecodeChildAtoms();
+		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
+		//	expecting this to just contain one dref
 	}
 	
 	async DecodeAtom_SampleTable(Atom,MovieHeader)
@@ -813,7 +858,8 @@ export class Mp4Decoder
 		const SyncSamplesAtom = Atom.GetChildAtom('stss');
 		const SampleDecodeDurationsAtom = Atom.GetChildAtom('stts');
 		const SamplePresentationTimeOffsetsAtom = Atom.GetChildAtom('ctts');
-
+		const SampleDescriptorAtom = Atom.GetChildAtom('stsd');
+		
 		//	work out samples from atoms!
 		if (SampleSizesAtom == null)
 			throw "Track missing sample sizes atom";
@@ -830,6 +876,9 @@ export class Mp4Decoder
 		const SampleKeyframes = await this.DecodeAtom_SampleKeyframes(SyncSamplesAtom, SampleSizes.length);
 		const SampleDurations = await this.DecodeAtom_SampleDurations( SampleDecodeDurationsAtom, SampleSizes.length);
 		const SamplePresentationTimeOffsets = await this.DecodeAtom_SampleDurations(SamplePresentationTimeOffsetsAtom, SampleSizes.length, 0 );
+		
+		const SampleMeta = await this.DecodeAtom_Stsd(SampleDescriptorAtom);
+		
 		
 		//	durations start at zero (proper time must come from somewhere else!) and just count up over durations
 		const SampleDecodeTimes = [];//new int[SampleSizes.Count];
@@ -885,7 +934,7 @@ export class Mp4Decoder
 		*/
 		const Samples = [];	//	array of Sample_t
 
-		const TimeScale = MovieHeader ? MovieHeader.TimeScale : 1;
+		const TimeScale = MovieHeader ? MovieHeader.TimeScale : 1000;
 
 		function TimeToMs(TimeUnit)
 		{
@@ -932,7 +981,7 @@ export class Mp4Decoder
 	async DecodeAtom_ChunkMetas(Atom)
 	{
 		const Metas = [];
-		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
+		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
 		
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
@@ -980,7 +1029,7 @@ export class Mp4Decoder
 		}
 		
 		const Offsets = [];
-		const Reader = new DataReader( Atom.Data,Atom.FilePosition );
+		const Reader = new AtomDataReader( Atom.Data,Atom.FilePosition );
 		
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
@@ -1004,7 +1053,7 @@ export class Mp4Decoder
 	
 	async DecodeAtom_SampleSizes(Atom)
 	{
-		const Reader = new DataReader( Atom.Data,Atom.FilePosition );
+		const Reader = new AtomDataReader( Atom.Data,Atom.FilePosition );
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
 		let SampleSize = await Reader.Read32();
@@ -1064,7 +1113,7 @@ export class Mp4Decoder
 		if ( !Atom )
 			return Keyframes;
 		
-		const Reader = new DataReader( Atom.Data,Atom.FilePosition );
+		const Reader = new AtomDataReader( Atom.Data,Atom.FilePosition );
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
 		const EntryCount = await Reader.Read32();
@@ -1094,6 +1143,16 @@ export class Mp4Decoder
 		return Keyframes;
 	}
 
+	async DecodeAtom_Stsd(Atom)
+	{
+		if ( !Atom )
+			return;
+		
+		//const stsd = await Atom_Stsd.Read(Atom, (a) => this.NewAtomQueue.Push(a) );
+		//stsd.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
+		
+	}
+
 	async DecodeAtom_SampleDurations(Atom,SampleCount,Default=null)
 	{
 		if ( !Atom )
@@ -1108,7 +1167,7 @@ export class Mp4Decoder
 		}
 		
 		const Durations = [];
-		const Reader = new DataReader(Atom.Data,Atom.DataFilePosition);
+		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
 		const Version = await Reader.Read8();
 		const Flags = await Reader.Read24();
 		const EntryCount = await Reader.Read32();
@@ -1136,4 +1195,1494 @@ export class Mp4Decoder
 
 }
 
+
+class PendingTrack_t
+{
+	constructor()
+	{
+		this.Samples = [];
+	}
+	
+	PushSample(Sample)
+	{
+		this.Samples.push(Sample);
+	}
+}
+
+//	encoding atoms, but maybe we can merge with decode
+class Atom_Moov extends Atom_t
+{
+	constructor()
+	{
+		super('moov');
+		
+		this.mvhd = new Atom_Mvhd();
+		this.ChildAtoms.push(this.mvhd);
+		
+		//	fragment needs trex in mvex
+		this.mvex = new Atom_Mvex();
+		this.ChildAtoms.push(this.mvex);
+	}
+	
+	GetTrakAtom(TrackId)
+	{
+		const Traks = this.GetChildAtoms('trak');
+		const Trak = Traks.find( t => t.TrackId == TrackId );
+		return Trak;
+	}
+	
+	AddTrack(TrackId)
+	{
+		//	does trak this already exist?
+		const ExistingTrack = this.GetTrakAtom(TrackId);
+		if ( ExistingTrack )
+			return;
+		
+		const Trak = new Atom_Trak(TrackId);
+		this.ChildAtoms.push(Trak);
+		
+		//	add a trex for every track
+		this.mvex.ChildAtoms.push( new Atom_Trex(TrackId) );
+	}
+}
+
+class Atom_Mvex extends Atom_t
+{
+	constructor()
+	{
+		super('mvex');
+	}
+}
+
+class Atom_Trex extends Atom_t
+{
+	constructor(TrackId)
+	{
+		super('trex');
+		
+		//	https://sce.umkc.edu/faculty-sites/lizhu/teaching/2018.fall.video-com/ref/mp4.pdf
+		//	This sets up default values used by the movie fragments. 
+		//	By setting defaults in this way, space and complexity can
+		//	be saved in each Track Fragment Box
+		this.Flags = 0;
+		this.TrackId = TrackId;
+		this.DefaultSampleDescriptionIndex = 0;
+		this.DefaultSampleDuration = 0;
+		this.DefaultSampleSize = 0;
+		this.DefaultSampleFlags = 0;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		if ( this.TrackId == 0 )
+			throw `Invalid Track Id ${this.TrackId} in Trex`;
+		/*
+		//	https://sce.umkc.edu/faculty-sites/lizhu/teaching/2018.fall.video-com/ref/mp4.pdf
+		gr: flags, I think signal more data
+		bit(6) reserved=0;
+		unsigned int(2) sample_depends_on;
+		unsigned int(2) sample_is_depended_on;
+		unsigned int(2) sample_has_redundancy;
+		bit(3) sample_padding_value;
+		bit(1) sample_is_difference_sample;
+		 // i.e. when 1 signals a non-key or non-sync sample
+		unsigned int(16) sample_degradation_priority
+		*/
+		DataWriter.Write32(this.Flags);
+		DataWriter.Write32(this.TrackId);
+		DataWriter.Write32(this.DefaultSampleDescriptionIndex);
+		DataWriter.Write32(this.DefaultSampleDuration);
+		DataWriter.Write32(this.DefaultSampleSize);
+		DataWriter.Write32(this.DefaultSampleFlags);
+	}
+}
+
+class Atom_Trak extends Atom_t
+{
+	constructor(TrackId)
+	{
+		super('trak');
+		
+		this.tkhd = new Atom_Tkhd(TrackId);
+		this.ChildAtoms.push(this.tkhd);
+		this.mdia = new Atom_Mdia();
+		this.ChildAtoms.push(this.mdia);
+	}
+	
+	get TrackId()
+	{
+		return this.tkhd.TrackId;
+	}	
+	
+	set TrackId(Value)
+	{
+		this.tkhd.TrackId = Value;
+	}
+}
+
+function GetFixed_16_16(Float)
+{
+	const MaxIntMask = ((1<<16)-1);
+	const MaxDecMask = ((1<<16)-1);
+	let Major = Math.floor(Float) & MaxIntMask;
+	let Minor = (Float-Major) * MaxDecMask;
+	return (Major<<16) | (Minor<<0);
+}
+
+function GetFixed_2_30(Float)
+{
+	const MaxIntMask = ((1<<2)-1);
+	const MaxDecMask = ((1<<30)-1);
+	let Major = Math.floor(Float) & MaxIntMask;
+	let Minor = (Float-Major) * MaxDecMask;
+	return (Major<<30) | (Minor<<0);
+}
+
+function CreateMatrix(a,b,u,c,d,v,tx,ty,w)
+{
+	const Matrix = 
+	[
+		GetFixed_16_16(a),
+		GetFixed_16_16(b),
+		GetFixed_2_30(u),
+		GetFixed_16_16(c),
+		GetFixed_16_16(d),
+		GetFixed_2_30(v),
+		GetFixed_16_16(tx),
+		GetFixed_16_16(ty),
+		GetFixed_2_30(w)
+	];
+	return new Uint32Array(Matrix);
+}
+
+class Atom_Tkhd extends Atom_t
+{
+	constructor(TrackId=0)
+	{
+		super('tkhd');
+		
+		this.Version = 0;
+		const Flag_Enabled = 1<<0;
+		const Flag_Used = 1<<1;
+		const Flag_Preview = 1<<2;
+		const Flag_Poster = 1<<3;
+		this.Flags = Flag_Enabled | Flag_Used;
+		this.CreationTime = new Date();
+		this.ModificationTime = new Date();
+		this.TrackId = TrackId;	//	0 is invalid
+		this.Duration = 123*1000;
+		
+		//	A 16-bit integer that indicates this track’s spatial priority in its movie. The QuickTime Movie Toolbox uses this value to determine how tracks overlay one another. Tracks with lower layer values are displayed in front of tracks with higher layer values.
+
+		this.Layer = 0;
+		this.AlternateGroup = 0;	//	zero =  not an alternative track
+		this.Volume = 0;	//	8.8 fixed
+		
+		this.Matrix = CreateMatrix(1,0,0,	0,1,0,	0,0,1);
+		this.PixelsWidth = 640;
+		this.PixelsHeight = 480;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap2/qtff2.html#//apple_ref/doc/uid/TP40000939-CH204-25550
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		
+		const CreationTime = GetSecondsSinceMidnightJan1st1904(this.CreationTime);
+		DataWriter.Write32(CreationTime);
+		const ModificationTime = GetSecondsSinceMidnightJan1st1904(this.ModificationTime);
+		DataWriter.Write32(ModificationTime);
+
+		if ( this.TrackId == 0 )
+			throw `zero is not a valid Track id number`;
+		DataWriter.Write32(this.TrackId);
+		DataWriter.Write32(0);	//	reserved
+		
+		const Duration = this.Duration;	//	 scaled to movie time scalar
+		DataWriter.Write32(Duration);
+
+		DataWriter.WriteBytes( new Uint8Array(8) );	//	reserved
+		DataWriter.Write16( this.Layer );
+		DataWriter.Write16( this.AlternateGroup );
+		DataWriter.Write16( this.Volume );
+		DataWriter.Write16( 0 );	//	reserved
+		DataWriter.WriteBytes( this.Matrix );
+		DataWriter.Write32( this.PixelsWidth );
+		DataWriter.Write32( this.PixelsHeight );
+	}
+}
+
+class Atom_Mdia extends Atom_t
+{
+	constructor()
+	{
+		super('mdia');
+		
+		this.mdhd = new Atom_Mdhd();
+		this.ChildAtoms.push(this.mdhd);
+
+		//	hdlr is optional, but I think we can't decode without it
+		//	it also dictates audio/visual/subtitle, so pretty important
+		this.hdlr = new Atom_Hdlr();
+		this.ChildAtoms.push(this.hdlr);
+		this.minf = new Atom_Minf_Video();
+		this.ChildAtoms.push(this.minf);
+	}
+}
+
+class Atom_Mdhd extends Atom_t
+{
+	constructor()
+	{
+		super('mdhd');
+		this.Version = 0;
+		this.Flags = 0;
+		this.CreationTime = new Date();
+		this.ModificationTime = new Date();
+		this.TimeScale = 1000;
+		this.DurationMs = 123*1000;
+		this.Language = 0;
+		this.Quality = 1;	//	0..1
+	}
+	
+	EncodeData(DataWriter)
+	{
+		const CreationTime = GetSecondsSinceMidnightJan1st1904(this.CreationTime);
+		const ModificationTime = GetSecondsSinceMidnightJan1st1904(this.ModificationTime);
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		DataWriter.Write32(CreationTime);
+		DataWriter.Write32(ModificationTime);
+		DataWriter.Write32(this.TimeScale);
+		const Duration = this.DurationMs / 1000 / this.TimeScale;
+		DataWriter.Write32(Duration);	//	need to scale this
+		DataWriter.Write16(this.Language);
+		
+		const Quality16 = this.Quality * 0xffff;
+		DataWriter.Write16(Quality16);
+	}
+};
+
+class Atom_Hdlr extends Atom_t
+{
+	constructor()
+	{
+		super('hdlr');
+		
+		this.Version = 0;
+		this.Flags = 0;
+		
+		//	'mhlr' for media handlers and 'dhlr'
+		this.Type = 'mhlr';	//	media handler
+		//this.Type = 'dhlr';	//	Data handler
+		
+		//	fourcc
+		//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-SW1
+		this.SubType = 'vide';	
+		//this.SubType = 'soun';
+		//this.SubType = 'subt';
+		//this.SubType = 'meta';	//	timed meta data
+		//this.SubType = 'text';	//	text with some formatting
+	}
+	
+	EncodeData(DataWriter)
+	{
+		if ( this.Type.length != 4 )
+			throw `Expected Track HDLR Type ($this.Type) to be 4 chars (fourcc)`;
+		if ( this.SubType.length != 4 )
+			throw `Expected Track HDLR Type ($this.SubType) to be 4 chars (fourcc)`;
+			
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		//	quicktime generated files have 0x0 here...
+		//DataWriter.WriteStringAsBytes(this.Type);//
+		DataWriter.Write32(0);
+		DataWriter.WriteStringAsBytes(this.SubType);
+		
+		DataWriter.Write32(0);	// Component manufacturer - reserved
+		DataWriter.Write32(0);	// Component flags - reserved
+		DataWriter.Write32(0);	// Component flags mask - reserved
+		DataWriter.WriteStringAsBytes('VideoHandler');	// Component name - can be empty
+		//	gr: quicktime file has one extra byte... null terminator?
+		DataWriter.Write8(0);
+	}
+}
+
+class Atom_Dinf extends Atom_t
+{
+	constructor()
+	{
+		super('dinf');
+		this.dref = new Atom_Dref();
+		this.ChildAtoms.push(this.dref);
+	}
+	
+	AddData(Index,Data)
+	{
+		this.dref.AddData(Index,Data);
+	}
+}
+
+
+class Atom_Dref extends Atom_t
+{
+	constructor()
+	{
+		super('dref');
+		
+		this.Version = 0;
+		this.Flags = 0;
+		this.Datas = [];
+	}
+	
+	AddData(Index,DataAtom)
+	{
+		while ( this.Datas.length < Index+1 )
+			this.Datas.push(null);
+		this.Datas[Index] = DataAtom;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		DataWriter.Write32(this.Datas.length);
+		
+		for ( let Data of this.Datas )
+		{
+			if ( Data == null )
+				Data = new Uint8Array(0);
+			if ( typeof Data == typeof '' )
+				Data = StringToBytes(Data);
+			
+			Pop.Debug(`Dref data; ${Data}`);
+			let Size = 4+4+1+3+Data.length+1;
+			DataWriter.Write32( Size );
+			const Type = 'url\0';
+			DataWriter.WriteStringAsBytes(Type);
+			const Version = 0;
+			const Flag_SelfReference = 0x1;	//	data is in same file as movie atom
+			const Flags = 0;//Flag_SelfReference;
+			
+			DataWriter.Write8(Version);
+			DataWriter.Write24(Flags);
+			
+			DataWriter.WriteBytes( Data );
+			//	terminator
+			DataWriter.Write8(0);
+		}
+	}
+}
+
+class Atom_Minf_Video extends Atom_t
+{
+	constructor()
+	{
+		super('minf');
+		
+		this.vmhd = new Atom_Vmhd();
+		this.ChildAtoms.push(this.vmhd);
+		//this.hdlr = new Atom_Hdlr();
+		//this.ChildAtoms.push(this.hdlr);
+		
+		this.dinf = new Atom_Dinf();
+		this.ChildAtoms.push(this.dinf);
+		this.dinf.AddData(0,'Hello!');
+
+		this.stbl = new Atom_Stbl();
+		this.ChildAtoms.push(this.stbl);
+	}
+}
+
+class Atom_Vmhd extends Atom_t
+{
+	constructor()
+	{
+		super('vmhd');
+		
+		this.Version = 0;
+		const Flag_NoLeanAhead = 1<<0;
+		this.Flags = Flag_NoLeanAhead;
+		
+		//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap4/qtff4.html#//apple_ref/doc/uid/TP40000939-CH206-18741
+		const GraphicsMode_Copy = 0;
+		this.GraphicsMode = GraphicsMode_Copy;
+		this.OpColour = [0,0,0];
+	}
+	
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		DataWriter.Write16(this.GraphicsMode);
+		DataWriter.Write16(this.OpColour[0]);
+		DataWriter.Write16(this.OpColour[1]);
+		DataWriter.Write16(this.OpColour[2]);
+	}
+}
+
+class Atom_Stbl extends Atom_t
+{
+	constructor()
+	{
+		super('stbl');
+		this.ChildAtoms.push( new Atom_Stsd() );
+		this.ChildAtoms.push( new Atom_Stts() );
+		this.ChildAtoms.push( new Atom_Stsc() );
+		this.ChildAtoms.push( new Atom_Stsz() );
+		this.ChildAtoms.push( new Atom_Stco() );
+	}
+}
+
+class Atom_SampleDescriptionExtension_Btrt extends Atom_t
+{
+	constructor()
+	{
+		super('btrt');
+		this.Data = 
+		[
+			0x00, 0x1c, 0x9c, 0x80, // bufferSizeDB
+			0x00, 0x2d, 0xc6, 0xc0, // maxBitrate
+			0x00, 0x2d, 0xc6, 0xc0 // avgBitrate
+		];
+	}
+	
+}
+
+class Atom_SampleDescriptionExtension_Avcc extends Atom_t
+{
+	constructor()
+	{
+		super('avcC');
+		
+		this.Version = 1;
+
+		const Sps = [/*0,0,0,1,*/39,66,0,30,171,64,80,30,200];
+		const Pps = [/*0,0,0,1,*/40,206,60,48];
+
+		this.SpsDatas = [Sps];
+		this.PpsDatas = [Pps];
+		this.NaluSize = 4;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		if ( this.SpsDatas.length == 0 || this.PpsDatas.length == 0 )
+			throw `Missing SPS and/or PPS`;
+			 
+		DataWriter.Write8(this.Version);
+		
+		const Sps0 = this.SpsDatas[0];
+		DataWriter.Write8( Sps0[1] );
+		DataWriter.Write8( Sps0[2] );
+		DataWriter.Write8( Sps0[3] );
+		
+		let NaluSizeByte = (this.NaluSize-1)&0x3;
+		NaluSizeByte |= 0xFC;	//	other 6 bytes reserved, must be 1
+		DataWriter.Write8(NaluSizeByte);
+		
+		let NumberOfSps = (this.SpsDatas.length & 0x1f);
+		NumberOfSps |= 	0xE0;	//	reserved bytes, must be 1
+		DataWriter.Write8(NumberOfSps);
+		
+		for ( let Sps of this.SpsDatas )
+		{
+			DataWriter.Write16( Sps.length );
+			DataWriter.WriteBytes( Sps );
+		}
+		
+		let NumberOfPps = (this.PpsDatas.length & 0x1f);
+		DataWriter.Write8(NumberOfPps);
+		for ( let Pps of this.PpsDatas )
+		{
+			DataWriter.Write16( Pps.length );
+			DataWriter.WriteBytes( Pps );
+		}
+		
+	}
+}
+
+
+class Atom_SampleDescriptionExtension_Pasp extends Atom_t
+{
+	constructor()
+	{
+		super('pasp');
+		this.Data = [0x00,0x00,0x00,0x01,	0x00,0x00,0x00,0x01,	0x00,0x00,0x00,0x01	];
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.WriteBytes( this.Data );
+	}
+}
+
+class VideoSampleDescription
+{
+	constructor()
+	{
+		this.Version = 0;
+		this.RevisionLevel = 0;
+		this.Vendor = '\0\0\0\0';
+		
+		this.SpatialQuality = 0;
+		this.TemporalQuality = 0;	//	0..1
+		this.FramesPerSample = 1;
+		this.PixelWidth = 640;
+		this.PixelHeight = 480;
+		
+		this.FramesPerSample = 1;
+
+		this.Compressor = 'The Compressor';
+		
+		//	A 16-bit integer that indicates the pixel depth of the compressed image. Values of 1, 2, 4, 8 ,16, 24, and 32 indicate the depth of color images. The value 32 should be used only if the image contains an alpha channel. Values of 34, 36, and 40 indicate 2-, 4-, and 8-bit grayscale, respectively, for grayscale images.
+		this.ColourDepth = 24;
+		//	gr 0x1111 is -1?!
+		this.ColourTableId = 0x1111;//0xffff;	//	ignored if 24 bit. -1= default table
+		
+		this.ExtensionAtoms = [];
+		
+		this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Avcc() );
+		//	if I delete this from a valid file, quicktime doesnt play it
+		//this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Pasp() );
+		//this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Btrt() );
+	}
+	
+	EncodeData(DataWriter)
+	{
+		if ( this.Vendor.length != 4 )
+			throw `Vendor(${this.Vendor}) needs to be 4 chars`;
+			
+		DataWriter.Write16(this.Version);
+		DataWriter.Write16(this.RevisionLevel);
+		DataWriter.WriteStringAsBytes(this.Vendor);
+		
+		//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-74522
+		//	note: docs actually specify 1023 and 1024!
+		const TemporalQuality = this.TemporalQuality * 1023;
+		DataWriter.Write32(TemporalQuality);
+		const SpatialQuality = this.SpatialQuality * 1024;
+		DataWriter.Write32(SpatialQuality);
+		
+		DataWriter.Write16(this.PixelWidth);
+		DataWriter.Write16(this.PixelHeight);
+		
+		const HorizontalResolution = 72<<16;//	pixels per inch 32bit fixed point
+		const VerticalResolution = 72<<16;//	pixels per inch 32bit fixed point
+		DataWriter.Write32(HorizontalResolution);
+		DataWriter.Write32(VerticalResolution);
+
+		const DataSize = 0;	//	"A 32-bit integer that must be set to 0."
+		DataWriter.Write32(DataSize);
+		DataWriter.Write16(this.FramesPerSample);
+
+		//	compressor needs to be 32-byte
+		//	but it's a pascal string so first byte is length
+		let CompressorLength = Math.min( 31, this.Compressor.length );
+		let Compressor = this.Compressor.substring(0,31).padEnd(31,'\0');	//	pad with terminators
+		DataWriter.Write8(CompressorLength);
+		DataWriter.WriteStringAsBytes(Compressor);
+
+		DataWriter.Write16(this.ColourDepth);
+		DataWriter.Write16(this.ColourTableId);
+		//	todo: write colour table if depth != 16,24,32 or -1 (default table)
+
+		//	write extensions
+		for ( let Extension of this.ExtensionAtoms )
+		{
+			const Data = Extension.Encode();
+			DataWriter.WriteBytes(Data);
+		}
+	}
+}
+
+class Atom_Stsd extends Atom_t
+{
+	constructor()
+	{
+		super('stsd');
+		
+		this.Version = 0;
+		this.Flags = 0;
+		this.SampleDescriptions = [];
+		
+		const Avc1Data = new VideoSampleDescription();
+		this.PushSampleDescription('avc1',0,Avc1Data);
+	}
+	
+	PushSampleDescription(Name,DataReferenceIndex,Data)
+	{
+		if ( Name.length != 4 )
+			throw `Expecting sample description name (${Name}) to be 4 chars (fourcc)`;
+		const Description = {};
+		Description.Name = Name;
+		Description.DataReferenceIndex = DataReferenceIndex;
+		Description.Data = Data;
+		this.SampleDescriptions.push(Description);
+	}
+		
+	EncodeData(Writer)
+	{
+		Writer.Write8(this.Version);
+		Writer.Write24(this.Flags);
+		Writer.Write32(this.SampleDescriptions.length);
+
+		//	now write each sample
+		for ( let Description of this.SampleDescriptions )
+		{
+			//	bake data
+			let Data = Description.Data;
+			//	if the data is an atom, encode it
+			//if ( Data instanceof Atom_t )
+			if ( typeof Data == typeof {} && Data.Encode )
+			{
+				Data = Data.Encode();
+			}
+			if ( typeof Data == typeof {} && Data.EncodeData )
+			{
+				const SubWriter = new DataWriter();
+				Data.EncodeData(SubWriter);
+				Data = SubWriter.GetData();
+			}
+			
+			//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-74522
+			//	When parsing sample descriptions in the ‘stsd’ atom, be aware of the sample description size value in order to read each table entry correctly. Some sample descriptions terminate with four zero bytes that are not otherwise indicated.
+			//	Note: Some video sample descriptions contain an optional 4-byte terminator with all bytes set to 0, 
+			//	following all other sample description and sample description extension data. If this optional terminator is present, the sample description size value will include it. 
+			//	It is important to check the sample description size when parsing: more than or fewer than these four optional bytes, if present in the size value, indicates a malformed sample description
+			let DataSize = Data.length;
+			const Last4 = Data.slice(-4);
+			if ( Last4[0]+Last4[1]+Last4[2]+Last4[3] == 0 )
+				DataSize -= 4;
+				
+			DataSize += 4;
+			DataSize += Description.Name.length;
+			DataSize += 6;
+			DataSize += 2;
+			
+			Writer.Write32(DataSize);
+			Writer.WriteStringAsBytes(Description.Name);
+			Writer.WriteBytes( new Uint8Array(6) );	//	reserved
+			//	indexes starting at 1?
+			Writer.Write16( Description.DataReferenceIndex+1 );
+			Writer.WriteBytes( Data );
+			
+		}
+	}
+	
+	static async Read(AnonymousAtom,EnumChildAtom)
+	{
+		const Reader = new AtomDataReader(AnonymousAtom.Data,AnonymousAtom.DataFilePosition);
+		const Atom = new Atom_Stsd(AnonymousAtom);
+		Atom.Version = await Reader.Read8();
+		Atom.Flags = await Reader.Read24();
+		Atom.SampleDescriptionCount = await Reader.Read32();
+		
+		for ( let s=0;	s<Atom.SampleDescriptionCount;	s++ )
+		{
+			const SampleDescriptionAtom = new Atom_t();
+			SampleDescriptionAtom.Size = await Reader.Read32();
+			SampleDescriptionAtom.Fourcc = await Reader.ReadString(4);
+			SampleDescriptionAtom.Zero6 = await Reader.ReadBytes(6);
+			SampleDescriptionAtom.DataReferenceIndex = await Reader.Read16();
+			const ContentSize = SampleDescriptionAtom.Size - 4 - 6 - 2;
+			if ( ContentSize )
+			{
+				const DescAtom = await Reader.ReadNextAtom();
+				SampleDescriptionAtom.ChildAtoms.push(DescAtom);
+			}
+			Atom.ChildAtoms.push(SampleDescriptionAtom);
+			EnumChildAtom(SampleDescriptionAtom);
+			SampleDescriptionAtom.ChildAtoms.forEach( a => EnumChildAtom(a) );
+		}
+	}
+}
+
+
+class Atom_Stts extends Atom_t
+{
+	constructor()
+	{
+		super('stts');
+		
+		this.Version = 0;
+		this.Flags = 0;
+	}
+		
+	EncodeData(Writer)
+	{
+		Writer.Write8(this.Version);
+		Writer.Write24(this.Flags);
+		
+		
+		const EntryCount = 0;
+		Writer.Write32(EntryCount);
+	}
+}
+
+class Atom_Stsc extends Atom_t
+{
+	constructor()
+	{
+		super('stsc');
+		
+		this.Version = 0;
+		this.Flags = 0;
+	}
+		
+	EncodeData(Writer)
+	{
+		Writer.Write8(this.Version);
+		Writer.Write24(this.Flags);
+		
+		const EntryCount = 0;
+		Writer.Write32(EntryCount);
+	}
+}
+
+class Atom_Stsz extends Atom_t
+{
+	constructor()
+	{
+		super('stsz');
+		
+		this.Version = 0;
+		this.Flags = 0;
+		this.SampleSizes = [];
+	}
+		
+	EncodeData(Writer)
+	{
+		Writer.Write8(this.Version);
+		Writer.Write24(this.Flags);
+		
+		const AllSameSizes = this.SampleSizes.every( v => v==this.SampleSizes[0] );
+		const FixedSize = AllSameSizes ? (this.SampleSizes[0] || 0) : 0
+		Writer.Write32( FixedSize );
+		Writer.Write32( this.SampleSizes.length );
+
+		if ( AllSameSizes )
+			return;
+
+		throw `todo; write sample sizes (24 or 32 bit)`;
+	}
+}
+
+class Atom_Stco extends Atom_t
+{
+	constructor()
+	{
+		super('stco');
+		
+		this.Version = 0;
+		this.Flags = 0;
+	}
+		
+	EncodeData(Writer)
+	{
+		Writer.Write8(this.Version);
+		Writer.Write24(this.Flags);
+		
+		const EntryCount = 0;
+		Writer.Write32(EntryCount);
+	}
+}
+
+class Atom_Mvhd extends Atom_t
+{
+	constructor()
+	{
+		super('mvhd');
+		
+		this.Version = 0;
+		this.Flags = 0;
+		this.CreationTime = new Date();
+		this.ModificationTime = new Date();
+		this.TimeScale = 1000; 
+		this.DurationMs = 2*1000;
+		this.PreferedRate = 0;
+		this.PreferedVolume = 0;	//	8.8 fixed
+		this.Reserved = new Uint8Array(10);
+		this.Matrix = CreateMatrix(1,0,0,	0,1,0,	0,0,1);
+		this.PreviewTime = 0;
+		this.PreviewDuration = 0;
+		this.PosterTime = 0;
+		this.SelectionTime = 0;
+		this.SelectionDuration = 0;
+		this.CurrentTime = 0;
+		this.NextTrackId = 0;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		
+		const CreationTime = GetSecondsSinceMidnightJan1st1904(this.CreationTime);
+		const ModificationTime = GetSecondsSinceMidnightJan1st1904(this.ModificationTime);
+		
+		GetDateTimeFromSecondsSinceMidnightJan1st1904
+		
+		if ( this.Version == 0 )
+		{
+			DataWriter.Write32(CreationTime);
+			DataWriter.Write32(ModificationTime);
+			DataWriter.Write32(this.TimeScale);
+			const Duration = this.DurationMs / 1000 / this.TimeScale;
+			DataWriter.Write32(Duration);
+		}
+		else if ( this.Version == 1 )
+		{
+			DataWriter.Write64(CreationTime);
+			DataWriter.Write64(ModificationTime);
+			DataWriter.Write32(this.TimeScale);
+			const Duration = this.DurationMs / 1000 / this.TimeScale;
+			DataWriter.Write64(Duration);
+		}
+		else
+			throw `unkown MVHD version ${this.Version}`;
+			
+		DataWriter.Write32(this.PreferedRate);
+		DataWriter.Write16(this.PreferedVolume);
+		DataWriter.WriteBytes(this.Reserved);
+		DataWriter.WriteBytes(this.Matrix);
+		DataWriter.Write32(this.PreviewTime);
+		DataWriter.Write32(this.PreviewDuration);
+		DataWriter.Write32(this.PosterTime);
+		DataWriter.Write32(this.SelectionTime);
+		DataWriter.Write32(this.SelectionDuration);
+		DataWriter.Write32(this.CurrentTime);
+		DataWriter.Write32(this.NextTrackId);
+	}
+}
+	
+class Atom_Ftyp extends Atom_t
+{
+	constructor()
+	{
+		super('ftyp');
+		
+		//	gr: get the proper version info etc
+		this.MajorBrand = 'isom';
+		this.MajorVersion = 1;
+		//this.CompatibleBrands = ['isom','iso2','avc1','iso6','mp41'];
+		this.CompatibleBrands = ['avc1'];
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.WriteStringAsBytes(this.MajorBrand);
+		DataWriter.Write32(this.MajorVersion);
+		for ( let Type of this.CompatibleBrands )
+		{
+			DataWriter.WriteStringAsBytes(Type);
+		}
+	}
+}
+
+class Atom_Free extends Atom_t
+{
+	constructor()
+	{
+		super('free');
+	}
+}
+
+class Atom_Mfhd extends Atom_t
+{
+	constructor(SequenceNumber=0)
+	{
+		super('mfhd');
+		this.Version = 0;
+		this.Flags = 0;
+		this.SequenceNumber = SequenceNumber;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		DataWriter.Write32(this.SequenceNumber);
+	}
+}
+
+class Atom_Moof extends Atom_t
+{
+	constructor(SequenceNumber)
+	{
+		super('moof');
+		
+		this.mfhd = new Atom_Mfhd(SequenceNumber);
+		this.ChildAtoms.push(this.mfhd);
+	}
+}
+
+
+class Atom_Traf extends Atom_t
+{
+	constructor(TrackId)
+	{
+		super('traf');
+		
+		this.Tfhd = new Atom_Tfhd(TrackId);
+		this.Tfdt = new Atom_Tfdt();
+		this.Trun = new Atom_Trun();
+		this.ChildAtoms.push(this.Tfhd);
+		this.ChildAtoms.push(this.Tfdt);
+		this.ChildAtoms.push(this.Trun);
+	}
+
+	set BaseMediaDecodeTime(Value)
+	{
+		this.Tfdt.BaseMediaDecodeTime = Value;
+	}
+	
+	AddSample(Sample)
+	{
+		this.Trun.AddSample(...arguments);
+	}
+}
+
+class Atom_Mdat extends Atom_t
+{
+	constructor()
+	{
+		super('mdat');
+		this.Datas = [];
+	}
+	
+	PushData(Data)
+	{
+		//	gr: I was going to enforce data being bytes, but
+		//		maybe should natively support subtitles
+		if ( typeof Data == typeof '' )
+			Data = StringToBytes(Data);
+			
+		//	get position before we add this new data
+		const JoinedData = JoinTypedArrays( new Uint8Array(0), ...this.Datas);
+		this.Datas.push(Data);
+		return JoinedData.length;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		this.Datas.forEach( d => DataWriter.WriteBytes(d) );
+	}
+}
+
+class Atom_Tfdt extends Atom_t
+{
+	constructor(CopyAtom)
+	{
+		super('tfdt',CopyAtom);
+		
+		this.Version = 0;
+		this.Flags = 0;
+		this.BaseMediaDecodeTime = 0;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		
+		if ( this.Version == 0 )
+			DataWriter.Write32(this.BaseMediaDecodeTime);
+		else
+			DataWriter.Write64(this.BaseMediaDecodeTime);
+	}
+	
+	static async Read(AnonymousAtom)
+	{
+		const Reader = new AtomDataReader(AnonymousAtom.Data,AnonymousAtom.DataFilePosition);
+		const Atom = new Atom_Tfdt(AnonymousAtom);
+		Atom.Version = await Reader.Read8();
+		Atom.Flags = await Reader.Read24();
+		
+		if ( Atom.Version == 0 )
+		{
+			Atom.BaseMediaDecodeTime = await Reader.Read32();
+		}
+		else
+		{
+			Atom.BaseMediaDecodeTime = await Reader.Read64();
+		}
+		return Atom;
+	}
+}
+
+		const TfhdFlag_HasBaseDataOffet = 1<<0;
+		const TfhdFlag_HasSampleDescriptionIndex = 1<<1;
+		const TfhdFlag_Unknown2 = 1<<2;
+		const TfhdFlag_HasSampleDuration = 1<<3;
+		const TfhdFlag_HasSampleSize = 1<<4;
+		const TfhdFlag_HasSampleFlags = 1<<5;
+		const TfhdFlag_DurationIsEmpty = 1<<16;
+		const TfhdFlag_DefaultBaseIsMoof = 1<<17;
+
+
+class Atom_Tfhd extends Atom_t
+{
+	constructor(TrackId)
+	{
+		super('tfhd');
+		this.Version = 0;
+		this.Flags = 0;
+		this.TrackId = TrackId;
+		/*
+		this.Flags |= TfhdFlag_HasBaseDataOffet;
+		this.Flags |= TfhdFlag_HasSampleDuration;
+		this.Flags |= TfhdFlag_HasSampleSize;
+		this.Flags |= TfhdFlag_HasSampleFlags;
+		*/
+		//	defaults if flag not set
+		this.BaseDataOffset = 0;
+		this.SampleDescriptionIndex = 0;
+		this.DefaultSampleDuration = 1;
+		this.DefaultSampleSize = 0;//0x000020C3;
+		this.DefaultSampleFlags = 0;//0x01010000;
+	}
+	
+	HasFlag(Flag)
+	{
+		return (this.Flags & Flag)!=0;
+	}
+	
+	static async Read(AnonymousAtom)
+	{
+		if ( this.TrackId == 0 )
+			throw `TrackId not set in TFHD (ffmpeg/libav/ffprobe wont parse without this correct)`;
+			
+		const Reader = new AtomDataReader(AnonymousAtom.Data,AnonymousAtom.DataFilePosition);
+		const Atom = new Atom_Tfhd(AnonymousAtom);
+		Atom.Version = await Reader.Read8();
+		Atom.Flags = await Reader.Read24();
+		Atom.TrackId = await Reader.Read32();
+	
+		//	http://178.62.222.88/mp4parser/mp4.js
+		if ( Atom.HasFlag(TfhdFlag_HasBaseDataOffet) )
+			Atom.BaseDataOffset = await Reader.Read64();	//	unsigned
+		
+		if ( Atom.HasFlag(TfhdFlag_HasSampleDescriptionIndex))
+			Atom.SampleDescriptionIndex = await Reader.Read32();
+
+		if ( Atom.HasFlag(TfhdFlag_HasSampleDuration))
+			Atom.DefaultSampleDuration = await Reader.Read32();
+		
+		if ( Atom.HasFlag(TfhdFlag_HasSampleSize))
+			Atom.DefaultSampleSize = await Reader.Read32();
+		
+		if ( Atom.HasFlag(TfhdFlag_HasSampleFlags))
+			Atom.DefaultSampleFlags = await Reader.Read32();
+
+		return Atom;
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		DataWriter.Write32(this.TrackId);
+
+		if ( this.HasFlag(TfhdFlag_HasBaseDataOffet) )
+			DataWriter.Write64(this.BaseDataOffset);	//	unsigned
+		
+		if ( this.HasFlag(TfhdFlag_HasSampleDescriptionIndex))
+			DataWriter.Write32(this.SampleDescriptionIndex);
+		
+		if ( this.HasFlag(TfhdFlag_HasSampleDuration))
+			DataWriter.Write32(this.DefaultSampleDuration);
+		
+		if ( this.HasFlag(TfhdFlag_HasSampleSize))
+			DataWriter.Write32(this.DefaultSampleSize);
+		
+		if ( this.HasFlag(TfhdFlag_HasSampleFlags))
+			DataWriter.Write32(this.DefaultSampleFlags);
+		
+	}
+}
+
+class Atom_Trun extends Atom_t
+{
+	constructor()
+	{
+		super('trun');
+		this.Version = 0;
+		this.Flags = 0;
+		
+		this.MoofSize = null;	//	null if not set
+		
+		this.Samples = [];
+		
+		//	setup flags
+		this.Flags |= 1<<TrunFlags.DataOffsetPresent;
+		this.Flags |= 1<<TrunFlags.SampleSizePresent;
+		this.Flags |= 1<<TrunFlags.SampleDurationPresent;
+		this.Flags |= 1<<TrunFlags.SampleFlagsPresent;
+	}
+	
+	AddSample(Sample,MdatPosition)
+	{
+		Sample.MdatPosition = MdatPosition;
+		this.Samples.push(Sample);
+	}
+	
+	EncodeData(DataWriter)
+	{
+		DataWriter.Write8(this.Version);
+		DataWriter.Write24(this.Flags);
+		
+		const EntryCount = this.Samples.length;
+		DataWriter.Write32(EntryCount);
+		
+		const Flags = this.Flags;
+		function IsFlagBit(Bit)	{ return (Flags & (1 << Bit)) != 0; };
+		
+		const SampleSizePresent = IsFlagBit(TrunFlags.SampleSizePresent);
+		const SampleDurationPresent = IsFlagBit(TrunFlags.SampleDurationPresent);
+		const SampleFlagsPresent = IsFlagBit(TrunFlags.SampleFlagsPresent);
+		const SampleCompositionTimeOffsetPresent = IsFlagBit(TrunFlags.SampleCompositionTimeOffsetPresent);
+		const FirstSampleFlagsPresent = IsFlagBit(TrunFlags.FirstSampleFlagsPresent);
+		const DataOffsetPresent = IsFlagBit(TrunFlags.DataOffsetPresent);
+
+
+		if ( DataOffsetPresent )
+		{
+			let DataOffsetFromMoof = (this.MoofSize||0);
+			DataOffsetFromMoof += 8;	//	from analysing existing... this must be size+fourcc of mdat, or moof
+			DataOffsetFromMoof += this.Samples[0].MdatPosition;
+			DataWriter.Write32(DataOffsetFromMoof);
+		}
+		
+		if ( FirstSampleFlagsPresent )
+		{
+			const FirstSampleFlags = 0;
+			DataWriter.Write32(FirstSampleFlags);
+		}
+
+		const Header = {};
+		Header.TimeScale = 1.0 / 15333.4;
+		
+		function MsToTime(TimeMs)
+		{
+			let Timef = TimeMs / 1000.0;
+			let TimeUnit = Timef / Header.TimeScale;
+			return Math.floor(TimeUnit);
+		};
+		
+		//	may need to do some time conversion		
+		//let CurrentTime = (Header.DecodeTime!==undefined) ? Header.DecodeTime : 0;
+		
+		//for ( let Sample of this.Samples )
+		let LastDuration = 1;
+		for ( let s=0;	s<this.Samples.length;	s++ )
+		{
+			const Sample = this.Samples[s];
+			let NextSampleTime;
+			if ( s == this.Samples.length-1 )
+			{
+				NextSampleTime = Sample.DecodeTimeMs + LastDuration;
+			}
+			else
+			{
+				NextSampleTime = this.Samples[s+1].DecodeTimeMs;
+			}
+			const DurationMs = NextSampleTime - Sample.DecodeTimeMs;
+			
+			if ( SampleDurationPresent )
+				DataWriter.Write32(DurationMs);
+			if ( SampleSizePresent )
+				DataWriter.Write32(Sample.Size);
+			if ( SampleFlagsPresent )
+				DataWriter.Write32(Sample.Flags);
+			if ( SampleCompositionTimeOffsetPresent )
+				DataWriter.Write32(Sample.CompositionTimeOffset);
+		}
+	}
+}
+
+export class Mp4FragmentedEncoder
+{
+	constructor()
+	{
+		//	gr: currently not stitching moofs together properly. only one works.
+		this.BakeFrequencyMs = 999999;//200;//9 * 1000;//100;//1 * 1000;
+		this.LastMoofSequenceNumber = 0;
+		this.Moov = null;	//	if non-null it's been written
+		
+		this.TrackSps = {};	//	[trackid]=sps
+		this.TrackPps = {};	//	[trackid]=sps
+		
+		this.RootAtoms = [];
+		
+		this.EncodedAtomQueue = new PromiseQueue('Mp4FragmentedEncoder.EncodedAtomQueue');
+		this.EncodedDataQueue = new PromiseQueue('Mp4FragmentedEncoder.EncodedDataQueue');
+		this.PendingSampleQueue = new PromiseQueue('Mp4FragmentedEncoder.PendingSampleQueue');
+		
+		this.PendingTracks = {};	//	[TrackId]
+		
+		this.EncodeThreadPromise = this.EncodeThread();
+	}
+	
+	async WaitForNextEncodedBytes()
+	{
+		return this.EncodedDataQueue.WaitForNext();
+	}
+	
+	async WaitForNextAtom()
+	{
+		return this.EncodedAtomQueue.WaitForNext();
+	}
+	
+	PushSample(Data,DecodeTimeMs,PresentationTimeMs,TrackId)
+	{
+		if ( !Number.isInteger(TrackId) || TrackId <= 0 )
+			throw `Sample track id must be a positive integer and above zero`;
+
+		//	hack! update SPS && PPS for each track
+		//	would be better to keep this in the samples, then filter out?
+		//	but we do need to hold onto them in case theyre not provided regularly...(or do we?)
+		if ( H264.GetNaluType(Data) == H264.ContentTypes.SPS )
+			this.TrackSps[TrackId] = Data.slice(4);
+		if ( H264.GetNaluType(Data) == H264.ContentTypes.PPS )
+			this.TrackPps[TrackId] = Data.slice(4);
+
+		Data = AnnexBToNalu4(Data);
+		if ( !Data )
+			return;
+
+		const Sample = new Sample_t();
+		Sample.Data = Data;
+		Sample.DecodeTimeMs = DecodeTimeMs;
+		Sample.PresentationTimeMs = PresentationTimeMs;
+		Sample.TrackId = TrackId;
+		Sample.DurationMs = 33;
+		Sample.Keyframe = true;
+		
+		this.PendingSampleQueue.Push(Sample);
+	}
+	
+	PushEndOfFile()
+	{
+		this.PendingSampleQueue.Push(EndOfFileMarker);
+	}
+	
+	GetPendingTrack(TrackId)
+	{
+		if ( !this.PendingTracks.hasOwnProperty(TrackId) )
+			this.PendingTracks[TrackId] = new PendingTrack_t();
+		return this.PendingTracks[TrackId];
+	}
+	
+	
+	PushAtom(Atom)
+	{
+		this.RootAtoms.push(Atom);
+		this.EncodedAtomQueue.Push(Atom);
+		
+		const EncodedData = Atom.Encode();
+		this.EncodedDataQueue.Push(EncodedData);
+	}
+
+	BakePendingTracks()
+	{
+		Pop.Debug(`BakePendingTracks`);
+		const MovieDuration = 6000;
+		const MovieTimescale = 1000;
+		this.LastMoofSequenceNumber++;
+		const SequenceNumber = this.LastMoofSequenceNumber;
+
+		const PendingTracks = this.PendingTracks;
+		this.PendingTracks = {};
+		const TrackIds = Object.keys(PendingTracks);
+		
+		const Moofs = [];
+		const Mdats = [];
+		const Mp4Tracks = [];
+
+		for ( let TrackIdKey of TrackIds )
+		{
+			const PendingTrack = PendingTracks[TrackIdKey];
+			const TrackId = Number(TrackIdKey);
+			PendingTrack.Sps = this.TrackSps[TrackId];
+			PendingTrack.Pps = this.TrackPps[TrackId];
+			
+			
+			const Track =  new H264Remuxer(MovieTimescale);
+			Track.mp4track.id = TrackId;
+			Track.readyToDecode = true;
+
+			//	hack
+			if ( !PendingTrack.Sps )
+				throw `missing SPS for track ${Track.mp4track.id}`;
+			if ( !PendingTrack.Pps )
+				throw `missing PPS for track ${Track.mp4track.id}`;
+			Track.mp4track.sps = [PendingTrack.Sps];
+			Track.mp4track.pps = [PendingTrack.Pps];
+			
+			function ShouldIncludeSample(Sample)
+			{
+				const SampleType = H264.GetNaluType(Sample.Data);
+				switch(SampleType)
+				{
+				case H264.ContentTypes.SPS:
+				case H264.ContentTypes.PPS:
+				case H264.ContentTypes.SEI:
+					return false;
+				default:
+					return true;
+				}
+			}
+			
+			//	fill track
+			let Samples = PendingTrack.Samples;
+			//	filter out [mp4]redundant packets
+			Samples = Samples.filter(ShouldIncludeSample);
+			
+			//	force all samples to keyframes for now, helps chrome
+			Samples.forEach( s => s.IsKeyframe=true );
+			
+			//	fill old mp4 track system
+			for ( let Sample of Samples )
+			{
+				const Unit = {};
+				Unit.Data = Sample.Data;
+				Unit.getData = () => {	return Sample.Data;	};
+				Unit.getSize = () => {	return Sample.Data.length;	};
+
+				Track.samples.push({
+					units:	[Unit],
+					size:	Sample.Data.length,
+					keyFrame:	Sample.IsKeyframe,	//	helps web browser if all true
+					duration:	Sample.DurationMs,
+				});
+			}		
+
+			//	gr: this bakes sample meta into track
+			const TrackPayload = Track.getPayload();
+			Mp4Tracks.push(Track.mp4track);
+
+			const mdat = new Atom_Mdat();
+			
+			const Moof = new Atom_Moof(SequenceNumber);
+			const Traf = this.traf = new Atom_Traf(TrackId);
+			Moof.ChildAtoms.push(Traf);
+			for ( let Sample of Samples )
+			{
+				const MdatPosition = mdat.PushData( Sample.Data );
+				Traf.AddSample(Sample,MdatPosition);
+			}
+			//	should this be zero, or maybe first sample's time?
+			Traf.BaseMediaDecodeTime = 0;//Track.dts;
+			
+			//	need to get data offset to mdat, but we need the moof size for that
+			{
+				const NewMoofData = Moof.Encode();
+				const MoofSize = NewMoofData.length;
+				Traf.Trun.MoofSize = MoofSize;
+			}	
+			
+			Moofs.push(Moof);
+			Mdats.push(mdat);
+		}
+		
+		//	write this once, can be done before backing moof
+		//	gr: mp4track.len doesnt matter
+		if ( !this.Moov )
+		{
+			//	replacement for mp4tracks
+			const MoovMp4Tracks = [];
+			for ( let TrackId of TrackIds )
+			{
+				const PendingTrack = PendingTracks[TrackId];
+				
+				const Mp4Track = {};
+				//	mdia
+				Mp4Track.timescale = MovieTimescale;
+				Mp4Track.type = 'video';
+				
+				Mp4Track.sps = [PendingTrack.Sps];
+				Mp4Track.pps = [PendingTrack.Pps];
+				Mp4Track.id = Number(TrackId);
+
+				const ParsedSps = H264.ParseSps(PendingTrack.Sps);
+				const LastSample = PendingTrack.Samples[PendingTrack.Samples.length-1];
+				const LastSampleEndTime = LastSample.DecodeTimeMs + LastSample.DurationMs;
+				
+				//	tkhd
+				Mp4Track.duration = LastSampleEndTime;
+				Mp4Track.width = ParsedSps.width;
+				Mp4Track.height = ParsedSps.height;
+				Mp4Track.volume = 0;
+				
+				MoovMp4Tracks.push(Mp4Track);
+			}
+			
+			this.Ftyp = new Atom_Ftyp();
+			this.PushAtom(this.Ftyp);
+			//this.Moov = MP4.initSegment( MoovMp4Tracks, MovieDuration, MovieTimescale );
+			this.Moov = MP4.moov( MoovMp4Tracks, MovieDuration, MovieTimescale );
+
+			
+			this.EncodedDataQueue.Push(this.Moov);
+			
+			//	needs sps etc setting up properly
+			this.Moov = new Atom_Moov();
+			for ( let TrackId of TrackIds )
+				this.Moov.AddTrack(TrackId);
+			//this.EncodedDataQueue.Push(this.Moov.Encode());
+			
+		}
+			
+		for ( let i=0;	i<Moofs.length;	i++ )
+		{
+			const moof = Moofs[i];
+			const mdat = Mdats[i];
+			this.PushAtom(moof);
+			this.PushAtom(mdat);
+		}
+	}
+
+	OnEncodeEof()
+	{
+		Pop.Debug(`OnEncodeEof`);
+		this.EncodedDataQueue.Push(EndOfFileMarker);
+	}
+	
+	async EncodeThread()
+	{
+		let LastBakedTimestamp = null;
+		
+		while(true)
+		{
+			const Sample = await this.PendingSampleQueue.WaitForNext();
+			const Eof = Sample == EndOfFileMarker;
+			if ( Eof )
+			{
+				Pop.Debug(`Mp4 encoder got end of file`);
+			}
+			
+
+			//	decide if previous data should bake
+			const TimeSinceLastBake = Sample.DecodeTimeMs - (LastBakedTimestamp||0);
+			if ( Eof || TimeSinceLastBake >= this.BakeFrequencyMs )
+			{
+				this.BakePendingTracks();
+				LastBakedTimestamp = Sample.DecodeTimeMs;
+			}
+			
+			if ( Eof )
+				break;
+			
+			//	get the track this should go into.
+			const Track = this.GetPendingTrack(Sample.TrackId);
+			Track.PushSample(Sample);
+		}
+		
+		this.BakePendingTracks();
+		this.OnEncodeEof();
+	}
+}
 
