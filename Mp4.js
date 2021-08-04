@@ -1372,7 +1372,7 @@ class Atom_Tkhd extends Atom_t
 		this.TrackId = TrackId;	//	0 is invalid
 		this.Duration = 123*1000;
 		
-		//	A 16-bit integer that indicates this track’s spatial priority in its movie. The QuickTime Movie Toolbox uses this value to determine how tracks overlay one another. Tracks with lower layer values are displayed in front of tracks with higher layer values.
+		//	A 16-bit integer that indicates this tracks spatial priority in its movie. The QuickTime Movie Toolbox uses this value to determine how tracks overlay one another. Tracks with lower layer values are displayed in front of tracks with higher layer values.
 
 		this.Layer = 0;
 		this.AlternateGroup = 0;	//	zero =  not an alternative track
@@ -1848,7 +1848,7 @@ class Atom_Stsd extends Atom_t
 			}
 			
 			//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-74522
-			//	When parsing sample descriptions in the ‘stsd’ atom, be aware of the sample description size value in order to read each table entry correctly. Some sample descriptions terminate with four zero bytes that are not otherwise indicated.
+			//	When parsing sample descriptions in the stsd atom, be aware of the sample description size value in order to read each table entry correctly. Some sample descriptions terminate with four zero bytes that are not otherwise indicated.
 			//	Note: Some video sample descriptions contain an optional 4-byte terminator with all bytes set to 0, 
 			//	following all other sample description and sample description extension data. If this optional terminator is present, the sample description size value will include it. 
 			//	It is important to check the sample description size when parsing: more than or fewer than these four optional bytes, if present in the size value, indicates a malformed sample description
