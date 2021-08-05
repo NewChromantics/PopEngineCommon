@@ -2456,9 +2456,10 @@ export class Mp4FragmentedEncoder
 		//	hack! update SPS && PPS for each track
 		//	would be better to keep this in the samples, then filter out?
 		//	but we do need to hold onto them in case theyre not provided regularly...(or do we?)
-		if ( H264.GetNaluType(Data) == H264.ContentTypes.SPS )
+		const ContentType = H264.GetNaluType(Data);
+		if ( ContentType == H264.ContentTypes.SPS )
 			this.TrackSps[TrackId] = Data.slice(4);
-		if ( H264.GetNaluType(Data) == H264.ContentTypes.PPS )
+		if ( ContentType == H264.ContentTypes.PPS )
 			this.TrackPps[TrackId] = Data.slice(4);
 
 		Data = AnnexBToNalu4(Data);
@@ -2471,7 +2472,7 @@ export class Mp4FragmentedEncoder
 		Sample.PresentationTimeMs = PresentationTimeMs;
 		Sample.TrackId = TrackId;
 		Sample.DurationMs = 33;
-		Sample.Keyframe = true;
+		Sample.IsKeyframe = H264.IsContentTypeKeyframe(ContentType);
 		
 		this.PendingSampleQueue.Push(Sample);
 	}
@@ -2562,9 +2563,6 @@ export class Mp4FragmentedEncoder
 			let Samples = PendingTrack.Samples;
 			//	filter out [mp4]redundant packets
 			Samples = Samples.filter(ShouldIncludeSample);
-			
-			//	force all samples to keyframes for now, helps chrome
-			Samples.forEach( s => s.IsKeyframe=true );
 			
 			//	fill old mp4 track system
 			for ( let Sample of Samples )
