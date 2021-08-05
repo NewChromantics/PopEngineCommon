@@ -2597,7 +2597,7 @@ export class Mp4FragmentedEncoder
 				Traf.AddSample(Sample,MdatPosition);
 			}
 			//	should this be zero, or maybe first sample's time?
-			Traf.BaseMediaDecodeTime = 0;//Track.dts;
+			Traf.BaseMediaDecodeTime = Samples[0].DecodeTimeMs;
 			
 			//	need to get data offset to mdat, but we need the moof size for that
 			{
