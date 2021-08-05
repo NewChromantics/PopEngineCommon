@@ -175,12 +175,15 @@ export function GetNaluType(Packet)
 }
 
 
-
 export function IsKeyframe(Packet)
 {
 	const Meta = GetNaluMeta(Packet);
-	
-	switch (Meta.Content)
+	return IsContentTypeKeyframe(Meta.Content);
+}
+
+export function IsContentTypeKeyframe(ContentType)
+{
+	switch (ContentType)
 	{
 		case ContentTypes.SPS:
 		case ContentTypes.PPS:
