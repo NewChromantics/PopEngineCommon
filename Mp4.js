@@ -2410,7 +2410,7 @@ export class Mp4FragmentedEncoder
 	constructor()
 	{
 		//	gr: currently not stitching moofs together properly. only one works.
-		this.BakeFrequencyMs = 999999;//200;//9 * 1000;//100;//1 * 1000;
+		this.BakeFrequencyMs = 5*1000;
 		this.LastMoofSequenceNumber = 0;
 		this.Ftyp = null;
 		this.Moov = null;	//	if non-null it's been written
