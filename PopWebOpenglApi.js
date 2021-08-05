@@ -885,6 +885,14 @@ export class Context
 		}
 	}
 	
+	CanRenderToPixelFormat(Format)
+	{
+		if ( Format == 'Float4' )
+			return CanRenderToFloat;
+			
+		return true;
+	}
+	
 	//	render some commands, (parse here)
 	//	queue up, and return their promise so caller knows when it's rendered
 	async Render(Commands)
