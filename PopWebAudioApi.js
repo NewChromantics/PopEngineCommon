@@ -913,7 +913,7 @@ function GetMp3FrameStarts(Data)
 function SplitMp3(DataChunks,HasEof,Frames,RemainderData)
 {
 	//	temp
-	const Data = Pop.JoinTypedArrays(...DataChunks);
+	const Data = Pop.JoinTypedArrays(DataChunks);
 	
 	const Starts = GetMp3FrameStarts(Data);
 	for ( let s=1;	s<Starts.length;	s++ )
@@ -965,7 +965,7 @@ class WaveSampleData_t
 		
 		//	decodeAudioData detaches the data from the original source so becomes empty
 		//	as this can affect the original file, we duplicate here
-		const ContiguiousData = isTypedArray(WaveData) ? WaveData.slice() : Pop.JoinTypedArrays(...WaveData);
+		const ContiguiousData = isTypedArray(WaveData) ? WaveData.slice() : Pop.JoinTypedArrays(WaveData);
 		const DataCopy = ContiguiousData.slice();
 		//const DataCopy = isTypedArray(WaveData) ? WaveData.slice() : Pop.JoinTypedArrays(...WaveData);
 		//	gr; reuse data as in the constructor we're already copying it

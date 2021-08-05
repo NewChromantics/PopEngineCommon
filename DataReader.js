@@ -47,7 +47,7 @@ export class DataReader
 				throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
 			
 			Pop.Debug(`New bytes x${NewBytes.length}`);
-			this.FileBytes = JoinTypedArrays(this.FileBytes,NewBytes);
+			this.FileBytes = JoinTypedArrays([this.FileBytes,NewBytes]);
 			Pop.Debug(`File size now x${this.FileBytes.length}`);
 		}
 		const Bytes = this.FileBytes.slice( FilePosition, EndPosition );
@@ -137,7 +137,7 @@ export class DataReader
 					throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
 			
 				//Pop.Debug(`New bytes x${NewBytes.length}`);
-				this.FileBytes = JoinTypedArrays(this.FileBytes,NewBytes);
+				this.FileBytes = JoinTypedArrays([this.FileBytes,NewBytes]);
 				//Pop.Debug(`File size now x${this.FileBytes.length}`);
 			}
 			
@@ -176,7 +176,7 @@ export class DataWriter
 		if ( !this.Datas.length )
 			return new Uint8Array(0);
 			
-		const JoinedData = JoinTypedArrays(...this.Datas);
+		const JoinedData = JoinTypedArrays(this.Datas);
 		this.Datas = [JoinedData];
 		return JoinedData;
 	}

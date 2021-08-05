@@ -2163,7 +2163,7 @@ class Atom_Mdat extends Atom_t
 			Data = StringToBytes(Data);
 			
 		//	get position before we add this new data
-		const JoinedData = JoinTypedArrays( new Uint8Array(0), ...this.Datas);
+		const JoinedData = JoinTypedArrays(this.Datas);
 		this.Datas.push(Data);
 		return JoinedData.length;
 	}

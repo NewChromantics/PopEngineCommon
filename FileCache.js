@@ -93,7 +93,7 @@ export default class FileCache_t
 		//		so we minimise copies as the already-copied parts aren't going
 		//		to change (in theory)
 		Debug(`Resolving x${Meta.ContentChunks.length} chunks of ${Filename}`);
-		this.Cache[Filename] = JoinTypedArrays(...Meta.ContentChunks);
+		this.Cache[Filename] = JoinTypedArrays(Meta.ContentChunks);
 		Meta.ContentChunks = null;
 	}
 	

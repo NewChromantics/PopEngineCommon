@@ -197,14 +197,27 @@ export function IsTypedArray(obj)
 	return !!obj && obj.byteLength !== undefined;
 }
 
-export function JoinTypedArrays(a,b,c,etc)
+export function JoinTypedArrays(Arrays,DeprecatedSecondArray)
 {
+	if ( DeprecatedSecondArray )
+	{
+		Pop.Debug(`JoinTypedArrays(a,b,c) deprecated, pass an array of typed arrays as first arg`);
+		Arrays = Array.from(arguments);
+	}
+	
+	if ( !Array.isArray(Arrays) )
+		throw `JoinTypedArrays() expecting array for first arg(${typeof Arrays})`;
+	
+	//	what should we return if empty...
+	if ( Arrays.length == 0 )
+		return new Uint8Array(0);
+	
+	const a = Arrays[0];
 	//	gr: need some more rigirous checks here
 	if ( !IsTypedArray(a) )
 		throw `Cannot JoinTypedArrays where 1st not typed array (${a})`;
 
 	const Constructor = a.constructor;
-	const Arrays = Array.from(arguments);
 	const TotalSize = Arrays.reduce( (Accumulator,a) => Accumulator + a.length, 0 );
 
 	const NewArray = new Constructor(TotalSize);
@@ -213,10 +226,7 @@ export function JoinTypedArrays(a,b,c,etc)
 	{
 		const NameA = TheArray.constructor.name;
 		const NameB = Constructor.name;
-		//	gr: this isn't working in javascriptcore :/
-		//		taking a risk using name instead
-		//if ( TheArray.constructor != Constructor )
-		if ( NameA != NameB )
+		if ( TheArray.constructor != Constructor )
 			throw `Cannot join to typedarrays of different types (${NameA} + ${NameB})`;
 	
 		NewArray.set( TheArray, Position );
