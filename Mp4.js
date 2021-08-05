@@ -119,14 +119,22 @@ enum TrunFlags
 
 const SampleFlags =
 {
-	isLeading:				24+2,
-	dependsOn_keyframe:		24+2,
-	dependsOn_notkeyframe:	24+1,	//	not sure what this flag is, but set when not keyframe
+	//	https://chromium.googlesource.com/chromium/src/media/+/refs/heads/main/formats/mp4/box_definitions.h#541
+	//	sample_depends_on values in ISO/IEC 14496-12 Section 8.40.2.3.
+	//	gr: used in chromium as (x>>24)&3 then cast to 0x3
+	//	https://chromium.googlesource.com/chromium/src/media/+/refs/heads/main/formats/mp4/track_run_iterator.cc#189
+	//kSampleDependsOnUnknown = 0,
+	//kSampleDependsOnOthers = 1,	bit 24 set
+	//kSampleDependsOnNoOther = 2,	bit 25 set
+	//kSampleDependsOnReserved = 3, both set
+	DependsOnOthers:		24+0,
+	DependsOnNoOthers:		24+1,	//	"is depended on" in other cases, so is keyframe
+	isLeading:				24+2,	//	
 	
 	IsNotKeyframe:			0+16,
 	PaddingValue:			1+16,
 	HasRedundancy:			4+16,
-	IsDepedendedOn:			6+16,
+	//IsDepedendedOn:			6+16,//	keyframe
 	
 	//	last 2 bytes of flags are priority
 	DegredationPriority0:	0xff00,
@@ -142,10 +150,10 @@ class Sample_t
 	{
 		this.DecodeTimeMs;
 		this.PresentationTimeMs;
+		this.IsKeyframe = true;
 
 		//	decoder
 		this.DataSize;
-		this.IsKeyframe;
 		this.DurationMs;
 		this.DataPosition;
 		this.DataFilePosition;
@@ -153,21 +161,30 @@ class Sample_t
 		//	encoder
 		this.Data;
 		this.TrackId;
-		this.Flags = 0;
 		this.CompositionTimeOffset;
 	}
 	
-	get IsKeyframe()
+	get Flags()
 	{
-		const NotKeyframe = (this.Flags & SampleFlags.IsNotKeyframe)!=0;
-		return !NotKeyframe;
+		let Flags = 0;
+		if ( this.IsKeyframe )
+		{
+			Flags |= 1<<SampleFlags.DependsOnNoOthers;
+		}
+		else
+		{
+			Flags |= 1<<SampleFlags.IsNotKeyframe;
+			Flags |= 1<<SampleFlags.DependsOnOthers;
+		}
+		return Flags;
 	}
 	
-	set IsKeyframe(IsKeyframe)
+	set Flags(Flags)
 	{
-		const NotKeyframe = !IsKeyframe;
-		this.Flags &= ~(1<<SampleFlags.IsNotKeyframe);
-		this.Flags |= NotKeyframe ? (1<<SampleFlags.IsNotKeyframe) : 0;
+		const NotKeyframe = Flags & (1<<SampleFlags.IsNotKeyframe);
+		const DependsOnOthers = Flags & (1<<SampleFlags.DependsOnOthers);
+		//	in case of bad flags, assume keyframe? 
+		this.IsKeyframe = (!NotKeyframe) || (!DependsOnOthers);
 	}
 		
 	
@@ -615,7 +632,6 @@ export class Mp4Decoder
 			Sample.DataFilePosition = CurrentDataStartPosition;
 			Sample.DataSize = SampleSize;
 			Sample.DurationMs = TimeToMs(SampleDuration);
-			Sample.IsKeyframe = false;
 			Sample.DecodeTimeMs = TimeToMs(CurrentTime);
 			Sample.PresentationTimeMs = TimeToMs(CurrentTime+SampleCompositionTimeOffset);
 			Sample.Flags = TrunBoxSampleFlags;
@@ -2398,7 +2414,10 @@ class Atom_Trun extends Atom_t
 			if ( SampleSizePresent )
 				DataWriter.Write32(Sample.Size);
 			if ( SampleFlagsPresent )
+			{
+				Pop.Debug(`Sample ${Sample.DecodeTimeMs}ms Flags: 0x${Sample.Flags.toString(16)}`);
 				DataWriter.Write32(Sample.Flags);
+			}
 			if ( SampleCompositionTimeOffsetPresent )
 				DataWriter.Write32(Sample.CompositionTimeOffset);
 		}
@@ -2450,6 +2469,7 @@ export class Mp4FragmentedEncoder
 	
 	PushSample(Data,DecodeTimeMs,PresentationTimeMs,TrackId)
 	{
+		Pop.Debug(`PushSample DecodeTimeMs=${DecodeTimeMs}ms TrackId=${TrackId}`);
 		if ( !Number.isInteger(TrackId) || TrackId <= 0 )
 			throw `Sample track id must be a positive integer and above zero`;
 
@@ -2512,7 +2532,7 @@ export class Mp4FragmentedEncoder
 	BakePendingTracks()
 	{
 		Pop.Debug(`BakePendingTracks`);
-		const MovieDuration = 6000;
+		const MovieDuration = 999*1000;
 		const MovieTimescale = 1000;
 		this.LastMoofSequenceNumber++;
 		const SequenceNumber = this.LastMoofSequenceNumber;
@@ -2678,6 +2698,7 @@ export class Mp4FragmentedEncoder
 		while(true)
 		{
 			const Sample = await this.PendingSampleQueue.WaitForNext();
+			//Pop.Debug(`Encoding sample...`);
 			this.WriteFtyp();
 
 			const Eof = Sample == EndOfFileMarker;
