@@ -211,8 +211,13 @@ export function JoinTypedArrays(a,b,c,etc)
 	let Position = 0;
 	for ( let TheArray of Arrays )
 	{
-		if ( TheArray.constructor != Constructor )
-			throw `Cannot join to typedarrays of different types`;
+		const NameA = TheArray.constructor.name;
+		const NameB = Constructor.name;
+		//	gr: this isn't working in javascriptcore :/
+		//		taking a risk using name instead
+		//if ( TheArray.constructor != Constructor )
+		if ( NameA != NameB )
+			throw `Cannot join to typedarrays of different types (${NameA} + ${NameB})`;
 	
 		NewArray.set( TheArray, Position );
 		Position += TheArray.length;
