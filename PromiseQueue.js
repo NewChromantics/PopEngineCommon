@@ -109,6 +109,14 @@ export default class PromiseQueue
 		this.FlushPending();
 	}
 	
+	PeekLatest()
+	{
+		if ( !this.PendingValues.length )
+			return undefined;
+		const Latest = this.PendingValues[this.PendingValues.length-1];
+		return Latest;
+	}
+	
 	GetQueueSize()
 	{
 		return this.PendingValues.length;
