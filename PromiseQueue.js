@@ -1,6 +1,4 @@
-//	gr: now as a module. As we convert the web api to modules.
-//		native is still not module-friendly though, so some of this will be duplicated
-//		in PopApi.js still
+import Pop from './PopEngine.js'
 
 //	a promise queue that manages multiple listeners
 //	gr: this is getting out of sync with the cyclic-fixing-copy in WebApi. Make it seperate!
@@ -8,7 +6,7 @@ export default class PromiseQueue
 {
 	constructor(DebugName='UnnamedPromiseQueue',QueueWarningSize=100,Warning)
 	{
-		this.Warning = Warning || function(){};
+		this.Warning = Warning || Pop.Warning;
 		this.QueueWarningSize = QueueWarningSize;
 		this.Name = DebugName;
 		//	pending promises
@@ -114,7 +112,15 @@ export default class PromiseQueue
 		if ( !this.PendingValues.length )
 			return undefined;
 		const Latest = this.PendingValues[this.PendingValues.length-1];
-		return Latest;
+		
+		//	latest is a rejection... what should we do?
+		if ( !Latest.ResolveValues )
+			return undefined;
+		
+		//	multiple args can be passed in, as normally this goes to a Resolve
+		//	gr: but promises onyl resolve to one value... so what's the case when we have multiple args?...
+		
+		return Latest.ResolveValues[0];
 	}
 	
 	GetQueueSize()
