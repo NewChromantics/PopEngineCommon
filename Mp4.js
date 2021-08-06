@@ -2469,7 +2469,7 @@ export class Mp4FragmentedEncoder
 	
 	PushSample(Data,DecodeTimeMs,PresentationTimeMs,TrackId)
 	{
-		Pop.Debug(`PushSample DecodeTimeMs=${DecodeTimeMs}ms TrackId=${TrackId}`);
+		//Pop.Debug(`PushSample DecodeTimeMs=${DecodeTimeMs}ms TrackId=${TrackId}`);
 		if ( !Number.isInteger(TrackId) || TrackId <= 0 )
 			throw `Sample track id must be a positive integer and above zero`;
 
