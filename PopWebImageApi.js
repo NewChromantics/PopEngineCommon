@@ -386,6 +386,9 @@ export default class PopImage
 	
 	WritePixels(Width,Height,Pixels,Format)
 	{
+		if ( !Number.isInteger(Width) || !Number.isInteger(Height) )
+			throw `Trying to write non-integers for width(${Width})/height(${Height}) of image`;
+
 		this.Size = [Width,Height];
 		this.Pixels = Pixels;
 		this.PixelsFormat = Format;
@@ -520,6 +523,11 @@ export default class PopImage
 			const SourceType = gl.UNSIGNED_BYTE;
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, SourceFormat, SourceType, this.Pixels );
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * this.Pixels.width * this.Pixels.height;
+			if ( isNaN(this.OpenglByteSize) )
+			{
+				Pop.Warning(`Nan size: ${this.OpenglByteSize}`);
+				this.OpenglByteSize=0;
+			}
 		}
 		else if ( this.Pixels instanceof Uint8Array || this.Pixels instanceof Uint8ClampedArray )
 		{
@@ -541,6 +549,11 @@ export default class PopImage
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
 			
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
+			if ( isNaN(this.OpenglByteSize) )
+			{
+				Pop.Warning(`Nan size: ${this.OpenglByteSize}`);
+				this.OpenglByteSize=0;
+			}
 		}
 		else if ( this.Pixels instanceof Float32Array )
 		{
@@ -562,6 +575,11 @@ export default class PopImage
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
 
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
+			if ( isNaN(this.OpenglByteSize) )
+			{
+				Pop.Warning(`Nan size: ${this.OpenglByteSize}`);
+				this.OpenglByteSize=0;
+			}
 		}
 		else if ( this.Pixels instanceof Uint32Array )
 		{
@@ -577,6 +595,11 @@ export default class PopImage
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
 			
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
+			if ( isNaN(this.OpenglByteSize) )
+			{
+				Pop.Warning(`Nan size: ${this.OpenglByteSize}`);
+				this.OpenglByteSize=0;
+			}
 		}
 		else
 		{
