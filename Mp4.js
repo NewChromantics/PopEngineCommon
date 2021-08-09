@@ -2415,7 +2415,7 @@ class Atom_Trun extends Atom_t
 				DataWriter.Write32(Sample.Size);
 			if ( SampleFlagsPresent )
 			{
-				Pop.Debug(`Sample ${Sample.DecodeTimeMs}ms Flags: 0x${Sample.Flags.toString(16)}`);
+				//Pop.Debug(`Sample ${Sample.DecodeTimeMs}ms Flags: 0x${Sample.Flags.toString(16)}`);
 				DataWriter.Write32(Sample.Flags);
 			}
 			if ( SampleCompositionTimeOffsetPresent )
