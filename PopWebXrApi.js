@@ -30,7 +30,7 @@ function RenderTargetFrameBufferProxy(OpenglFrameBuffer,Viewport,RenderContext)
 		
 		const Viewport = this.GetRenderTargetRect();
 		gl.viewport( ...Viewport );
-		gl.scissor( ...Viewport );
+		//gl.scissor( ...Viewport );
 		
 		this.ResetState();
 	}
@@ -175,7 +175,11 @@ Pop.Xr.Device = class
 		
 		//	bind to device
 		this.ReferenceSpace.onreset = this.OnSpaceChanged.bind(this);
-		this.ReferenceSpace.addEventListener('reset', this.OnSpaceChanged.bind(this) );
+		
+		//	some implementations are missing addEventListener
+		if ( this.ReferenceSpace.addEventListener )
+			this.ReferenceSpace.addEventListener('reset', this.OnSpaceChanged.bind(this) );
+			
 		Session.addEventListener('end', this.OnSessionEnded.bind(this) );
 		this.InitLayer( RenderContext );
 		
@@ -369,7 +373,8 @@ Pop.Xr.Device = class
 				const InputName = Input.handedness;
 
 				//	treat joints as individual inputs as they all have their own pos
-				if (Input.hand!==null)
+				//	gr: this was !== null, does that mean in the past hand===0 ?
+				if (Input.hand!==null && Input.hand!==undefined)
 				{
 					const ThumbToJointMaxDistance = 0.03;
 					//	for hands, if a finger tip touches the thumb tip, its a button press
