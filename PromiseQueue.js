@@ -1,4 +1,5 @@
-import Pop from './PopEngine.js'
+//	chrome having trouble with cyclical import
+//import Pop from './PopEngine.js'
 
 //	a promise queue that manages multiple listeners
 //	gr: this is getting out of sync with the cyclic-fixing-copy in WebApi. Make it seperate!
@@ -6,7 +7,7 @@ export default class PromiseQueue
 {
 	constructor(DebugName='UnnamedPromiseQueue',QueueWarningSize=100,Warning)
 	{
-		this.Warning = Warning || Pop.Warning;
+		this.Warning = Warning || function(){};
 		this.QueueWarningSize = QueueWarningSize;
 		this.Name = DebugName;
 		//	pending promises
@@ -101,7 +102,7 @@ export default class PromiseQueue
 		Value.ResolveValues = Args;
 		
 		if ( Args.length > 1 )
-			Pop.Debug(`PromiseQueue (${this.Name}).Push(${Args}) with multiple args; What is this case? We should reduce to 1 arg`);
+			this.Warning(`PromiseQueue (${this.Name}).Push(${Args}) with multiple args; What is this case? We should reduce to 1 arg`);
 		
 		this.PendingValues.push( Value );
 		
