@@ -327,6 +327,7 @@ export function MakeRectSquareCentered(Rect,Grow=true)
 	return Rect;
 }
 
+//	scale rect from it's center
 export function GrowRect(Rect,Scale)
 {
 	//	don't modify original rect
@@ -539,6 +540,13 @@ export function GetTriangleArea2(PointA,PointB,PointC)
 	const s = PerimeterLength / 2;
 	const Area = Math.sqrt( s * (s-a) * (s-b) * (s-c) );
 	return Area;
+}
+
+export function GetRectCenter(Rect)
+{
+	const Halfw = Rect[2]/2;
+	const Halfh = Rect[3]/2;
+	return [ Rect[0]+Halfw, Rect[1]+Halfh ];
 }
 
 export function GetRectArea(Rect)
