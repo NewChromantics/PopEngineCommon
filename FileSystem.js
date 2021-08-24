@@ -463,6 +463,11 @@ export function LoadFileAsArrayBuffer(Filename,ResolveChunks=true)
 	return Contents;
 }
 
+export async function WriteToFileAsync(Filename,Contents,Append=false)
+{
+	return WriteToFile(...arguments);
+}
+
 //	on web, this call causes a Save As... dialog to appear to save the contents
 export function WriteToFile(Filename,Contents,Append=false)
 {
