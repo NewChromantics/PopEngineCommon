@@ -55,9 +55,9 @@ export const Range = range;
 
 export function rangeClamped(Min,Max,Value)
 {
-	return clamp( 0, 1, Math.range( Min, Max, Value ) );
+	return clamp( 0, 1, range( Min, Max, Value ) );
 }
-export const RangeClamped = Math.rangeClamped;
+export const RangeClamped = rangeClamped;
 
 export function lerp(Min,Max,Time)
 {
