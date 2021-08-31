@@ -464,9 +464,16 @@ export class Context
 	
 	AllocTextureIndex(Image)
 	{
+		const gl = this.GetGlContext();
+		const GlTextureNames = 
+		[
+			gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7, 
+			gl.TEXTURE8, gl.TEXTURE9, gl.TEXTURE10, gl.TEXTURE11, gl.TEXTURE12, gl.TEXTURE13, gl.TEXTURE14, gl.TEXTURE15 
+		];
+		
 		//	gr: make a pool or something
 		//		we fixed this on desktop, so take same model
-		const Index = (this.ActiveTextureIndex % 8);
+		const Index = (this.ActiveTextureIndex % GlTextureNames.length);
 		this.ActiveTextureIndex++;
 	
 		//	gr: only keep image reference for debugging!
@@ -1290,9 +1297,16 @@ export class RenderTarget
 	{
 		const RenderContext = this.GetRenderContext();
 
+		const gl = RenderContext.GetGlContext();
+		const GlTextureNames = 
+		[
+			gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7, 
+			gl.TEXTURE8, gl.TEXTURE9, gl.TEXTURE10, gl.TEXTURE11, gl.TEXTURE12, gl.TEXTURE13, gl.TEXTURE14, gl.TEXTURE15 
+		];
+
 		if ( CheckActiveTexturesBeforeRenderTargetBind )
 		{
-			const CurrentActiveTextureIndex =  (RenderContext.ActiveTextureIndex-1) % 8;
+			const CurrentActiveTextureIndex =  (RenderContext.ActiveTextureIndex-1) % GlTextureNames.length;
 			const ActiveTexture = RenderContext.ActiveTextureRef[CurrentActiveTextureIndex];
 			const ActiveTextureName = ActiveTexture ? ActiveTexture.Name : `<null ${CurrentActiveTextureIndex}>`;
 			Pop.Debug(`BindRenderTarget to ${TargetTexture.Name} active=${ActiveTextureName}`);
@@ -1300,8 +1314,7 @@ export class RenderTarget
 		//	unbind all texture units
 		if ( UnbindActiveTexturesBeforeRenderTargetBind )
 		{
-			const gl = RenderContext.GetGlContext();
-			const GlTextureNames = [ gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7 ];
+			//const gl = RenderContext.GetGlContext();
 			function UnbindTextureSlot(SlotName)
 			{
 				//gl.activeTexture(SlotName);
@@ -1972,7 +1985,16 @@ export class Shader
 		const gl = this.GetGlContext();
 		//  https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Using_textures_in_WebGL
 		//  WebGL provides a minimum of 8 texture units;
-		const GlTextureNames = [ gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7 ];
+		const GlTextureNames = 
+		[
+			gl.TEXTURE0, gl.TEXTURE1, gl.TEXTURE2, gl.TEXTURE3, gl.TEXTURE4, gl.TEXTURE5, gl.TEXTURE6, gl.TEXTURE7, 
+			gl.TEXTURE8, gl.TEXTURE9, gl.TEXTURE10, gl.TEXTURE11, gl.TEXTURE12, gl.TEXTURE13, gl.TEXTURE14, gl.TEXTURE15 
+		];
+		//const maxTextures = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+		//console.log(`maxTextures=${maxTextures}`);
+		if ( TextureIndex >= GlTextureNames.length )
+			throw `TextureIndex(${TextureIndex}) out of range`;
+
 		//	setup textures
 		gl.activeTexture( GlTextureNames[TextureIndex] );
 		try
