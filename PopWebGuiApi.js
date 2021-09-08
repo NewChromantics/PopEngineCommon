@@ -426,7 +426,8 @@ export function ReadSettingJson(Key)
 {
 	const Json = PopGuiStorage.getItem(Key);
 	if ( !Json )
-		throw `No setting for ${Key}`;
+		//throw `No setting for ${Key}`;
+		return null;
 	const Object = JSON.parse(Json);
 	return Object;
 }
@@ -593,14 +594,14 @@ function SetGuiControl_Draggable(Element)
 	{
 		//	if an element is draggable, see if we've got a previos position to restore
 		//	todo: make sure previous pos fits on new screen when we restore
-		try
+		const NewRect = ReadSettingJson(RectKey);
+		if ( NewRect )
 		{
-			const NewRect = ReadSettingJson(RectKey);
 			const x = NewRect.x;
 			const y = NewRect.y;
 			SetElementPosition( Element, x, y );
 		}
-		catch(e)
+		else
 		{
 			Pop.Warning(`Failed to restore window position for ${RectKey}`);
 		}
