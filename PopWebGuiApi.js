@@ -1985,3 +1985,32 @@ export class Table extends BaseControl
 			Table.createTBody();
 	}
 }
+
+
+//	using WebComponent_TreeView
+export class Tree extends BaseControl
+{
+	constructor(Parent,Rect)
+	{
+		super(...arguments);
+		
+		let Element = Rect;
+		
+		if ( typeof Element == typeof '' )
+			Element = document.getElementById(Element);
+		
+		if ( !Element || Element.nodeName != 'TREE-VIEW')
+			throw `Pop.Gui.Tree expecting Rect of treeview; is ${Element ? Element.nodeName :'null'}`;
+		this.Element = Element;
+	}
+	
+	GetElement()
+	{
+		return this.Element;
+	}
+	
+	SetValue(Json)
+	{
+		this.GetElement().json = Json;
+	}
+}
