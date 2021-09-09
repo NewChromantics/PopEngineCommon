@@ -1994,6 +1994,8 @@ export class Tree extends BaseControl
 	{
 		super(...arguments);
 		
+		this.ChangePromiseQueue = new PromiseQueue('Tree.ChangePromiseQueue');
+		
 		let Element = Rect;
 		
 		if ( typeof Element == typeof '' )
@@ -2002,6 +2004,16 @@ export class Tree extends BaseControl
 		if ( !Element || Element.nodeName != 'TREE-VIEW')
 			throw `Pop.Gui.Tree expecting Rect of treeview; is ${Element ? Element.nodeName :'null'}`;
 		this.Element = Element;
+		
+		this.BindEvents();
+	}
+	
+	BindEvents()
+	{
+		this.Element.onchange = function()
+		{
+			this.ChangePromiseQueue.Push( this.Element.json );
+		}.bind(this);
 	}
 	
 	GetElement()
@@ -2012,5 +2024,10 @@ export class Tree extends BaseControl
 	SetValue(Json)
 	{
 		this.GetElement().json = Json;
+	}
+	
+	async WaitForChange()
+	{
+		return this.ChangePromiseQueue.WaitForNext();
 	}
 }
