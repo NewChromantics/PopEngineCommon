@@ -1995,6 +1995,7 @@ export class Tree extends BaseControl
 		super(...arguments);
 		
 		this.ChangePromiseQueue = new PromiseQueue('Tree.ChangePromiseQueue');
+		this.SelectionChangePromiseQueue = new PromiseQueue('Tree.SelectionChangePromiseQueue');
 		
 		let Element = Rect;
 		
@@ -2010,15 +2011,25 @@ export class Tree extends BaseControl
 	
 	BindEvents()
 	{
-		this.Element.onchange = function()
+		this.Element.onchange = function(Json,Change)
 		{
-			this.ChangePromiseQueue.Push( this.Element.json );
+			this.ChangePromiseQueue.Push(Change);
+		}.bind(this);
+		
+		this.Element.onselectionchange = function(SelectedAddresses)
+		{
+			this.SelectionChangePromiseQueue.Push(SelectedAddresses);
 		}.bind(this);
 	}
 	
 	GetElement()
 	{
 		return this.Element;
+	}
+	
+	GetValue()
+	{
+		return this.GetElement().json;
 	}
 	
 	SetValue(Json)
@@ -2029,5 +2040,10 @@ export class Tree extends BaseControl
 	async WaitForChange()
 	{
 		return this.ChangePromiseQueue.WaitForNext();
+	}
+	
+	async WaitForSelectionChange()
+	{
+		return this.SelectionChangePromiseQueue.WaitForNext();
 	}
 }
