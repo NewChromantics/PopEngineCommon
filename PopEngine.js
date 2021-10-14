@@ -38,7 +38,7 @@ Pop.FileSystem = FileSystem;
 //Pop.LoadFileAsStringAsync = Pop.FileSystem.LoadFileAsStringAsync;
 Object.assign( Pop, Pop.FileSystem );
 
-
+/*
 import * as Zip from './PopWebZipApi.js'
 Pop.Zip = Zip;
-
+*/
