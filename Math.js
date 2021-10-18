@@ -1150,6 +1150,27 @@ export function GetBoundingBox(Positions)
 	*/
 }
 
+export function GetBoundingBoxCenter(Box)
+{
+	const Min = Box.Min;
+	const Max = Box.Max;
+	
+	const x = (Min[0] + Max[0]) / 2;
+	const y = (Min[1] + Max[1]) / 2;
+	const z = (Min[2] + Max[2]) / 2;
+	return [x,y,z];
+}
+
+//	returns [x,y,z,radius]
+export function GetBoundingSphereFromBoundingBox(Box)
+{
+	const Center = GetBoundingBoxCenter(Box);
+	const Radius = Distance3( Center, Box.Max );
+	Center.push(Radius);
+	return Center;
+}
+
+
 export function IsBoundingBoxIntersectingFrustumPlanes(Box,Planes)
 {
 	//	convert to list of planes from .Left .Near .Far etc
