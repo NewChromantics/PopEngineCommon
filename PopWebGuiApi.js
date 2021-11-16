@@ -1099,7 +1099,7 @@ export class BaseControl
 
 	BindEvents()
 	{
-		Pop.Debug(`BindEvents`);
+		//Pop.Debug(`BindEvents`);
 		const Element = this.GetElement();
 		Element.addEventListener('drop',this.OnDragDrop.bind(this));
 		Element.addEventListener('dragover',this.OnTryDragDropEvent.bind(this));
