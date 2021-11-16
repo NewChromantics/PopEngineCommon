@@ -969,7 +969,8 @@ export class Context
 				{
 					try
 					{
-						const TargetImage0 = PassRenderTarget.Images[0];
+						//	todo: need to support depth textures here
+						const TargetImage0 = PassRenderTarget.ColourImages[0];
 						const ReadFormat = TargetImage0.GetFormat();
 						const Pixels = PassRenderTarget.ReadPixels(ReadFormat);
 						//	gr: need to set gl version to match pixels version here
@@ -1135,21 +1136,22 @@ export class Context
 		this.GeometryHeap.OnDeallocated( Geometry.OpenglByteSize );
 	}
 	
-	GetRenderTargetIndex(Textures)
+	GetRenderTargetIndex(ColourImages,DepthImages=[])
 	{
+		const ThisColourHashs = ColourImages.map( GetUniqueHash );
+		const ThisDepthHashs = DepthImages.map( GetUniqueHash );
+
 		function MatchRenderTarget(RenderTarget)
 		{
-			const RTTextures = RenderTarget.Images;
-			if ( RTTextures.length != Textures.length )
+			const MatchColourHashs = RenderTarget.ColourImages.map( GetUniqueHash );
+			if ( !ThisColourHashs.every( (Hash,Index) => Hash == MatchColourHashs[Index] ) )
 				return false;
-			//	check hash of each one
-			for ( let i=0;	i<RTTextures.length;	i++ )
-			{
-				const a = GetUniqueHash( RTTextures[i] );
-				const b = GetUniqueHash( Textures[i] );
-				if ( a != b )
-					return false;
-			}
+			
+			/* todo update all callers to pass depth before using this
+			const MatchDepthHashs = RenderTarget.DepthImages.map( GetUniqueHash );
+			if ( !ThisDepthHashs.every( (Hash,Index) => Hash == MatchDepthHashs[Index] ) )
+				return false;
+			*/
 			return true;
 		}
 		
@@ -1159,6 +1161,7 @@ export class Context
 		return RenderTargetIndex;
 	}
 	
+	//	todo: support depth images param
 	GetTextureRenderTarget(Textures)
 	{
 		if ( !Array.isArray(Textures) )
@@ -1433,6 +1436,21 @@ export class RenderTarget
 		//GL_FUNC_ADD
 	}
 	
+	SetBlendModeMin()
+	{
+		const gl = this.GetGlContext();
+		if ( gl.EXT_blend_minmax === undefined )
+			throw "EXT_blend_minmax hasn't been setup on this context";
+		
+		//	set mode
+		//	enable blend
+		gl.enable( gl.BLEND );
+		gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
+		//gl.blendEquation( gl.FUNC_ADD );
+		gl.blendEquation( gl.EXT_blend_minmax.MIN_EXT );
+		//GL_FUNC_ADD
+	}
+	
 	DrawGeometry(Geometry,Shader,SetUniforms,TriangleCount)
 	{
 		const RenderContext = this.GetRenderContext();
@@ -1521,27 +1539,38 @@ export class RenderTarget
 //	maybe this should be an API type
 class TextureRenderTarget extends RenderTarget
 {
-	constructor(Images)
+	constructor(ColourImages,DepthImages=[])
 	{
 		super();
-		if ( !Array.isArray(Images) )
+		if ( !Array.isArray(ColourImages) )
+			throw "Pop.Opengl.TextureRenderTarget now expects array of images for MRT support";
+		if ( !Array.isArray(DepthImages) )
 			throw "Pop.Opengl.TextureRenderTarget now expects array of images for MRT support";
 		
 		this.FrameBuffer = null;
 		this.FrameBufferContextVersion = null;
 		this.FrameBufferRenderContext = null;
-		this.Images = Images;
-			
+		
+		this.ColourImages = ColourImages;
+		this.DepthImages = DepthImages;
+		
+		if ( this.DepthImages.length > 1 )
+			throw `Only supporting (Currently?) 1 depth image in TextureRenderTarget`;
+		if ( this.ColourImages.length < 1 )
+			throw `Require at least 1 colour image in TextureRenderTarget (x${this.DepthImages.length} depth images)`;
+		
 		//	verify each image is same dimensions (and format?)
 		this.IsImagesValid();
 	}
 	
 	IsImagesValid()
 	{
+		//	todo: check depth support, size etc as well as colour
+		
 		// Pop.Debug("IsImagesValid",this);
 		
 		//	if multiple images, size and format need to be the same
-		const Image0 = this.Images[0];
+		const Image0 = this.ColourImages[0];
 		const IsSameAsImage0 = function(Image)
 		{
 			if ( Image.GetWidth() != Image0.GetWidth() )	return false;
@@ -1549,7 +1578,7 @@ class TextureRenderTarget extends RenderTarget
 			if ( Image.PixelsFormat != Image0.PixelsFormat )	return false;
 			return true;
 		}
-		if ( !this.Images.every( IsSameAsImage0 ) )
+		if ( !this.ColourImages.every( IsSameAsImage0 ) )
 			throw "Images for MRT are not all same size & format";
 		
 		//	reject some formats
@@ -1571,7 +1600,7 @@ class TextureRenderTarget extends RenderTarget
 	
 	GetRenderTargetRect()
 	{
-		const FirstImage = this.Images[0];
+		const FirstImage = this.ColourImages[0];
 		let Rect = [0,0,0,0];
 		Rect[2] = FirstImage.GetWidth();
 		Rect[3] = FirstImage.GetHeight();
@@ -1589,17 +1618,19 @@ class TextureRenderTarget extends RenderTarget
 		//this.BindRenderTarget();
 		gl.bindFramebuffer( gl.FRAMEBUFFER, this.FrameBuffer );
 		
-		//  attach this texture to colour output
-		const Level = 0;
-		
-		//	one binding, use standard mode
-		if ( this.Images.length == 1 )
+		function AttachImage(Image,AttachmentPoint)
 		{
-			const Image = this.Images[0];
-			const AttachmentPoint = gl.COLOR_ATTACHMENT0;
+			const Level = 0;
 			const Texture = Image.GetOpenglTexture( RenderContext );
 			//gl.bindTexture(gl.TEXTURE_2D, null);
 			gl.framebufferTexture2D(gl.FRAMEBUFFER, AttachmentPoint, gl.TEXTURE_2D, Texture, Level );
+		}
+		
+		//	one binding, use standard mode
+		if ( this.ColourImages.length == 1 )
+		{
+			const Image = this.ColourImages[0];
+			AttachImage( Image, gl.COLOR_ATTACHMENT0 );
 		}
 		else
 		{
@@ -1611,14 +1642,20 @@ class TextureRenderTarget extends RenderTarget
 			function BindTextureColourAttachment(Image,Index)
 			{
 				const AttachmentPoint = AttachmentPoints[Index];
-				const Texture = Image.GetOpenglTexture( RenderContext );
+				AttachImage( Image, AttachmentPoint );
 				Attachments.push( AttachmentPoint );
-				gl.framebufferTexture2D(gl.FRAMEBUFFER, AttachmentPoint, gl.TEXTURE_2D, Texture, Level );
 			}
-			this.Images.forEach( BindTextureColourAttachment );
+			this.ColourImages.forEach( BindTextureColourAttachment );
 			
 			//	set gl_FragData binds in the shader
 			gl.drawBuffers( Attachments );
+		}
+		
+		if ( this.DepthImages.length )
+		{
+			//	non MRT approach, not sure if we can MRT depth?
+			const Image = this.DepthImages[0];
+			AttachImage( gl.DEPTH_ATTACHMENT, Image );
 		}
 		
 		if ( !gl.isFramebuffer( this.FrameBuffer ) )
@@ -1664,11 +1701,11 @@ class TextureRenderTarget extends RenderTarget
 		//	gr: this may be more to do with the extension OES_texture_float_linear
 		//		so we should check for support and make sure it never gets set in the opengl image
 		let PreviousFilter = null;
-		if ( this.Images )
+		if ( this.ColourImages )
 		{
 			//	gr: this is changing the active texture binding... but does it matter?
 			/*
-			const ImageTarget = this.Images[0];
+			const ImageTarget = this.ColourImages[0];
 			const Texture = ImageTarget.OpenglTexture;
 			gl.bindTexture(gl.TEXTURE_2D,Texture);
 			PreviousFilter = ImageTarget.LinearFilter;
@@ -1689,7 +1726,7 @@ class TextureRenderTarget extends RenderTarget
 		
 		if ( gl.WEBGL_draw_buffers )
 		{
-			const Attachments = gl.WEBGL_draw_buffers.AttachmentPoints.slice( 0, this.Images.length );
+			const Attachments = gl.WEBGL_draw_buffers.AttachmentPoints.slice( 0, this.ColourImages.length );
 			gl.drawBuffers( Attachments );
 		}
 		
@@ -1704,9 +1741,9 @@ class TextureRenderTarget extends RenderTarget
 		
 		function Unbind()
 		{
-			if ( this.Images )
+			if ( this.ColourImages )
 			{
-				const ImageTarget = this.Images[0];
+				const ImageTarget = this.ColourImages[0];
 				const Texture = ImageTarget.OpenglTexture;
 				gl.bindTexture(gl.TEXTURE_2D,Texture);
 				PreviousFilter = ImageTarget.LinearFilter;
