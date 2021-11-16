@@ -283,6 +283,7 @@ class StateParams_t
 		this.DepthRead = 'LessEqual';	//	need to turn true into this default
 		this.DepthWrite = true;
 		this.CullMode = null;	//	null = none
+		this.BlendMode = 'Alpha';
 		
 		Object.assign( this, Params );
 	}
@@ -1435,6 +1436,28 @@ export class RenderTarget
 		{
 			gl.disable(gl.DEPTH_TEST);
 		}
+		
+		
+		switch(StateParams.BlendMode)
+		{
+			//	no blending
+			default:
+			case 'Blit':
+				this.SetBlendModeBlit();
+				break;
+
+			case 'Alpha':
+				this.SetBlendModeBlit();
+				break;
+
+			case 'Min':
+				this.SetBlendModeMin();
+				break;
+
+			case 'Max':
+				this.SetBlendModeMax();
+				break;
+			}
 	}
 	
 	SetBlendModeBlit()
