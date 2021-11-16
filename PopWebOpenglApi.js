@@ -178,37 +178,64 @@ class RenderCommand_SetRenderTarget extends RenderCommand_Base
 	{
 		super();
 		this.ReadBack = false;
-		this.TargetImages = [];	//	if none then renders to screen
+		this.ColourTargetImages = [];	//	if none then renders to screen
+		this.DepthTargetImages = [];
 		this.ClearColour = null;
 	}
 	
 	static ParseCommand(Params,PushCommand)
 	{
 		const SetRenderTarget = new RenderCommand_SetRenderTarget();
+		const ParamColourTarget = 1;
+		const ParamClearColour = 2;
+		const ParamReadBackFormat = 3;
+		const ParamDepthTarget = 4;
 		
 		//	targets can be null (screen), image, or array of images
-		let Targets = Params[1];
-		if ( Targets === null )
+		let ColourTargets = Params[ParamColourTarget];
+		if ( ColourTargets === null )
 		{
 			//	must not have readback format
-			if ( Params[3] != undefined )
-				throw `Render-to-screen(null) target must not have read-back format`;
+			if ( Params[ParamReadBackFormat] != undefined )
+				throw `Render-to-screen(null) target cannot not have read-back format`;
+			//	nor depth
+			if ( Params[ParamDepthTarget] != undefined )
+				throw `Render-to-screen(null) target cannot not have depth target`;
 		}
 		else
 		{
-			if ( !Array.isArray(Targets) )
-				Targets = [Targets];
+			//	backwards compatible/simple api allowing 1 image to be passed in
+			if ( !Array.isArray(ColourTargets) )
+				ColourTargets = [ColourTargets];
 			
 			//	need to make sure these are all images
-			SetRenderTarget.TargetImages.push(...Targets);
+			SetRenderTarget.ColourTargetImages.push(...ColourTargets);
 		}
 		
-		SetRenderTarget.ReadBack = (Params[3] === true);
-		if ( Params[3] && Params[3] !== true )
-			throw `Readback format ${Params[3]} now expected to be true, not a format, to match MRT formats`;
+		let DepthTargets = Params[ParamDepthTarget];
+		if ( DepthTargets )
+		{
+			//	backwards compatible/simple api allowing 1 image to be passed in
+			if ( !Array.isArray(DepthTargets) )
+				DepthTargets = [DepthTargets];
+			
+			//	need to make sure these are all images
+			SetRenderTarget.DepthTargetImages.push(...DepthTargets);
+		}
+		
+		SetRenderTarget.ReadBack = (Params[ParamReadBackFormat] === true);
+		if ( Params[ParamReadBackFormat] && Params[ParamReadBackFormat] !== true )
+			throw `Readback format ${Params[ParamReadBackFormat]} now expected to be true, not a format, to match MRT formats`;
 		
 		//	make update commands for any render targets
-		for ( let Image of SetRenderTarget.TargetImages )
+		for ( let Image of SetRenderTarget.ColourTargetImages )
+		{
+			const UpdateImageCommand = new RenderCommand_UpdateImage();
+			UpdateImageCommand.Image = Image;
+			UpdateImageCommand.IsRenderTarget = true;
+			PushCommand( UpdateImageCommand );
+		}
+		for ( let Image of SetRenderTarget.DepthTargetImages )
 		{
 			const UpdateImageCommand = new RenderCommand_UpdateImage();
 			UpdateImageCommand.Image = Image;
@@ -217,14 +244,15 @@ class RenderCommand_SetRenderTarget extends RenderCommand_Base
 		}
 		
 		//	arg 2 is clear colour, or if none provided (or zero alpha), no clear
-		SetRenderTarget.ClearColour = Params[2];
+		SetRenderTarget.ClearColour = Params[ParamClearColour];
 		if ( SetRenderTarget.ClearColour )
 		{
 			if ( SetRenderTarget.ClearColour.length < 3 )
 				throw `Clear colour provided ${Command.ClearColour.length} colours, expecting RGB or RGBA`;
 
+			const DefaultAlpha = 1;
 			if ( SetRenderTarget.ClearColour.length < 4 )
-				SetRenderTarget.ClearColour.push(1);
+				SetRenderTarget.ClearColour.push(DefaultAlpha);
 		}
 		
 		PushCommand(SetRenderTarget);
@@ -991,7 +1019,7 @@ export class Context
 			}
 		}.bind(this);
 		
-		const NewPass = function(TargetImages,ClearColour,ReadBack)
+		const NewPass = function(ColourTargetImages,ColourDepthImages,ClearColour,ReadBack)
 		{
 			//	zero alpha = no clear so we just load old contents
 			if ( ClearColour && ClearColour[3] <= 0.0 )
@@ -999,7 +1027,7 @@ export class Context
 				
 			EndPass();
 			let Target;
-			if ( !TargetImages.length )
+			if ( !ColourTargetImages.length && !ColourDepthImages.length )
 			{
 				//	bind to screen
 				Target = new WindowRenderTarget(this);
@@ -1009,7 +1037,7 @@ export class Context
 			else
 			{
 				//	get texture target
-				Target = this.GetTextureRenderTarget(TargetImages);
+				Target = this.GetTextureRenderTarget(ColourTargetImages,ColourDepthImages);
 			}
 			
 			const Unbind = Target.BindRenderTarget(this);
@@ -1068,7 +1096,7 @@ export class Context
 					//	fetch opengl render targets/screen target
 					//	bind target[s]
 					//	clear
-					NewPass( RenderCommand.TargetImages, RenderCommand.ClearColour, RenderCommand.ReadBack );
+					NewPass( RenderCommand.ColourTargetImages, RenderCommand.DepthTargetImages, RenderCommand.ClearColour, RenderCommand.ReadBack );
 				}
 				else if ( RenderCommand instanceof RenderCommand_ReadPixels )
 				{
@@ -1161,20 +1189,22 @@ export class Context
 		return RenderTargetIndex;
 	}
 	
-	//	todo: support depth images param
-	GetTextureRenderTarget(Textures)
+	GetTextureRenderTarget(ColourTextures,DepthTextures)
 	{
-		if ( !Array.isArray(Textures) )
-			Textures = [Textures];
+		if ( !Array.isArray(ColourTextures) )
+			ColourTextures = [ColourTextures];
+		if ( !Array.isArray(DepthTextures) )
+			DepthTextures = [DepthTextures];
 		
-		const RenderTargetIndex = this.GetRenderTargetIndex(Textures);
+		const RenderTargetIndex = this.GetRenderTargetIndex(ColourTextures,DepthTextures);
 		if ( RenderTargetIndex !== false )
 			return this.TextureRenderTargets[RenderTargetIndex];
 		
 		//	make a new one
-		const RenderTarget = new TextureRenderTarget( Textures );
+		const RenderTarget = new TextureRenderTarget( ColourTextures, DepthTextures );
 		this.TextureRenderTargets.push( RenderTarget );
-		if ( this.GetRenderTargetIndex(Textures) === false )
+		//	[unit test]check we can find the new target again
+		if ( this.GetRenderTargetIndex(ColourTextures,DepthTextures) === false )
 			throw "New render target didn't re-find";
 		return RenderTarget;
 	}
@@ -1184,6 +1214,8 @@ export class Context
 		if ( !Array.isArray(Textures) )
 			Textures = [Textures];
 		
+		let Found = 0;
+		
 		//	in case there's more than one!
 		while(true)
 		{
@@ -1192,7 +1224,11 @@ export class Context
 				break;
 				
 			this.TextureRenderTargets.splice(TargetIndex,1);
+			Found++;
 		}
+		
+		if ( !Found )
+			Pop.Warning(`Found 0 matching targets in FreeRenderTarget()`);
 	}
 	
 	ReadPixels(Image,ReadBackFormat)
@@ -1651,11 +1687,13 @@ class TextureRenderTarget extends RenderTarget
 			gl.drawBuffers( Attachments );
 		}
 		
+		//	note, if no depth images are provided, there is no depth
+		//	should we always fallback and create a hardware RENDERBUFFER depth attachment?
 		if ( this.DepthImages.length )
 		{
 			//	non MRT approach, not sure if we can MRT depth?
 			const Image = this.DepthImages[0];
-			AttachImage( gl.DEPTH_ATTACHMENT, Image );
+			AttachImage( Image, gl.DEPTH_ATTACHMENT );
 		}
 		
 		if ( !gl.isFramebuffer( this.FrameBuffer ) )

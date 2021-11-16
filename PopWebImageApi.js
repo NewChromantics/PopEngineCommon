@@ -1,6 +1,6 @@
 import { GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
 import {LoadFileAsImageAsync} from './FileSystem.js'
-
+import {Debug} from './PopWebApiCore.js'
 
 //	gr: I forget what browser this was for! add comments when we know!
 //	ImageBitmap should also be supported
@@ -60,6 +60,7 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	
 	switch ( PixelFormat )
 	{
+		case 'R16':			return [ gl.LUMINANCE,		gl.UNSIGNED_SHORT];
 		case 'Luma':
 		case 'ChromaU':
 		case 'ChromaV':
@@ -84,18 +85,27 @@ function GetTextureFormatPixelByteSize(OpenglContext,Format,Type)
 		case gl.RG32F:		return 2 * 4;
 		case gl.RGB32F:		return 3 * 4;
 		case gl.RGBA32F:	return 4 * 4;
+
+		case gl.DEPTH_COMPONENT:	return 1 * 2;
+		case gl.DEPTH_COMPONENT16:	return 1 * 2;
+		case gl.DEPTH_COMPONENT24:	return 1 * 3;
+		case gl.DEPTH_COMPONENT32F:	return 1 * 4;
+
 		case gl.LUMINANCE:	Channels = 1;	break;
 		case gl.LUMINANCE_ALPHA:	Channels = 2;	break;
 		case gl.RGB:		Channels = 3;	break;
 		case gl.RGBA:		Channels = 4;	break;
+
 		default:			throw "Unhandled Format GetTextureFormatPixelByteSize(" + Format + "," + Type + ")";
 	}
 	
 	switch ( Type )
 	{
+		case gl.UNSIGNED_SHORT:		return Channels * 2;
 		case gl.UNSIGNED_BYTE:		return Channels * 1;
+		case gl.UNSIGNED_INT:		return Channels * 4;
 		case gl.UNSIGNED_INT_24_8:	return Channels * 4;
-		case gl.FLOAT:			return Channels * 4;
+		case gl.FLOAT:				return Channels * 4;
 		default:				throw "Unhandled Type GetTextureFormatPixelByteSize(" + Format + "," + Type + ")";
 	}
 }
@@ -487,10 +497,10 @@ export default class PopImage
 		//	up to date
 		if ( this.OpenglVersion == this.GetLatestVersion() )
 			return;
-		
+		/*
 		if ( !this.Pixels )
 			throw "Trying to create opengl texture, with no pixels";
-		
+		*/
 		//Pop.Debug("Updating opengl texture pixels " + this.Name);
 		
 		//	update from pixels
@@ -518,12 +528,16 @@ export default class PopImage
 		const Width = this.GetWidth();
 		const Height = this.GetHeight();
 
+
 		//	convert pixels
 		//	gr: ideally, we don't mess with original pixels. Refactor this so there's a more low level
 		//		"do the write"
 		
 		//	dont support float, convert
-		if ( this.Pixels instanceof Float32Array && !RenderContext.FloatTextureSupported )
+		if ( !this.Pixels )
+		{
+		}
+		else if ( this.Pixels instanceof Float32Array && !RenderContext.FloatTextureSupported )
 		{
 			Pop.Debug("Float texture not supported, converting to 8bit");
 			//	for now, convert to 8bit
@@ -547,8 +561,10 @@ export default class PopImage
 			 */
 		}
 		
-		
-		if ( IsHtmlElementPixels(this.Pixels) )
+		if ( !this.Pixels )
+		{
+		}
+		else if ( IsHtmlElementPixels(this.Pixels) )
 		{
 			//Pop.Debug("Image from Image",this.PixelsFormat);
 			const SourceFormat = gl.RGBA;
@@ -583,13 +599,43 @@ export default class PopImage
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
 			if ( isNaN(this.OpenglByteSize) )
 			{
-				Pop.Warning(`Nan size: ${this.OpenglByteSize}`);
+				Warning(`Nan size: ${this.OpenglByteSize}`);
+				this.OpenglByteSize=0;
+			}
+		}
+		else if ( this.Pixels instanceof Uint16Array )
+		{
+			Debug("Image from Uint16Array",this.PixelsFormat);
+			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
+			
+			/*	gr: temp bodge for depth
+			
+			let SourceFormat = SourceFormatTypes[0];
+			const SourceType = SourceFormatTypes[1];
+			InternalFormat = SourceFormat;
+			
+			//	gr: may want this on everything but 16 bit x luminance doesnt align to 4 components
+			gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+
+			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
+			*/
+			//const InternalFormat = gl.DEPTH_COMPONENT24;
+			const InternalFormat = gl.DEPTH_COMPONENT;
+			const SourceFormat = gl.DEPTH_COMPONENT;
+			const SourceType = gl.UNSIGNED_INT;
+			const Pixels = null;
+			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, Pixels );
+			
+			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
+			if ( isNaN(this.OpenglByteSize) )
+			{
+				Warning(`Nan size: ${this.OpenglByteSize}`);
 				this.OpenglByteSize=0;
 			}
 		}
 		else if ( this.Pixels instanceof Float32Array )
 		{
-			//Pop.Debug("Image from Float32Array",this.PixelsFormat);
+			//Debug("Image from Float32Array",this.PixelsFormat);
 			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
 			let SourceFormat = SourceFormatTypes[0];
 			const SourceType = gl.FLOAT;//SourceFormatTypes[1];
@@ -609,7 +655,7 @@ export default class PopImage
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
 			if ( isNaN(this.OpenglByteSize) )
 			{
-				Pop.Warning(`Nan size: ${this.OpenglByteSize}`);
+				Warning(`Nan size: ${this.OpenglByteSize}`);
 				this.OpenglByteSize=0;
 			}
 		}
