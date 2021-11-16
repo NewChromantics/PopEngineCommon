@@ -1,5 +1,6 @@
 import PromiseQueue from './PromiseQueue.js'
 import * as Pop from './PopWebApiCore.js'
+import * as FileSystem from './FileSystem.js'
 
 const Default = 'Pop Gui module';
 export default Default;
@@ -1184,8 +1185,7 @@ export class BaseControl
 				Pop.Debug(`Filename ${File.name}->${Filename} mime ${Mime}`);
 				const FileArray = await File.arrayBuffer();
 				const File8 = new Uint8Array(FileArray);
-				if ( Pop.SetFileCache )
-					Pop.SetFileCache(Filename,File8);
+				FileSystem.SetFileCache(Filename,File8);
 				FinalAddedFiles.push(Filename);
 			}
 			//	make a promise for each file
@@ -1845,10 +1845,19 @@ export class Table extends BaseControl
 			throw `Pop.Gui.Table.SetValue(${Rows}) expecting an array of keyed objects`;
 
 		//	merge new keys
-		if (Rows.length > 0)
+		//	gr: this could get pretty slow... hmm
 		{
-			const NewKeys = Object.keys(Rows[0]);
-			this.KnownKeys = Array.from(new Set(this.KnownKeys.concat(NewKeys)));
+			const Keys = {};
+			for ( let Key of this.KnownKeys )
+				Keys[Key] = null;
+				
+			for ( let Row of Rows )
+			{
+				const RowKeys = Object.keys(Row);
+				for ( let Key of RowKeys )
+					Keys[Key] = null;
+			}
+			this.KnownKeys = Object.keys(Keys);
 			this.KnownKeys = this.KnownKeys.filter(NotSpecialKey);
 		}
 
@@ -1931,9 +1940,13 @@ export class Table extends BaseControl
 			Body.deleteRow(0);
 
 		//	make sure all rows are correct size
+		//	fill columns with blank values in case columns change and we need to reset data
+		//	means we're basically changing dom twice
+		const DummyColumnValues = new Array(Columns.length);
+		DummyColumnValues.fill('');
 		for (let r = 0;r < RowCount;r++)
 		{
-			this.UpdateTableRow(Body.rows[r],Columns);
+			this.UpdateTableRow(Body.rows[r],DummyColumnValues);
 		}
 	}
 

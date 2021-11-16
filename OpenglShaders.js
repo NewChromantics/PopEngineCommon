@@ -16,6 +16,9 @@ export function RefactorGlslShader(Source)
 	
 	//Source = 'precision mediump float;\n' + Source;
 	
+	Source = Source.replace(/float4x4/gi,'mat4');
+	Source = Source.replace(/float2x2/gi,'mat2');
+	Source = Source.replace(/float3x3/gi,'mat3');
 	Source = Source.replace(/float2/gi,'vec2');
 	Source = Source.replace(/float3/gi,'vec3');
 	Source = Source.replace(/float4/gi,'vec4');

@@ -885,6 +885,14 @@ export class Context
 		}
 	}
 	
+	CanRenderToPixelFormat(Format)
+	{
+		if ( Format == 'Float4' )
+			return CanRenderToFloat;
+			
+		return true;
+	}
+	
 	//	render some commands, (parse here)
 	//	queue up, and return their promise so caller knows when it's rendered
 	async Render(Commands)
@@ -1352,6 +1360,7 @@ export class RenderTarget
 		gl.disable(gl.BLEND);
 		gl.enable(gl.DEPTH_TEST);
 		gl.enable(gl.SCISSOR_TEST);
+		gl.disable(gl.SCISSOR_TEST);
 		//	to make blending work well, don't reject things on same plane
 		gl.depthFunc(gl.LEQUAL);
 	}

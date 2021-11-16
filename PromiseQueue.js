@@ -1,6 +1,5 @@
-//	gr: now as a module. As we convert the web api to modules.
-//		native is still not module-friendly though, so some of this will be duplicated
-//		in PopApi.js still
+//	chrome having trouble with cyclical import
+//import Pop from './PopEngine.js'
 
 //	a promise queue that manages multiple listeners
 //	gr: this is getting out of sync with the cyclic-fixing-copy in WebApi. Make it seperate!
@@ -28,12 +27,12 @@ export default class PromiseQueue
 	}
 
 	//	this waits for next resolve, but when it flushes, it returns LAST entry and clears the rest; LIFO (kinda, last in, only out)
-	async WaitForLatest()
+	async WaitForLatest(OnSkipped)
 	{
 		const Promise = this.Allocate();
 
 		//	if we have any pending data, flush now, this will return an already-resolved value
-		this.FlushPending(true);
+		this.FlushPending(true,OnSkipped);
 
 		return Promise;
 	}
@@ -101,12 +100,32 @@ export default class PromiseQueue
 		const Args = Array.from(arguments);
 		const Value = {};
 		Value.ResolveValues = Args;
+		
+		if ( Args.length > 1 )
+			this.Warning(`PromiseQueue (${this.Name}).Push(${Args}) with multiple args; What is this case? We should reduce to 1 arg`);
+		
 		this.PendingValues.push( Value );
 		
 		if ( this.PendingValues.length > this.QueueWarningSize )
 			this.Warning(`This (${this.Name}) promise queue has ${this.PendingValues.length} pending values and ${this.Promises.length} pending promises`,this);
 		
 		this.FlushPending();
+	}
+	
+	PeekLatest()
+	{
+		if ( !this.PendingValues.length )
+			return undefined;
+		const Latest = this.PendingValues[this.PendingValues.length-1];
+		
+		//	latest is a rejection... what should we do?
+		if ( !Latest.ResolveValues )
+			return undefined;
+		
+		//	multiple args can be passed in, as normally this goes to a Resolve
+		//	gr: but promises onyl resolve to one value... so what's the case when we have multiple args?...
+		
+		return Latest.ResolveValues[0];
 	}
 	
 	GetQueueSize()
@@ -119,7 +138,7 @@ export default class PromiseQueue
 		return this.PendingValues.length > 0;
 	}
 	
-	FlushPending(FlushLatestAndClear=false)
+	FlushPending(FlushLatestAndClear=false,OnDropped)
 	{
 		//	if there are promises and data's waiting, we can flush next
 		if ( this.Promises.length == 0 )
@@ -133,7 +152,19 @@ export default class PromiseQueue
 		{
 			this.Warning(`Promise queue FlushLatest dropping ${this.PendingValues.length - 1} elements`);
 		}
-		const Value0 = FlushLatestAndClear ? this.PendingValues.splice(0,this.PendingValues.length).pop() : this.PendingValues.shift();
+		
+		let Value0;
+		if ( FlushLatestAndClear )
+		{
+			const Cut = this.PendingValues.splice(0,this.PendingValues.length);
+			Value0 = Cut.pop();
+			if ( OnDropped )
+				Cut.forEach( v => OnDropped( (v.ResolveValues||v.RejectValues)[0] ) );
+		}
+		else
+		{
+			Value0 = this.PendingValues.shift();
+		}
 		const HandlePromise = function(Promise)
 		{
 			if ( Value0.RejectionValues )

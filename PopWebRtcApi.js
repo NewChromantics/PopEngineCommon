@@ -1,6 +1,24 @@
 Pop.WebRtc = {};
 
-Pop.WebRtc.IceServers = [];
+Pop.WebRtc.IceServers = 
+[
+'stun.l.google.com:19302'
+];
+
+function GetWebRtcConfiguration()
+{
+	const Configuration = {};
+	Configuration.iceServers = Pop.WebRtc.IceServers.map(IceServerToConfiguration);
+	return Configuration;
+}
+
+function IceServerToConfiguration(IceServerAddress)
+{
+	const Entry = {};
+	Entry.urls = `stun:${IceServerAddress}`;
+	return Entry;
+}
+
 
 class WebRtcChannel_t
 {
@@ -49,12 +67,11 @@ class WebRtcChannel_t
 }
 
 
-
 Pop.WebRtc.Server = class
 {
 	constructor()
 	{
-		this.Connection = new RTCPeerConnection(Pop.WebRtc.IceServers);
+		this.Connection = new RTCPeerConnection( GetWebRtcConfiguration() );
 		this.Connection.onicecandidate = this.OnIceCandidate.bind(this);
 		
 		this.HasAddressPromise = Pop.CreatePromise();
@@ -240,7 +257,7 @@ Pop.WebRtc.Client = class
 		
 		this.Channels = {};	//	Channel['Name']
 		
-		this.Connection = new RTCPeerConnection(Pop.WebRtc.IceServers );
+		this.Connection = new RTCPeerConnection( GetWebRtcConfiguration() );
 		this.Connection.onicecandidate = this.OnIceCandidate.bind(this);
 		this.Connection.ondatachannel = this.OnFoundDataChannel.bind(this);
 		this.ConnectedPromise = this.Connect(RemoteAddress);

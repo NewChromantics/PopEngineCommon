@@ -74,14 +74,22 @@ export function BytesToString(Bytes)
 	}
 	return Str;
 }
+/*
+class TextEncoderReplacement
+{
+	encode(String)
+	{
+	}
+}
 
-
+let TextEncoder_t = this.TextEncoder || TextEncoderReplacement;
+*/
 export function StringToBytes(Str,AsArrayBuffer=false)
 {
 	//	https://stackoverflow.com/questions/6965107/converting-between-strings-and-arraybuffers
-	if ( TextEncoder !== undefined )
+	if ( this.TextEncoder !== undefined )
 	{
-		const Encoder = new TextEncoder("utf-8");
+		const Encoder = new this.TextEncoder("utf-8");
 		const Bytes = Encoder.encode(Str);
 		return Bytes;
 	}
@@ -98,6 +106,26 @@ export function StringToBytes(Str,AsArrayBuffer=false)
 	if ( AsArrayBuffer )
 		Bytes = new Uint8Array(Bytes);
 	return Bytes;
+}
+
+export function BytesToBigInt(Bytes)
+{
+	if ( Bytes.length != 64/8 )
+		throw `BytesToBigInt() expected to be ${64/8} bytes long (is ${Bytes.length})`;
+
+	const Hex = [];
+	function AppendHex(i) 
+	{
+		var h = i.toString(16);
+		if (h.length % 2) 
+		{
+			h = '0' + h;
+		}
+		Hex.push(h);
+	}
+	Bytes.forEach(AppendHex);
+	const HexString = `0x${Hex.join('')}`;
+	const Int = BigInt(HexString);
 }
 
 
@@ -169,22 +197,37 @@ export function IsTypedArray(obj)
 	return !!obj && obj.byteLength !== undefined;
 }
 
-export function JoinTypedArrays(a,b,c,etc)
+export function JoinTypedArrays(Arrays,DeprecatedSecondArray)
 {
+	if ( DeprecatedSecondArray )
+	{
+		Pop.Debug(`JoinTypedArrays(a,b,c) deprecated, pass an array of typed arrays as first arg`);
+		Arrays = Array.from(arguments);
+	}
+	
+	if ( !Array.isArray(Arrays) )
+		throw `JoinTypedArrays() expecting array for first arg(${typeof Arrays})`;
+	
+	//	what should we return if empty...
+	if ( Arrays.length == 0 )
+		return new Uint8Array(0);
+	
+	const a = Arrays[0];
 	//	gr: need some more rigirous checks here
 	if ( !IsTypedArray(a) )
 		throw `Cannot JoinTypedArrays where 1st not typed array (${a})`;
 
 	const Constructor = a.constructor;
-	const Arrays = Array.from(arguments);
 	const TotalSize = Arrays.reduce( (Accumulator,a) => Accumulator + a.length, 0 );
 
 	const NewArray = new Constructor(TotalSize);
 	let Position = 0;
 	for ( let TheArray of Arrays )
 	{
+		const NameA = TheArray.constructor.name;
+		const NameB = Constructor.name;
 		if ( TheArray.constructor != Constructor )
-			throw `Cannot join to typedarrays of different types`;
+			throw `Cannot join to typedarrays of different types (${NameA} + ${NameB})`;
 	
 		NewArray.set( TheArray, Position );
 		Position += TheArray.length;

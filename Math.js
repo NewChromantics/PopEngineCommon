@@ -17,7 +17,7 @@ export const degrees = RadToDeg;
 
 export function SinCos(Degrees)
 {
-	let AngleRad = Math.DegToRad( Degrees );
+	let AngleRad = DegToRad( Degrees );
 	let Sin = Math.sin( AngleRad );
 	let Cos = Math.cos( AngleRad );
 	return [Sin,Cos];
@@ -28,7 +28,7 @@ export function clamp(min,max,Value)
 {
 	return Math.min( Math.max(Value, min), max);
 }
-export const Clamp = Math.clamp;
+export const Clamp = clamp;
 
 export function Clamp01(Value)
 {
@@ -55,9 +55,9 @@ export const Range = range;
 
 export function rangeClamped(Min,Max,Value)
 {
-	return clamp( 0, 1, Math.range( Min, Max, Value ) );
+	return clamp( 0, 1, range( Min, Max, Value ) );
 }
-export const RangeClamped = Math.rangeClamped;
+export const RangeClamped = rangeClamped;
 
 export function lerp(Min,Max,Time)
 {
@@ -327,6 +327,7 @@ export function MakeRectSquareCentered(Rect,Grow=true)
 	return Rect;
 }
 
+//	scale rect from it's center
 export function GrowRect(Rect,Scale)
 {
 	//	don't modify original rect
@@ -408,10 +409,10 @@ export function ScaleRect(ChildRect,ParentRect)
 	let ct = ChildRect[1];
 	let cb = ct + ChildRect[3];
 	
-	let l = Math.Lerp( pl, pr, cl );
-	let r = Math.Lerp( pl, pr, cr );
-	let t = Math.Lerp( pt, pb, ct );
-	let b = Math.Lerp( pt, pb, cb );
+	let l = Lerp( pl, pr, cl );
+	let r = Lerp( pl, pr, cr );
+	let t = Lerp( pt, pb, ct );
+	let b = Lerp( pt, pb, cb );
 	let w = r-l;
 	let h = b-t;
 	
@@ -529,9 +530,9 @@ export function RectIsOverlapped(RectA,RectB)
 export function GetTriangleArea2(PointA,PointB,PointC)
 {
 	//	get edge lengths
-	const a = Math.Distance2( PointA, PointB );
-	const b = Math.Distance2( PointB, PointC );
-	const c = Math.Distance2( PointC, PointA );
+	const a = Distance2( PointA, PointB );
+	const b = Distance2( PointB, PointC );
+	const c = Distance2( PointC, PointA );
 	
 	//	Heron's formula
 	const PerimeterLength = a + b + c;
@@ -539,6 +540,13 @@ export function GetTriangleArea2(PointA,PointB,PointC)
 	const s = PerimeterLength / 2;
 	const Area = Math.sqrt( s * (s-a) * (s-b) * (s-c) );
 	return Area;
+}
+
+export function GetRectCenter(Rect)
+{
+	const Halfw = Rect[2]/2;
+	const Halfh = Rect[3]/2;
+	return [ Rect[0]+Halfw, Rect[1]+Halfh ];
 }
 
 export function GetRectArea(Rect)
@@ -1574,7 +1582,7 @@ export function GetCatmullPathPosition(Path,Time,Loop=false)
 	let Next = End + 1;
 	
 	//	we're calculating points between start & end
-	const Lerp = Math.range( Start, End, Time );
+	const Lerp = range( Start, End, Time );
 	if ( Lerp < 0 || Lerp > 1 )
 		throw "Trying to calculate wrong time between Start=" + Start + " End=" + End + " Time="+Time;
 
@@ -1595,7 +1603,7 @@ export function GetCatmullPathPosition(Path,Time,Loop=false)
 	{
 		FixIndex = function(Index)
 		{
-			Index = Math.clamp( 0, Path.length-1, Index );
+			Index = clamp( 0, Path.length-1, Index );
 			return Index;
 		}
 	}
@@ -1812,13 +1820,13 @@ export function GetIntersectionRayTriangle3(RayStart,RayDirection,a,b,c)
 DistanceToTriangle3 = function(Position,a,b,c)
 {
 	const p = Position;
-	const ba = Math.Subtract3(b, a);
-	const pa = Math.Subtract3(p, a);
-	const cb = Math.Subtract3(c, b);
-	const pb = Math.Subtract3(p, b);
-	const ac = Math.Subtract3(a, c);
-	const pc = Math.Subtract3(p, c);
-	const nor = Math.cross3( ba, ac );
+	const ba = Subtract3(b, a);
+	const pa = Subtract3(p, a);
+	const cb = Subtract3(c, b);
+	const pb = Subtract3(p, b);
+	const ac = Subtract3(a, c);
+	const pc = Subtract3(p, c);
+	const nor = cross3( ba, ac );
 
 	//	work out which side of each edge we're on
 	const Sideab = sign(dot(cross(ba,nor),pa));

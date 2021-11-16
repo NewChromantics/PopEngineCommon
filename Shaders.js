@@ -5,7 +5,7 @@ export default Default;
 export function ExtractShaderUniforms(Shader,Shader2=null)
 {
 	//const Pattern = new RegExp(`uniform\\s([a-zA-Z0-9]+)\\s([a-zA-Z0-9-_]+)\\s;`);
-	const Pattern = new RegExp(`uniform\\s([a-zA-Z0-9]+)\\s([a-zA-Z0-9]+)\\s?;`,'g');
+	const Pattern = new RegExp(`uniform\\s([a-zA-Z0-9]+)\\s([a-zA-Z0-9_]+)\\s?;`,'g');
 	const Uniforms = [];
 	
 	//	filter out duplicates

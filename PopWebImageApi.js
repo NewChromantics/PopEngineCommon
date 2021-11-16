@@ -3,10 +3,28 @@ import {LoadFileAsImageAsync} from './FileSystem.js'
 
 
 //	gr: I forget what browser this was for! add comments when we know!
+//	ImageBitmap should also be supported
+//	https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/texImage2D
 const WebApi_HtmlImageElement = window.hasOwnProperty('HTMLImageElement') ? window['HTMLImageElement'] : null;
 const WebApi_HtmlCanvasElement = window.hasOwnProperty('HTMLCanvasElement') ? window['HTMLCanvasElement'] : null;
+const WebApi_HtmlVideoElement = window.hasOwnProperty('HTMLVideoElement') ? window['HTMLVideoElement'] : null;
 
-
+function IsHtmlElementPixels(Pixels)
+{
+	if ( !Pixels )
+		return false;
+	
+	if ( Pixels.constructor == WebApi_HtmlImageElement )
+		return true;
+		
+	if ( Pixels.constructor == WebApi_HtmlCanvasElement )
+		return true;
+		
+	if ( Pixels.constructor == WebApi_HtmlVideoElement )
+		return true;
+		
+	return false;
+}
 
 function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 {
@@ -226,6 +244,7 @@ export default class PopImage
 {
 	constructor(Filename)
 	{
+		this.Freed = false;
 		this.Name = (typeof Filename == 'string') ? Filename : "Pop.Image";
 		this.Size = [undefined,undefined];
 		this.OpenglTexture = null;
@@ -258,7 +277,7 @@ export default class PopImage
 				this.WritePixels( ImageFile.width, ImageFile.height, Image, PixelFormat );
 			}
 		}
-		else if ( Filename && (Filename.constructor == WebApi_HtmlImageElement || Filename.constructor == WebApi_HtmlCanvasElement) )
+		else if ( Filename && IsHtmlElementPixels(Filename) )
 		{
 			const HtmlImage = Filename;
 			//	gr: this conversion should be in WritePixels()
@@ -362,7 +381,7 @@ export default class PopImage
 			return this.Pixels;
 
 		//	extract pixels from object
-		if ( this.Pixels.constructor == WebApi_HtmlImageElement || this.Pixels.constructor == WebApi_HtmlCanvasElement )
+		if ( IsHtmlElementPixels(this.Pixels) )
 		{
 			const NewPixels = GetPixelsFromHtmlImageElement(this.Pixels);
 			//	gr: we should replace this.Pixels here, but pixelversion stays the same (texture shouldn't change)
@@ -389,18 +408,31 @@ export default class PopImage
 		if ( !Number.isInteger(Width) || !Number.isInteger(Height) )
 			throw `Trying to write non-integers for width(${Width})/height(${Height}) of image`;
 
+		if ( IsHtmlElementPixels(Pixels) )
+		{
+			const Meta = GetPixelsMetaFromHtmlImageElement(Pixels);
+			Width = Meta.Width;
+			Height = Meta.Height;
+			Format = Meta.Format;
+		}
+		
 		this.Size = [Width,Height];
 		this.Pixels = Pixels;
 		this.PixelsFormat = Format;
 		this.PixelsVersion = this.GetLatestVersion()+1;
+		
+		//	here might be a good place to
+		//	make a thread that auto updates if the pixels are a video
 	}
 	
 	Clear()
 	{
 		//	this is getting convuluted, so maybe the API need to change (C++ side too)
 		this.DeleteOpenglTexture( this.OpenglOwnerContext );
-		
 		this.DeletePixels();
+		
+		//	flag for anything that wants to know if a user tried to delete it
+		this.Freed = true;
 	}
 	
 	DeletePixels()
@@ -516,7 +548,7 @@ export default class PopImage
 		}
 		
 		
-		if ( this.Pixels instanceof Image || this.Pixels instanceof WebApi_HtmlCanvasElement )
+		if ( IsHtmlElementPixels(this.Pixels) )
 		{
 			//Pop.Debug("Image from Image",this.PixelsFormat);
 			const SourceFormat = gl.RGBA;
