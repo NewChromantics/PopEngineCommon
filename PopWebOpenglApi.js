@@ -1457,6 +1457,10 @@ export class RenderTarget
 			case 'Max':
 				this.SetBlendModeMax();
 				break;
+
+			case 'Add':
+				this.SetBlendModeAdd();
+				break;
 			}
 	}
 	
@@ -1508,6 +1512,17 @@ export class RenderTarget
 		//gl.blendEquation( gl.FUNC_ADD );
 		gl.blendEquation( gl.EXT_blend_minmax.MIN_EXT );
 		//GL_FUNC_ADD
+	}
+	
+	SetBlendModeAdd()
+	{
+		const gl = this.GetGlContext();
+		
+		//	set mode
+		//	enable blend
+		gl.enable( gl.BLEND );
+		gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
+		gl.blendEquation( gl.FUNC_ADD );
 	}
 	
 	DrawGeometry(Geometry,Shader,SetUniforms,TriangleCount)
