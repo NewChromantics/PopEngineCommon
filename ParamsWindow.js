@@ -281,8 +281,14 @@ export class ParamsWindow
 			{
 				//	call the control's OnChanged func
 				const Value = GetValue();
-				Control.OnChanged(Value,true);
+				//	gr: if a function assigned, call it
+				//		otherwise, we're triggering a fake change
+				if ( isFunction(Value) )
+					Value();
+				else
+					Control.OnChanged(Value,true);
 			}
+			GetLabelForValue = () => {	return Name;	}; 
 			//const Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			//Control.SetLabel(Name);
 		}
