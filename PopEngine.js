@@ -1,5 +1,13 @@
 import * as WebApi from './PopWebApi.js';
 
+//	gr: this module should only export Pop. namespaces that are
+//		present in the native API
+//	NOT:
+//		.Math
+//		.Colour
+//		.Assets
+
+
 //import * as Opengl from './PopWebOpenglApi.js';
 //Pop.Opengl = Opengl;
 
@@ -13,18 +21,9 @@ export default Pop;
 import PopImage from './PopWebImageApi.js'
 Pop.Image = PopImage;
 
-import * as Colour from './Colour.js'
-Pop.Colour = Colour;
-
-import * as PopMath from './Math.js'
-Pop.Math = PopMath;
-
 import * as Opengl from './PopWebOpenglApi.js'
 Pop.Opengl = Opengl;
 Pop.Sokol = Opengl;	//	native name. Should rename both of these to Renderer?
-
-import * as Assets from './AssetManager.js'
-Pop.Assets = Assets;
 
 import * as Gui from './PopWebGuiApi.js'
 Pop.Gui = Gui;
