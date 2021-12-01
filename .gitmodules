@@ -10,3 +10,6 @@
 [submodule "PopGltf.js"]
 	path = PopGltf.js
 	url = https://github.com/NewChromantics/PopGltf.js.git
+[submodule "WebComponent_TreeView"]
+	path = WebComponent_TreeView
+	url = https://github.com/NewChromantics/WebComponent_TreeView.git
