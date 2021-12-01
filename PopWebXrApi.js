@@ -532,7 +532,7 @@ class Device_t
 			const SetRenderTargetCommand = ['SetRenderTarget',RenderTarget,ClearColour]
 			
 			//	would be nice if we could have some generic camera uniforms and only generate one set of commands?
-			const UserRenderCommands = this.GetRenderCommands( Camera );
+			const UserRenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
 			let RenderCommands = [SetRenderTargetCommand,...UserRenderCommands];
 			RenderCommands = new RenderCommands_t( RenderCommands );
 			
