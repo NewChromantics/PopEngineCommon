@@ -1264,6 +1264,11 @@ export class RenderView extends BaseControl
 	{
 		return this.Element;
 	}
+	
+	GetScreenRect()
+	{
+		return [0,0,this.Element.width,this.Element.height];
+	}
 }
 
 
