@@ -114,8 +114,8 @@ function GetTextureFormatPixelByteSize(OpenglContext,Format,Type)
 function GetPixelsMetaFromHtmlImageElement(Img)
 {
 	const Meta = {};
-	Meta.Width = Img.width;
-	Meta.Height = Img.height;
+	Meta.Width = Img.videoWidth || Img.width;
+	Meta.Height = Img.videoHeight || Img.height;
 	Meta.Format = 'RGBA';
 	return Meta;
 }
