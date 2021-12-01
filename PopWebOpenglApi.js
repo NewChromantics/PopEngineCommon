@@ -230,6 +230,8 @@ class RenderCommand_SetRenderTarget extends RenderCommand_Base
 		//	make update commands for any render targets
 		for ( let Image of SetRenderTarget.ColourTargetImages )
 		{
+			if ( Image instanceof RenderTarget )
+				continue;
 			const UpdateImageCommand = new RenderCommand_UpdateImage();
 			UpdateImageCommand.Image = Image;
 			UpdateImageCommand.IsRenderTarget = true;
@@ -237,6 +239,8 @@ class RenderCommand_SetRenderTarget extends RenderCommand_Base
 		}
 		for ( let Image of SetRenderTarget.DepthTargetImages )
 		{
+			if ( Image instanceof RenderTarget )
+				continue;
 			const UpdateImageCommand = new RenderCommand_UpdateImage();
 			UpdateImageCommand.Image = Image;
 			UpdateImageCommand.IsRenderTarget = true;
@@ -343,7 +347,7 @@ function ParseRenderCommand(PushCommand,CommandParams)
 
 
 //	this is just an array of commands, but holds the promise to resolve once it's rendered
-class RenderCommands_t
+export class RenderCommands_t
 {
 	constructor(Commands)
 	{
@@ -1034,6 +1038,10 @@ export class Context
 				Target = new WindowRenderTarget(this);
 				if ( ReadBack )
 					throw `ReadBack not currently supported to screen. Need to allow user to pass in a texture instead of true/format here`;
+			}
+			else if ( ColourTargetImages[0] instanceof RenderTarget )
+			{
+				Target = ColourTargetImages[0];
 			}
 			else
 			{

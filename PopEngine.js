@@ -19,6 +19,7 @@ const Pop = Object.assign({},WebApi);
 export default Pop;
 //Pop.GetTimeNowMs = WebApi.GetTimeNowMs;
 
+
 import PopImage from './PopWebImageApi.js'
 Pop.Image = PopImage;
 
@@ -31,6 +32,9 @@ Pop.Gui = Gui;
 
 import * as Websocket from './PopWebSocketApi.js'
 Pop.Websocket = Websocket;
+
+import * as Xr from './PopWebXrApi.js'
+Pop.Xr = Xr;
 
 import * as FileSystem from './FileSystem.js'
 //	gr: hmm these are root functions, so they need to go into PopWebApi?

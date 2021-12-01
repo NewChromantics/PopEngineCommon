@@ -1,24 +1,45 @@
-function RenderTargetFrameBufferProxy(OpenglFrameBuffer,Viewport,RenderContext)
+export default `Pop XR`;
+import * as Pop from './PopWebApiCore.js'
+import {CreatePromise} from './PopApi.js'
+import PromiseQueue from './PromiseQueue.js'
+import {BrowserAnimationStep} from './PopWebApi.js'
+import {RenderTarget,RenderCommands_t} from './PopWebOpenglApi.js'
+import Camera_t from './Camera.js'
+import {SetMatrixTranslation,Distance3} from './Math.js'
+
+class RenderTargetFrameBufferProxy extends RenderTarget
 {
-	Pop.Opengl.RenderTarget.call( this );
-	
-	this.GetFrameBuffer = function()
+	constructor(OpenglFrameBuffer,Viewport,RenderContext)
 	{
-		return OpenglFrameBuffer;
+		super();
+		this.OpenglFrameBuffer = OpenglFrameBuffer;
+		this.Viewport = Viewport;
+		this.RenderContext = RenderContext;
 	}
 	
-	this.GetRenderContext = function()
+	GetFrameBuffer()
 	{
-		return RenderContext;
+		return this.OpenglFrameBuffer;
 	}
 	
-	this.GetRenderTargetRect = function()
+	GetRenderContext()
 	{
-		let Rect = [Viewport.x,Viewport.y,Viewport.width,Viewport.height];
+		return this.RenderContext;
+	}
+	
+	GetRenderTargetRect()
+	{
+		let Rect = 
+		[
+			this.Viewport.x,
+			this.Viewport.y,
+			this.Viewport.width,
+			this.Viewport.height
+		];
 		return Rect;
 	}
 	
-	this.BindRenderTarget = function(RenderContext)
+	BindRenderTarget(RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
 		const FrameBuffer = this.GetFrameBuffer();
@@ -33,25 +54,32 @@ function RenderTargetFrameBufferProxy(OpenglFrameBuffer,Viewport,RenderContext)
 		//gl.scissor( ...Viewport );
 		
 		this.ResetState();
+		
+		function Unbind()
+		{
+		}
+		return Unbind.bind(this);
 	}
 }
 
 
-Pop.Xr = {};
-
 //	currently webxr lets us create infinite sessions, so monitor when we have a device already created
-Pop.Xr.Devices = [];
+let Devices = [];
 
-Pop.Xr.SupportedSessionMode = null;
+let SupportedSessionMode = null;
 
 //	allow this to be overriden with custom polyfills
 //	todo: abstract these interfaces so we can have our own XR API along side navigator
-Pop.Xr.PlatformXr = navigator.xr;		
-Pop.Xr.PlatformXRWebGLLayer = (typeof XRWebGLLayer !== 'undefined') ? XRWebGLLayer : null; 
-
-Pop.Xr.GetSupportedSessionMode = async function()
+//let PlatformXr = navigator.xr;
+function GetPlatformXr()
 {
-	const PlatformXr = Pop.Xr.PlatformXr || navigator.xr;
+	return navigator.xr;
+}
+let PlatformXRWebGLLayer = (typeof XRWebGLLayer !== 'undefined') ? XRWebGLLayer : null; 
+
+async function GetSupportedSessionMode()
+{
+	const PlatformXr = GetPlatformXr();
 	if ( !PlatformXr )
 		return false;
 	
@@ -105,7 +133,7 @@ Pop.Xr.GetSupportedSessionMode = async function()
 }
 
 //	setup cache of support for synchronous call
-//Pop.Xr.GetSupportedSessionMode().then( Mode => Pop.Xr.SupportedSessionMode=Mode ).catch( Pop.Debug );
+//GetSupportedSessionMode().then( Mode => SupportedSessionMode=Mode ).catch( Pop.Debug );
 
 
 function IsReferenceSpaceOriginFloor(ReferenceSpaceType)
@@ -150,19 +178,17 @@ function GetClearAlphaFromBlendMode(BlendMode)
 }
 
 
-Pop.Xr.Device = class
+class Device_t
 {
-	constructor(Session,ReferenceSpace,RenderContext)
+	constructor(Session,ReferenceSpace,RenderContext,GetRenderCommands)
 	{
 		this.OnEndPromises = [];
 		this.Cameras = {};
 		this.Session = Session;
 		this.ReferenceSpace = ReferenceSpace;
 		this.RenderContext = RenderContext;
+		this.GetRenderCommands = GetRenderCommands;
 		
-		//	overload this
-		this.OnRender = this.OnRender_Default.bind(this);
-
 		//	overload these! (also, name it better, currently matching window/touches)
 		this.OnMouseDown = this.OnMouseEvent_Default.bind(this);
 		this.OnMouseMove = this.OnMouseEvent_Default.bind(this);
@@ -171,7 +197,7 @@ Pop.Xr.Device = class
 		//	store input state so we can detect button up, tracking lost/regained
 		this.InputStates = {};	//	[Name] = XrInputState
 		
-		this.RealSpaceChangedQueue = new Pop.PromiseQueue();
+		this.RealSpaceChangedQueue = new PromiseQueue(`XR real space change`);
 		
 		//	bind to device
 		this.ReferenceSpace.onreset = this.OnSpaceChanged.bind(this);
@@ -212,21 +238,13 @@ Pop.Xr.Device = class
 	InitLayer(RenderContext)
 	{
 		const OpenglContext = this.RenderContext.GetGlContext();
-		this.Layer = new Pop.Xr.PlatformXRWebGLLayer(this.Session, OpenglContext);
+		this.Layer = new PlatformXRWebGLLayer(this.Session, OpenglContext);
 		this.Session.updateRenderState({ baseLayer: this.Layer });
 	}
 	
 	WaitForEnd()
 	{
-		let Prom = {};
-		function CreatePromise(Resolve,Reject)
-		{
-			Prom.Resolve = Resolve;
-			Prom.Reject = Reject;
-		}
-		const OnEnd = new Promise(CreatePromise);
-		OnEnd.Resolve = Prom.Resolve;
-		OnEnd.Reject = Prom.Reject;
+		const OnEnd = CreatePromise();
 		this.OnEndPromises.push( OnEnd );
 		return OnEnd;
 	}
@@ -246,7 +264,7 @@ Pop.Xr.Device = class
 	{
 		if ( !this.Cameras.hasOwnProperty(Name) )
 		{
-			this.Cameras[Name] = new Pop.Camera();
+			this.Cameras[Name] = new Camera_t();
 			this.Cameras[Name].Name = Name;
 		}
 		return this.Cameras[Name];
@@ -330,9 +348,7 @@ Pop.Xr.Device = class
 		const ProxyWindowAnimation = true;
 		if ( ProxyWindowAnimation )
 		{
-			//	clear old frames so we don't get a backlog
-			Pop.WebApi.AnimationFramePromiseQueue.ClearQueue();
-			Pop.WebApi.AnimationFramePromiseQueue.Push(TimeMs);
+			BrowserAnimationStep(TimeMs);
 		}
 		
 		//Pop.Debug("XR frame",Frame);
@@ -402,7 +418,7 @@ Pop.Xr.Device = class
 						const FingerPos = GetJointPos(Key);
 						if ( !FingerPos )
 							return false;
-						const Distance = Math.Distance3(ThumbPos,FingerPos);
+						const Distance = Distance3(ThumbPos,FingerPos);
 						return Distance <= ThumbToJointMaxDistance;
 					}
 					const ThumbPos = GetJointPos(ThumbKey);
@@ -471,10 +487,11 @@ Pop.Xr.Device = class
 		
 		const RenderView = function(View)
 		{
+			//	generate render target
 			const ViewPort = glLayer.getViewport(View);
-			//	scene.draw(view.projectionMatrix, view.transform);
 			const RenderTarget = new RenderTargetFrameBufferProxy( glLayer.framebuffer, ViewPort, this.RenderContext );
-			
+
+			//	generate camera
 			const CameraName = GetCameraName(View);
 			const Camera = this.GetCamera(CameraName);
 			
@@ -483,7 +500,8 @@ Pop.Xr.Device = class
 			Camera.IsOriginFloor = IsOriginFloor;
 			
 			//	AR (and additive, eg. hololens) need to be transparent
-			Camera.ClearAlpha = GetClearAlphaFromBlendMode(Frame.session.environmentBlendMode);
+			const ClearAlpha = GetClearAlphaFromBlendMode(Frame.session.environmentBlendMode);
+			const ClearColour = [0,0,0,ClearAlpha];
 
 			//	use the render params on our camera
 			if ( Frame.session.renderState )
@@ -504,12 +522,24 @@ Pop.Xr.Device = class
 			//	get rotation but remove the translation (so we use .Position)
 			//	we also want the inverse for our camera-local purposes
 			Camera.Rotation4x4 = View.transform.inverse.matrix;
-			Math.SetMatrixTranslation(Camera.Rotation4x4,0,0,0,1);
+			SetMatrixTranslation(Camera.Rotation4x4,0,0,0,1);
 			
 			Camera.ProjectionMatrix = View.projectionMatrix;
 			
-			RenderTarget.BindRenderTarget( this.RenderContext );
-			this.OnRender( RenderTarget, Camera );
+			//	we do the clear here for specific colour etc
+			//	gr: maybe that should be extra specific in the RenderTarget proxy to disallow client to clear AR to a solid colour?
+			//		but maybe we want some effects...
+			const SetRenderTargetCommand = ['SetRenderTarget',RenderTarget,ClearColour]
+			
+			//	would be nice if we could have some generic camera uniforms and only generate one set of commands?
+			const UserRenderCommands = this.GetRenderCommands( Camera );
+			let RenderCommands = [SetRenderTargetCommand,...UserRenderCommands];
+			RenderCommands = new RenderCommands_t( RenderCommands );
+			
+			//	execute commands
+			//RenderTarget.BindRenderTarget( this.RenderContext );
+			this.RenderContext.ProcessRenderCommands( RenderCommands );
+			//this.OnRender( RenderTarget, Camera );
 		}
 		Pose.views.forEach( RenderView.bind(this) );
 	}
@@ -517,19 +547,6 @@ Pop.Xr.Device = class
 	Destroy()
 	{
 		this.Session.end();
-	}
-
-	//	overload this!
-	OnRender_Default(RenderTarget,Camera)
-	{
-		if ( Camera.Name == 'left' )
-			RenderTarget.ClearColour( 0,0.5,1 );
-		else if (Camera.Name == 'right')
-			RenderTarget.ClearColour(1, 0, 0);
-		else if (Camera.Name == 'none')
-			RenderTarget.ClearColour(0, 1, 0);
-		else
-			RenderTarget.ClearColour( 0,0,1 );
 	}
 	
 	OnMouseEvent_Default(xyz,Button,Controller,Transform)
@@ -539,20 +556,22 @@ Pop.Xr.Device = class
 }
 
 
-Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
+export async function CreateDevice(RenderContext,GetRenderCommands,OnWaitForCallback)
 {
 	if ( !OnWaitForCallback )
-		throw `Pop.Xr.CreateDevice requires OnUserCallback callback for 2nd argument`;
+		throw `CreateDevice() requires OnUserCallback callback for 3rd argument`;
+	if ( !GetRenderCommands )
+		throw `CreateDevice() requires a GetRenderCommands callback for 2nd argument`;
 	
-	const SessionMode = await Pop.Xr.GetSupportedSessionMode();
+	const SessionMode = await GetSupportedSessionMode();
 	if ( SessionMode == false )
 		throw "Browser doesn't support XR.";
 	
 	//	if we have a device, wait for it to finish
-	if ( Pop.Xr.Devices.length )
-		await Pop.Xr.Devices[0].WaitForEnd();
+	if ( Devices.length )
+		await Devices[0].WaitForEnd();
 
-	const PlatformXr = Pop.Xr.PlatformXr;
+	const PlatformXr = GetPlatformXr();
 
 	//	loop until we get a session
 	while(true)
@@ -562,7 +581,7 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 			//	this will cause a dom exception if there's more than one async queue
 			//	so we create a callback, that a callback can call when the user clicks a button
 			//const Session = await PlatformXr.requestSession(SessionMode);
-			const SessionPromise = Pop.CreatePromise();
+			const SessionPromise = CreatePromise();
 			const Callback = function()
 			{
 				//	gr: could use a generic callback like the audio system does
@@ -620,15 +639,15 @@ Pop.Xr.CreateDevice = async function(RenderContext,OnWaitForCallback)
 			const ReferenceSpace = await GetReferenceSpace();
 			Pop.Debug(`Got XR ReferenceSpace`,ReferenceSpace);
 			
-			const Device = new Pop.Xr.Device( Session, ReferenceSpace, RenderContext );
+			const Device = new Device_t( Session, ReferenceSpace, RenderContext, GetRenderCommands );
 			
 			//	add to our global list (currently only to make sure we have one at a time)
-			Pop.Xr.Devices.push( Device );
+			Devices.push( Device );
 			
 			//	when device ends, remove it from the list
 			const RemoveDevice = function()
 			{
-				Pop.Xr.Devices = Pop.Xr.Devices.filter( d => d!=Device );
+				Devices = Devices.filter( d => d!=Device );
 			}
 			Device.WaitForEnd().then(RemoveDevice).catch(RemoveDevice);
 			

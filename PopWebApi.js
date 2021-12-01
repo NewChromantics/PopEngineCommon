@@ -477,7 +477,7 @@ PopX.WaitForNextFrame = PopX.WebApi.AsyncFrameLoop.WaitForFrame.bind(PopX.WebApi
 //	todo: promise queue that only stores the latest (we need a keyframe'd queue!)
 const AnimationFramePromiseQueue = new PromiseQueue();	
 
-function BrowserAnimationStep(Time)
+export function BrowserAnimationStep(Time)
 {
 	//	clear old frames so we don't get a backlog
 	AnimationFramePromiseQueue.ClearQueue();
