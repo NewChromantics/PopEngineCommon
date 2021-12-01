@@ -459,7 +459,14 @@ class Device_t
 				Pop.Debug(`Input error ${e}`);
 			}
 		}
-		FrameInputs.forEach(UpdateInput.bind(this));
+		try
+		{
+			FrameInputs.forEach(UpdateInput.bind(this));
+		}
+		catch(e)
+		{
+			console.error(e);
+		}
 		
 		const OldInputNames = Object.keys(this.InputStates);
 		const MissingInputNames = OldInputNames.filter( Name => !UpdatedInputNames.some( uin => uin == Name) );
