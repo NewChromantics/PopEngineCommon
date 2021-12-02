@@ -407,9 +407,21 @@ export class Camera
 		return this.Up.slice();
 	}
 	
+	//	get forward vector in world space
 	GetForward(Normalised=true)
 	{
-		let z = PopMath.Subtract3( this.LookAt, this.Position );
+		let LookAt = this.LookAt;
+
+		//	external transform, so need to calc the real lookat
+		if ( this.Rotation4x4 )
+		{
+			let LocalToWorld = this.GetLocalToWorldMatrix();
+			//	gr: why is this backwards...
+			let LocalPos = [0,0,-1];
+			LookAt = PopMath.TransformPosition( LocalPos,LocalToWorld  );
+		}
+			
+		let z = PopMath.Subtract3( LookAt, this.Position );
 		if ( Normalised )
 			z = PopMath.Normalise3( z );
 		return z;
