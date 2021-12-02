@@ -6,6 +6,8 @@ import {BrowserAnimationStep} from './PopWebApi.js'
 import {RenderTarget,RenderCommands_t} from './PopWebOpenglApi.js'
 import Camera_t from './Camera.js'
 import {SetMatrixTranslation,Distance3} from './Math.js'
+import Image_t from './PopWebImageApi.js'
+import FrameCounter_t from './FrameCounter.js'
 
 class RenderTargetFrameBufferProxy extends RenderTarget
 {
@@ -138,6 +140,7 @@ async function GetSupportedSessionMode()
 
 function IsReferenceSpaceOriginFloor(ReferenceSpaceType)
 {
+	//	gr: anything that ends in '-floor' should match
 	switch( ReferenceSpaceType )
 	{
 		case 'local-floor':
@@ -162,18 +165,18 @@ class XrInputState
 }
 
 //	return alpha 0 or 1 for AR(alpha blend) or additive mode
-function GetClearAlphaFromBlendMode(BlendMode)
+function IsTransparentBlendMode(BlendMode)
 {
 	//	if undefined or invalid, assume opaque
 	switch(BlendMode)
 	{
 	case 'additive':
 	case 'alpha-blend':
-		return 0;
+		return true;
 	
 	case 'opaque':
 	default:
-		return 1;
+		return false;
 	}
 }
 
@@ -188,6 +191,9 @@ class Device_t
 		this.ReferenceSpace = ReferenceSpace;
 		this.RenderContext = RenderContext;
 		this.GetRenderCommands = GetRenderCommands;
+		
+		this.FrameCounter = new FrameCounter_t(`XR Frame`);
+		this.DepthImages = {};	//	[CameraName] = Image. Depth data is per-view
 		
 		//	overload these! (also, name it better, currently matching window/touches)
 		this.OnMouseDown = this.OnMouseEvent_Default.bind(this);
@@ -333,8 +339,21 @@ class Device_t
 			this.OnMouseMove( State.Position, Pop.SoyMouseButton.None, InputName, State.Transform );
 	}
 	
+	GetDepthImage(Name)
+	{
+		if ( !this.DepthImages.hasOwnProperty(Name) )
+		{
+			this.DepthImages[Name] = new Image_t(`${Name}_Depth`);
+			const Px = new Float32Array( [1,0,0,1] );
+			this.DepthImages[Name].WritePixels( 1,1,Px,'Float4');
+		}
+		return this.DepthImages[Name];
+	}
+	
 	OnFrame(TimeMs,Frame)
 	{
+		this.FrameCounter.Add();
+		
 		//	gr: need a better fix here.
 		//	https://github.com/immersive-web/webxr/issues/225
 		//		when XR is active, and the 2D window is NOT active
@@ -461,7 +480,7 @@ class Device_t
 		}
 		try
 		{
-			FrameInputs.forEach(UpdateInput.bind(this));
+			//FrameInputs.forEach(UpdateInput.bind(this));
 		}
 		catch(e)
 		{
@@ -492,6 +511,37 @@ class Device_t
 			return View.eye;
 		}
 		
+		//	extract depth textures
+		//	https://immersive-web.github.io/depth-sensing/
+		if ( Frame.getDepthInformation )
+		{
+			for ( let View of Pose.views )
+			{
+				const DepthInfo = Frame.getDepthInformation(View);
+				if ( !DepthInfo )
+					continue;
+					
+				const CameraName = GetCameraName(View);
+				const DepthImage = this.GetDepthImage(CameraName);
+				
+				//	gr: maybe a bit of a waste to do any cpu conversion when we can do it on gpu
+				//	gr: only needed if data isnt float				
+				//	todo: get .normDepthBufferFromNormView to get projection matrix
+				let Depth16 = new Uint16Array( DepthInfo.data );
+				let Depthf = new Float32Array( Depth16 );
+				//let Depthf = new Float32Array( DepthInfo.width*DepthInfo.height );
+				//DepthImage.WritePixels( DepthInfo.width, DepthInfo.height, Depth16, 'R16' );
+				DepthImage.WritePixels( DepthInfo.width, DepthInfo.height, Depthf, 'Float1' );
+				
+				/*
+				const NonZeros = new Uint16Array(DepthInfo.data).filter( x => x!=0 );
+				if ( NonZeros.length )
+					console.log(`DepthInfo with non zero`,DepthInfo);
+				*/
+			}
+		}
+		
+		
 		const RenderView = function(View)
 		{
 			//	generate render target
@@ -507,8 +557,7 @@ class Device_t
 			Camera.IsOriginFloor = IsOriginFloor;
 			
 			//	AR (and additive, eg. hololens) need to be transparent
-			const ClearAlpha = GetClearAlphaFromBlendMode(Frame.session.environmentBlendMode);
-			const ClearColour = [0,0,0,ClearAlpha];
+			const TransparentClear = IsTransparentBlendMode(Frame.session.environmentBlendMode);
 
 			//	use the render params on our camera
 			if ( Frame.session.renderState )
@@ -533,19 +582,30 @@ class Device_t
 			
 			Camera.ProjectionMatrix = View.projectionMatrix;
 			
-			//	we do the clear here for specific colour etc
-			//	gr: maybe that should be extra specific in the RenderTarget proxy to disallow client to clear AR to a solid colour?
-			//		but maybe we want some effects...
-			const SetRenderTargetCommand = ['SetRenderTarget',RenderTarget,ClearColour]
+			Camera.DepthImage = this.GetDepthImage(CameraName);
 			
 			//	would be nice if we could have some generic camera uniforms and only generate one set of commands?
-			const UserRenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
-			let RenderCommands = [SetRenderTargetCommand,...UserRenderCommands];
-			RenderCommands = new RenderCommands_t( RenderCommands );
+			let RenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
+			
+			//	force any clear-colours of null (device) render target to have alpha=0 for AR/transparent devices
+			//	gr: should we do this before, or after parsing...
+			if ( TransparentClear )
+			{
+				function SetRenderTargetCommandClearTransparent(Command)
+				{
+					if ( Command[0] != 'SetRenderTarget' )
+						return Command;
+						
+					Command[2][3] = 0;
+					return Command;
+				}
+				RenderCommands = RenderCommands.map( SetRenderTargetCommandClearTransparent );
+			}
 			
 			//	execute commands
+			RenderCommands = new RenderCommands_t( RenderCommands );
+			this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
 			//RenderTarget.BindRenderTarget( this.RenderContext );
-			this.RenderContext.ProcessRenderCommands( RenderCommands );
 			//this.OnRender( RenderTarget, Camera );
 		}
 		Pose.views.forEach( RenderView.bind(this) );
@@ -600,8 +660,47 @@ export async function CreateDevice(RenderContext,GetRenderCommands,OnWaitForCall
 					//	gr: this should/could request for permission for the extra functionality
 					//	https://immersive-web.github.io/webxr/#dictdef-xrsessioninit
 					//Options.requiredFeatures = ['local-floor'];
-					//	gr: add all the features!
-					Options.optionalFeatures = ['local-floor','hand-tracking','bounded-floor'];
+
+					Options.optionalFeatures = [];
+					
+					//	gr: I thought these were space types... rather than features 
+					Options.optionalFeatures.push('local');
+					Options.optionalFeatures.push('local-floor');
+					Options.optionalFeatures.push('bounded-floor');
+
+					Options.optionalFeatures.push('hand-tracking');	//	for quest
+					Options.optionalFeatures.push('hit-test');	//	raycasting
+					
+					//	try and enable meshing
+					//	https://cabanier.github.io/real-world-geometry/webxrmeshing-1.html
+					Options.optionalFeatures.push('XRWorldMeshFeature');
+					Options.optionalFeatures.push('XRNearMeshFeature');
+					
+					//	feature names based on specs/proposals from
+					//	https://github.com/orgs/immersive-web/repositories
+
+					//	https://immersive-web.github.io/depth-sensing/					
+					Options.optionalFeatures.push('depth-sensing');
+					//	depth sensing options required if requesting feature
+					Options.depthSensing = {};
+					Options.depthSensing.usagePreference = ['gpu-optimized','cpu-optimized'];
+					Options.depthSensing.dataFormatPreference = ['float32','luminance-alpha'];
+					
+					Options.optionalFeatures.push('light-estimation');
+					
+					Options.optionalFeatures.push('dom-overlay');	//	rendering dom in 3d
+					
+					//	https://github.com/immersive-web/marker-tracking/blob/main/explainer.md
+					Options.optionalFeatures.push('image-tracking');
+					
+					Options.optionalFeatures.push('real-world-geometry');
+					
+					//	https://immersive-web.github.io/real-world-geometry/plane-detection.html
+					Options.optionalFeatures.push('plane-detection');
+					
+					//	https://immersive-web.github.io/raw-camera-access/
+					Options.optionalFeatures.push('camera-access');
+					
 					
 					const RequestSessionPromise = PlatformXr.requestSession(SessionMode,Options);
 					RequestSessionPromise.then( Session => SessionPromise.Resolve(Session) ).catch( e => SessionPromise.Reject(e) );
@@ -613,6 +712,9 @@ export async function CreateDevice(RenderContext,GetRenderCommands,OnWaitForCall
 			}
 			OnWaitForCallback(Callback);
 			const Session = await SessionPromise;
+			
+			const HasHitTest = Session.requestHitTestSource != null;
+			console.log(`XR HasHitTest=${HasHitTest}`);
 			
 			//	gr: isImmersive was deprecated
 			//		we want a local space, maybe not relative to the floor?

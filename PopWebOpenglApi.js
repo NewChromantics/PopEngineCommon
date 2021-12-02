@@ -183,6 +183,11 @@ class RenderCommand_SetRenderTarget extends RenderCommand_Base
 		this.ClearColour = null;
 	}
 	
+	IsDeviceRenderTarget()
+	{
+		return (this.ColourTargetImages.length == 0) && (this.DepthTargetImages.length == 0);
+	}		
+	
 	static ParseCommand(Params,PushCommand)
 	{
 		const SetRenderTarget = new RenderCommand_SetRenderTarget();
@@ -969,7 +974,8 @@ export class Context
 			{
 				try
 				{
-					this.ProcessRenderCommands(RenderCommands);
+					const DeviceRenderTarget = new WindowRenderTarget(this);
+					this.ProcessRenderCommands(RenderCommands,DeviceRenderTarget);
 					RenderCommands.OnRendered();
 				}
 				catch(e)
@@ -986,8 +992,12 @@ export class Context
 		window.requestAnimationFrame( Render.bind(this) );
 	}
 	
-	ProcessRenderCommands(RenderCommands)
+	//	Device render target is the target for "null"
+	ProcessRenderCommands(RenderCommands,DeviceRenderTarget)
 	{
+		if ( !DeviceRenderTarget )
+			throw `"null" (device) render target missing in ProcessRenderCommands()`;
+			
 		//	current state
 		let PassRenderTarget = null;	//	MRT is still one target, so this is nice and simple
 		let PassTargetUnbind = null;
@@ -1024,29 +1034,28 @@ export class Context
 			}
 		}.bind(this);
 		
-		const NewPass = function(ColourTargetImages,ColourDepthImages,ClearColour,ReadBack)
+		const NewPass = function(SetRenderTargetCommand,ClearColour,ReadBack)
 		{
 			//	zero alpha = no clear so we just load old contents
 			if ( ClearColour && ClearColour[3] <= 0.0 )
 				ClearColour = null;
 				
 			EndPass();
-			let Target;
-			if ( !ColourTargetImages.length && !ColourDepthImages.length )
+			let Target;	
+			if ( SetRenderTargetCommand.IsDeviceRenderTarget() )
 			{
 				//	bind to screen
-				Target = new WindowRenderTarget(this);
+				Target = DeviceRenderTarget;
 				if ( ReadBack )
 					throw `ReadBack not currently supported to screen. Need to allow user to pass in a texture instead of true/format here`;
 			}
-			else if ( ColourTargetImages[0] instanceof RenderTarget )
-			{
-				Target = ColourTargetImages[0];
-			}
 			else
 			{
+				let ColourTargetImages = SetRenderTargetCommand.ColourTargetImages;
+				let DepthTargetImages = SetRenderTargetCommand.DepthTargetImages;
+			
 				//	get texture target
-				Target = this.GetTextureRenderTarget(ColourTargetImages,ColourDepthImages);
+				Target = this.GetTextureRenderTarget(ColourTargetImages,DepthTargetImages);
 			}
 			
 			const Unbind = Target.BindRenderTarget(this);
@@ -1105,7 +1114,7 @@ export class Context
 					//	fetch opengl render targets/screen target
 					//	bind target[s]
 					//	clear
-					NewPass( RenderCommand.ColourTargetImages, RenderCommand.DepthTargetImages, RenderCommand.ClearColour, RenderCommand.ReadBack );
+					NewPass( RenderCommand, RenderCommand.ClearColour, RenderCommand.ReadBack );
 				}
 				else if ( RenderCommand instanceof RenderCommand_ReadPixels )
 				{
