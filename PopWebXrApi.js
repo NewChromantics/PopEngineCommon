@@ -521,8 +521,13 @@ class Device_t
 				if ( !DepthInfo )
 					continue;
 					
+				const NormalDepthToViewDepthTransform = DepthInfo.normDepthBufferFromNormView.matrix;
+					
 				const CameraName = GetCameraName(View);
 				const DepthImage = this.GetDepthImage(CameraName);
+				
+				//	store meta on image (should be camera?)
+				DepthImage.NormalDepthToViewDepthTransform = NormalDepthToViewDepthTransform;
 				
 				//	gr: maybe a bit of a waste to do any cpu conversion when we can do it on gpu
 				//	gr: only needed if data isnt float				
@@ -595,7 +600,10 @@ class Device_t
 				{
 					if ( Command[0] != 'SetRenderTarget' )
 						return Command;
-						
+					//	only applies to device target
+					if ( Command[1] != null )
+						return Command;
+					//	set arg2 (clear colour) alpha, to zero
 					Command[2][3] = 0;
 					return Command;
 				}
