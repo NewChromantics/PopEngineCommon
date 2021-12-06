@@ -479,8 +479,8 @@ export class ParamsWindow
 			SetValue = function (ControlValue,IsFinalValue)
 			{
 				const NormValue = PopMath.Range(TickMin,TickMax,ControlValue);
-				const RealValue = PopMath.Lerp(Min,Max,NormValue);
-				//	this should have been cleaned, but maybe needs it agian?
+				let RealValue = PopMath.Lerp(Min,Max,NormValue);
+				RealValue = RealCleanValue(RealValue);
 				RealSetValue(RealValue,IsFinalValue);
 			}
 			GetLabelForValue = function (ControlValue)
