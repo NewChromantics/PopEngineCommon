@@ -539,7 +539,7 @@ export default class PopImage
 		}
 		else if ( this.Pixels instanceof Float32Array && !RenderContext.FloatTextureSupported )
 		{
-			Pop.Debug("Float texture not supported, converting to 8bit");
+			Debug("Float texture not supported, converting to 8bit");
 			//	for now, convert to 8bit
 			const NewPixels = FloatToInt8Pixels( this.Pixels, this.PixelsFormat, Width, Height );
 			this.Pixels = NewPixels.Pixels;
