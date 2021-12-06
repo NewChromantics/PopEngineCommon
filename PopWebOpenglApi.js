@@ -196,7 +196,7 @@ class RenderCommand_SetRenderTarget extends RenderCommand_Base
 		if ( ColourTargets === null )
 		{
 			//	must not have readback format
-			if ( Params[ParamReadBackFormat] != undefined )
+			if ( Params[ParamReadBackFormat] != undefined && Params[ParamReadBackFormat] != false )
 				throw `Render-to-screen(null) target cannot not have read-back format`;
 			//	nor depth
 			if ( Params[ParamDepthTarget] != undefined )
