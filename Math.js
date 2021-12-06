@@ -940,6 +940,8 @@ export function Max3(a,b)
 }
 
 
+//	this currently returns false for zero - should it be 0? (or 1)
+//	1 will return 1... should it be 2?
 export function GetNextPowerOf2(Number)
 {
 	//	round any floats
