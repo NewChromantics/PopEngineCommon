@@ -1,6 +1,7 @@
 import { GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
 import {LoadFileAsImageAsync} from './FileSystem.js'
 import {Debug} from './PopWebApiCore.js'
+import {clamp} from './Math.js'
 
 //	gr: I forget what browser this was for! add comments when we know!
 //	ImageBitmap should also be supported
@@ -222,7 +223,7 @@ function Float4ToRgba(FloatArray)
 	for ( let i=0;	i<IntArray.length;	i++ )
 	{
 		const Float = FloatArray[i];
-		const Int = Math.clamp( 0, 255, Float * 255 );
+		const Int = clamp( 0, 255, Float * 255 );
 		IntArray[i] = Int;
 	}
 	return IntArray;
