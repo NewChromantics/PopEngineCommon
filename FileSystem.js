@@ -2,6 +2,7 @@ import PopImage from './PopWebImageApi.js'
 import FileCache_t from './FileCache.js'
 import PromiseQueue from './PromiseQueue.js'
 import {Debug,Warning,CreatePromise,Yield} from './PopWebApiCore.js'
+import {ParseExeArguments} from './PopApi.js'
 
 const Default = 'FileSystem.js Module';
 export default Default;
@@ -32,34 +33,7 @@ export function GetExeArguments()
 	//	gr: probably shouldn't lowercase now it's proper
 	const UrlArgs = window.location.search.replace('?',' ').trim().split('&');
 	
-	//	turn into keys & values - gr: we're not doing this in engine! fix so they match!
-	const UrlParams = {};
-	function AddParam(Argument)
-	{
-		let [Key,Value] = Argument.split('=',2);
-		if ( Value === undefined )
-			Value = true;
-		
-		//	attempt some auto conversions
-		if ( typeof Value == 'string' )
-		{
-			const NumberValue = Number(Value);
-
-			if ( Value === '' )
-				Value = null;
-			else if ( Value == 'null' )
-				Value = null;
-			else if ( !isNaN(NumberValue) )
-				Value = NumberValue;
-			else if ( Value == 'true' )
-				Value = true;
-			else if ( Value == 'false' )
-				Value = false;
-		}
-		UrlParams[Key] = Value;
-	}
-	UrlArgs.forEach(AddParam);
-	return UrlParams;
+	return ParseExeArguments(UrlArgs);	
 }
 
 

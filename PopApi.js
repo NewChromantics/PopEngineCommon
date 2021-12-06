@@ -251,3 +251,34 @@ export function CreatePromise()
 	return Prom;
 }
 
+export function ParseExeArguments(Args)
+{
+	//	turn into keys & values - gr: we're not doing this in engine! fix so they match!
+	const UrlParams = {};
+	function AddParam(Argument)
+	{
+		let [Key,Value] = Argument.split('=',2);
+		if ( Value === undefined )
+			Value = true;
+		
+		//	attempt some auto conversions
+		if ( typeof Value == 'string' )
+		{
+			const NumberValue = Number(Value);
+
+			if ( Value === '' )
+				Value = null;
+			else if ( Value == 'null' )
+				Value = null;
+			else if ( !isNaN(NumberValue) )
+				Value = NumberValue;
+			else if ( Value == 'true' )
+				Value = true;
+			else if ( Value == 'false' )
+				Value = false;
+		}
+		UrlParams[Key] = Value;
+	}
+	Args.forEach(AddParam);
+	return UrlParams;
+}
