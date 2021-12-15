@@ -3,6 +3,8 @@ import {GetUniqueHash} from './Hash.js'
 import {ExtractShaderUniforms} from './Shaders.js'
 import Pop from './PopEngine.js'
 
+//	todo: turn asset manager into a class so client has to instance it,
+//		and can have multiple asset managers if required
 const PopAssetManager = {};
 export default PopAssetManager;
 

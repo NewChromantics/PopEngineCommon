@@ -2,10 +2,15 @@ const Default = `Common geometry generating functions`;
 export default Default;
 
 
-export function CreateCubeGeometry(Min=-1,Max=1)
+export function CreateCubeGeometry(Min=-1,Max=1,MinY=undefined,MaxY=undefined)
 {
 	let PositionData = [];
 	let UvData = [];
+	
+	if ( MinY === undefined )	
+		MinY = Min;
+	if ( MaxY === undefined )	
+		MaxY = Max;
 	
 	let AddTriangle = function(a,b,c)
 	{
@@ -18,14 +23,14 @@ export function CreateCubeGeometry(Min=-1,Max=1)
 	}
 	
 	//	top left near bottom right far
-	let tln = [Min,Min,Min,		0,0];
-	let trn = [Max,Min,Min,		1,0];
-	let brn = [Max,Max,Min,		1,1];
-	let bln = [Min,Max,Min,		0,1];
-	let tlf = [Min,Min,Max,		0,0];
-	let trf = [Max,Min,Max,		1,0];
-	let brf = [Max,Max,Max,		1,1];
-	let blf = [Min,Max,Max,		0,1];
+	let tln = [Min,MinY,Min,		0,0];
+	let trn = [Max,MinY,Min,		1,0];
+	let brn = [Max,MaxY,Min,		1,1];
+	let bln = [Min,MaxY,Min,		0,1];
+	let tlf = [Min,MinY,Max,		0,0];
+	let trf = [Max,MinY,Max,		1,0];
+	let brf = [Max,MaxY,Max,		1,1];
+	let blf = [Min,MaxY,Max,		0,1];
 	
 	
 	//	near
