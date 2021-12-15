@@ -31,6 +31,13 @@ export default class Timeline
 		}
 	}
 	
+	GetDurationMs()
+	{
+		//	gr: not figured out this timescale yet
+		const LastTime = this.Keyframes[ this.Keyframes.length-1 ].Time;
+		return LastTime;
+	}
+	
 	AddKeyframe(Time,Uniforms)
 	{
 		//	todo: make sure there are no duplicates
