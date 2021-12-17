@@ -2,6 +2,22 @@
 const Default = 'PopApi.js module';
 export default Default; 
 
+export function GetArrayRandomIndex(Array)
+{
+	if ( !Array.length )
+		return undefined;
+	const Index = Math.floor( Math.random() * Array.length );
+	return Index;
+}
+
+export function GetArrayRandomElement(Array)
+{
+	const Index = GetArrayRandomIndex(Array);
+	if ( Index === undefined )
+		return undefined;
+	return Array[Index];
+}
+
 //	returns shuffled version of array
 export function GetArrayShuffled(Array)
 {
