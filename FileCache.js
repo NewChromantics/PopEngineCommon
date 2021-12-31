@@ -1,5 +1,14 @@
 import PromiseQueue from './PromiseQueue.js'
+import {JoinTypedArrays} from './PopApi.js'
 
+//	cyclic include hmm
+//import Pop from './PopEngine.js'
+//const Debug = Pop.Debug;
+
+function Debug()
+{
+	console.log(...arguments);
+}
 
 //	this will become generic and not webapi specific
 //	we just need to abstract what IS webapi specific first
