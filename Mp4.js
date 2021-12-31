@@ -363,6 +363,12 @@ export class Mp4Decoder
 		
 		this.ParsePromise = this.ParseFileThread();
 	}
+
+	//	gr: should this integrate into WaitForNextSamples?	
+	async WaitForParseFinish()
+	{
+		return this.ParsePromise;
+	}	
 	
 	//	any atom at all
 	//	may want 
