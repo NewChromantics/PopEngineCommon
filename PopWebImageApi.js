@@ -9,6 +9,9 @@ const WebApi_HtmlImageElement = window.hasOwnProperty('HTMLImageElement') ? wind
 const WebApi_HtmlCanvasElement = window.hasOwnProperty('HTMLCanvasElement') ? window['HTMLCanvasElement'] : null;
 const WebApi_HtmlVideoElement = window.hasOwnProperty('HTMLVideoElement') ? window['HTMLVideoElement'] : null;
 
+//	webcodec output
+const WebApi_HtmlVideoFrame = window.hasOwnProperty('VideoFrame') ? window['VideoFrame'] : null;
+
 function IsHtmlElementPixels(Pixels)
 {
 	if ( !Pixels )
@@ -21,6 +24,9 @@ function IsHtmlElementPixels(Pixels)
 		return true;
 		
 	if ( Pixels.constructor == WebApi_HtmlVideoElement )
+		return true;
+		
+	if ( Pixels.constructor == WebApi_HtmlVideoFrame )
 		return true;
 		
 	return false;
@@ -114,8 +120,8 @@ function GetTextureFormatPixelByteSize(OpenglContext,Format,Type)
 function GetPixelsMetaFromHtmlImageElement(Img)
 {
 	const Meta = {};
-	Meta.Width = Img.videoWidth || Img.width;
-	Meta.Height = Img.videoHeight || Img.height;
+	Meta.Width = Img.videoWidth || Img.width || Img.displayWidth;
+	Meta.Height = Img.videoHeight || Img.height || Img.displayHeight;
 	Meta.Format = 'RGBA';
 	return Meta;
 }
@@ -128,8 +134,9 @@ function GetPixelsFromHtmlImageElement(Img)
 		//	gr: is this really the best way :/
 		const Canvas = document.createElement('canvas');
 		const Context = Canvas.getContext('2d');
-		const Width = Img.width;
-		const Height = Img.height;
+		const ImgMeta = GetPixelsMetaFromHtmlImageElement(Img);
+		const Width = ImgMeta.Width;
+		const Height = ImgMeta.Height;
 		Canvas.width = Width;
 		Canvas.height = Height;
 		Context.drawImage( Img, 0, 0 );
