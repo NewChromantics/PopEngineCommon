@@ -9,30 +9,6 @@ import * as H264 from './H264.js'
 import {MP4,H264Remuxer} from './Mp4_Generator.js'
 
 
-function AnnexBToNalu4(Data)
-{
-	if ( Data[0] == 0 && Data[1] == 0 && Data[2] == 0 && Data[3] == 1 )
-	{
-		let Length = Data.length - 4;	//	ignore prefix in size
-		Data[0] = (Length >> 24) & 0xff;
-		Data[1] = (Length >> 16) & 0xff;
-		Data[2] = (Length >> 8) & 0xff;
-		Data[3] = (Length >> 0) & 0xff;
-		//	Data = Data.slice(4);	//	wrong!
-		//Pop.Debug(`converted to avcc`);
-	}
-	
-	//	ignore sps & pps & sei
-	/*
-	//	gr: we dont need to ignore them, but it does slow video down (cos of timestamps)
-	if ( Data.length == 13 || Data.length == 8 )
-		return null;
-	//	ignore sei
-	if ( Data.length == 34 )
-		return null;
-	*/
-	return Data;
-}
 
 class AtomDataReader extends DataReader
 {
@@ -2488,7 +2464,7 @@ export class Mp4FragmentedEncoder
 		if ( ContentType == H264.ContentTypes.PPS )
 			this.TrackPps[TrackId] = Data.slice(4);
 
-		Data = AnnexBToNalu4(Data);
+		Data = H264.Nalu4ToAnnexB(Data);
 		if ( !Data )
 			return;
 

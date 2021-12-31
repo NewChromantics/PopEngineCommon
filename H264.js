@@ -133,6 +133,7 @@ export function GetContentName(ContentType)
 	return `Unknown H264 content type ${ContentType}`;
 }
 
+
 export function GetNaluLength(Packet)
 {
 	const Data = Packet.slice(0,4);
@@ -201,6 +202,33 @@ export function IsContentTypeKeyframe(ContentType)
 }
 
 export function SplitNalus(Packet)
+{
+	if ( Packet[0] == 0 &&
+		Packet[1] == 0 &&
+		Packet[2] == 0 &&
+		Packet[3] == 1 )
+	{
+		return SplitNalus_Nalu4(Packet);
+	}
+
+	const Nalus = [];
+	let Pos = 0;
+	while ( Pos < Packet.length )
+	{
+		let Length = 0;
+		Length += Packet[Pos+0] << 24;
+		Length += Packet[Pos+1] << 16;
+		Length += Packet[Pos+2] << 8;
+		Length += Packet[Pos+3] << 0;
+		const Data = Packet.slice( Pos, Pos+Length+4 );
+		Nalus.push( Data );
+		Pos += 4;
+		Pos += Length;
+	}
+	return Nalus;
+}
+
+function SplitNalus_Nalu4(Packet)
 {
 	//	gr: we need this fast search-for-bytes as a generic thing so we can get the fastest possible func
 	const Marker = new Uint8Array([0,0,1]);
@@ -371,4 +399,51 @@ export function ParseSps(data)
 		width: Math.ceil((((picWidthInMbsMinus1 + 1) * 16) - frameCropLeftOffset * 2 - frameCropRightOffset * 2) * sarScale),
 		height: ((2 - frameMbsOnlyFlag) * (picHeightInMapUnitsMinus1 + 1) * 16) - ((frameMbsOnlyFlag ? 2 : 4) * (frameCropTopOffset + frameCropBottomOffset)),
 	};
+}
+
+export function Nalu4ToAnnexB(Data)
+{
+	if ( Data[0] == 0 && Data[1] == 0 && Data[2] == 0 && Data[3] == 1 )
+	{
+		let Length = Data.length - 4;	//	ignore prefix in size
+		Data[0] = (Length >> 24) & 0xff;
+		Data[1] = (Length >> 16) & 0xff;
+		Data[2] = (Length >> 8) & 0xff;
+		Data[3] = (Length >> 0) & 0xff;
+		//	Data = Data.slice(4);	//	wrong!
+		//Pop.Debug(`converted to avcc`);
+	}
+	
+	//	ignore sps & pps & sei
+	/*
+	//	gr: we dont need to ignore them, but it does slow video down (cos of timestamps)
+	if ( Data.length == 13 || Data.length == 8 )
+		return null;
+	//	ignore sei
+	if ( Data.length == 34 )
+		return null;
+	*/
+	return Data;
+}
+
+export function AnnexBToNalu4(Data)
+{
+	//	already 0001 or 001
+	if ( Data[0] == 0 && Data[1] == 0 && Data[2] == 0 && Data[3] == 1 )
+		return Data;
+	if ( Data[0] == 0 && Data[1] == 0 && Data[2] == 1 )
+		return Data;
+
+	let Length = 0;
+	Length += Data[0] << 24;
+	Length += Data[1] << 16;
+	Length += Data[2] << 8;
+	Length += Data[3] << 0;
+
+	//	todo: check the length
+	Data[0] = 0;
+	Data[1] = 0;
+	Data[2] = 0;
+	Data[3] = 1;
+	return Data;
 }
