@@ -420,7 +420,8 @@ export default class PopImage
 		return Version;
 	}
 	
-	WritePixels(Width,Height,Pixels,Format)
+	//	ResolveHtmlFormatNow will extract rgba so resource can be freed
+	WritePixels(Width,Height,Pixels,Format,ResolveHtmlFormatNow=false)
 	{
 		if ( !Number.isInteger(Width) || !Number.isInteger(Height) )
 			throw `Trying to write non-integers for width(${Width})/height(${Height}) of image`;
@@ -431,6 +432,15 @@ export default class PopImage
 			Width = Meta.Width;
 			Height = Meta.Height;
 			Format = Meta.Format;
+			
+			if ( ResolveHtmlFormatNow )
+			{
+				const Data = GetPixelsFromHtmlImageElement(Pixels);
+				Pixels = Data.Buffer;
+				Width = Data.Width;
+				Height = Data.Height;
+				Format = Data.Format;
+			}
 		}
 		
 		this.Size = [Width,Height];
