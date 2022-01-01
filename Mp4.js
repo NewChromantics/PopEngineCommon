@@ -249,7 +249,7 @@ class Atom_t
 	}
 	
 	//	turn atom[tree] into Uint8Array()
-	Encode()
+	Encode(IncludeAtomHeader=true)
 	{
 		if ( this.Fourcc.length != 4 )
 			throw `Atom fourcc (${this.Fourcc}) is not 4 chars`;
@@ -258,6 +258,9 @@ class Atom_t
 		const SubDataWriter = new DataWriter();
 		this.EncodeData(SubDataWriter);
 		const Data = SubDataWriter.GetData();
+		
+		if ( !IncludeAtomHeader )
+			return Data;
 		
 		//	atom size includes header size
 		let AtomSize = (32/8) + 4;	//	size + fourcc
@@ -764,6 +767,7 @@ export class Mp4Decoder
 			Medias.push(Media);
 		}
 		
+		Track.Medias = Medias;
 		Pop.Debug(`Found x${Medias.length} media atoms`);
 		return Track;
 	}
@@ -1651,7 +1655,7 @@ class Atom_SampleDescriptionExtension_Btrt extends Atom_t
 	
 }
 
-class Atom_SampleDescriptionExtension_Avcc extends Atom_t
+export class Atom_SampleDescriptionExtension_Avcc extends Atom_t
 {
 	constructor()
 	{
