@@ -390,9 +390,23 @@ export class Context
 {
 	constructor(RenderView,ContextOptions={})
 	{
-		const Canvas = RenderView.GetElement();
-		if ( !(Canvas instanceof HTMLCanvasElement) )
-			throw `First element of Opengl.Context now expected to be a canvas`;
+		//	if no renderview, create an offscreen canvas for context
+		//	todo: standardise this for native
+		let Canvas;
+		if ( !RenderView )
+		{
+			const Width = 256;
+			const Height = 256;
+			Canvas = new OffscreenCanvas(Width,Height);
+		}
+		else
+		{
+			Canvas = RenderView.GetElement();
+			if ( !(Canvas instanceof HTMLCanvasElement) )
+				throw `First element of Opengl.Context now expected to be a canvas`;
+		}
+		
+		const CanvasIsElement = Canvas instanceof HTMLCanvasElement;
 		
 		//	todo: rename this, leftover naming from when this was a window
 		//		now it needs to be set(to false) when we want to shutdown
@@ -400,10 +414,14 @@ export class Context
 		
 		this.CanvasElement = Canvas;		//	cached element pointer
 		this.ContextOptions = ContextOptions || {};
+		
 		//	proper way to detect when canvas is removed from the dom (and our context should die)
-		this.CanvasObserver = new MutationObserver( this.OnCanvasObservation.bind(this) );
-		this.CanvasObserver.observe( this.CanvasElement, { childList: true } );
-
+		if ( CanvasIsElement )
+		{
+			this.CanvasObserver = new MutationObserver( this.OnCanvasObservation.bind(this) );
+			this.CanvasObserver.observe( this.CanvasElement, { childList: true } );
+		}
+		
 		this.Context = null;
 		this.ContextVersion = 0;	//	used to tell if resources are out of date
 
@@ -610,11 +628,15 @@ export class Context
 		if ( !this.ScreenRectCache )
 		{
 			let Canvas = this.GetCanvasElement();
-			let ElementRect = Canvas.getBoundingClientRect();
-			this.ScreenRectCache = [ ElementRect.x, ElementRect.y, ElementRect.width, ElementRect.height ];
+			
+			//	gr: offscreen canvas has no rect
+			//let ElementRect = Canvas.getBoundingClientRect();
+			//this.ScreenRectCache = [ ElementRect.x, ElementRect.y, ElementRect.width, ElementRect.height ];
 			
 			//	gr: the bounding rect is correct, BUT for rendering,
 			//		we should match the canvas pixel size
+			this.ScreenRectCache[0] = 0;
+			this.ScreenRectCache[1] = 0;
 			this.ScreenRectCache[2] = Canvas.width;
 			this.ScreenRectCache[3] = Canvas.height;
 		}
@@ -657,6 +679,12 @@ export class Context
 	RefreshCanvasResolution()
 	{
 		const Canvas = this.GetCanvasElement();
+		const CanvasIsElement = Canvas instanceof HTMLCanvasElement;
+		
+		//	not needed for offscreen canvases (should this ever be called?)
+		if ( !CanvasIsElement )
+			return;
+		
 
 		//	gr: this function now should always just get the rect via dom, 
 		//		if it can't get it from itself, from it's parent
@@ -1314,12 +1342,13 @@ export class Context
 	
 	async CreateShader(VertSource,FragSource,UniformDescriptions,AttribDescriptions)
 	{
+		//	todo: deprecate Uniform&Attribs explicitly (we regex them now, only sokol needs it, not webgl)
+		//		and force adding a name for debugging
 		const ShaderName = `A shader`;
 		//	gr: I think this can be synchronous in webgl
 		const ShaderObject = new Shader(this, ShaderName, VertSource, FragSource );
 		//	gr: this needs to be managed so it's freed when no longer needed!
 		return ShaderObject;
-		throw `Todo; CreateShader`;
 	}
 	
 	
