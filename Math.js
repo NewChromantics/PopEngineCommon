@@ -2270,3 +2270,77 @@ export function CalcHomography(src,dest,Plane='xy')
 	return HomographyMtx;
 }
 
+
+
+//	returns false for parralel lines
+//	returns [x,y,TimeAlongAOfIntersection]
+export function GetRayRayIntersection(StartA,EndA,StartB,EndB)
+{
+	let Ax = StartA[0];
+	let Ay = StartA[1];
+	let Bx = EndA[0];
+	let By = EndA[1];
+	
+	let Cx = StartB[0];
+	let Cy = StartB[1];
+	let Dx = EndB[0];
+	let Dy = EndB[1];
+	
+	
+	let  distAB, theCos, theSin, newX, ABpos ;
+	
+	//  Fail if either line is undefined.
+	//if (Ax==Bx && Ay==By || Cx==Dx && Cy==Dy) return NO;
+	
+	//  (1) Translate the system so that point A is on the origin.
+	Bx-=Ax; By-=Ay;
+	Cx-=Ax; Cy-=Ay;
+	Dx-=Ax; Dy-=Ay;
+	
+	//  Discover the length of segment A-B.
+	distAB = Math.sqrt(Bx*Bx+By*By);
+	
+	//  (2) Rotate the system so that point B is on the positive X axis.
+	theCos = Bx / distAB;
+	theSin = By / distAB;
+	
+	newX = Cx*theCos+Cy*theSin;
+	Cy  = Cy*theCos-Cx*theSin; 
+	Cx = newX;
+	newX = Dx*theCos+Dy*theSin;
+	Dy = Dy*theCos-Dx*theSin;
+	Dx = newX;
+	
+	//  Fail if the lines are parallel.
+	//if (Cy==Dy) return NO;
+	if ( Cy==Dy )
+		return false;
+	
+	//  (3) Discover the position of the intersection point along line A-B.
+	ABpos = Dx+(Cx-Dx) * Dy/(Dy-Cy);
+	
+	let IntersectionX = Ax + ABpos * theCos;
+	let IntersectionY = Ay + ABpos * theSin;
+
+	//	position div length = normalised time	
+	const TimeAlongA = ABpos / distAB;
+	
+	return [IntersectionX,IntersectionY,TimeAlongA];
+}
+
+export function GetLineLineIntersection(StartA,EndA,StartB,EndB)
+{
+	//	get ray intersection
+	const Intersection = GetRayRayIntersection(StartA,EndA,StartB,EndB);
+	if ( Intersection === false )
+		return false;
+
+	//	clip to line A, return false if outside
+	const TimeAlongA = Intersection[2];
+	if ( TimeAlongA < 0 )
+		return false;
+	if ( TimeAlongA > 1 )
+		return false;
+	
+	return Intersection.slice(0,2);
+}
