@@ -2287,18 +2287,29 @@ export function GetRayRayIntersection(StartA,EndA,StartB,EndB)
 	let Dy = EndB[1];
 	
 	
-	let  distAB, theCos, theSin, newX, ABpos ;
+	let theCos, theSin, newX, ABpos ;
+	
+	
 	
 	//  Fail if either line is undefined.
 	//if (Ax==Bx && Ay==By || Cx==Dx && Cy==Dy) return NO;
 	
 	//  (1) Translate the system so that point A is on the origin.
-	Bx-=Ax; By-=Ay;
-	Cx-=Ax; Cy-=Ay;
-	Dx-=Ax; Dy-=Ay;
+	Bx-=Ax;
+	By-=Ay;
+	Cx-=Ax; 
+	Cy-=Ay;
+	Dx-=Ax; 
+	Dy-=Ay;
 	
 	//  Discover the length of segment A-B.
-	distAB = Math.sqrt(Bx*Bx+By*By);
+	let distAB = Math.sqrt(Bx*Bx+By*By);
+	//	gr: todo; we COULD intersect a 1x1 line still!
+	if ( distAB == 0 )
+	{
+		console.warn(`todo: extra checks on a 1x1 line where ray/ray intersection fails`);
+		return false;
+	}
 	
 	//  (2) Rotate the system so that point B is on the positive X axis.
 	theCos = Bx / distAB;
@@ -2324,6 +2335,8 @@ export function GetRayRayIntersection(StartA,EndA,StartB,EndB)
 
 	//	position div length = normalised time	
 	const TimeAlongA = ABpos / distAB;
+	if ( isNaN(IntersectionX) ||isNaN(IntersectionX) ||isNaN(TimeAlongA) )
+		return false;
 	
 	return [IntersectionX,IntersectionY,TimeAlongA];
 }
