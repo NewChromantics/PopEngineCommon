@@ -2357,3 +2357,23 @@ export function GetLineLineIntersection(StartA,EndA,StartB,EndB)
 	
 	return Intersection.slice(0,2);
 }
+
+//	return a "distance" to how much a is inside b
+//	this is essentially used to find overlapping lines, and to find
+//	the weakest (smallest) line
+//	a = [ [x,y] [x,y] ] 
+//	b= [ [x,y], [x,y] ]
+export function GetLineDistanceToLine(a,b)
+{
+	//	we could probably find the dot too as an early rejection
+	//	but we want a score
+	//	also, do we want to know if the lines intersect?
+	
+	//	find nearest start/end points on b
+	let NearStart = GetNearestPointOnLine2( a[0], b[0], b[1] );
+	let NearEnd = GetNearestPointOnLine2( a[1], b[0], b[1] );
+	
+	let StartDistance = Distance2( NearStart, a[0] );
+	let EndDistance = Distance2( NearStart, a[0] );
+	return StartDistance + EndDistance;
+}
