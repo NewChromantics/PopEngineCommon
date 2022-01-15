@@ -2286,15 +2286,10 @@ export function GetRayRayIntersection(StartA,EndA,StartB,EndB)
 	let Dx = EndB[0];
 	let Dy = EndB[1];
 	
-	
-	let theCos, theSin, newX, ABpos ;
-	
-	
-	
 	//  Fail if either line is undefined.
 	//if (Ax==Bx && Ay==By || Cx==Dx && Cy==Dy) return NO;
 	
-	//  (1) Translate the system so that point A is on the origin.
+	//	Translate the system so that point A is on the origin.
 	Bx-=Ax;
 	By-=Ay;
 	Cx-=Ax; 
@@ -2303,7 +2298,7 @@ export function GetRayRayIntersection(StartA,EndA,StartB,EndB)
 	Dy-=Ay;
 	
 	//  Discover the length of segment A-B.
-	let distAB = Math.sqrt(Bx*Bx+By*By);
+	let distAB = Math.hypot(Bx,By);
 	//	gr: todo; we COULD intersect a 1x1 line still!
 	if ( distAB == 0 )
 	{
@@ -2311,32 +2306,32 @@ export function GetRayRayIntersection(StartA,EndA,StartB,EndB)
 		return false;
 	}
 	
-	//  (2) Rotate the system so that point B is on the positive X axis.
-	theCos = Bx / distAB;
-	theSin = By / distAB;
+	//	Rotate the system so that point B is on the positive X axis.
+	let theCos = Bx / distAB;
+	let theSin = By / distAB;
 	
-	newX = Cx*theCos+Cy*theSin;
-	Cy  = Cy*theCos-Cx*theSin; 
+	let newX = Cx*theCos + Cy*theSin;
+	Cy = Cy*theCos - Cx*theSin; 
 	Cx = newX;
-	newX = Dx*theCos+Dy*theSin;
-	Dy = Dy*theCos-Dx*theSin;
+	
+	newX = Dx*theCos + Dy*theSin;
+	Dy = Dy*theCos - Dx*theSin;
 	Dx = newX;
 	
-	//  Fail if the lines are parallel.
-	//if (Cy==Dy) return NO;
+	// Fail if the lines are parallel.
 	if ( Cy==Dy )
 		return false;
 	
-	//  (3) Discover the position of the intersection point along line A-B.
-	ABpos = Dx+(Cx-Dx) * Dy/(Dy-Cy);
+	//	Discover the position of the intersection point along line A-B.
+	let ABpos = Dx+(Cx-Dx) * Dy/(Dy-Cy);
 	
 	let IntersectionX = Ax + ABpos * theCos;
 	let IntersectionY = Ay + ABpos * theSin;
 
 	//	position div length = normalised time	
 	const TimeAlongA = ABpos / distAB;
-	if ( isNaN(IntersectionX) ||isNaN(IntersectionX) ||isNaN(TimeAlongA) )
-		return false;
+	//if ( isNaN(IntersectionX) ||isNaN(IntersectionX) ||isNaN(TimeAlongA) )
+	//	return false;
 	
 	return [IntersectionX,IntersectionY,TimeAlongA];
 }
