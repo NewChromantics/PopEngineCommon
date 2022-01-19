@@ -1,6 +1,6 @@
-import PromiseQueue from './PopEngine/PromiseQueue.js'
-import * as H264 from './PopEngine/H264.js'
-import {Atom_SampleDescriptionExtension_Avcc} from './PopEngine/Mp4.js'
+import PromiseQueue from './PromiseQueue.js'
+import * as H264 from './H264.js'
+import {Atom_SampleDescriptionExtension_Avcc} from './Mp4.js'
 
 
 function IntToHexString(Integer)
