@@ -2370,5 +2370,9 @@ export function GetLineDistanceToLine(a,b)
 	
 	let StartDistance = Distance2( NearStart, a[0] );
 	let EndDistance = Distance2( NearEnd, a[1] );
+	
+	if ( isNaN(StartDistance) || isNaN(EndDistance) )
+		throw `GetLineDistanceToLine nan`;
+		
 	return StartDistance + EndDistance;
 }
