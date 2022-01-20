@@ -13,14 +13,16 @@ import {MP4,H264Remuxer} from './Mp4_Generator.js'
 class AtomDataReader extends DataReader
 {
 	//	gr: move this to an overloaded Atom/Mpeg DataReader
-	async ReadNextAtom()
+	async ReadNextAtom(GetAtomType)
 	{
-		const Atom = new Atom_t();
-		Atom.FilePosition = this.ExternalFilePosition + this.FilePosition;
+		GetAtomType = GetAtomType || function(Fourcc)	{	return null;	}
+	
+		const Atom_FilePosition = this.ExternalFilePosition + this.FilePosition;
+		let Atom_Size;
 		//	catch EOF and return null, instead of throwing
 		try
 		{
-			Atom.Size = await this.Read32();
+			Atom_Size = await this.Read32();
 		}
 		catch(e)
 		{
@@ -28,7 +30,14 @@ class AtomDataReader extends DataReader
 				return null;
 			throw e;
 		}
-		Atom.Fourcc = await this.ReadString(4);
+		const Atom_Fourcc = await this.ReadString(4);
+
+		//	alloc atom
+		const AtomType = GetAtomType(Atom_Fourcc) ||  Atom_t;
+		const Atom = new AtomType();
+		Atom.FilePosition = Atom_FilePosition;
+		Atom.Size = Atom_Size;
+		Atom.Fourcc = Atom_Fourcc;
 		
 		//	size of 1 means 64 bit size
 		if ( Atom.Size == 1 )
@@ -431,9 +440,10 @@ export class Mp4Decoder
 		}
 	}
 	
-	EnumTracks(Tracks)
+	OnNewTrack(Track,TrackId)
 	{
-		Pop.Debug(`Got new tracks ${Tracks}`);
+		this.Tracks.push(Track);
+		this.NewTrackQueue.Push(Track);
 	}
 	
 	async DecodeAtom_Mdat(Atom)
@@ -654,7 +664,7 @@ export class Mp4Decoder
 		for ( let TrakAtom of TrakAtoms )
 		{
 			const Track = await this.DecodeAtom_Trak(TrakAtom,MovieHeader);
-			this.NewTrackQueue.Push(Track);
+			this.OnNewTrack(Track);
 		}
 	}
 	
@@ -826,11 +836,41 @@ export class Mp4Decoder
 		await Atom.DecodeChildAtoms();
 		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
 		
-		const Samples = await this.DecodeAtom_SampleTable( Atom.GetChildAtom('stbl'), MovieHeader );
+		const Samples = await this.DecodeAtom_SampleTable( Atom.GetChildAtom('stbl'), MediaHeader, MovieHeader );
 		
 		const Dinfs = Atom.GetChildAtoms('dinf');
 		for ( let Dinf of Dinfs )
 			await this.DecodeAtom_Dinf(Dinf);
+		
+		//	todo: should we convert header to samples? (SPS & PPS)
+		//		does this ONLY apply to h264/video?
+		const Avc1 = MediaHeader.SampleMeta.GetChildAtom('avc1');
+		if ( Avc1 )
+		{
+			const Avcc = Avc1.GetChildAtom('avcC');
+			if ( Avcc )
+			{
+				const FirstSample = Samples[0];
+			
+				//	messy hack! should start with nalu size prefix
+				const SpsSample = new Sample_t();
+				SpsSample.Data = [0,0,0,1,	...Avcc.SpsDatas[0] ];
+				SpsSample.DecodeTimeMs = FirstSample.DecodeTimeMs;
+				SpsSample.PresentationTimeMs = FirstSample.PresentationTimeMs;
+				SpsSample.TrackId = FirstSample.TrackId;
+				SpsSample.DurationMs = 0;
+
+				const PpsSample = new Sample_t();
+				PpsSample.Data = [0,0,0,1,	...Avcc.PpsDatas[0] ];
+				PpsSample.DecodeTimeMs = FirstSample.DecodeTimeMs;
+				PpsSample.PresentationTimeMs = FirstSample.PresentationTimeMs;
+				PpsSample.TrackId = FirstSample.TrackId;
+				PpsSample.DurationMs = 0;
+
+				this.NewSamplesQueue.Push( [SpsSample,PpsSample] );
+			}
+		}
+			
 		
 		this.NewSamplesQueue.Push(Samples);
 		//	gmhd
@@ -846,7 +886,8 @@ export class Mp4Decoder
 		//	expecting this to just contain one dref
 	}
 	
-	async DecodeAtom_SampleTable(Atom,MovieHeader)
+	//	todo: see how much this overlaps with DecodeAtom_FragmentSampleTable
+	async DecodeAtom_SampleTable(Atom,MediaHeader,MovieHeader)
 	{
 		if ( !Atom )
 			return null;
@@ -880,9 +921,9 @@ export class Mp4Decoder
 		const SampleKeyframes = await this.DecodeAtom_SampleKeyframes(SyncSamplesAtom, SampleSizes.length);
 		const SampleDurations = await this.DecodeAtom_SampleDurations( SampleDecodeDurationsAtom, SampleSizes.length);
 		const SamplePresentationTimeOffsets = await this.DecodeAtom_SampleDurations(SamplePresentationTimeOffsetsAtom, SampleSizes.length, 0 );
-		
-		const SampleMeta = await this.DecodeAtom_Stsd(SampleDescriptorAtom);
-		
+
+		//	extract sample info, including AVCC headers for h264
+		MediaHeader.SampleMeta = await this.DecodeAtom_Stsd(SampleDescriptorAtom);
 		
 		//	durations start at zero (proper time must come from somewhere else!) and just count up over durations
 		const SampleDecodeTimes = [];//new int[SampleSizes.Count];
@@ -1147,14 +1188,15 @@ export class Mp4Decoder
 		return Keyframes;
 	}
 
+	//	sample descriptor (meta for samples in a table)
 	async DecodeAtom_Stsd(Atom)
 	{
 		if ( !Atom )
 			return;
 		
-		//const stsd = await Atom_Stsd.Read(Atom, (a) => this.NewAtomQueue.Push(a) );
-		//stsd.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
-		
+		//	gr: is this similar to DecodeAtom_FragmentSampleTable ?
+		const Stsd = await Atom_Stsd.Read(Atom, (a) => this.NewAtomQueue.Push(a) );
+		return Stsd;
 	}
 
 	async DecodeAtom_SampleDurations(Atom,SampleCount,Default=null)
@@ -1640,11 +1682,32 @@ class Atom_Stbl extends Atom_t
 	}
 }
 
+
+function GetSampleDescriptionExtensionType(Fourcc)
+{
+	switch ( Fourcc )
+	{
+		//	improve naming of this!
+		case 'avc1':	return VideoSampleDescription;
+		
+		//	extensions
+		case Atom_SampleDescriptionExtension_Avcc.Fourcc:	return Atom_SampleDescriptionExtension_Avcc;
+		case Atom_SampleDescriptionExtension_Btrt.Fourcc:	return Atom_SampleDescriptionExtension_Btrt;
+		case Atom_SampleDescriptionExtension_Pasp.Fourcc:	return Atom_SampleDescriptionExtension_Pasp;
+
+		default:
+			return Atom_t;
+	}
+}
+
+
+//	bit rate meta
 class Atom_SampleDescriptionExtension_Btrt extends Atom_t
 {
+	static get Fourcc()	{	return 'btrt';	}
 	constructor()
 	{
-		super('btrt');
+		super( Atom_SampleDescriptionExtension_Btrt.Fourcc );
 		this.Data = 
 		[
 			0x00, 0x1c, 0x9c, 0x80, // bufferSizeDB
@@ -1657,17 +1720,20 @@ class Atom_SampleDescriptionExtension_Btrt extends Atom_t
 
 export class Atom_SampleDescriptionExtension_Avcc extends Atom_t
 {
+	static get Fourcc()	{	return 'avcC';	}
+
 	constructor()
 	{
-		super('avcC');
+		super( Atom_SampleDescriptionExtension_Avcc.Fourcc );
 		
 		this.Version = 1;
 
-		const Sps = [/*0,0,0,1,*/39,66,0,30,171,64,80,30,200];
-		const Pps = [/*0,0,0,1,*/40,206,60,48];
-
-		this.SpsDatas = [Sps];
-		this.PpsDatas = [Pps];
+		//const Sps = [/*0,0,0,1,*/39,66,0,30,171,64,80,30,200];
+		//const Pps = [/*0,0,0,1,*/40,206,60,48];
+		//this.SpsDatas = [Sps];
+		//this.PpsDatas = [Pps];
+		this.SpsDatas = [];
+		this.PpsDatas = [];
 		this.NaluSize = 4;
 	}
 	
@@ -1704,16 +1770,49 @@ export class Atom_SampleDescriptionExtension_Avcc extends Atom_t
 			DataWriter.Write16( Pps.length );
 			DataWriter.WriteBytes( Pps );
 		}
+	}
+	
+	//	is different to Read()? (no atom headers etc)
+	async DecodeData(Bytes)
+	{
+		const Reader = new DataReader(Bytes);
+		this.Version = await Reader.Read8();
 		
+		//	[1,2,3] of sps0 is here (for simple profile & level access)
+		const Sps0Copy = await Reader.ReadBytes(3);
+		
+		const NaluSizeAndReserved = await Reader.Read8();
+		const Reserved0xFC = NaluSizeAndReserved & 0xfc;
+		this.NaluSize = (NaluSizeAndReserved & ~0xfc) + 1;
+		
+		const NumberOfSpsAndReserved = await Reader.Read8();
+		const Reserved0xE0 = NumberOfSpsAndReserved & 0xe0;
+		const NumberOfSps = NumberOfSpsAndReserved & 0x1f;
+		for ( let s=0;	s<NumberOfSps;	s++ )
+		{
+			const SpsSize = await Reader.Read16();
+			const Sps = await Reader.ReadBytes(SpsSize);
+			this.SpsDatas.push( Sps );
+		}
+
+		const NumberOfPpsAndReserved = await Reader.Read8();
+		const NumberOfPps = NumberOfPpsAndReserved & 0x1f;
+		for ( let p=0;	p<NumberOfPps;	p++ )
+		{
+			const PpsSize = await Reader.Read16();
+			const Pps = await Reader.ReadBytes(PpsSize);
+			this.PpsDatas.push( Pps );
+		}
 	}
 }
 
 
 class Atom_SampleDescriptionExtension_Pasp extends Atom_t
 {
+	static get Fourcc()	{	return 'pasp';	}
 	constructor()
 	{
-		super('pasp');
+		super( Atom_SampleDescriptionExtension_Pasp.Fourcc );
 		this.Data = [0x00,0x00,0x00,0x01,	0x00,0x00,0x00,0x01,	0x00,0x00,0x00,0x01	];
 	}
 	
@@ -1748,11 +1847,31 @@ class VideoSampleDescription
 		
 		this.ExtensionAtoms = [];
 		
-		this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Avcc() );
+		//	gr: now explicitly add sps & pps data,which creates the avcc header
+		//this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Avcc() );
 		//	if I delete this from a valid file, quicktime doesnt play it
 		//this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Pasp() );
 		//this.ExtensionAtoms.push( new Atom_SampleDescriptionExtension_Btrt() );
 	}
+	
+	AddAvcc(Sps,Pps)
+	{
+		const Avcc = new Atom_SampleDescriptionExtension_Avcc();
+		//	do any NALU detection/stripping here
+		Avcc.SpsDatas.push( Sps );
+		Avcc.SpsDatas.push( Pps );
+		this.ExtensionAtoms.push( Avcc );
+	}
+	
+	GetChildAtom(Fourcc)
+	{
+		const Matches = this.ExtensionAtoms.filter( a => a.Fourcc == Fourcc );
+		if ( Matches.length == 0 )
+			return null;
+		if ( Matches.length > 1 )
+			throw `More than one(x${Matches.length}) child ${Fourcc}} atom found`;
+		return Matches[0];
+	}	
 	
 	EncodeData(DataWriter)
 	{
@@ -1799,6 +1918,49 @@ class VideoSampleDescription
 			const Data = Extension.Encode();
 			DataWriter.WriteBytes(Data);
 		}
+	}
+	
+	async DecodeData(Bytes)
+	{
+		const Reader = new AtomDataReader(Bytes);
+		
+		this.Version = await Reader.Read16();
+		this.RevisionLevel = await Reader.Read16();
+		this.Vendor = await Reader.ReadString(4);
+		this.TemporalQuality = await Reader.Read32() / 1023;
+		this.SpatialQuality = await Reader.Read32() / 1024;
+		this.PixelWidth = await Reader.Read16();
+		this.PixelHeight = await Reader.Read16();
+		//	72ppi shifted
+		this.HorizontalResolution = await Reader.Read32() >> 16; 
+		this.VerticalResolution = await Reader.Read32() >> 16;
+		
+		//	gr: not the following data size;
+		//	"A 32-bit integer that must be set to 0."
+		const DataSize = await Reader.Read32();
+		if ( DataSize != 0 )
+			throw `Unexpected non-zero data size in ${this.Fourcc} atom`;
+
+		this.FramesPerSample = await Reader.Read16();
+		const CompressorStringLength = await Reader.Read8();
+		this.Compressor = await Reader.ReadString(CompressorStringLength);
+		this.ColourDepth = await Reader.Read16();
+		this.ColourTableId = await Reader.Read16();
+		
+		//	gr: there's some data here before the avcc atom...
+		const Gap = await Reader.ReadBytes(31); 
+		
+		//	remaining data is blocks of extension atoms
+		while ( Reader.BytesRemaining )
+		{
+			const ExtensionAtom = await Reader.ReadNextAtom(GetSampleDescriptionExtensionType);
+			//	decode self
+			if ( ExtensionAtom.DecodeData )
+				await ExtensionAtom.DecodeData( ExtensionAtom.Data );
+			console.log(`Atom ${this.Fourcc} found extension ${ExtensionAtom.Fourcc}`);
+			this.ExtensionAtoms.push( ExtensionAtom );
+		}
+		
 	}
 }
 
@@ -1861,10 +2023,10 @@ class Atom_Stsd extends Atom_t
 			if ( Last4[0]+Last4[1]+Last4[2]+Last4[3] == 0 )
 				DataSize -= 4;
 				
-			DataSize += 4;
-			DataSize += Description.Name.length;
-			DataSize += 6;
-			DataSize += 2;
+			DataSize += 4;	//	size
+			DataSize += Description.Name.length;	//	fourcc so always 4
+			DataSize += 6;	//	reserved 6
+			DataSize += 2;	//	16bit datareference index
 			
 			Writer.Write32(DataSize);
 			Writer.WriteStringAsBytes(Description.Name);
@@ -1886,21 +2048,36 @@ class Atom_Stsd extends Atom_t
 		
 		for ( let s=0;	s<Atom.SampleDescriptionCount;	s++ )
 		{
-			const SampleDescriptionAtom = new Atom_t();
-			SampleDescriptionAtom.Size = await Reader.Read32();
-			SampleDescriptionAtom.Fourcc = await Reader.ReadString(4);
+			const ExtensionSize = await Reader.Read32();
+			const ExtensionFourcc = await Reader.ReadString(4);
+			const ExtensionAtomType = GetSampleDescriptionExtensionType( ExtensionFourcc );
+			
+			const SampleDescriptionAtom = new ExtensionAtomType();
+			SampleDescriptionAtom.Size = ExtensionSize;
+			SampleDescriptionAtom.Fourcc = ExtensionFourcc;
 			SampleDescriptionAtom.Zero6 = await Reader.ReadBytes(6);
 			SampleDescriptionAtom.DataReferenceIndex = await Reader.Read16();
-			const ContentSize = SampleDescriptionAtom.Size - 4 - 6 - 2;
-			if ( ContentSize )
-			{
-				const DescAtom = await Reader.ReadNextAtom();
-				SampleDescriptionAtom.ChildAtoms.push(DescAtom);
-			}
+			
+			//	see EncodeData() for some more magic numbers/caveats
+			//	size - header read above
+			let DataSize = SampleDescriptionAtom.Size;
+			DataSize -= 4;	//	size
+			DataSize -= 4;	//	fourcc
+			DataSize -= 6;	//	reserved 6
+			DataSize -= 2;	//	16bit datareference index
+
+			const Data = await Reader.ReadBytes(DataSize);
+			if ( SampleDescriptionAtom.DecodeData )
+				await SampleDescriptionAtom.DecodeData(Data);
+			else
+				SampleDescriptionAtom.Data = Data;
+
 			Atom.ChildAtoms.push(SampleDescriptionAtom);
-			EnumChildAtom(SampleDescriptionAtom);
-			SampleDescriptionAtom.ChildAtoms.forEach( a => EnumChildAtom(a) );
+			if ( EnumChildAtom )
+				EnumChildAtom(SampleDescriptionAtom);
 		}
+		
+		return Atom;
 	}
 }
 
