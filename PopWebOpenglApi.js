@@ -418,8 +418,11 @@ export class Context
 		//	proper way to detect when canvas is removed from the dom (and our context should die)
 		if ( CanvasIsElement )
 		{
-			this.CanvasObserver = new MutationObserver( this.OnCanvasObservation.bind(this) );
-			this.CanvasObserver.observe( this.CanvasElement, { childList: true } );
+			this.CanvasMutationObserver = new MutationObserver( this.OnCanvasMutationObservation.bind(this) );
+			this.CanvasMutationObserver.observe( this.CanvasElement, { childList: true } );
+
+			this.CanvasResizeObserver = new ResizeObserver( this.OnCanvasResizeObservation.bind(this) );
+			this.CanvasResizeObserver.observe( this.CanvasElement );
 		}
 		
 		this.Context = null;
@@ -456,10 +459,15 @@ export class Context
 		this.RenderLoop();
 	}
 	
-	OnCanvasObservation(Event)
+	OnCanvasMutationObservation(Event)
 	{
 		Pop.Debug(`Something happened to canvas; ${Event}`);
 		this.Close();
+	}
+
+	OnCanvasResizeObservation(Event)
+	{
+		this.RefreshCanvasResolution();
 	}
 
 	Close()
@@ -482,7 +490,13 @@ export class Context
 		}
 		
 		this.CanvasElement = null;
-		this.CanvasObserver.disconnect();		
+		if ( this.CanvasMutationObserver )
+			this.CanvasMutationObserver.disconnect();
+		if ( this.CanvasResizeObserver )
+			this.CanvasResizeObserver.disconnect();
+			
+		this.CanvasMutationObserver = null;
+		this.CanvasResizeObserver = null;
 	}
 
 	OnOrientationChange(ResizeEvent)
@@ -685,7 +699,9 @@ export class Context
 		//	not needed for offscreen canvases (should this ever be called?)
 		if ( !CanvasIsElement )
 			return;
-		
+
+		//	assume something has happened that has made us this the size has changed, make sure it gets refreshed
+		this.ScreenRectCache = null;		
 
 		//	gr: this function now should always just get the rect via dom, 
 		//		if it can't get it from itself, from it's parent
