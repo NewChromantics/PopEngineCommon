@@ -632,6 +632,7 @@ export class Context
 			//	gr: offscreen canvas has no rect
 			//let ElementRect = Canvas.getBoundingClientRect();
 			//this.ScreenRectCache = [ ElementRect.x, ElementRect.y, ElementRect.width, ElementRect.height ];
+			this.ScreenRectCache = [];
 			
 			//	gr: the bounding rect is correct, BUT for rendering,
 			//		we should match the canvas pixel size
