@@ -88,6 +88,11 @@ export default class WebcodecDecoder extends DecoderBase
 	{
 		if ( this.AvccHeader )
 			return this.AvccHeader;
+		
+		if ( !this.Sps )
+			throw `No SPS yet`;
+		if ( !this.Pps )
+			throw `No PPS yet`;
 			
 		//	 should Atom_SampleDescriptionExtension_Avcc be stripping nalu from sps?
 		const Atom = new Atom_SampleDescriptionExtension_Avcc();
