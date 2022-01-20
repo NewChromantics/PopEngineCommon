@@ -1,6 +1,6 @@
 import { GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
 import {LoadFileAsImageAsync} from './FileSystem.js'
-import {Debug} from './PopWebApiCore.js'
+import {Debug,Warning} from './PopWebApiCore.js'
 
 //	gr: I forget what browser this was for! add comments when we know!
 //	ImageBitmap should also be supported
@@ -590,7 +590,7 @@ export default class PopImage
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * this.Pixels.width * this.Pixels.height;
 			if ( isNaN(this.OpenglByteSize) )
 			{
-				Pop.Warning(`Nan size: ${this.OpenglByteSize}`);
+				Warning(`Nan size: ${this.OpenglByteSize}`);
 				this.OpenglByteSize=0;
 			}
 		}
@@ -692,7 +692,7 @@ export default class PopImage
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
 			if ( isNaN(this.OpenglByteSize) )
 			{
-				Pop.Warning(`Nan size: ${this.OpenglByteSize}`);
+				Warning(`Nan size: ${this.OpenglByteSize}`);
 				this.OpenglByteSize=0;
 			}
 		}
