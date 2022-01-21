@@ -444,6 +444,20 @@ export default class PopImage
 		}
 		
 		this.Size = [Width,Height];
+		
+		//	in case old data needs to be freed, delete before re-assigning
+		let NewTimestamp = Pixels.timestamp;
+		let OldTimestamp = this.Pixels ? this.Pixels.timestamp : null;
+		//console.log(`texture ${OldTimestamp}->${NewTimestamp}`);
+		//if ( NewTimestamp === OldTimestamp )
+		if ( this.Pixels == Pixels )
+		{
+			console.warn(`Setting pixels to self?? ${this.Pixels}==${Pixels}?${this.Pixels==Pixels}`);
+		}
+		else
+		{
+			this.DeletePixels();
+		}
 		this.Pixels = Pixels;
 		this.PixelsFormat = Format;
 		this.PixelsVersion = this.GetLatestVersion()+1;
@@ -464,6 +478,14 @@ export default class PopImage
 	
 	DeletePixels()
 	{
+		//	auto cleanup any html elements - this may want to be somewhere else
+		//	.close is for decoded video frames
+		if ( this.Pixels && this.Pixels.close )
+		{
+			this.Pixels.ClosedByPopImage = this.Pixels.timestamp;
+			this.Pixels.close();
+		}
+		
 		this.PixelsVersion = null;
 		this.Pixels = null;
 		this.PixelsFormat = null;
