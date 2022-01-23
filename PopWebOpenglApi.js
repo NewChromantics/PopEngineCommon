@@ -933,7 +933,10 @@ export class Context
 				return Extension.vertexAttribDivisorANGLE(...arguments);
 			}
 			
-			Context.drawArraysInstanced = Extension.drawArraysInstancedANGLE;
+			Context.drawArraysInstanced = function()
+			{
+				return Extension.drawArraysInstancedANGLE(...arguments);
+			}
 		}
 		
 		const EnableExtension = function(ExtensionName,Init)
@@ -2781,6 +2784,7 @@ export class TriangleBuffer
 		else
 		{
 			gl.drawArrays( this.PrimitiveType, 0, this.IndexCount );
+			//gl.drawArraysInstanced( this.PrimitiveType, 0, this.IndexCount, 2 );
 		}
 	}
 	
