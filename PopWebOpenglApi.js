@@ -5,6 +5,7 @@ export default Default;
 import {GetUniqueHash} from './Hash.js'
 import {CreatePromise} from './PopApi.js'
 import Pool from './Pool.js'
+import {IsTypedArray} from './PopApi.js'
 
 import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
 
@@ -1388,7 +1389,10 @@ export class Context
 						
 		//	this needs to unroll the values into one giant array...
 		//	if this an array of typed arrays, we need some more work
-		const DataValues = new Float32Array( Values.flat(2) );
+		let DataValues = Values;
+		if ( !IsTypedArray(DataValues) )
+			DataValues = new Float32Array( Values.flat(2) );
+			
 		let DetectedInstanceCount = DataValues.length / AttributeMeta.ElementSize;
 		if ( DetectedInstanceCount != Math.floor(DetectedInstanceCount) )
 			throw `Attribute ${AttributeMeta.Name} has misaligned input`; 
