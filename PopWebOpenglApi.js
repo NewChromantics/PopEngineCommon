@@ -937,6 +937,11 @@ export class Context
 			{
 				return Extension.drawArraysInstancedANGLE(...arguments);
 			}
+
+			Context.drawElementsInstanced = function()
+			{
+				return Extension.drawElementsInstancedANGLE(...arguments);
+			}
 		}
 		
 		const EnableExtension = function(ExtensionName,Init)
@@ -1244,6 +1249,7 @@ export class Context
 					//	but we may need to be after so uniform-attribs override geo attribs
 					Geometry.Bind( RenderContext, Shader );
 
+					let InstanceCount = 0;
 
 					//	set uniforms on shader
 					for ( let UniformKey in RenderCommand.Uniforms )
@@ -1263,16 +1269,29 @@ export class Context
 						//	we need to turn these values into an attribute buffer and bind it
 						
 						//	gr: for instancing, this needs to be an array for each instance...
-						const Values = [UniformValue];
-						const Buffer = this.AllocAndBindAttribInstances( AttributeMeta, Values );
+						//	gr: now auto unrolling and expecting to align...
+						const Values = UniformValue;
+						const Bind = this.AllocAndBindAttribInstances( AttributeMeta, Values );
+						const Buffer = Bind.Buffer;
 						PoolArrayBuffers.push( Buffer );
+						
+						if ( InstanceCount != 0 )
+							if ( Bind.InstanceCount < InstanceCount )
+								console.warn(`Attribute ${AttributeMeta.Name} detected ${Bind.InstanceCount} instances, but already detected ${InstanceCount}`);
+						
+						//	things wont render if any input data isnt aligned to instance count
+						//	should we change this to min()>0 so something will render?
+						if ( InstanceCount == 0 )
+							InstanceCount = Bind.InstanceCount;
+						else
+							InstanceCount = Math.min( InstanceCount, Bind.InstanceCount );
 					}
 
 					//	sokol sets state every frame, we should too
 					PassRenderTarget.SetState(StateParams);
 
 					//	draw polygons
-					Geometry.Draw(RenderContext);
+					Geometry.Draw( RenderContext, InstanceCount );
 				}
 				else if ( RenderCommand instanceof RenderCommand_SetRenderTarget ) 
 				{
@@ -1356,19 +1375,24 @@ export class Context
 	
 	AllocAndBindAttribInstances(AttributeMeta,Values)
 	{
-		if ( !Array.isArray(Values) )
-			throw `AllocAndBindAttribInstances(${AttributeMeta.Name}) expecting array of values (per instance)`;
-			
+		//	may need a better approach?
 		const InstanceCount = Values.length;
 		
+		//if ( !Array.isArray(Values) )
+		//	throw `AllocAndBindAttribInstances(${AttributeMeta.Name}) expecting array of values (per instance)`;
+			
 		//	alloc a buffer from a pool
 		const Buffer = this.AllocArrayBuffer();
 		const gl = this.Context;
 		gl.bindBuffer(gl.ARRAY_BUFFER, Buffer);
 						
-		//	this needs to unroll the values into one giant array?
+		//	this needs to unroll the values into one giant array...
+		//	if this an array of typed arrays, we need some more work
 		const DataValues = new Float32Array( Values.flat(2) );
-		
+		let DetectedInstanceCount = DataValues.length / AttributeMeta.ElementSize;
+		if ( DetectedInstanceCount != Math.floor(DetectedInstanceCount) )
+			throw `Attribute ${AttributeMeta.Name} has misaligned input`; 
+
 		//	gl.get = sync = slow!
 		//	init buffer size (or resize if bigger than before)
 		//const BufferSize = gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE);
@@ -1391,7 +1415,7 @@ export class Context
 			const Normalised = false;
 			const RowSize = AttributeMeta.ElementSize / AttributeMeta.ElementRows;
 			if ( RowSize != Math.floor(RowSize) )
-				throw `ElementSize vs ElementRows not aligned`;
+				throw `Attribute ${AttributeMeta.Name} ElementSize vs ElementRows not aligned`;
 			const RowStride = RowSize * DataValues.BYTES_PER_ELEMENT;
 			const Location = AttributeMeta.Location + Row;
 			const Type = AttributeMeta.ElementType;	//	gl.FLOAT int etc
@@ -1402,7 +1426,11 @@ export class Context
 			//	and enables instancing
 			gl.vertexAttribDivisor( Location, 1);
 		}
-		return Buffer;
+		
+		const BindMeta = {};
+		BindMeta.Buffer = Buffer;
+		BindMeta.InstanceCount = DetectedInstanceCount;
+		return BindMeta;
 	}
 	
 	OnAllocatedTexture(Image)
@@ -2773,18 +2801,27 @@ export class TriangleBuffer
 		}
 	}
 	
-	Draw(RenderContext)
+	Draw(RenderContext,Instances=0)
 	{
 		const gl = RenderContext.GetGlContext();
+
+		//	in future, we may use instances=0 for something, if we have a
+		//	platform we cannot call instancing on
+		//	instances=0 renders nothing (as expected!)
+		Instances = Math.max( 1, Instances );
+
+		//	gr: it seems we can provide an extra instanced param to drawXXX() without any problems
+		//		we can also just use the instanced params	
 		if ( this.TriangleIndexes )
 		{
 			const Offset = 0;
-			gl.drawElements( this.PrimitiveType, this.IndexCount, this.TriangleIndexesType, Offset );
+			//gl.drawElements( this.PrimitiveType, this.IndexCount, this.TriangleIndexesType, Offset, Instances );
+			gl.drawElementsInstanced( this.PrimitiveType, this.IndexCount, this.TriangleIndexesType, Offset, Instances );
 		}
 		else
 		{
-			gl.drawArrays( this.PrimitiveType, 0, this.IndexCount );
-			//gl.drawArraysInstanced( this.PrimitiveType, 0, this.IndexCount, 2 );
+			//gl.drawArrays( this.PrimitiveType, 0, this.IndexCount, Instances );
+			gl.drawArraysInstanced( this.PrimitiveType, 0, this.IndexCount, Instances );
 		}
 	}
 	
