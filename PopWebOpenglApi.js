@@ -61,6 +61,71 @@ function GetString(Context,Enum)
 	return "<" + Enum + ">";
 }
 
+function GetUniformOrAttribMeta(Context,Program,Uniform)
+{
+	const gl = Context;
+	const Meta = {};
+	
+	Meta.ElementCount = Uniform.size;
+	Meta.ElementSize = undefined;
+			
+	//	match name even if it's an array
+	//	todo: struct support
+	Meta.Name = Uniform.name.split('[')[0];
+	//	note: uniform consists of structs, Array[Length] etc
+
+	let AttribLocation = gl.getAttribLocation( Program, Uniform.name );
+	let UniformLocation = gl.getUniformLocation( Program, Uniform.name );
+	//	invalid attribs are -1 or number
+	//	invalid uniforms are null or WebGLUniformLocation
+	AttribLocation = (AttribLocation == -1) ? null : AttribLocation;
+	Meta.Location = UniformLocation || AttribLocation;
+	
+	switch( Uniform.type )
+	{
+		case gl.SAMPLER_2D:	//	samplers' value is the texture index
+		case gl.INT:
+		case gl.UNSIGNED_INT:
+		case gl.BOOL:
+			Meta.ElementSize = 1;
+			Meta.SetValues = function(v)	{	gl.uniform1iv( Meta.Location, v );	};
+			break;
+		case gl.FLOAT:
+			Meta.ElementSize = 1;
+			Meta.SetValues = function(v)	{	gl.uniform1fv( Meta.Location, v );	};
+			break;
+		case gl.FLOAT_VEC2:
+			Meta.ElementSize = 2;
+			Meta.SetValues = function(v)	{	gl.uniform2fv( Meta.Location, v );	};
+			break;
+		case gl.FLOAT_VEC3:
+			Meta.ElementSize = 3;
+			Meta.SetValues = function(v)	{	gl.uniform3fv( Meta.Location, v );	};
+			break;
+		case gl.FLOAT_VEC4:
+			Meta.ElementSize = 4;
+			Meta.SetValues = function(v)	{	gl.uniform4fv( Meta.Location, v );	};
+			break;
+		case gl.FLOAT_MAT2:
+			Meta.ElementSize = 2*2;
+			Meta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix2fv( Meta.Location, Transpose, v );	};
+			break;
+		case gl.FLOAT_MAT3:
+			Meta.ElementSize = 3*3;
+			Meta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix3fv( Meta.Location, Transpose, v );	};
+			break;
+		case gl.FLOAT_MAT4:
+			Meta.ElementSize = 4*4;
+			Meta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix4fv( Meta.Location, Transpose, v );	};
+			break;
+
+		default:
+			Meta.SetValues = function(v)	{	throw `Unhandled type ${Uniform.type} on ${Uniform.name}`;	};
+			break;
+	}
+	return Meta;
+}
+
 
 //	gl.isFrameBuffer is expensive! probably flushing
 const TestFrameBuffer = false;
@@ -683,7 +748,7 @@ export class Context
 				Width = WindowInnerSize[0];
 			if (!Height)
 				Height = WindowInnerSize[1];
-			Rect = [0,0,Width,Height];
+			let Rect = [0,0,Width,Height];
 			Pop.Debug("SetCanvasSize defaulting to ",Rect,"ParentSize=" + ParentSize,"ParentInnerSize=" + ParentInnerSize,"WindowInnerSize=" + WindowInnerSize);
 			return Rect;
 		}
@@ -847,6 +912,22 @@ export class Context
 			this.Int32TextureSupported = true;
 		}.bind(this);
 
+		function InitInstancedArrays(Context,Extension)
+		{
+			console.log(`ANGLE_instanced_arrays supported; InitInstancedArrays()`);
+			if ( !Context.drawArraysInstanced )
+			{
+				function drawArraysInstanced()
+				{
+					return Extension.drawArraysInstancedANGLE(...arguments);
+				}
+				Context.drawArraysInstanced = drawArraysInstanced;
+			}
+			else
+			{
+				console.log(`ANGLE_instanced_arrays supported but drawArraysInstanced() already exists`);
+			}
+		}
 		
 		const EnableExtension = function(ExtensionName,Init)
 		{
@@ -876,6 +957,8 @@ export class Context
 		EnableExtension('OES_vertex_array_object', this.InitVao.bind(this) );
 		EnableExtension('WEBGL_draw_buffers', this.InitMultipleRenderTargets.bind(this) );
 		EnableExtension('OES_element_index_uint', this.Init32BitBufferIndexes.bind(this) );
+		EnableExtension('ANGLE_instanced_arrays', InitInstancedArrays.bind(this) );
+		
 		
 		//	texture load needs extension in webgl1
 		//	in webgl2 it's built in, but requires #version 300 es
@@ -1137,15 +1220,31 @@ export class Context
 					//	bind geo & shader (these are intrinsicly linked by attribs, we should change code
 					//	so they HAVE to be bound together)
 					Shader.Bind( RenderContext );
-					Geometry.Bind( RenderContext, Shader );
 
 					//	set uniforms on shader
 					for ( let UniformKey in RenderCommand.Uniforms )
 					{
 						const UniformValue = RenderCommand.Uniforms[UniformKey];
-						Shader.SetUniform( UniformKey, UniformValue );
+						if ( Shader.SetUniform( UniformKey, UniformValue ) )
+							continue;
+
+						//	gr: this also picks up uniforms that have been optimised out...
+						const AttributeMeta = Shader.GetAttributeMeta(UniformKey);
+						if ( !AttributeMeta )
+							continue;
+					
+						//console.log(`Turn ${UniformKey} into attrib`,AttributeMeta);
+						//	prep for instancing support;
+						//	if there are uniforms provided that are attributes, (AND not in geo?)
+						//	we need to turn these values into an attribute buffer and bind it
+						//	alloc a buffer from a pool
+						//this.AllocArrayBuffer(
 					}
-										
+					
+					//	seems to be okay after, putting after in case array buffers mess anything up
+					//	but we may need to be after so uniform-attribs override geo attribs
+					Geometry.Bind( RenderContext, Shader );
+
 					//	sokol sets state every frame, we should too
 					PassRenderTarget.SetState(StateParams);
 
@@ -2082,7 +2181,7 @@ export class Shader
 	{
 		const UniformMeta = this.GetUniformMeta(Uniform);
 		if ( !UniformMeta )
-			return;
+			return false;
 		if( Array.isArray(Value) )					this.SetUniformArray( Uniform, UniformMeta, Value );
 		else if( Value instanceof Float32Array )	this.SetUniformArray( Uniform, UniformMeta, Value );
 		else if ( Value instanceof PopImage )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTextureIndex() );
@@ -2094,6 +2193,7 @@ export class Shader
 			console.log(Value);
 			throw "Failed to set uniform " +Uniform + " to " + ( typeof Value );
 		}
+		return true;
 	}
 	
 	SetUniformArray(UniformName,UniformMeta,Values)
@@ -2173,6 +2273,26 @@ export class Shader
 		UniformMeta.SetValues( [Value] );
 	}
 	
+	
+	GetAttributeMetas()
+	{
+		if ( this.AttributeMetaCache )
+			return this.AttributeMetaCache;
+	
+		//	iterate and cache!
+		this.AttributeMetaCache = {};
+		let gl = this.GetGlContext();
+		let Count = gl.getProgramParameter( this.Program, gl.ACTIVE_ATTRIBUTES );
+		for ( let i=0;	i<Count;	i++ )
+		{
+			const UniformMeta = gl.getActiveAttrib( this.Program, i );
+			const Meta = GetUniformOrAttribMeta( gl, this.Program, UniformMeta );
+			Meta.Location = gl.getAttribLocation( this.Program, UniformMeta.name );
+			this.AttributeMetaCache[Meta.Name] = Meta;
+		}
+		return this.AttributeMetaCache;
+	}
+	
 	GetUniformMetas()
 	{
 		if ( this.UniformMetaCache )
@@ -2184,72 +2304,33 @@ export class Shader
 		let UniformCount = gl.getProgramParameter( this.Program, gl.ACTIVE_UNIFORMS );
 		for ( let i=0;	i<UniformCount;	i++ )
 		{
-			let UniformMeta = gl.getActiveUniform( this.Program, i );
-			UniformMeta.ElementCount = UniformMeta.size;
-			UniformMeta.ElementSize = undefined;
-			//	match name even if it's an array
-			//	todo: struct support
-			let UniformName = UniformMeta.name.split('[')[0];
-			//	note: uniform consists of structs, Array[Length] etc
-			
-			UniformMeta.Location = gl.getUniformLocation( this.Program, UniformMeta.name );
-			switch( UniformMeta.type )
-			{
-				case gl.SAMPLER_2D:	//	samplers' value is the texture index
-				case gl.INT:
-				case gl.UNSIGNED_INT:
-				case gl.BOOL:
-					UniformMeta.ElementSize = 1;
-					UniformMeta.SetValues = function(v)	{	gl.uniform1iv( UniformMeta.Location, v );	};
-					break;
-				case gl.FLOAT:
-					UniformMeta.ElementSize = 1;
-					UniformMeta.SetValues = function(v)	{	gl.uniform1fv( UniformMeta.Location, v );	};
-					break;
-				case gl.FLOAT_VEC2:
-					UniformMeta.ElementSize = 2;
-					UniformMeta.SetValues = function(v)	{	gl.uniform2fv( UniformMeta.Location, v );	};
-					break;
-				case gl.FLOAT_VEC3:
-					UniformMeta.ElementSize = 3;
-					UniformMeta.SetValues = function(v)	{	gl.uniform3fv( UniformMeta.Location, v );	};
-					break;
-				case gl.FLOAT_VEC4:
-					UniformMeta.ElementSize = 4;
-					UniformMeta.SetValues = function(v)	{	gl.uniform4fv( UniformMeta.Location, v );	};
-					break;
-				case gl.FLOAT_MAT2:
-					UniformMeta.ElementSize = 2*2;
-					UniformMeta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix2fv( UniformMeta.Location, Transpose, v );	};
-					break;
-				case gl.FLOAT_MAT3:
-					UniformMeta.ElementSize = 3*3;
-					UniformMeta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix3fv( UniformMeta.Location, Transpose, v );	};
-					break;
-				case gl.FLOAT_MAT4:
-					UniformMeta.ElementSize = 4*4;
-					UniformMeta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix4fv( UniformMeta.Location, Transpose, v );	};
-					break;
-
-				default:
-					UniformMeta.SetValues = function(v)	{	throw "Unhandled type " + UniformMeta.type + " on " + UniformName;	};
-					break;
-			}
-			
-			this.UniformMetaCache[UniformName] = UniformMeta;
+			const UniformMeta = gl.getActiveUniform( this.Program, i );
+			const Meta = GetUniformOrAttribMeta( gl, this.Program, UniformMeta );
+			this.UniformMetaCache[Meta.Name] = Meta;
 		}
 		return this.UniformMetaCache;
 	}
 
-	GetUniformMeta(MatchUniformName)
+	GetUniformMeta(Name)
 	{
 		const Metas = this.GetUniformMetas();
-		if ( !Metas.hasOwnProperty(MatchUniformName) )
+		if ( !Metas.hasOwnProperty(Name) )
 		{
 			//throw "No uniform named " + MatchUniformName;
 			//Pop.Debug("No uniform named " + MatchUniformName);
 		}
-		return Metas[MatchUniformName];
+		return Metas[Name];
+	}
+	
+	GetAttributeMeta(Name)
+	{
+		const Metas = this.GetAttributeMetas();
+		if ( !Metas.hasOwnProperty(Name) )
+		{
+			//throw "No uniform named " + MatchUniformName;
+			//Pop.Debug("No uniform named " + MatchUniformName);
+		}
+		return Metas[Name];
 	}
 	
 }
