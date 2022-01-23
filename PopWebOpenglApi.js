@@ -4,6 +4,7 @@ const Default = 'Pop Opengl module';
 export default Default;
 import {GetUniqueHash} from './Hash.js'
 import {CreatePromise} from './PopApi.js'
+import Pool from './Pool.js'
 
 import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
 
@@ -80,6 +81,9 @@ function GetUniformOrAttribMeta(Context,Program,Uniform)
 	//	invalid uniforms are null or WebGLUniformLocation
 	AttribLocation = (AttribLocation == -1) ? null : AttribLocation;
 	Meta.Location = UniformLocation || AttribLocation;
+	Meta.GlType = Uniform.type;
+	Meta.ElementType = Uniform.type;
+	Meta.ElementRows = 1;
 	
 	switch( Uniform.type )
 	{
@@ -95,27 +99,36 @@ function GetUniformOrAttribMeta(Context,Program,Uniform)
 			Meta.SetValues = function(v)	{	gl.uniform1fv( Meta.Location, v );	};
 			break;
 		case gl.FLOAT_VEC2:
+			Meta.ElementType = gl.FLOAT;
 			Meta.ElementSize = 2;
 			Meta.SetValues = function(v)	{	gl.uniform2fv( Meta.Location, v );	};
 			break;
 		case gl.FLOAT_VEC3:
+			Meta.ElementType = gl.FLOAT;
 			Meta.ElementSize = 3;
 			Meta.SetValues = function(v)	{	gl.uniform3fv( Meta.Location, v );	};
 			break;
 		case gl.FLOAT_VEC4:
+			Meta.ElementType = gl.FLOAT;
 			Meta.ElementSize = 4;
 			Meta.SetValues = function(v)	{	gl.uniform4fv( Meta.Location, v );	};
 			break;
 		case gl.FLOAT_MAT2:
+			Meta.ElementType = gl.FLOAT;
 			Meta.ElementSize = 2*2;
+			Meta.ElementRows = 2;
 			Meta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix2fv( Meta.Location, Transpose, v );	};
 			break;
 		case gl.FLOAT_MAT3:
+			Meta.ElementType = gl.FLOAT;
 			Meta.ElementSize = 3*3;
+			Meta.ElementRows = 3;
 			Meta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix3fv( Meta.Location, Transpose, v );	};
 			break;
 		case gl.FLOAT_MAT4:
+			Meta.ElementType = gl.FLOAT;
 			Meta.ElementSize = 4*4;
+			Meta.ElementRows = 4;
 			Meta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix4fv( Meta.Location, Transpose, v );	};
 			break;
 
@@ -915,18 +928,12 @@ export class Context
 		function InitInstancedArrays(Context,Extension)
 		{
 			console.log(`ANGLE_instanced_arrays supported; InitInstancedArrays()`);
-			if ( !Context.drawArraysInstanced )
+			Context.vertexAttribDivisor = function(Location,Divisor)
 			{
-				function drawArraysInstanced()
-				{
-					return Extension.drawArraysInstancedANGLE(...arguments);
-				}
-				Context.drawArraysInstanced = drawArraysInstanced;
+				return Extension.vertexAttribDivisorANGLE(...arguments);
 			}
-			else
-			{
-				console.log(`ANGLE_instanced_arrays supported but drawArraysInstanced() already exists`);
-			}
+			
+			Context.drawArraysInstanced = Extension.drawArraysInstancedANGLE;
 		}
 		
 		const EnableExtension = function(ExtensionName,Init)
@@ -954,7 +961,7 @@ export class Context
 		}
 		EnableExtension('WEBGL_depth_texture',InitDepthTexture);
 		EnableExtension('EXT_blend_minmax');
-		EnableExtension('OES_vertex_array_object', this.InitVao.bind(this) );
+		EnableExtension('OES_vertex_array_object', this.InitVaoExtension.bind(this) );
 		EnableExtension('WEBGL_draw_buffers', this.InitMultipleRenderTargets.bind(this) );
 		EnableExtension('OES_element_index_uint', this.Init32BitBufferIndexes.bind(this) );
 		EnableExtension('ANGLE_instanced_arrays', InitInstancedArrays.bind(this) );
@@ -997,7 +1004,7 @@ export class Context
 	}
 
 	
-	InitVao(Context,Extension)
+	InitVaoExtension(Context,Extension)
 	{
 		//	already enabled with webgl2
 		if ( Context.createVertexArray )
@@ -1132,6 +1139,15 @@ export class Context
 		let ReadBackPass = false;
 		let InsidePass = false;
 		
+		//	release any pool-allocated array buffers
+		//	these could still be rendering... maybe this needs to be after a glfinish?
+		let PoolArrayBuffers = [];
+		const ReleaseArrayBuffers = function()
+		{
+			if ( this.ArrayBufferPool )
+				PoolArrayBuffers.forEach( this.ArrayBufferPool.Release.bind(this.ArrayBufferPool) );
+		}.bind(this);
+		
 		const EndPass = function()
 		{
 			if ( InsidePass )
@@ -1221,6 +1237,11 @@ export class Context
 					//	so they HAVE to be bound together)
 					Shader.Bind( RenderContext );
 
+					//	seems to be okay after, putting after in case array buffers mess anything up
+					//	but we may need to be after so uniform-attribs override geo attribs
+					Geometry.Bind( RenderContext, Shader );
+
+
 					//	set uniforms on shader
 					for ( let UniformKey in RenderCommand.Uniforms )
 					{
@@ -1237,13 +1258,12 @@ export class Context
 						//	prep for instancing support;
 						//	if there are uniforms provided that are attributes, (AND not in geo?)
 						//	we need to turn these values into an attribute buffer and bind it
-						//	alloc a buffer from a pool
-						//this.AllocArrayBuffer(
+						
+						//	gr: for instancing, this needs to be an array for each instance...
+						const Values = [UniformValue];
+						const Buffer = this.AllocAndBindAttribInstances( AttributeMeta, Values );
+						PoolArrayBuffers.push( Buffer );
 					}
-					
-					//	seems to be okay after, putting after in case array buffers mess anything up
-					//	but we may need to be after so uniform-attribs override geo attribs
-					Geometry.Bind( RenderContext, Shader );
 
 					//	sokol sets state every frame, we should too
 					PassRenderTarget.SetState(StateParams);
@@ -1282,6 +1302,7 @@ export class Context
 		finally
 		{
 			EndPass();
+			ReleaseArrayBuffers();
 		}
 	}
 
@@ -1303,6 +1324,82 @@ export class Context
 			this.InitialiseContext();
 		}
 		return this.Context;
+	}
+	
+	AllocArrayBuffer()
+	{
+		function PopFromFreeList(FreeItems,Meta)
+		{
+			if ( !FreeItems.length )
+				return false;	//	no match
+			return FreeItems.shift();
+		}
+		function Alloc(Meta)
+		{
+			const gl = this.Context;
+			const Buffer = gl.createBuffer();
+			return Buffer;
+		}
+		
+		if ( !this.ArrayBufferPool )
+		{
+			this.ArrayBufferPool = new Pool(`ArrayBufferPool`,Alloc.bind(this),Pop.Warning,PopFromFreeList.bind(this));
+		}
+		
+		const Buffer = this.ArrayBufferPool.Alloc();
+		return Buffer;
+	}
+	
+	
+	AllocAndBindAttribInstances(AttributeMeta,Values)
+	{
+		if ( !Array.isArray(Values) )
+			throw `AllocAndBindAttribInstances(${AttributeMeta.Name}) expecting array of values (per instance)`;
+			
+		const InstanceCount = Values.length;
+		
+		//	alloc a buffer from a pool
+		const Buffer = this.AllocArrayBuffer();
+		const gl = this.Context;
+		gl.bindBuffer(gl.ARRAY_BUFFER, Buffer);
+						
+		//	this needs to unroll the values into one giant array?
+		const DataValues = new Float32Array( Values.flat(1) );
+		
+		//	gl.get = sync = slow!
+		//	init buffer size (or resize if bigger than before)
+		//const BufferSize = gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE);
+		//if ( DataValues.byteLength > BufferSize )
+			gl.bufferData(gl.ARRAY_BUFFER, DataValues.byteLength, gl.DYNAMIC_DRAW, null );
+		//const NewBufferSize = gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE);
+			
+		gl.bufferSubData(gl.ARRAY_BUFFER, 0, DataValues);
+						
+		const ValueDataSize = AttributeMeta.ElementSize * DataValues.BYTES_PER_ELEMENT;
+		
+		//	matrixes are multiples of value*elementsize as all shader things are 4 floats at max
+		//	so we iterate the sub parts to describe
+		//	gr: maybe we can cache this layout so only needs updating if the pooled buffer is dirty
+		//	https://stackoverflow.com/a/38853623/355753
+		const Rows = AttributeMeta.ElementRows;
+		for ( let Row=0;	Row<Rows;	Row++ )
+		{
+			const ValueStride = ValueDataSize;
+			const Normalised = false;
+			const RowSize = AttributeMeta.ElementSize / AttributeMeta.ElementRows;
+			if ( RowSize != Math.floor(RowSize) )
+				throw `ElementSize vs ElementRows not aligned`;
+			const RowStride = RowSize * DataValues.BYTES_PER_ELEMENT;
+			const Location = AttributeMeta.Location + Row;
+			const Type = AttributeMeta.ElementType;	//	gl.FLOAT int etc
+			const Offset = RowStride * Row;
+			gl.enableVertexAttribArray(Location);
+			gl.vertexAttribPointer( Location, RowSize, Type, Normalised, ValueStride, Offset);
+			//	this line says this attribute only changes for each 1 instance
+			//	and enables instancing
+			gl.vertexAttribDivisor( Location, 1);
+		}
+		return Buffer;
 	}
 	
 	OnAllocatedTexture(Image)
