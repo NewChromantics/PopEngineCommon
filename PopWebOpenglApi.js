@@ -1364,7 +1364,7 @@ export class Context
 		gl.bindBuffer(gl.ARRAY_BUFFER, Buffer);
 						
 		//	this needs to unroll the values into one giant array?
-		const DataValues = new Float32Array( Values.flat(1) );
+		const DataValues = new Float32Array( Values.flat(2) );
 		
 		//	gl.get = sync = slow!
 		//	init buffer size (or resize if bigger than before)
