@@ -447,6 +447,9 @@ export class Mp4Decoder
 			{
 				Pop.Debug(`Skipping atom ${Atom.Fourcc} x${Atom.ContentSize}`);
 			}
+			
+			//	breath
+			await Pop.Yield(0);
 		}
 	}
 	
