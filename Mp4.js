@@ -350,6 +350,16 @@ export class Mp4Decoder
 		this.FileReader = new AtomDataReader( new Uint8Array(0), 0, this.WaitForMoreFileData.bind(this) );
 		
 		this.ParsePromise = this.ParseFileThread();
+		this.ParsePromise.catch( this.OnError.bind(this) );
+	}
+
+	OnError(Error)
+	{
+		//	make queues fail
+		Pop.Warning(`Mp4 decode thread error ${Error}`);
+		this.NewSamplesQueue.Reject(Error);
+		this.NewAtomQueue.Reject(Error);
+		this.NewTrackQueue.Reject(Error);
 	}
 
 	//	gr: should this integrate into WaitForNextSamples?	
@@ -437,6 +447,9 @@ export class Mp4Decoder
 			{
 				Pop.Debug(`Skipping atom ${Atom.Fourcc} x${Atom.ContentSize}`);
 			}
+			
+			//	breath
+			await Pop.Yield(0);
 		}
 	}
 	

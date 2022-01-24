@@ -43,8 +43,10 @@ export class DataReader
 			Pop.Debug(`waiting for ${EndPosition-this.FileBytes.length} more bytes...`);
 			
 			const NewBytes = await this.WaitForMoreData();
-			if ( NewBytes == EndOfFileMarker )
-				throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
+			//	this is slow when NewBytes is massive!, do a quick length check
+			if ( NewBytes.length == EndOfFileMarker.length )
+				if ( NewBytes == EndOfFileMarker )
+					throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
 			
 			Pop.Debug(`New bytes x${NewBytes.length}`);
 			this.FileBytes = JoinTypedArrays([this.FileBytes,NewBytes]);

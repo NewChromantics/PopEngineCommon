@@ -30,6 +30,10 @@ class DecoderBase
 		//	turn into an image/planes/meta
 		this.DecodedFrameQueue.Push(Frame);
 	}
+	OnFrameEof()
+	{
+		this.DecodedFrameQueue.Push(null);
+	}
 	
 	OnError(Error)
 	{
@@ -61,6 +65,9 @@ export default class WebcodecDecoder extends DecoderBase
 		this.AvccHeader = null;
 		this.Decoder = null;
 		//this.TestEncoder();
+		this.HadInputEof = false;
+
+		this.SubmittedFramesDecoded = {};	//	[SubmittedFrame] = HasFrameBeenDecoded
 	}
 	
 	SetAvccHeader(AvccHeader)
@@ -101,6 +108,25 @@ export default class WebcodecDecoder extends DecoderBase
 		const Data = Atom.Encode(false);
 		return Data;
 	}	
+	
+	OnFrame(Frame)
+	{
+		super.OnFrame(Frame);
+	
+		//	if there are no more frames queued for decoding
+		//	AND we've had a EOF submitted, there must be no more frames coming
+		const DecoderQueueSize = this.Decoder.decodeQueueSize;
+		/*
+		console.log(`OnFrame(); DecoderQueueSize=${DecoderQueueSize} had eof=${this.HadInputEof}`);
+		if ( DecoderQueueSize == 0 )
+		{
+			if ( this.HadInputEof )
+			{
+				this.OnFrameEof();
+			}
+		}
+		*/
+	}
 	
 	CreateDecoder(AvccHeader)
 	{
@@ -260,6 +286,20 @@ export default class WebcodecDecoder extends DecoderBase
 			}
 		}
 		return CodecNames;
+	}
+	
+	PushEndOfFile()
+	{
+		console.log(`H264 PushEndOfFile()`);
+		this.HadInputEof = true;
+		
+		function OnVideoDecoderFlushed()
+		{
+			console.log(`OnVideoDecoderFlushed()`);
+			this.OnFrameEof();
+		}
+		console.log(`H264 decoder flush()`);
+		this.Decoder.flush().then(OnVideoDecoderFlushed.bind(this));	
 	}
 	
 	//	todo: detect keyframe from h264 data...
