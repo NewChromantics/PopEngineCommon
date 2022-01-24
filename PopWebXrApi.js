@@ -53,9 +53,14 @@ class RenderTargetFrameBufferProxy extends RenderTarget
 		
 		const Viewport = this.GetRenderTargetRect();
 		gl.viewport( ...Viewport );
-		//gl.scissor( ...Viewport );
 		
 		this.ResetState();
+		
+		//	webxr on quest needs scissoring
+		//	does this break pixel3 webAR?
+		//	gr: I believe this breaks the looking glass webxr extension
+		gl.scissor( ...Viewport );
+		gl.enable(gl.SCISSOR_TEST);
 		
 		function Unbind()
 		{
