@@ -224,9 +224,14 @@ export function JoinTypedArrays(Arrays,DeprecatedSecondArray)
 	if ( !Array.isArray(Arrays) )
 		throw `JoinTypedArrays() expecting array for first arg(${typeof Arrays})`;
 	
+	//	skip some stuff we dont need to join
+	Arrays = Arrays.filter( a => a!=null && a.length!=0 );
+	
 	//	what should we return if empty...
 	if ( Arrays.length == 0 )
 		return new Uint8Array(0);
+	if ( Arrays.length == 1 )
+		return Arrays[0];
 	
 	const a = Arrays[0];
 	//	gr: need some more rigirous checks here
