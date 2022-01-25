@@ -612,7 +612,7 @@ export default class PopImage
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * this.Pixels.width * this.Pixels.height;
 			if ( isNaN(this.OpenglByteSize) )
 			{
-				Warning(`Nan size: ${this.OpenglByteSize}`);
+				//Warning(`Nan size: ${this.OpenglByteSize}`);
 				this.OpenglByteSize=0;
 			}
 		}

@@ -420,7 +420,7 @@ export class Mp4Decoder
 			const Atom = await this.FileReader.ReadNextAtom();
 			if ( Atom === null )
 			{
-				Pop.Debug(`End of file`);
+				//Pop.Debug(`End of file`);
 				break;
 			}
 			
@@ -445,7 +445,7 @@ export class Mp4Decoder
 			}
 			else
 			{
-				Pop.Debug(`Skipping atom ${Atom.Fourcc} x${Atom.ContentSize}`);
+				//Pop.Debug(`Skipping atom ${Atom.Fourcc} x${Atom.ContentSize}`);
 			}
 			
 			//	breath
@@ -657,7 +657,7 @@ export class Mp4Decoder
 		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
 		const MajorBrand = await Reader.ReadString(4);
 		const MinorVersion = await Reader.Read32();
-		Pop.Debug(`ftyp ${MajorBrand} ver 0x${MinorVersion.toString(16)}`); 
+		//Pop.Debug(`ftyp ${MajorBrand} ver 0x${MinorVersion.toString(16)}`); 
 	}
 	
 	async DecodeAtom_Moov(Atom)
@@ -791,7 +791,7 @@ export class Mp4Decoder
 		}
 		
 		Track.Medias = Medias;
-		Pop.Debug(`Found x${Medias.length} media atoms`);
+		//Pop.Debug(`Found x${Medias.length} media atoms`);
 		return Track;
 	}
 	
@@ -970,7 +970,7 @@ export class Mp4Decoder
 		//	we're now expecting this to be here
 		var MdatStartPosition = MdatAtom.HasValue ? MdatAtom.Value.AtomDataFilePosition : (long?)null;
 */
-		Pop.Debug(`todo; grab last mdat?`);
+		//Pop.Debug(`todo; grab last mdat?`);
 		let MdatStartPosition = null;
 		/*
 		//	superfolous data
@@ -1970,7 +1970,7 @@ class VideoSampleDescription
 			//	decode self
 			if ( ExtensionAtom.DecodeData )
 				await ExtensionAtom.DecodeData( ExtensionAtom.Data );
-			console.log(`Atom ${this.Fourcc} found extension ${ExtensionAtom.Fourcc}`);
+			//Pop.Debug(`Atom ${this.Fourcc} found extension ${ExtensionAtom.Fourcc}`);
 			this.ExtensionAtoms.push( ExtensionAtom );
 		}
 		
@@ -2880,7 +2880,7 @@ export class Mp4FragmentedEncoder
 			const Eof = Sample == EndOfFileMarker;
 			if ( Eof )
 			{
-				Pop.Debug(`Mp4 encoder got end of file`);
+				//Pop.Debug(`Mp4 encoder got end of file`);
 			}
 			
 
