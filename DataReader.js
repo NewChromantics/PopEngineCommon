@@ -1,4 +1,4 @@
-import Pop from './PopEngine.js'
+import {Debug,Warning,Yield} from './PopWebApiCore.js'
 import {IsTypedArray,JoinTypedArrays,BytesToString,StringToBytes,BytesToBigInt} from './PopApi.js'
 
 //	when we push this data to a decoder, it signals no more data coming

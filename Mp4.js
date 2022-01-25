@@ -1,13 +1,12 @@
 const Default = 'Mp4.js';
 export default Default;
 
-import Pop from './PopEngine.js'
 import PromiseQueue from './PromiseQueue.js'
 import {DataReader,DataWriter,EndOfFileMarker} from './DataReader.js'
 import {StringToBytes,JoinTypedArrays} from './PopApi.js'
 import * as H264 from './H264.js'
 import {MP4,H264Remuxer} from './Mp4_Generator.js'
-
+import {Debug,Warning,Yield} from './PopWebApiCore.js'
 
 
 class AtomDataReader extends DataReader
@@ -356,7 +355,7 @@ export class Mp4Decoder
 	OnError(Error)
 	{
 		//	make queues fail
-		Pop.Warning(`Mp4 decode thread error ${Error}`);
+		Warning(`Mp4 decode thread error ${Error}`);
 		this.NewSamplesQueue.Reject(Error);
 		this.NewAtomQueue.Reject(Error);
 		this.NewTrackQueue.Reject(Error);
@@ -400,6 +399,8 @@ export class Mp4Decoder
 	
 	PushData(Bytes)
 	{
+		if ( !Bytes )
+			throw `Don't pass null to Mp4 PushData(), call PushEndOfFile()`;
 		this.NewByteQueue.Push(Bytes);
 	}
 	
@@ -420,7 +421,7 @@ export class Mp4Decoder
 			const Atom = await this.FileReader.ReadNextAtom();
 			if ( Atom === null )
 			{
-				//Pop.Debug(`End of file`);
+				//Debug(`End of file`);
 				break;
 			}
 			
@@ -445,12 +446,15 @@ export class Mp4Decoder
 			}
 			else
 			{
-				//Pop.Debug(`Skipping atom ${Atom.Fourcc} x${Atom.ContentSize}`);
+				//Debug(`Skipping atom ${Atom.Fourcc} x${Atom.ContentSize}`);
 			}
 			
 			//	breath
-			await Pop.Yield(0);
+			await Yield(0);
 		}
+		
+		//	push a null eof sample when parsing done
+		this.NewSamplesQueue.Push(null);
 	}
 	
 	OnNewTrack(Track,TrackId)
@@ -602,7 +606,7 @@ export class Mp4Decoder
 			const MoofPos = MoofAtom.FilePosition;
 			if (HeaderPos != MoofPos)
 			{
-				Pop.Debug("Expected Header Pos(" + HeaderPos + ") and moof pos(" + MoofPos + ") to be the same");
+				Debug("Expected Header Pos(" + HeaderPos + ") and moof pos(" + MoofPos + ") to be the same");
 			}
 		}
 		const MoofPosition = (Header.BaseDataOffset!==undefined) ? Header.BaseDataOffset : MoofAtom.FilePosition;
@@ -657,7 +661,7 @@ export class Mp4Decoder
 		const Reader = new AtomDataReader(Atom.Data,Atom.DataFilePosition);
 		const MajorBrand = await Reader.ReadString(4);
 		const MinorVersion = await Reader.Read32();
-		//Pop.Debug(`ftyp ${MajorBrand} ver 0x${MinorVersion.toString(16)}`); 
+		//Debug(`ftyp ${MajorBrand} ver 0x${MinorVersion.toString(16)}`); 
 	}
 	
 	async DecodeAtom_Moov(Atom)
@@ -738,7 +742,7 @@ export class Mp4Decoder
 		for ( const Zero of Reserved )
 		{
 			if (Zero != 0)
-				Pop.Warning(`Reserved value ${Zero} is not zero`);
+				Warning(`Reserved value ${Zero} is not zero`);
 		}
 
 		//	actually a 3x3 matrix, but we make it 4x4 for unity
@@ -791,7 +795,7 @@ export class Mp4Decoder
 		}
 		
 		Track.Medias = Medias;
-		//Pop.Debug(`Found x${Medias.length} media atoms`);
+		//Debug(`Found x${Medias.length} media atoms`);
 		return Track;
 	}
 	
@@ -970,7 +974,7 @@ export class Mp4Decoder
 		//	we're now expecting this to be here
 		var MdatStartPosition = MdatAtom.HasValue ? MdatAtom.Value.AtomDataFilePosition : (long?)null;
 */
-		//Pop.Debug(`todo; grab last mdat?`);
+		//Debug(`todo; grab last mdat?`);
 		let MdatStartPosition = null;
 		/*
 		//	superfolous data
@@ -1031,7 +1035,7 @@ export class Mp4Decoder
 		}
 
 		if (SampleIndex != SampleSizes.length)
-			Pop.Warning(`Enumerated ${SampleIndex} samples, expected ${SampleSizes.length}`);
+			Warning(`Enumerated ${SampleIndex} samples, expected ${SampleSizes.length}`);
 
 		return Samples;
 	}
@@ -1615,7 +1619,7 @@ class Atom_Dref extends Atom_t
 			if ( typeof Data == typeof '' )
 				Data = StringToBytes(Data);
 			
-			Pop.Debug(`Dref data; ${Data}`);
+			Debug(`Dref data; ${Data}`);
 			let Size = 4+4+1+3+Data.length+1;
 			DataWriter.Write32( Size );
 			const Type = 'url\0';
@@ -1970,7 +1974,7 @@ class VideoSampleDescription
 			//	decode self
 			if ( ExtensionAtom.DecodeData )
 				await ExtensionAtom.DecodeData( ExtensionAtom.Data );
-			//Pop.Debug(`Atom ${this.Fourcc} found extension ${ExtensionAtom.Fourcc}`);
+			//Debug(`Atom ${this.Fourcc} found extension ${ExtensionAtom.Fourcc}`);
 			this.ExtensionAtoms.push( ExtensionAtom );
 		}
 		
@@ -2591,7 +2595,7 @@ class Atom_Trun extends Atom_t
 				DataWriter.Write32(Sample.Size);
 			if ( SampleFlagsPresent )
 			{
-				//Pop.Debug(`Sample ${Sample.DecodeTimeMs}ms Flags: 0x${Sample.Flags.toString(16)}`);
+				//Debug(`Sample ${Sample.DecodeTimeMs}ms Flags: 0x${Sample.Flags.toString(16)}`);
 				DataWriter.Write32(Sample.Flags);
 			}
 			if ( SampleCompositionTimeOffsetPresent )
@@ -2628,7 +2632,7 @@ export class Mp4FragmentedEncoder
 	OnError(Error)
 	{
 		//	make queues fail
-		Pop.Warning(`Mp4 encode thread error ${Error}`);
+		Warning(`Mp4 encode thread error ${Error}`);
 		this.EncodedAtomQueue.Reject(Error);
 		this.EncodedDataQueue.Reject(Error);
 	}
@@ -2645,7 +2649,7 @@ export class Mp4FragmentedEncoder
 	
 	PushSample(Data,DecodeTimeMs,PresentationTimeMs,TrackId)
 	{
-		//Pop.Debug(`PushSample DecodeTimeMs=${DecodeTimeMs}ms TrackId=${TrackId}`);
+		//Debug(`PushSample DecodeTimeMs=${DecodeTimeMs}ms TrackId=${TrackId}`);
 		if ( !Number.isInteger(TrackId) || TrackId <= 0 )
 			throw `Sample track id must be a positive integer and above zero`;
 
@@ -2692,7 +2696,7 @@ export class Mp4FragmentedEncoder
 		this.EncodedAtomQueue.Push(Atom);
 			
 		const EncodedData = Atom.Encode();
-		//Pop.Debug(`Pushing atom data ${Atom.Fourcc} x${EncodedData.length}`);
+		//Debug(`Pushing atom data ${Atom.Fourcc} x${EncodedData.length}`);
 		this.EncodedDataQueue.Push(EncodedData);
 	}
 
@@ -2707,7 +2711,7 @@ export class Mp4FragmentedEncoder
 	
 	BakePendingTracks()
 	{
-		Pop.Debug(`BakePendingTracks`);
+		Debug(`BakePendingTracks`);
 		const MovieDuration = 999*1000;
 		const MovieTimescale = 1000;
 		this.LastMoofSequenceNumber++;
@@ -2863,7 +2867,7 @@ export class Mp4FragmentedEncoder
 
 	OnEncodeEof()
 	{
-		Pop.Debug(`OnEncodeEof`);
+		Debug(`OnEncodeEof`);
 		this.EncodedDataQueue.Push(EndOfFileMarker);
 	}
 	
@@ -2874,13 +2878,13 @@ export class Mp4FragmentedEncoder
 		while(true)
 		{
 			const Sample = await this.PendingSampleQueue.WaitForNext();
-			//Pop.Debug(`Encoding sample...`);
+			//Debug(`Encoding sample...`);
 			this.WriteFtyp();
 
 			const Eof = Sample == EndOfFileMarker;
 			if ( Eof )
 			{
-				//Pop.Debug(`Mp4 encoder got end of file`);
+				//Debug(`Mp4 encoder got end of file`);
 			}
 			
 
