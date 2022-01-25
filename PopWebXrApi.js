@@ -53,9 +53,14 @@ class RenderTargetFrameBufferProxy extends RenderTarget
 		
 		const Viewport = this.GetRenderTargetRect();
 		gl.viewport( ...Viewport );
-		//gl.scissor( ...Viewport );
 		
 		this.ResetState();
+		
+		//	webxr on quest needs scissoring
+		//	does this break pixel3 webAR?
+		//	gr: I believe this breaks the looking glass webxr extension
+		gl.scissor( ...Viewport );
+		gl.enable(gl.SCISSOR_TEST);
 		
 		function Unbind()
 		{
@@ -515,34 +520,44 @@ class Device_t
 		//	https://immersive-web.github.io/depth-sensing/
 		if ( Frame.getDepthInformation )
 		{
-			for ( let View of Pose.views )
+			//	on quest, the function exists but it throws an exception as its unsupported, 
+			//	we can assume its the same for all views really.
+			//	todo: better way to catch lack of support and skip the exception?
+			try
 			{
-				const DepthInfo = Frame.getDepthInformation(View);
-				if ( !DepthInfo )
-					continue;
+				for ( let View of Pose.views )
+				{
+					const DepthInfo = Frame.getDepthInformation(View);
+					if ( !DepthInfo )
+						continue;
+						
+					const NormalDepthToViewDepthTransform = DepthInfo.normDepthBufferFromNormView.matrix;
+						
+					const CameraName = GetCameraName(View);
+					const DepthImage = this.GetDepthImage(CameraName);
 					
-				const NormalDepthToViewDepthTransform = DepthInfo.normDepthBufferFromNormView.matrix;
+					//	store meta on image (should be camera?)
+					DepthImage.NormalDepthToViewDepthTransform = NormalDepthToViewDepthTransform;
 					
-				const CameraName = GetCameraName(View);
-				const DepthImage = this.GetDepthImage(CameraName);
-				
-				//	store meta on image (should be camera?)
-				DepthImage.NormalDepthToViewDepthTransform = NormalDepthToViewDepthTransform;
-				
-				//	gr: maybe a bit of a waste to do any cpu conversion when we can do it on gpu
-				//	gr: only needed if data isnt float				
-				//	todo: get .normDepthBufferFromNormView to get projection matrix
-				let Depth16 = new Uint16Array( DepthInfo.data );
-				let Depthf = new Float32Array( Depth16 );
-				//let Depthf = new Float32Array( DepthInfo.width*DepthInfo.height );
-				//DepthImage.WritePixels( DepthInfo.width, DepthInfo.height, Depth16, 'R16' );
-				DepthImage.WritePixels( DepthInfo.width, DepthInfo.height, Depthf, 'Float1' );
-				
-				/*
-				const NonZeros = new Uint16Array(DepthInfo.data).filter( x => x!=0 );
-				if ( NonZeros.length )
-					console.log(`DepthInfo with non zero`,DepthInfo);
-				*/
+					//	gr: maybe a bit of a waste to do any cpu conversion when we can do it on gpu
+					//	gr: only needed if data isnt float				
+					//	todo: get .normDepthBufferFromNormView to get projection matrix
+					let Depth16 = new Uint16Array( DepthInfo.data );
+					let Depthf = new Float32Array( Depth16 );
+					//let Depthf = new Float32Array( DepthInfo.width*DepthInfo.height );
+					//DepthImage.WritePixels( DepthInfo.width, DepthInfo.height, Depth16, 'R16' );
+					DepthImage.WritePixels( DepthInfo.width, DepthInfo.height, Depthf, 'Float1' );
+					
+					/*
+					const NonZeros = new Uint16Array(DepthInfo.data).filter( x => x!=0 );
+					if ( NonZeros.length )
+						console.log(`DepthInfo with non zero`,DepthInfo);
+					*/
+				}
+			}
+			catch(e)
+			{
+				//console.error(`Error with depth`,e);
 			}
 		}
 		
