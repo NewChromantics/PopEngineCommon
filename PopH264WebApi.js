@@ -290,15 +290,15 @@ export default class WebcodecDecoder extends DecoderBase
 	
 	PushEndOfFile()
 	{
-		console.log(`H264 PushEndOfFile()`);
+		//console.log(`H264 PushEndOfFile()`);
 		this.HadInputEof = true;
 		
 		function OnVideoDecoderFlushed()
 		{
-			console.log(`OnVideoDecoderFlushed()`);
+			//console.log(`OnVideoDecoderFlushed()`);
 			this.OnFrameEof();
 		}
-		console.log(`H264 decoder flush()`);
+		//console.log(`H264 decoder flush()`);
 		this.Decoder.flush().then(OnVideoDecoderFlushed.bind(this));	
 	}
 	
