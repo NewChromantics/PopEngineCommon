@@ -138,6 +138,12 @@ export default class WebcodecDecoder extends DecoderBase
 		this.ExpectsAnnexB = true;
 		//	need to convert to array other wise integeer conversion doesnt work
 		let abc = Array.from( AvccHeader.slice(1,4) );
+		
+		//	chrome on mac with CR data streams/grove/grove-30fps-2
+		//	errors with "ambiguous code" and wont decode
+		if ( abc[2] == 0x3c )
+			abc[2] = 0x34;
+			
 		abc = abc.map( IntToHexString ).join('');
 		const Config = {};
 		Config.codec = `avc1.${abc}`;
