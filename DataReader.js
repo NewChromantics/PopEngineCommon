@@ -1,4 +1,4 @@
-import Pop from './PopEngine.js'
+import {Debug,Warning,Yield} from './PopWebApiCore.js'
 import {IsTypedArray,JoinTypedArrays,BytesToString,StringToBytes,BytesToBigInt} from './PopApi.js'
 
 //	when we push this data to a decoder, it signals no more data coming
@@ -40,7 +40,7 @@ export class DataReader
 		const EndPosition = FilePosition + Length;
 		while ( EndPosition > this.FileBytes.length )
 		{
-			Pop.Debug(`waiting for ${EndPosition-this.FileBytes.length} more bytes...`);
+			//Pop.Debug(`waiting for ${EndPosition-this.FileBytes.length} more bytes...`);
 			
 			const NewBytes = await this.WaitForMoreData();
 			//	this is slow when NewBytes is massive!, do a quick length check
@@ -48,9 +48,9 @@ export class DataReader
 				if ( NewBytes == EndOfFileMarker )
 					throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
 			
-			Pop.Debug(`New bytes x${NewBytes.length}`);
+			//Pop.Debug(`New bytes x${NewBytes.length}`);
 			this.FileBytes = JoinTypedArrays([this.FileBytes,NewBytes]);
-			Pop.Debug(`File size now x${this.FileBytes.length}`);
+			//Pop.Debug(`File size now x${this.FileBytes.length}`);
 		}
 		const Bytes = this.FileBytes.slice( FilePosition, EndPosition );
 		if ( Bytes.length != Length )
@@ -133,7 +133,7 @@ export class DataReader
 			
 			while ( EndPosition > this.FileBytes.length )
 			{
-				Pop.Debug(`waiting for ${EndPosition-this.FileBytes.length} more bytes...`);
+				//Pop.Debug(`waiting for ${EndPosition-this.FileBytes.length} more bytes...`);
 				const NewBytes = await this.WaitForMoreData();
 				if ( NewBytes == EndOfFileMarker )
 					throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;

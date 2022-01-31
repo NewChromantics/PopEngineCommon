@@ -227,7 +227,7 @@ class Device_t
 		Session.requestAnimationFrame( this.OnFrame.bind(this) );
 	}
 	
-	WaitForNewSpace()
+	async WaitForNewSpace()
 	{
 		return this.RealSpaceChangedQueue.WaitForNext();
 	}
@@ -253,7 +253,7 @@ class Device_t
 		this.Session.updateRenderState({ baseLayer: this.Layer });
 	}
 	
-	WaitForEnd()
+	async WaitForEnd()
 	{
 		const OnEnd = CreatePromise();
 		this.OnEndPromises.push( OnEnd );

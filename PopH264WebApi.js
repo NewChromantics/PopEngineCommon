@@ -138,6 +138,12 @@ export default class WebcodecDecoder extends DecoderBase
 		this.ExpectsAnnexB = true;
 		//	need to convert to array other wise integeer conversion doesnt work
 		let abc = Array.from( AvccHeader.slice(1,4) );
+		
+		//	chrome on mac with CR data streams/grove/grove-30fps-2
+		//	errors with "ambiguous code" and wont decode
+		if ( abc[2] == 0x3c )
+			abc[2] = 0x34;
+			
 		abc = abc.map( IntToHexString ).join('');
 		const Config = {};
 		Config.codec = `avc1.${abc}`;
@@ -290,16 +296,26 @@ export default class WebcodecDecoder extends DecoderBase
 	
 	PushEndOfFile()
 	{
-		console.log(`H264 PushEndOfFile()`);
+		//console.log(`H264 PushEndOfFile()`);
 		this.HadInputEof = true;
 		
 		function OnVideoDecoderFlushed()
 		{
-			console.log(`OnVideoDecoderFlushed()`);
+			//console.log(`OnVideoDecoderFlushed()`);
 			this.OnFrameEof();
 		}
-		console.log(`H264 decoder flush()`);
-		this.Decoder.flush().then(OnVideoDecoderFlushed.bind(this));	
+		
+		//	gr: this function shouldn't throw, flush() will throw if the codec has already been closed;
+		//		this can be manual, but if left idle for too long, chrome will auto-close it
+		try
+		{
+			//console.log(`H264 decoder flush()`);
+			this.Decoder.flush().then(OnVideoDecoderFlushed.bind(this));
+		}
+		catch(e)
+		{
+			console.warn(`PushEndOfFile() flush() error; ${e}`);
+		}
 	}
 	
 	//	todo: detect keyframe from h264 data...

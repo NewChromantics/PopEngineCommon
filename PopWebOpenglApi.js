@@ -2477,6 +2477,46 @@ function GetOpenglElementType(OpenglContext,Elements)
 }
 
 
+//	turn our plain striped attrib layout into opengl-data
+//	for geometry, but working towards generic vertex-attrib/vao layout caching in the context
+function GetOpenglAttributes(Attribs,RenderContext)
+{
+	const gl = RenderContext;
+	
+	function CleanupAttrib(Attrib)
+	{
+		//	fix attribs
+		//	data as array doesn't work properly and gives us
+		//	gldrawarrays attempt to access out of range vertices in attribute 0
+		if ( Array.isArray(Attrib.Data) )
+			Attrib.Data = new Float32Array( Attrib.Data );
+			
+		Attrib.Stride = Attrib.Stride || 0;
+	}
+			
+	function AttribNameToOpenglAttrib(Name,Index)
+	{
+		//	should get location from shader binding!
+		const Attrib = Attribs[Name];
+		CleanupAttrib(Attrib);
+		
+		const OpenglAttrib = {};
+		OpenglAttrib.Name = Name;
+		OpenglAttrib.Floats = Attrib.Data;
+		OpenglAttrib.Size = Attrib.Size;
+		OpenglAttrib.Type = GetOpenglElementType( gl, Attrib.Data );
+		OpenglAttrib.DataIndex = Index;
+		OpenglAttrib.Stride = Attrib.Stride;
+		//	null means we haven't assigned it from the shader
+		//	note; this means we really need a location PER shader, change this to {}[Shader.UniqueHash] = Location
+		OpenglAttrib.Location = null;
+
+		return OpenglAttrib;
+	}
+	const OpenglAttributes = Object.keys( Attribs ).map( AttribNameToOpenglAttrib );
+	return OpenglAttributes;
+}
+
 //	attributes are keyed objects for each semantic
 //	Attrib['Position'].Size = 3
 //	Attrib['Position'].Data = <float32Array(size*vertcount)>
@@ -2489,9 +2529,11 @@ export class TriangleBuffer
 		this.VertexBuffer = null;
 		this.IndexBuffer = null;
 		this.Vao = null;
+		this.VaoContext = null;
 		this.TriangleIndexes = null;
 		this.TriangleIndexesType = null;	//	gl.UNSIGNED_INT or gl.UNSIGNED_SHORT, but require OES_element_index_uint for 32bit
 		this.Attribs = Attribs;
+		this.OpenglAttributes = null;			//	calc-once opengl layouts. This should be a seperate thing (which can make use of VAO)
 		
 		//	backwards compatibility
 		if ( typeof Attribs == 'string' )
@@ -2591,9 +2633,20 @@ export class TriangleBuffer
 		RenderContext.OnDeletedGeometry( this );
 	}
 	
+	Free()
+	{
+		//	gr: free() needs to do more than this
+		this.DeleteVao();
+	}
+	
 	DeleteVao()
 	{
+		if ( !this.Vao )
+			return;
+		
+		this.VaoContext.deleteVertexArray(this.Vao);
 		this.Vao = null;
+		this.VaoContext = null;
 	}
 	
 	GetVao(RenderContext,Shader)
@@ -2611,12 +2664,13 @@ export class TriangleBuffer
 			const gl = RenderContext.GetGlContext();
 			//this.Vao = gl.OES_vertex_array_object.createVertexArrayOES();
 			this.Vao = gl.createVertexArray();
+			this.VaoContext = gl;
+			
+			//	this currently initialises opengl layout
+			this.GetVertexBuffer(RenderContext);
+			
 			//	setup buffer & bind stuff in the vao
 			gl.bindVertexArray( this.Vao );
-			let VertexBuffer = this.GetVertexBuffer( RenderContext );
-			let IndexBuffer = this.GetIndexBuffer( RenderContext );
-			gl.bindBuffer( gl.ARRAY_BUFFER, VertexBuffer );
-			gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, IndexBuffer );
 			//	we'll need this if we start having multiple attributes
 			if ( DisableOldVertexAttribArrays )
 				for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
@@ -2628,7 +2682,12 @@ export class TriangleBuffer
 		return this.Vao;
 	}
 			
-	
+	//	todo: VAO's are a description of attributes, and not tied to buffers
+	//	our rendercontext should pool, hash & share VAO's (shader locations + attrib layouts)
+	//	https://stackoverflow.com/a/61583362/355753 
+	//	^^ explains this well; "Setting buffer binding state is much cheaper than setting vertex format state."
+	//	then we can make triangle buffers fast by fetching known VAO formats and binding new(or reusing)
+	//	buffers when rendering
 	CreateVertexBuffer(RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
@@ -2653,47 +2712,20 @@ export class TriangleBuffer
 			throw "Triangle index count not divisible by 3";
 		}
 		
-		function CleanupAttrib(Attrib)
-		{
-			//	fix attribs
-			//	data as array doesn't work properly and gives us
-			//	gldrawarrays attempt to access out of range vertices in attribute 0
-			if ( Array.isArray(Attrib.Data) )
-				Attrib.Data = new Float32Array( Attrib.Data );
-				
-			Attrib.Stride = Attrib.Stride || 0;
-		}		
-		
-		let TotalByteLength = 0;
-		function AttribNameToOpenglAttrib(Name,Index)
-		{
-			//	should get location from shader binding!
-			const Attrib = Attribs[Name];
-			CleanupAttrib(Attrib);
-			
-			const OpenglAttrib = {};
-			OpenglAttrib.Name = Name;
-			OpenglAttrib.Floats = Attrib.Data;
-			OpenglAttrib.Size = Attrib.Size;
-			OpenglAttrib.Type = GetOpenglElementType( gl, Attrib.Data );
-			OpenglAttrib.DataIndex = Index;
-			OpenglAttrib.Stride = Attrib.Stride;
-			//	null means we haven't assigned it from the shader
-			//	note; this means we really need a location PER shader, change this to {}[Shader.UniqueHash] = Location
-			OpenglAttrib.Location = null;
+		//	get the opengl-vertex/attrib layout
+		this.OpenglAttributes = GetOpenglAttributes(Attribs,gl);
 
+		let TotalByteLength = 0;
+		for ( let Attrib of Object.values(Attribs) )
 			TotalByteLength += Attrib.Data.byteLength;
-			return OpenglAttrib;
-		}
 		
-		this.Attributes = Object.keys( Attribs ).map( AttribNameToOpenglAttrib );
 		
 		//	todo: detect when attribs all use same buffer and have a stride (interleaved data)
 		//	concat data
 		let TotalData = new Float32Array( TotalByteLength / 4 );//Float32Array.BYTES_PER_ELEMENT );
 		
 		let TotalDataOffset = 0;
-		for ( let Attrib of this.Attributes )
+		for ( let Attrib of this.OpenglAttributes )
 		{
 			TotalData.set( Attrib.Floats, TotalDataOffset );
 			Attrib.ByteOffset = TotalDataOffset * Float32Array.BYTES_PER_ELEMENT;
@@ -2721,7 +2753,7 @@ export class TriangleBuffer
 				Attrib.ByteOffset = AttribByteOffset;
 				AttribByteOffset += Attrib.Floats.byteLength;
 			}
-			this.Attributes.forEach( BufferAttribData );
+			this.OpenglAttributes.forEach( BufferAttribData );
 			this.OpenglByteSize = AttribByteOffset;
 		}
 		
@@ -2776,25 +2808,21 @@ export class TriangleBuffer
 			gl.vertexAttribPointer( Attrib.Location, Attrib.Size, Attrib.Type, Normalised, StrideBytes, OffsetBytes );
 			gl.enableVertexAttribArray( Attrib.Location );
 		}
-		this.Attributes.forEach( InitAttribute );
+		this.OpenglAttributes.forEach( InitAttribute );
 	}
 	
 	Bind(RenderContext,Shader)
 	{
-		const Vao = AllowVao ? this.GetVao( RenderContext, Shader ) : null;
 		const gl = RenderContext.GetGlContext();
 
+		//	bind the vertex layout
+		const Vao = AllowVao ? this.GetVao( RenderContext, Shader ) : null;
 		if ( Vao )
 		{
 			gl.bindVertexArray( Vao );
 		}
 		else
 		{
-			const VertexBuffer = this.GetVertexBuffer(RenderContext);
-			const IndexBuffer = this.GetIndexBuffer(RenderContext);
-			gl.bindBuffer( gl.ARRAY_BUFFER, VertexBuffer );
-			gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, IndexBuffer );
-			
 			//	we'll need this if we start having multiple attributes
 			if ( DisableOldVertexAttribArrays )
 				for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
@@ -2803,6 +2831,11 @@ export class TriangleBuffer
 			//		even if we call gl.enableVertexAttribArray
 			this.BindVertexPointers( RenderContext, Shader );
 		}
+
+		let VertexBuffer = this.GetVertexBuffer( RenderContext );
+		let IndexBuffer = this.GetIndexBuffer( RenderContext );
+		gl.bindBuffer( gl.ARRAY_BUFFER, VertexBuffer );
+		gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, IndexBuffer );
 	}
 	
 	Draw(RenderContext,Instances=0)
