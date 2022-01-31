@@ -304,8 +304,18 @@ export default class WebcodecDecoder extends DecoderBase
 			//console.log(`OnVideoDecoderFlushed()`);
 			this.OnFrameEof();
 		}
-		//console.log(`H264 decoder flush()`);
-		this.Decoder.flush().then(OnVideoDecoderFlushed.bind(this));	
+		
+		//	gr: this function shouldn't throw, flush() will throw if the codec has already been closed;
+		//		this can be manual, but if left idle for too long, chrome will auto-close it
+		try
+		{
+			//console.log(`H264 decoder flush()`);
+			this.Decoder.flush().then(OnVideoDecoderFlushed.bind(this));
+		}
+		catch(e)
+		{
+			console.warn(`PushEndOfFile() flush() error; ${e}`);
+		}
 	}
 	
 	//	todo: detect keyframe from h264 data...
