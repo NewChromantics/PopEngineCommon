@@ -1590,7 +1590,10 @@ export class Context
 	
 	async CreateShader(VertSource,FragSource,UniformDescriptions,AttribDescriptions)
 	{
-		//	todo: deprecate Uniform&Attribs explicitly (we regex them now, only sokol needs it, not webgl)
+		//	todo: deprecate Uniform&Attribs explicitly
+		//	we regex them now in AssetManager, and only sokol (not webgl) needs it, so
+		//	even that regex should be native side
+		
 		//		and force adding a name for debugging
 		const ShaderName = `A shader`;
 		//	gr: I think this can be synchronous in webgl

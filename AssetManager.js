@@ -1,6 +1,6 @@
 import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
 import {GetUniqueHash} from './Hash.js'
-import {ExtractShaderUniforms} from './Shaders.js'
+import {ExtractShaderUniforms,ExtractShaderAttributes} from './Shaders.js'
 import Pop from './PopEngine.js'
 
 //	todo: turn asset manager into a class so client has to instance it,
@@ -140,10 +140,10 @@ export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUnif
 {
 	//	we now extract these with regex
 	if ( ShaderUniforms )	
-		Pop.Debug(`RegisterShaderAssetFilename: ShaderUniforms ${FragFilename}/${VertFilename}(${JSON.stringify(ShaderUniforms)}) no longer need to be supplied`);
+		Pop.Debug(`RegisterShaderAssetFilename(${FragFilename}): ShaderUniforms no longer need to be supplied`);
 		
-	if ( !ShaderAttribs )
-		throw `RegisterShaderAssetFilename(${FragFilename}) missing ShaderAttribs`;
+	if ( ShaderAttribs )
+		Pop.Debug(`RegisterShaderAssetFilename(${FragFilename}): ShaderAttribs no longer need to be supplied`);
 		
 	//	we use / as its not a valid filename char
 	const AssetName = FragFilename+PopAssetManager.AssetFilenameJoinString+VertFilename;
@@ -158,6 +158,7 @@ export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUnif
 		VertSource = RefactorVertShader(VertSource);
 
 		const ShaderUniforms = ExtractShaderUniforms( FragSource, VertSource );
+		const ShaderAttribute = ExtractShaderAttributes( FragSource, VertSource );
 
 		//const Shader = new Pop.Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
 		//const Shader = new Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
