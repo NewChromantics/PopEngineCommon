@@ -974,7 +974,7 @@ export class Context
 		EnableExtension('WEBGL_draw_buffers', this.InitMultipleRenderTargets.bind(this) );
 		EnableExtension('OES_element_index_uint', this.Init32BitBufferIndexes.bind(this) );
 		EnableExtension('ANGLE_instanced_arrays', InitInstancedArrays.bind(this) );
-		
+		EnableExtension('OES_standard_derivatives');
 		
 		//	texture load needs extension in webgl1
 		//	in webgl2 it's built in, but requires #version 300 es
