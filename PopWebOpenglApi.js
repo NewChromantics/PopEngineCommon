@@ -2699,18 +2699,19 @@ export class TriangleBuffer
 		this.PrimitiveType = gl.TRIANGLES;
 		if ( this.TriangleIndexes )
 		{
-			this.IndexCount = this.TriangleIndexes.length;
+			this.IndexCount = this.TriangleIndexes.length / 3;
 		}
 		else
 		{
 			const FirstAttrib = Attribs[Object.keys(Attribs)[0]];
 			this.IndexCount = (FirstAttrib.Data.length / FirstAttrib.Size);
+
+			if ( this.IndexCount % 3 != 0 )
+			{
+				throw "Triangle index count not divisible by 3";
+			}
 		}
 		
-		if ( this.IndexCount % 3 != 0 )
-		{
-			throw "Triangle index count not divisible by 3";
-		}
 		
 		//	get the opengl-vertex/attrib layout
 		this.OpenglAttributes = GetOpenglAttributes(Attribs,gl);
