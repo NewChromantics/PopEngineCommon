@@ -154,6 +154,9 @@ export default function ParseObjGeometry(Contents,OnGeometry,OnDebug)
 	function OnNormal(Values)
 	{
 		Values = Values.map(parseFloat);
+		//	we invert z position, so we need to do the same on normal...
+		//	gr: is this correct? simply a localspace inversion?
+		Values[2] = -Values[2];
 		Normals.push( Values );
 	}
 
