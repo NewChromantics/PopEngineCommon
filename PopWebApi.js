@@ -12,7 +12,7 @@ let ForegroundState = true;
 //	gr: currently require a PromiseQueue() class as we have a cyclic dependency. Fix this!
 let ForegroundChangePromises = new PromiseQueue();
 
-function IsMinimised()
+export function IsMinimised()
 {
 	//	android chome;
 	//		sleep or change app:	minimised
@@ -33,7 +33,7 @@ function IsMinimised()
 	return false;
 }
 
-function IsForeground()
+export function IsForeground()
 {
 	if (document.hasFocus !== undefined)
 		return document.hasFocus();
