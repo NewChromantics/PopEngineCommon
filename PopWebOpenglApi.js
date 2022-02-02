@@ -2702,17 +2702,18 @@ export class TriangleBuffer
 		this.PrimitiveType = gl.TRIANGLES;
 		if ( this.TriangleIndexes )
 		{
-			this.IndexCount = this.TriangleIndexes.length / 3;
+			this.IndexCount = this.TriangleIndexes.length;
 		}
 		else
 		{
 			const FirstAttrib = Attribs[Object.keys(Attribs)[0]];
 			this.IndexCount = (FirstAttrib.Data.length / FirstAttrib.Size);
-
-			if ( this.IndexCount % 3 != 0 )
-			{
-				throw "Triangle index count not divisible by 3";
-			}
+		}
+		
+		//	this needs changing for non-triangle geometry
+		if ( this.IndexCount % 3 != 0 )
+		{
+			throw "Triangle index count not divisible by 3";
 		}
 		
 		
