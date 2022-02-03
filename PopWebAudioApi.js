@@ -989,12 +989,13 @@ export class WaveSampleData_t
 		if ( this.WaveData instanceof AudioBuffer )
 		{
 			this.SampleBuffer = this.WaveData;
-			return;
+			return this.SampleBuffer;
 		}
 		
 		//	decode
 		//	todo: crop data to last mp3 frame (if we know this data isn't complete)
 		this.SampleBuffer = await this.DecodeAudioBuffer(Context,this.WaveData);
+		return this.SampleBuffer;
 	}
 	
 	GetDurationMs()
