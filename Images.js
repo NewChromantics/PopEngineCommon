@@ -24,7 +24,10 @@ export function CreateRandomImage(Width,Height)
 
 export function CreateColourTexture(Colour4)
 {
-	let NewTexture = new Pop.Image(`Colour ${Colour4}`);
+	//	avoid misinterpreting our colour name as a filename
+	const Name = `Colour ${Colour4}`.split('.').join('_');
+	
+	let NewTexture = new Pop.Image(Name);
 	if ( Array.isArray(Colour4) )
 		Colour4 = new Float32Array(Colour4);
 	NewTexture.WritePixels( 1, 1, Colour4, 'Float4' );
