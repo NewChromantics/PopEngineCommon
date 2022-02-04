@@ -1,6 +1,23 @@
 import Pop from './PopEngine.js'
 
 
+export class Clock
+{
+	constructor(TimeMs,GetLiveTimeMs=Pop.GetTimeNowMs)
+	{
+		this.GetLiveTimeMs = GetLiveTimeMs;
+		this.ClockTimeMs = TimeMs;
+		this.AppTimeMs = this.GetLiveTimeMs();
+	}
+	
+	get TimeMs()
+	{
+		const Elapsed = this.GetLiveTimeMs() - this.AppTimeMs;
+		return this.ClockTimeMs + Elapsed;
+	}
+}
+
+
 export default class FrameCounter
 {
 	constructor(CounterName="",LapTimeMs=1000)
