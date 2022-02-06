@@ -341,7 +341,7 @@ class Device_t
 		
 		//	if no button changes, we still want to register a controller move with no button
 		if ( ButtonChangedCount == 0 )
-			this.OnMouseMove( State.Position, Pop.SoyMouseButton.None, InputName, State.Transform );
+			this.OnMouseMove( State.Position, null, InputName, State.Transform );
 	}
 	
 	GetDepthImage(Name)
@@ -485,7 +485,7 @@ class Device_t
 		}
 		try
 		{
-			//FrameInputs.forEach(UpdateInput.bind(this));
+			FrameInputs.forEach(UpdateInput.bind(this));
 		}
 		catch(e)
 		{
@@ -628,8 +628,6 @@ class Device_t
 			//	execute commands
 			RenderCommands = new RenderCommands_t( RenderCommands );
 			this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
-			//RenderTarget.BindRenderTarget( this.RenderContext );
-			//this.OnRender( RenderTarget, Camera );
 		}
 		Pose.views.forEach( RenderView.bind(this) );
 	}
