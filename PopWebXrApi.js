@@ -199,6 +199,7 @@ class Device_t
 		
 		this.FrameCounter = new FrameCounter_t(`XR Frame`);
 		this.DepthImages = {};	//	[CameraName] = Image. Depth data is per-view
+		this.DepthInfoError = 'x';//null;	//	on quest/chrome, calling get depth info throws a dom exception that wont catch. so if it ever fails, mark it as failed and dont let it trigger again  
 		
 		//	overload these! (also, name it better, currently matching window/touches)
 		this.OnMouseDown = this.OnMouseEvent_Default.bind(this);
@@ -518,7 +519,7 @@ class Device_t
 		
 		//	extract depth textures
 		//	https://immersive-web.github.io/depth-sensing/
-		if ( Frame.getDepthInformation )
+		if ( Frame.getDepthInformation && !this.DepthInfoError )
 		{
 			//	on quest, the function exists but it throws an exception as its unsupported, 
 			//	we can assume its the same for all views really.
@@ -557,7 +558,8 @@ class Device_t
 			}
 			catch(e)
 			{
-				//console.error(`Error with depth`,e);
+				console.error(`Error with getDepthInformation`,e);
+				this.DepthInfoError = e;
 			}
 		}
 		
