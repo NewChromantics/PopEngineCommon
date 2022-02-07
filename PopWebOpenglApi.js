@@ -2135,10 +2135,13 @@ class TextureRenderTarget extends RenderTarget
 				const ImageTarget = this.ColourImages[0];
 				const Texture = ImageTarget.OpenglTexture;
 				gl.bindTexture(gl.TEXTURE_2D,Texture);
-				PreviousFilter = ImageTarget.LinearFilter;
-				const FilterMode = gl.LINEAR;
+				
+				/*
+				//	restore filter mode
+				const FilterMode = ImageTarget.LinearFilter ? gl.LINEAR : gl.NEAREST;
 				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, FilterMode);
 				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, FilterMode);
+				*/
 				//gl.bindTexture(gl.TEXTURE_2D,null);
 			}
 		}
