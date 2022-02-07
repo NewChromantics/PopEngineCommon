@@ -1783,6 +1783,7 @@ export class RenderTarget
 		gl.enable( gl.BLEND );
 		gl.blendFunc( gl.ONE, gl.ZERO );
 		gl.blendEquation( gl.FUNC_ADD );
+		gl.disable( gl.BLEND );
 	}
 	
 	SetBlendModeAlpha()
