@@ -81,11 +81,14 @@ export class DataReader
 		return Int;
 	}
 	
-	async Read32()
+	async Read32(LittleEndian=true)
 	{
 		const Bytes = await this.GetBytes(this.FilePosition,32/8);
 		this.FilePosition += 32/8;
-		const Int = (Bytes[0]<<24) | (Bytes[1]<<16) | (Bytes[2]<<8) | (Bytes[3]<<0);
+		const ShiftBigEndian = [0,8,16,24];
+		const ShiftLittleEndian = [24,16,8,0];
+		const Shift = LittleEndian ? ShiftLittleEndian : ShiftBigEndian;
+		const Int = (Bytes[0]<<Shift[0]) | (Bytes[1]<<Shift[1]) | (Bytes[2]<<Shift[2]) | (Bytes[3]<<Shift[3]);
 		return Int;
 	}
 	
