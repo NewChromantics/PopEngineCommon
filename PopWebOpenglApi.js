@@ -1084,13 +1084,22 @@ export class Context
 		return RenderCommands.Promise;
 	}
 	
-	RenderLoop()
+	async RenderLoop()
 	{
 		//	wait for new paint event ("render thread")
 		//	process all queued render-submissions (which resolve a promise)
 		
-		let Render = function(Timestamp)
+		//	gr: this is now an async function, using pop engine
+		//	WaitForFrame()
+		//	instead of request animation frame
+		//	so that this renderloop still executes in say, XR mode
+		//	to flush out gpu queued work (even if we don't render to screen)
+		//	Is this a problem where we need to render whilst inside requestAnimationFrame() callback?
+		
+		while ( true )
 		{
+			const Timestep = await Pop.WaitForFrame();
+		
 			if ( !this.IsOpen )
 			{
 				console.warn(`RenderContext.IsOpen=${this.IsOpen}; ending render loop`);
@@ -1106,8 +1115,10 @@ export class Context
 			{
 				//	Renderloop error, failed to get context... waiting to try again
 				console.error("OnRender error: ",e);
-				setTimeout( Render.bind(this), RetryGetContextMs );
-				return;
+				await Pop.Yield(RetryGetContextMs);
+				//setTimeout( Render.bind(this), RetryGetContextMs );
+				//return;
+				continue;
 			}
 			
 			//	pop all the commands so we don't get stuck in an infinite loop if a command queues more commands
@@ -1129,11 +1140,10 @@ export class Context
 			}
 			
 			//	request next frame, before any render fails, so we will get exceptions thrown for debugging, but recover
-			window.requestAnimationFrame( Render.bind(this) );
+			//window.requestAnimationFrame( Render.bind(this) );
 
 			Stats.Renders++;
 		}
-		window.requestAnimationFrame( Render.bind(this) );
 	}
 	
 	//	Device render target is the target for "null"
