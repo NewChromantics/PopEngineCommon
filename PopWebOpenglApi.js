@@ -147,7 +147,7 @@ const TestFrameBuffer = false;
 //	gr; VAO's are current disabled whilst attrib locations are fixed.
 //		and now we're using attribs properly, disable before enable!
 const DisableOldVertexAttribArrays = true;
-const AllowVao = !Pop.GetExeArguments().DisableVao;
+const AllowVao = false;//!Pop.GetExeArguments().DisableVao;
 
 //	I was concerned active texture was being used as render target and failing to write
 const CheckActiveTexturesBeforeRenderTargetBind = false;	
@@ -1246,6 +1246,9 @@ export class Context
 					//	so they HAVE to be bound together)
 					Shader.Bind( RenderContext );
 
+					//	gr: change this around so we set all uniforms, 
+					//		then setup attributes in one go
+
 					//	seems to be okay after, putting after in case array buffers mess anything up
 					//	but we may need to be after so uniform-attribs override geo attribs
 					Geometry.Bind( RenderContext, Shader );
@@ -1392,7 +1395,9 @@ export class Context
 		let DataValues = Values;
 		if ( !IsTypedArray(DataValues) )
 			DataValues = new Float32Array( Values.flat(2) );
-			
+		
+		//	gr: we should forcibly clip the data if we already have a InstanceCount determined
+		//		as the attributes have to align
 		let DetectedInstanceCount = DataValues.length / AttributeMeta.ElementSize;
 		if ( DetectedInstanceCount != Math.floor(DetectedInstanceCount) )
 			throw `Attribute ${AttributeMeta.Name} has misaligned input`; 
@@ -2233,6 +2238,7 @@ export class Shader
 		this.ProgramContextVersion = null;
 		this.Context = null;			//	 need to remove this, currently still here for SetUniformConvinience
 		this.UniformMetaCache = null;	//	may need to invalidate this on new context
+		this.AttributeMetaCache = null;	//	may need to invalidate this on new context
 		this.VertShaderSource = VertShaderSource;
 		this.FragShaderSource = FragShaderSource;
 	}
@@ -2249,8 +2255,9 @@ export class Shader
 		{
 			this.Program = this.CompileProgram( RenderContext );
 			this.ProgramContextVersion = RenderContext.ContextVersion;
-			this.UniformMetaCache = null;
 			this.Context = RenderContext;
+			this.UniformMetaCache = this.GetUniformMetas();
+			this.AttributeMetaCache = this.GetAttributeMetas();
 		}
 		return this.Program;
 	}
@@ -2510,9 +2517,7 @@ function GetOpenglAttributes(Attribs,RenderContext)
 		OpenglAttrib.Type = GetOpenglElementType( gl, Attrib.Data );
 		OpenglAttrib.DataIndex = Index;
 		OpenglAttrib.Stride = Attrib.Stride;
-		//	null means we haven't assigned it from the shader
-		//	note; this means we really need a location PER shader, change this to {}[Shader.UniqueHash] = Location
-		OpenglAttrib.Location = null;
+		//	we do NOT store location here, it's per-shader, not per geometry
 
 		return OpenglAttrib;
 	}
@@ -2675,9 +2680,9 @@ export class TriangleBuffer
 			//	setup buffer & bind stuff in the vao
 			gl.bindVertexArray( this.Vao );
 			//	we'll need this if we start having multiple attributes
-			if ( DisableOldVertexAttribArrays )
-				for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
-					gl.disableVertexAttribArray(i);
+			//if ( DisableOldVertexAttribArrays )
+			//	for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
+			//		gl.disableVertexAttribArray(i);
 			this.BindVertexPointers( RenderContext, Shader );
 		
 			gl.bindVertexArray( null );
@@ -2794,24 +2799,19 @@ export class TriangleBuffer
 		//	setup offset in buffer
 		let InitAttribute = function(Attrib)
 		{
-			//	not yet fetched attrib location from shader
-			if ( Attrib.Location === null )
-			{
-				if ( !Shader )
-					throw `Unknown location for attrib ${Attrib.Name} but no shader provided`;
-					
-				Attrib.Location = gl.getAttribLocation( Shader.Program, Attrib.Name );
-			}
-			
 			//	this shader doesn't use this attrib
-			if ( Attrib.Location == -1 )
+			const ShaderAttrib = Shader.GetAttributeMeta(Attrib.Name);
+			if ( !ShaderAttrib )
 				return;
 			
+			const Location = ShaderAttrib.Location;
 			let Normalised = false;
 			let StrideBytes = Attrib.Stride;
 			let OffsetBytes = Attrib.ByteOffset;
-			gl.vertexAttribPointer( Attrib.Location, Attrib.Size, Attrib.Type, Normalised, StrideBytes, OffsetBytes );
-			gl.enableVertexAttribArray( Attrib.Location );
+			gl.enableVertexAttribArray( Location );
+			gl.vertexAttribPointer( Location, Attrib.Size, Attrib.Type, Normalised, StrideBytes, OffsetBytes );
+			//	repeats per vertex(0) not per instance(1)
+			gl.vertexAttribDivisor( Location, 0 );
 		}
 		this.OpenglAttributes.forEach( InitAttribute );
 	}
@@ -2820,27 +2820,58 @@ export class TriangleBuffer
 	{
 		const gl = RenderContext.GetGlContext();
 
+		//	gr: need to clear all bindings on a fresh geo binding;
+		//		the problem here was some old instancd attributes were still bound
+		//	we'll need this if we start having multiple attributes
+		/*
+		if ( DisableOldVertexAttribArrays )
+		{
+			for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
+			{
+				gl.vertexAttribDivisor( i, 0);
+				gl.disableVertexAttribArray(i);
+			}
+		}
+		*/
+
+		let VertexBuffer = this.GetVertexBuffer( RenderContext );
+		let IndexBuffer = this.GetIndexBuffer( RenderContext );
+		
 		//	bind the vertex layout
 		const Vao = AllowVao ? this.GetVao( RenderContext, Shader ) : null;
 		if ( Vao )
 		{
+			//	todo: need to fix VAO's;
+			//		need to establish the exact things stored in a vao
+			//		and whether we need vao per shader+geo or just per geo
+			//	currently broken as we're using 1 geo for 2 shaders with different attrib locations
+			//	VAO contains
+			//		- buffer
+			//		- vertex offset
+			//		- vertex divisor?
+			//		- attribute location?
 			gl.bindVertexArray( Vao );
+			function InitAttribute(Attrib)
+			{
+				const ShaderAttrib = Shader.GetAttributeMeta(Attrib.Name);
+				if ( !ShaderAttrib )
+					return;
+				gl.enableVertexAttribArray( ShaderAttrib.Location );
+			}
+			this.OpenglAttributes.forEach( InitAttribute );
 		}
 		else
 		{
-			//	we'll need this if we start having multiple attributes
-			if ( DisableOldVertexAttribArrays )
-				for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
-					gl.disableVertexAttribArray(i);
+			//	this currently initialises opengl layout
+			this.GetVertexBuffer(RenderContext);
+			
 			//	gr: we get glDrawArrays: attempt to access out of range vertices in attribute 0, if we dont update every frame (this seems wrong)
 			//		even if we call gl.enableVertexAttribArray
+			gl.bindBuffer( gl.ARRAY_BUFFER, VertexBuffer );
+			gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, IndexBuffer );
 			this.BindVertexPointers( RenderContext, Shader );
 		}
 
-		let VertexBuffer = this.GetVertexBuffer( RenderContext );
-		let IndexBuffer = this.GetIndexBuffer( RenderContext );
-		gl.bindBuffer( gl.ARRAY_BUFFER, VertexBuffer );
-		gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, IndexBuffer );
 	}
 	
 	Draw(RenderContext,Instances=0)
