@@ -1362,18 +1362,28 @@ export class Context
 		return this.Context;
 	}
 	
-	AllocArrayBuffer()
+	AllocArrayBuffer(FloatCount)
 	{
 		function PopFromFreeList(FreeItems,Meta)
 		{
+			//	todo: match length, maybe hash on meta (meta=size)
 			if ( !FreeItems.length )
 				return false;	//	no match
-			return FreeItems.shift();
+				
+			const First = FreeItems.shift();
+			//	make sure float array aligns
+			if ( First.Floats.length != Meta )
+				First.Floats = new Float32Array(Meta);
+			return First;
 		}
 		function Alloc(Meta)
 		{
+			if ( !Meta )
+				throw `Now expected to pass length as meta for buffer pool`;
 			const gl = this.Context;
-			const Buffer = gl.createBuffer();
+			const Buffer = {};
+			Buffer.Buffer = gl.createBuffer();
+			Buffer.Floats = new Float32Array(Meta);
 			return Buffer;
 		}
 		
@@ -1382,29 +1392,35 @@ export class Context
 			this.ArrayBufferPool = new Pool(`ArrayBufferPool`,Alloc.bind(this),Pop.Warning,PopFromFreeList.bind(this));
 		}
 		
-		const Buffer = this.ArrayBufferPool.Alloc();
+		const Buffer = this.ArrayBufferPool.Alloc(...arguments);
 		return Buffer;
 	}
 	
 	
 	AllocAndBindAttribInstances(AttributeMeta,Values)
 	{
-		//	may need a better approach?
-		const InstanceCount = Values.length;
-		
 		//if ( !Array.isArray(Values) )
 		//	throw `AllocAndBindAttribInstances(${AttributeMeta.Name}) expecting array of values (per instance)`;
-			
+	
+		//	flatten as needed
+		//	gr: this is mega expensive
+		if ( Values.flat )
+			if ( Array.isArray(Values[0]) )
+				Values = Values.flat(2);
+		
 		//	alloc a buffer from a pool
-		const Buffer = this.AllocArrayBuffer();
+		const Buffer = this.AllocArrayBuffer(Values.length);
 		const gl = this.Context;
-		gl.bindBuffer(gl.ARRAY_BUFFER, Buffer);
+		gl.bindBuffer(gl.ARRAY_BUFFER, Buffer.Buffer);
 						
 		//	this needs to unroll the values into one giant array...
 		//	if this an array of typed arrays, we need some more work
 		let DataValues = Values;
 		if ( !IsTypedArray(DataValues) )
-			DataValues = new Float32Array( Values.flat(2) );
+		{
+			DataValues = Buffer.Floats;
+			DataValues.set( Values );
+		}
 		
 		//	gr: we should forcibly clip the data if we already have a InstanceCount determined
 		//		as the attributes have to align
@@ -1416,10 +1432,10 @@ export class Context
 		//	init buffer size (or resize if bigger than before)
 		//const BufferSize = gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE);
 		//if ( DataValues.byteLength > BufferSize )
-			gl.bufferData(gl.ARRAY_BUFFER, DataValues.byteLength, gl.DYNAMIC_DRAW, null );
+		//	gl.bufferData(gl.ARRAY_BUFFER, DataValues.byteLength, gl.DYNAMIC_DRAW, null );
 		//const NewBufferSize = gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE);
-			
-		gl.bufferSubData(gl.ARRAY_BUFFER, 0, DataValues);
+		//gl.bufferSubData(gl.ARRAY_BUFFER, 0, DataValues);
+		gl.bufferData(gl.ARRAY_BUFFER, DataValues, gl.DYNAMIC_DRAW );
 						
 		const ValueDataSize = AttributeMeta.ElementSize * DataValues.BYTES_PER_ELEMENT;
 		
@@ -1428,7 +1444,8 @@ export class Context
 		//	gr: maybe we can cache this layout so only needs updating if the pooled buffer is dirty
 		//	https://stackoverflow.com/a/38853623/355753
 		const Rows = AttributeMeta.ElementRows;
-		for ( let Row=0;	Row<Rows;	Row++ )
+		
+		function BindAttribArray(Row)
 		{
 			const ValueStride = ValueDataSize;
 			const Normalised = false;
@@ -1444,6 +1461,11 @@ export class Context
 			//	this line says this attribute only changes for each 1 instance
 			//	and enables instancing
 			gl.vertexAttribDivisor( Location, 1);
+		}
+		
+		for ( let Row=0;	Row<Rows;	Row++ )
+		{
+			BindAttribArray(Row);
 		}
 		
 		const BindMeta = {};
