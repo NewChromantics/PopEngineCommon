@@ -101,9 +101,10 @@ async function ParseXyzi(Xyzi,Size,Palette)
 		const Pal = await Reader.Read8();
 		const Rgba = Rgba32ToFloat(Palette[Pal]);
 		
+		let Scale = 1.6;
 		let xyz = [x,y,z];
 		xyz = xyz.map( (v,i) => v/Size[i] );
-		xyz = xyz.map( v => (v-0.5)*1.5 );
+		xyz = xyz.map( v => (v-0.5)*Scale*2 );
 		
 		x = xyz[0];
 		y = xyz[1];
@@ -186,7 +187,6 @@ export default async function ParseVox(Contents,OnDebug)
 		}
 	}
 	
-	
-	console.log(RootChunks);
+	//console.log(RootChunks);
 	return Geometrys[0];
 }
