@@ -101,18 +101,16 @@ async function ParseXyzi(Xyzi,Size,Palette)
 		const Pal = await Reader.Read8();
 		const Rgba = Rgba32ToFloat(Palette[Pal]);
 		
-		let Scale = 2.0;
 		let xyz = [x,y,z];
-		xyz = xyz.map( (v,i) => v/Size[i] );
-		xyz = xyz.map( v => (v-0.5)*Scale*2 );
+		//	leave 1unit = 1
+		//let Scale = 3.0;
+		//xyz = xyz.map( (v,i) => v/Size[i] );
+		//xyz = xyz.map( v => (v-0.5)*Scale*2 );
 		
 		x = xyz[0];
 		y = xyz[1];
 		z = xyz[2];
-		xyz = [x,z,-y];
-		
-		if ( i % 2 != 0 )
-			continue;
+		xyz = [-x,z,-y];
 		
 		Geometry.Positions.push(xyz);
 		Geometry.Colours.push(Rgba);
