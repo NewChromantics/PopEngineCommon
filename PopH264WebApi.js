@@ -27,6 +27,12 @@ class DecoderBase
 	
 	OnFrame(Frame)
 	{
+		Frame.Free = function()
+		{
+			Frame.close();
+			Frame.ClosedByFree = Frame.timestamp;
+		};
+
 		//	turn into an image/planes/meta
 		this.DecodedFrameQueue.Push(Frame);
 	}
@@ -136,7 +142,7 @@ export default class WebcodecDecoder extends DecoderBase
 		const Decoder = new VideoDecoder( DecoderOptions );
 
 		this.ExpectsAnnexB = true;
-		//	need to convert to array other wise integeer conversion doesnt work
+		//	need to convert to array otherwise integer conversion doesnt work
 		let abc = Array.from( AvccHeader.slice(1,4) );
 		
 		//	chrome on mac with CR data streams/grove/grove-30fps-2
