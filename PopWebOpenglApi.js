@@ -1136,6 +1136,9 @@ export class Context
 				catch(e)
 				{
 					RenderCommands.OnError(e);
+					//	slow down for shader errors etc
+					//	gr: this should be done by caller in the promise rejection
+					//await Pop.Yield(20);
 				}
 			}
 			
