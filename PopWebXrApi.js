@@ -768,7 +768,13 @@ function ExtractHandInputs(InputHand,InputName,GetPose)
 	//	we should have one general one for the hand?
 	function GetFingerSkeleton(Prefix)
 	{
-		return [`${Prefix}-tip`,`${Prefix}-phalanx-distal`,`${Prefix}-phalanx-proximal`,`${Prefix}-metacarpal`,`wrist`];
+		return [
+			`${Prefix}-tip`,
+			`${Prefix}-phalanx-distal`,
+			`${Prefix}-phalanx-proximal`,
+			`${Prefix}-metacarpal`,
+			//`wrist`
+		];
 	}
 	//	these names + skeleton above are standard webxr names (from quest)
 	const FingerNames = 
