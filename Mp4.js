@@ -9,10 +9,10 @@ import {MP4,H264Remuxer} from './Mp4_Generator.js'
 import {Debug,Warning,Yield} from './PopWebApiCore.js'
 
 
-class AtomDataReader extends DataReader
+export class AtomDataReader extends DataReader
 {
 	//	gr: move this to an overloaded Atom/Mpeg DataReader
-	async ReadNextAtom(GetAtomType)
+	async ReadNextAtom(GetAtomType=null)
 	{
 		GetAtomType = GetAtomType || function(Fourcc)	{	return null;	}
 	
@@ -181,7 +181,7 @@ class Sample_t
 		
 }
 
-class Atom_t
+export class Atom_t
 {
 	constructor(Fourcc=null,CopyAtom=null)
 	{
@@ -340,6 +340,7 @@ export class Mp4Decoder
 		this.NewTrackQueue = new PromiseQueue('Mpeg decoded Tracks');
 		this.NewSamplesQueue = new PromiseQueue('Mpeg Decoded samples');
 		
+		this.PendingAtoms = [];	//	pre-decoded atoms pushed into file externally
 		this.RootAtoms = [];	//	trees coming off root atoms
 		this.Mdats = [];		//	atoms with data
 		this.Tracks = [];
@@ -399,6 +400,35 @@ export class Mp4Decoder
 	
 	PushData(Bytes)
 	{
+		//	we now allow caller to push in pre-decoded atoms
+		//	eg. MOOV extracted from tail of an mp4
+		//	gr: when data moves through web workers, it loses
+		//		it's type. so check for our Atom_t member[s]
+		if ( Bytes.hasOwnProperty('Fourcc') )
+		{
+			const Atom = new Atom_t();
+			Object.assign( Atom, Bytes );
+			Bytes = Atom;
+		}
+			
+		if ( Bytes instanceof Atom_t )
+		{
+			this.PendingAtoms.push(Bytes);
+			return;
+		}
+		
+		//	check valid input types
+		if ( Bytes == EndOfFileMarker )
+		{
+		}
+		else if ( Bytes instanceof Uint8Array )
+		{
+		}
+		else
+		{
+			throw `PushData(${typeof Bytes}) to mp4 which isn't a byte array`;
+		}
+		
 		if ( !Bytes )
 			throw `Don't pass null to Mp4 PushData(), call PushEndOfFile()`;
 		this.NewByteQueue.Push(Bytes);
@@ -414,11 +444,23 @@ export class Mp4Decoder
 		this.Tracks.push(Track);
 	}
 	
+	async ReadNextAtom()
+	{
+		if ( this.PendingAtoms.length > 0 )
+		{
+			const Atom = this.PendingAtoms.shift();
+			return Atom;
+		}
+		
+		const Atom = await this.FileReader.ReadNextAtom();
+		return Atom;
+	}
+	
 	async ParseFileThread()
 	{
 		while ( true )
 		{
-			const Atom = await this.FileReader.ReadNextAtom();
+			const Atom = await this.ReadNextAtom();
 			if ( Atom === null )
 			{
 				//Debug(`End of file`);
