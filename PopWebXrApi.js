@@ -282,7 +282,7 @@ class Device_t
 		return this.Cameras[Name];
 	}
 	
-	UpdateInputState(InputName,Pose,Buttons)
+	UpdateInputState(InputName,Pose,Buttons,ExtraData)
 	{
 		//	new state!
 		if ( !this.InputStates.hasOwnProperty(InputName) )
@@ -292,6 +292,7 @@ class Device_t
 			Pop.Debug(`New input! ${InputName}`);
 		}
 		const State = this.InputStates[InputName];
+		State.ExtraData = ExtraData;
 		
 		//	if no pose, no longer tracking
 		if ( !Pose )
@@ -314,6 +315,7 @@ class Device_t
 		
 		//	work out new button states & any changes
 		//	gr: here, if not tracking, we may want to skip any changes
+		//	gr: include tracking state in some meta data?
 		const ButtonCount = Math.max(State.Buttons.length,Buttons.length);
 		const NewButtonState = [];
 		let ButtonChangedCount = 0;
@@ -328,12 +330,12 @@ class Device_t
 			if ( !Old && New )
 			{
 				ButtonChangedCount++;
-				this.OnMouseDown(State.Position,ButtonName,InputName, State.Transform );
+				this.OnMouseDown( State.Position, ButtonName, InputName, State.Transform, State.ExtraData );
 			}
 			else if ( Old && !New )
 			{
 				ButtonChangedCount++;
-				this.OnMouseUp(State.Position,ButtonName,InputName, State.Transform );
+				this.OnMouseUp( State.Position, ButtonName, InputName, State.Transform, State.ExtraData );
 			}
 			NewButtonState.push(New);
 		}
@@ -342,7 +344,7 @@ class Device_t
 		
 		//	if no button changes, we still want to register a controller move with no button
 		if ( ButtonChangedCount == 0 )
-			this.OnMouseMove( State.Position, null, InputName, State.Transform );
+			this.OnMouseMove( State.Position, null, InputName, State.Transform, State.ExtraData );
 	}
 	
 	GetDepthImage(Name)
@@ -397,15 +399,18 @@ class Device_t
 		//		has keyframed input structs per-controller/pose
 		const FrameInputs = Array.from(Frame.session.inputSources);
 		
-		const UpdateInputNode = function(InputXrSpace,InputName,Buttons)
+		const UpdatedInputNames = [];
+		function UpdateInputNode_(InputXrSpace,InputName,Buttons,ExtraData)
 		{
 			//	get the pose
 			const InputPose = InputXrSpace ? Frame.getPose(InputXrSpace,this.ReferenceSpace) : null;
-			this.UpdateInputState(InputName,InputPose,Buttons);
-		}.bind(this);
+			this.UpdateInputState(InputName,InputPose,Buttons,ExtraData);
+			UpdatedInputNames.push(InputName);
+		}
+		const UpdateInputNode = UpdateInputNode_.bind(this);
 		
 		//	track which inputs we updated, so we can update old inputs that have gone missing
-		const UpdatedInputNames = [];
+		
 		function UpdateInput(Input)
 		{
 			try
@@ -414,67 +419,27 @@ class Device_t
 				const InputName = Input.handedness;
 
 				//	treat joints as individual inputs as they all have their own pos
-				//	gr: this was !== null, does that mean in the past hand===0 ?
-				if (Input.hand!==null && Input.hand!==undefined)
+				if ( Input.hand )
 				{
-					const ThumbToJointMaxDistance = 0.03;
-					//	for hands, if a finger tip touches the thumb tip, its a button press
-					const ThumbKey = XRHand.THUMB_PHALANX_TIP;
-					const FingerKeys =
-					[
-					 XRHand.INDEX_PHALANX_TIP,XRHand.MIDDLE_PHALANX_TIP,XRHand.RING_PHALANX_TIP,XRHand.LITTLE_PHALANX_TIP,
-					 XRHand.INDEX_PHALANX_DISTAL,XRHand.MIDDLE_PHALANX_DISTAL,XRHand.RING_PHALANX_DISTAL,XRHand.LITTLE_PHALANX_DISTAL,
-					 XRHand.INDEX_PHALANX_INTERMEDIATE,XRHand.MIDDLE_PHALANX_INTERMEDIATE,XRHand.RING_PHALANX_INTERMEDIATE,XRHand.LITTLE_PHALANX_INTERMEDIATE,
-					 ];
-					const ReferenceSpace = this.ReferenceSpace;
-					
-					//	we're duplicating work here
-					function GetJointPos(Key)
+					function GetPose(XrSpace)
 					{
-						const XrSpace = Input.hand[Key];
-						const Pose = XrSpace ? Frame.getPose(XrSpace,ReferenceSpace) : null;
-						const Position = Pose ? [Pose.transform.position.x,Pose.transform.position.y,Pose.transform.position.z] : null;
-						return Position;
+						if ( !XrSpace )
+							return null;
+						return Frame.getPose(XrSpace,this.ReferenceSpace);
 					}
-					function IsTipCloseToThumb(Key)
+					const HandInputs = ExtractHandInputs( Input.hand, InputName, GetPose.bind(this) );
+					for ( let Input of HandInputs )
 					{
-						if ( !ThumbPos )
-							return false;
-						const FingerPos = GetJointPos(Key);
-						if ( !FingerPos )
-							return false;
-						const Distance = Distance3(ThumbPos,FingerPos);
-						return Distance <= ThumbToJointMaxDistance;
+						UpdateInputNode( Input.PoseSpace, Input.Name, Input.Buttons, Input.ExtraData );
 					}
-					const ThumbPos = GetJointPos(ThumbKey);
-					const FingersNear = FingerKeys.map(IsTipCloseToThumb);
-					
-					
-					//	enum all the joints
-					const JointNames = Object.keys(XRHand);
-					function EnumJoint(JointName)
-					{
-						const Key = XRHand[JointName];	//	XRHand.WRIST = int = key for .hand
-						const PoseSpace = Input.hand[Key];
-						const NodeName = `${InputName}_${JointName}`;
-						const Buttons = [];
-						const FingerNearThumbIndex = FingerKeys.indexOf(Key);
-						if ( FingerNearThumbIndex != -1 )
-							Buttons.push(FingersNear[FingerNearThumbIndex]);
-						UpdatedInputNames.push(NodeName);
-						UpdateInputNode(PoseSpace,NodeName,Buttons);
-					}
-					JointNames.forEach(EnumJoint.bind(this));
-					//Pop.Debug(`Input has hand! ${JSON.stringify(Input.hand)}`,Input.hand);
 				}
-
-				//	normal controller
+				else//	normal controller, but on quest, this is also the center of the hand with the finger-click button0
+					//	so we should make use of these buttons for a "palm" finger 
 				if ( Input.gamepad )
 				{
 					if (!Input.gamepad.connected)
 						return;
 				
-					UpdatedInputNames.push(InputName);
 					const Buttons = Input.gamepad.buttons || [];
 					UpdateInputNode( Input.targetRaySpace, InputName, Buttons );
 				}
@@ -793,3 +758,58 @@ export async function CreateDevice(RenderContext,GetRenderCommands,OnWaitForCall
 	}
 }
 
+function ExtractHandInputs(InputHand,InputName,GetPose)
+{
+	const Joints = Object.fromEntries(InputHand.entries());
+
+	//	divide each finger into it's own input, with trailing bones(joints). 
+	//	First joint name is our most important one and is the position of the input
+	//	it then has transforms of its children
+	//	we should have one general one for the hand?
+	function GetFingerSkeleton(Prefix)
+	{
+		return [`${Prefix}-tip`,`${Prefix}-phalanx-distal`,`${Prefix}-phalanx-proximal`,`${Prefix}-metacarpal`,`wrist`];
+	}
+	//	these names + skeleton above are standard webxr names (from quest)
+	const FingerNames = 
+	[
+		'thumb',
+		'index-finger',
+		'middle-finger',
+		'ring-finger',
+		'pinky-finger'
+	];
+	
+	function GetJointPosition(JointName)
+	{
+		const XrSpace = Joints[JointName];
+		const Pose = GetPose(XrSpace);
+		const Position = Pose ? [Pose.transform.position.x,Pose.transform.position.y,Pose.transform.position.z] : null;
+		return Position;
+	}
+	
+	//	each finger is a "button"
+	function GetFingerInput(FingerName)
+	{
+		const NodeName = `${InputName}_${FingerName}`;
+		const JointNames = GetFingerSkeleton(FingerName);
+		const JointPositions = JointNames.map( GetJointPosition );
+		const JointSpaces = JointNames.map( jn => Joints[jn] );
+		
+		const Input = {};
+		Input.Name = NodeName;
+		Input.PoseSpace = JointSpaces[0];	//	primary joint (tip)
+		Input.ExtraData = {};
+		Input.ExtraData.Positions = JointPositions;
+		//	new system never has buttons down... 
+		//	could do a float of how straight fingers are
+		//	or if tip is touching another tip...
+		//	could do both as our input system is all about named buttons
+		//	eg. left-index-finger-outstretched=0.9
+		Input.Buttons = [];	
+		
+		return Input;
+	}
+	const FingerInputs = FingerNames.map(GetFingerInput);
+	return FingerInputs;
+}
