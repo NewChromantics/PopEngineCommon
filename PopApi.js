@@ -100,12 +100,13 @@ class TextEncoderReplacement
 
 let TextEncoder_t = this.TextEncoder || TextEncoderReplacement;
 */
+
 export function StringToBytes(Str,AsArrayBuffer=false)
 {
 	//	https://stackoverflow.com/questions/6965107/converting-between-strings-and-arraybuffers
-	if ( this.TextEncoder !== undefined )
+	if ( TextEncoder !== undefined )
 	{
-		const Encoder = new this.TextEncoder("utf-8");
+		const Encoder = new TextEncoder("utf-8");
 		const Bytes = Encoder.encode(Str);
 		return Bytes;
 	}
