@@ -793,20 +793,27 @@ function ExtractHandInputs(InputHand,InputName,GetPose)
 		const Position = Pose ? [Pose.transform.position.x,Pose.transform.position.y,Pose.transform.position.z] : null;
 		return Position;
 	}
+	function GetJointLocalToWorld(JointName)
+	{
+		const XrSpace = Joints[JointName];
+		const Pose = GetPose(XrSpace);
+		const Position = Pose ? Array.from(Pose.transform.matrix) : null;
+		return Position;
+	}
 	
 	//	each finger is a "button"
 	function GetFingerInput(FingerName)
 	{
 		const NodeName = `${InputName}_${FingerName}`;
 		const JointNames = GetFingerSkeleton(FingerName);
-		const JointPositions = JointNames.map( GetJointPosition );
+		const JointLocalToWorlds = JointNames.map( GetJointLocalToWorld );
 		const JointSpaces = JointNames.map( jn => Joints[jn] );
 		
 		const Input = {};
 		Input.Name = NodeName;
 		Input.PoseSpace = JointSpaces[0];	//	primary joint (tip)
 		Input.ExtraData = {};
-		Input.ExtraData.Positions = JointPositions;
+		Input.ExtraData.LocalToWorlds = JointLocalToWorlds;
 		//	new system never has buttons down... 
 		//	could do a float of how straight fingers are
 		//	or if tip is touching another tip...
