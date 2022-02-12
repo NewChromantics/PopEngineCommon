@@ -801,6 +801,8 @@ function ExtractHandInputs(InputHand,InputName,GetPose)
 		return Position;
 	}
 	
+	const InputOriginLocalToWorld = GetJointLocalToWorld('wrist');
+	
 	//	each finger is a "button"
 	function GetFingerInput(FingerName)
 	{
@@ -814,6 +816,7 @@ function ExtractHandInputs(InputHand,InputName,GetPose)
 		Input.PoseSpace = JointSpaces[0];	//	primary joint (tip)
 		Input.ExtraData = {};
 		Input.ExtraData.LocalToWorlds = JointLocalToWorlds;
+		Input.ExtraData.InputOriginLocalToWorld = InputOriginLocalToWorld;
 		//	new system never has buttons down... 
 		//	could do a float of how straight fingers are
 		//	or if tip is touching another tip...
