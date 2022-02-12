@@ -249,8 +249,13 @@ class Device_t
 	//	without recreating device
 	InitLayer(RenderContext)
 	{
+		const Options = {};
+		//	scale down frame buffer size to debug frag vs vert bound
+		Options.framebufferScaleFactor = 1.0;
+		Options.antialias = true;
+		
 		const OpenglContext = this.RenderContext.GetGlContext();
-		this.Layer = new PlatformXRWebGLLayer(this.Session, OpenglContext);
+		this.Layer = new PlatformXRWebGLLayer( this.Session, OpenglContext, Options );
 		this.Session.updateRenderState({ baseLayer: this.Layer });
 	}
 	
