@@ -100,12 +100,13 @@ class TextEncoderReplacement
 
 let TextEncoder_t = this.TextEncoder || TextEncoderReplacement;
 */
+
 export function StringToBytes(Str,AsArrayBuffer=false)
 {
 	//	https://stackoverflow.com/questions/6965107/converting-between-strings-and-arraybuffers
-	if ( this.TextEncoder !== undefined )
+	if ( TextEncoder !== undefined )
 	{
-		const Encoder = new this.TextEncoder("utf-8");
+		const Encoder = new TextEncoder("utf-8");
 		const Bytes = Encoder.encode(Str);
 		return Bytes;
 	}
@@ -255,6 +256,109 @@ export function JoinTypedArrays(Arrays,DeprecatedSecondArray)
 	}
 	return NewArray;
 }
+
+
+
+//	array of chunks to avoid joining typed arrays, with
+//	a handy function to grab a slice that could straddle
+//	chunks
+//	so when storing lots of chunks of say, a file, instead of joining them
+//	use this class, push() chunks, and grab slice()'s as needed 
+//	(instead of joining everything) 
+export class ChunkArray
+{
+	constructor()
+	{
+		this.Chunks = [];
+	}
+	
+	get length()
+	{
+		//const TotalSize = Arrays.reduce( (Accumulator,a) => Accumulator + a.length, 0 );
+
+		let Length = 0;
+		for ( let Chunk of this.Chunks )
+		{
+			Length += Chunk.length;
+		}
+		return Length;
+	}
+	
+	push(Chunk)
+	{
+		this.Chunks.push( Chunk );
+	}
+	
+	slice(Start,End)
+	{
+		if ( Start === undefined && End === undefined )
+			return JoinTypedArrays( this.Chunks );
+
+		if ( End === undefined )
+			throw `todo: handle slice() with no end, but start offset`;
+			
+		if ( Start===undefined || Start < 0 || End < 0 )
+			throw `todo: Handle negative slice(${Start},${End}) params`;
+
+		if ( this.Chunks.length == 0 )
+		{
+			throw `May need to handle this more gracefully... what do we return when no chunks?`;
+			return null;
+		}
+
+		const SliceLength = End-Start;
+		const a = this.Chunks[0];
+		const Constructor = a.constructor;
+		const NewArray = new Constructor(SliceLength);
+		
+		const ChunksToCopy = [];
+		
+		let Position = 0;
+		for ( let TheArray of this.Chunks )
+		{
+			const NameA = TheArray.constructor.name;
+			const NameB = Constructor.name;
+			if ( TheArray.constructor != Constructor )
+				throw `Cannot join to typedarrays of different types (${NameA} + ${NameB})`;
+		
+			//	dont need any of this array
+			let ArrayStart = Position;
+			let ArrayEnd = ArrayStart + TheArray.length;
+			if ( End < ArrayStart || Start >= ArrayEnd )
+			{
+				Position += TheArray.length;
+				continue;
+			}
+			
+			//	whole of this array goes in
+			if ( Start <= ArrayStart && End >= ArrayEnd )
+			{
+				ChunksToCopy.push( TheArray );
+				Position += TheArray.length;
+				continue;
+			}
+			
+			//	only part of this array
+			let StartOfThisArray = Math.max( 0, Start - ArrayStart );
+			let EndOfThisArray = Math.min( End, ArrayEnd );
+			//	make relative to this array for slicing
+			StartOfThisArray = Math.max( 0, StartOfThisArray );
+			EndOfThisArray = EndOfThisArray - ArrayStart;
+
+			//	gr: instead of slice, we should be able to make a new bufferview?
+			const Part = TheArray.slice( StartOfThisArray, EndOfThisArray );
+			ChunksToCopy.push( Part );
+			
+			Position += TheArray.length;
+		}
+		
+		const Slice = JoinTypedArrays(ChunksToCopy);
+		if ( Slice.length != SliceLength )
+			throw `calculated sub chunks wrong`;
+		return Slice;
+	}
+}
+
 
 
 //	create a promise function with the Resolve & Reject functions attached so we can call them

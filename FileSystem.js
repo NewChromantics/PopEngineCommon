@@ -153,7 +153,7 @@ async function FetchArrayBufferStream(Url,OnProgress)
 	let KnownSize = parseInt(Fetched.headers.get("content-length"));
 	KnownSize = isNaN(KnownSize) ? -1 : KnownSize;
 	const KnownSizeKb = (KnownSize/1024).toFixed(2);
-	//	gr: maybe fture speed up with our own buffer
+	//	gr: maybe future speed up with our own buffer
 	//		https://developer.mozilla.org/en-US/docs/Web/API/ReadableStreamBYOBReader but currently 0 support
 	const Reader = Fetched.body.getReader();
 

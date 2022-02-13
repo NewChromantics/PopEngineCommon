@@ -1,5 +1,5 @@
 import {Debug,Warning,Yield} from './PopWebApiCore.js'
-import {IsTypedArray,JoinTypedArrays,BytesToString,StringToBytes,BytesToBigInt} from './PopApi.js'
+import {ChunkArray,IsTypedArray,JoinTypedArrays,BytesToString,StringToBytes,BytesToBigInt} from './PopApi.js'
 
 //	when we push this data to a decoder, it signals no more data coming
 export const EndOfFileMarker = 'eof';
@@ -24,7 +24,12 @@ export class DataReader
 		
 		this.ExternalFilePosition = ExternalFilePosition;
 		this.FilePosition = InitialPositon;
-		this.FileBytes = Data;
+		
+		//	using chunk array for slightly slower access (of big data)
+		//	but faster than doing lots of unncessary JoinTypedArray calls
+		this.FileBytes = new ChunkArray();
+		this.FileBytes.push(Data);
+		
 		this.WaitForMoreData = WaitForMoreData;	//	async func that returns more data
 	}
 	
@@ -49,7 +54,9 @@ export class DataReader
 					throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
 			
 			//Pop.Debug(`New bytes x${NewBytes.length}`);
-			this.FileBytes = JoinTypedArrays([this.FileBytes,NewBytes]);
+			//this.FileBytes = JoinTypedArrays([this.FileBytes,NewBytes]);
+			this.FileBytes.push(NewBytes);
+			
 			//Pop.Debug(`File size now x${this.FileBytes.length}`);
 		}
 		const Bytes = this.FileBytes.slice( FilePosition, EndPosition );
@@ -142,7 +149,8 @@ export class DataReader
 					throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
 			
 				//Pop.Debug(`New bytes x${NewBytes.length}`);
-				this.FileBytes = JoinTypedArrays([this.FileBytes,NewBytes]);
+				//this.FileBytes = JoinTypedArrays([this.FileBytes,NewBytes]);
+				this.FileBytes.push(NewBytes);
 				//Pop.Debug(`File size now x${this.FileBytes.length}`);
 			}
 			
