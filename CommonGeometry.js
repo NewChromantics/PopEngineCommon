@@ -1,3 +1,5 @@
+import {JoinTypedArrays} from './PopApi.js'
+
 const Default = `Common geometry generating functions`;
 export default Default;
 
@@ -122,4 +124,25 @@ export function CreateBlitQuadGeometry()
 	const Geometry = {};
 	Geometry.TexCoord = TexCoord;
 	return Geometry;
+}
+
+export function MergeGeometry(Geometrys)
+{
+	if ( Geometrys.length <= 1 )
+		return Geometrys[0];
+		
+	//	todo: need to verify matching attribs etc
+	const Attribs = Object.keys(Geometrys[0]);
+	
+	const MergedGeometry = {};
+	
+	for ( let Attrib of Attribs )
+	{
+		//	todo: check .Size is same all
+		const AttribDatas = Geometrys.map( g => g[Attrib].Data );
+		MergedGeometry[Attrib] = {};
+		MergedGeometry[Attrib].Data = JoinTypedArrays(AttribDatas);
+		MergedGeometry[Attrib].Size = Geometrys[0][Attrib].Size;
+	}
+	return MergedGeometry;
 }
