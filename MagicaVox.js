@@ -93,12 +93,12 @@ async function ParseXyzi(Xyzi,Size,Palette)
 	
 	const Reader = new ChunkReader(Xyzi.Content);
 	const VoxelCount = await Reader.Read32(LittleEndian);
+	
+	//	much faster to only async once
+	const xyzpals = await Reader.ReadBytes( VoxelCount * 4 );
 	for ( let i=0;	i<VoxelCount;	i++ )
 	{
-		let x = await Reader.Read8();
-		let y = await Reader.Read8();
-		let z = await Reader.Read8();
-		const Pal = await Reader.Read8();
+		let [x,y,z,Pal] = xyzpals.slice( i*4, i*4+4 );
 		const Rgba = Rgba32ToFloat(Palette[Pal]);
 		
 		let xyz = [x,y,z];
