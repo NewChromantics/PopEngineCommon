@@ -115,6 +115,7 @@ async function ParseXyzi(Xyzi,Size,Palette)
 		Geometry.Positions.push(xyz);
 		Geometry.Colours.push(Rgba);
 	}
+	
 	return Geometry;
 }
 
@@ -132,7 +133,7 @@ async function ParsePalette(PaletteChunk)
 
 
 //	https://github.com/ephtracy/voxel-model/blob/master/MagicaVoxel-file-format-vox.txt
-export default async function ParseVox(Contents,OnDebug)
+export default async function ParseVox(Contents,OnGeometry,OnDebug)
 {
 	OnDebug = OnDebug || function(){};
 	
@@ -162,12 +163,12 @@ export default async function ParseVox(Contents,OnDebug)
 	if ( Main.Id != 'MAIN' )
 		throw `Main chunk isn't MAIN; ${RootChunkNames}`;
 	
-	const Geometrys = [];
-	
 	let Palette = DefaultPalette;
 	let PaletteChunk = Main.GetChild('RGBA');
 	if ( PaletteChunk )
 		Palette = await ParsePalette(PaletteChunk);
+	
+		
 	
 	//	expecting SIZE followed by XYZI (could be multiple for multiple models)
 	let LastSize = null;
@@ -179,12 +180,10 @@ export default async function ParseVox(Contents,OnDebug)
 		if ( Child.Id == 'XYZI' )
 		{
 			const Geo = await ParseXyzi( Child, LastSize, Palette );
-			Geometrys.push(Geo);
+			OnGeometry(Geo);
 			LastSize = null;
 			continue;
 		}
 	}
 	
-	//console.log(RootChunks);
-	return Geometrys[0];
 }
