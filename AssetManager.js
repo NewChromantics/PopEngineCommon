@@ -62,6 +62,14 @@ function OnAssetChanged()
 	
 }
 
+export function HasFetchFunction(Name)
+{
+	if ( PopAssetManager.AssetFetchAsyncFunctions.hasOwnProperty(Name) )
+		return true;
+	if ( PopAssetManager.AssetFetchFunctions.hasOwnProperty(Name) )
+		return true;
+	return false;
+}
 
 export function GetAsset(Name,RenderContext)
 {
@@ -83,9 +91,8 @@ export function GetAsset(Name,RenderContext)
 	if ( ContextAssets.hasOwnProperty(Name) )
 		return ContextAssets[Name];
 	
-	if ( !AssetFetchAsyncFunctions.hasOwnProperty(Name) )
-		if ( !AssetFetchFunctions.hasOwnProperty(Name) )
-			throw `No known asset named ${Name} registered`;
+	if ( !HasFetchFunction(Name) )
+		throw `No known asset named ${Name} registered`;
 	
 	Pop.Debug(`Generating asset ${Name} on context ${ContextKey}...`);
 	const Timer_Start = Pop.GetTimeNowMs();
