@@ -8,13 +8,14 @@ export function CreateCubeGeometry(Min=-1,Max=1,MinY=undefined,MaxY=undefined)
 {
 	let PositionData = [];
 	let UvData = [];
+	let NormalData = [];
 	
 	if ( MinY === undefined )	
 		MinY = Min;
 	if ( MaxY === undefined )	
 		MaxY = Max;
 	
-	let AddTriangle = function(a,b,c)
+	let AddTriangle = function(a,b,c,Normal)
 	{
 		PositionData.push( ...a.slice(0,3) );
 		PositionData.push( ...b.slice(0,3) );
@@ -22,6 +23,9 @@ export function CreateCubeGeometry(Min=-1,Max=1,MinY=undefined,MaxY=undefined)
 		UvData.push( ...a.slice(3,5) );
 		UvData.push( ...b.slice(3,5) );
 		UvData.push( ...c.slice(3,5) );
+		NormalData.push( ...Normal );
+		NormalData.push( ...Normal );
+		NormalData.push( ...Normal );
 	}
 	
 	//	top left near bottom right far
@@ -36,25 +40,25 @@ export function CreateCubeGeometry(Min=-1,Max=1,MinY=undefined,MaxY=undefined)
 	
 	
 	//	near
-	AddTriangle( tln, trn, brn );
-	AddTriangle( brn, bln, tln );
+	AddTriangle( tln, trn, brn,	[0,0,-1] );
+	AddTriangle( brn, bln, tln,	[0,0,-1] );
 	//	far
-	AddTriangle( trf, tlf, blf );
-	AddTriangle( blf, brf, trf );
+	AddTriangle( trf, tlf, blf,	[0,0,1] );
+	AddTriangle( blf, brf, trf,	[0,0,1] );
 	
 	//	top
-	AddTriangle( tln, tlf, trf );
-	AddTriangle( trf, trn, tln );
+	AddTriangle( tln, tlf, trf,	[0,-1,0] );
+	AddTriangle( trf, trn, tln,	[0,-1,0] );
 	//	bottom
-	AddTriangle( bln, blf, brf );
-	AddTriangle( brf, brn, bln );
+	AddTriangle( bln, blf, brf,	[0,1,0] );
+	AddTriangle( brf, brn, bln,	[0,1,0] );
 	
 	//	left
-	AddTriangle( tlf, tln, bln );
-	AddTriangle( bln, blf, tlf );
+	AddTriangle( tlf, tln, bln,	[-1,0,0] );
+	AddTriangle( bln, blf, tlf,	[-1,0,0] );
 	//	right
-	AddTriangle( trn, trf, brf );
-	AddTriangle( brf, brn, trn );
+	AddTriangle( trn, trf, brf,	[1,0,0] );
+	AddTriangle( brf, brn, trn,	[1,0,0] );
 	
 	const Attributes = {};
 	Attributes.LocalPosition = {};
@@ -64,6 +68,10 @@ export function CreateCubeGeometry(Min=-1,Max=1,MinY=undefined,MaxY=undefined)
 	Attributes.LocalUv = {};
 	Attributes.LocalUv.Size = 2;
 	Attributes.LocalUv.Data = new Float32Array(UvData);
+	
+	Attributes.LocalNormal = {};
+	Attributes.LocalNormal.Size = 3;
+	Attributes.LocalNormal.Data = new Float32Array(NormalData);
 	
 	return Attributes;
 }
