@@ -590,8 +590,8 @@ class Device_t
 					//	only applies to device target
 					if ( Command[1] != null )
 						return Command;
-					//	set arg2 (clear colour) alpha, to zero
-					Command[2][3] = 0;
+					//	set arg2 (clear colour) to null to not clear
+					Command[2] = null;
 					return Command;
 				}
 				RenderCommands = RenderCommands.map( SetRenderTargetCommandClearTransparent );

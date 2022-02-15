@@ -1203,8 +1203,11 @@ export class Context
 		const NewPass = function(SetRenderTargetCommand,ClearColour,ReadBack)
 		{
 			//	zero alpha = no clear so we just load old contents
-			if ( ClearColour && ClearColour[3] <= 0.0 )
-				ClearColour = null;
+			//		so alpha needs to be null
+			//	gr: we sometimes WANT zero alpha (eg, clearing a texture to 0,0,0,0)
+			//	so explicitly needs to be missing clear colour to not clear
+			//if ( ClearColour && ClearColour[3] <= 0.0 )
+			//	ClearColour = null;
 				
 			EndPass();
 			let Target;	
