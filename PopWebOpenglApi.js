@@ -1237,6 +1237,11 @@ export class Context
 			{
 				PassRenderTarget.ClearColour(...ClearColour);
 			}
+			else // always clear depth... make this an option!
+			{
+				PassRenderTarget.ClearDepth();
+			}
+			
 			PassRenderTarget.ResetState();
 			//PassRenderTarget.SetBlendModeAlpha();
 		}.bind(this);
