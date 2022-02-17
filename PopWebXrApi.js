@@ -363,6 +363,23 @@ class Device_t
 		return this.DepthImages[Name];
 	}
 	
+	GetCameraName(View)
+	{
+		//	different names from different browsers
+		//	webxr spec is expecting 'left', 'right' and 'none' for mono
+		if (typeof View.eye == 'string')
+			return View.eye.toLowerCase();
+		
+		if (typeof View.eye == 'number')
+		{
+			const EyeNames = ['left', 'right'];
+			return EyeNames[View.eye];
+		}
+
+		Pop.Debug(`Improperly handled View.eye=${View.eye}(${typeof View.eye})`);
+		return View.eye;
+	}
+	
 	OnFrame(TimeMs,Frame)
 	{
 		this.FrameCounter.Add();
@@ -397,8 +414,86 @@ class Device_t
 			return;
 		}
 		
-		const IsOriginFloor = IsReferenceSpaceOriginFloor(this.ReferenceSpace.Type);
+		this.FrameUpdate_Input(Frame,Pose);
 		
+		if ( Frame.getImageTrackingResults )
+			this.FrameUpdate_ImageTracking(Frame,Pose);
+		
+		//	extract depth textures
+		//	https://immersive-web.github.io/depth-sensing/
+		if ( Frame.getDepthInformation  )
+			this.FrameUpdate_Depth(Frame,Pose);
+		
+		for ( let View of Pose.views )
+		{
+			this.FrameUpdate_RenderView( Frame, Pose, View );
+		}
+	}
+	
+	FrameUpdate_ImageTracking(Frame,Pose)
+	{
+		//	gather results and put in promise queue... or synchronous callback?
+		const TrackingResults = Frame.getImageTrackingResults();
+		for ( let TrackingResult of TrackingResults )
+		{
+			//	todo: map to constructor key
+			const ImageIndex = TrackingResult.index;
+			
+			const ImagePose = Frame.getPose(TrackingResult.imageSpace, this.ReferenceSpace);
+			const ImageState = TrackingResult.trackingState;
+			// if (state == "tracked") {
+			///} else if (state == "emulated") {
+		}
+	}
+	
+	FrameUpdate_Depth(Frame,Pose)
+	{
+		//	on quest, the function exists but it throws an exception as its unsupported, 
+		//	we can assume its the same for all views really.
+		//	todo: better way to catch lack of support and skip the exception?
+		if ( this.DepthInfoError )
+			return;
+
+		try
+		{
+			for ( let View of Pose.views )
+			{
+				const DepthInfo = Frame.getDepthInformation(View);
+				if ( !DepthInfo )
+					continue;
+					
+				const NormalDepthToViewDepthTransform = DepthInfo.normDepthBufferFromNormView.matrix;
+					
+				const CameraName = this.GetCameraName(View);
+				const DepthImage = this.GetDepthImage(CameraName);
+				
+				//	store meta on image (should be camera?)
+				DepthImage.NormalDepthToViewDepthTransform = NormalDepthToViewDepthTransform;
+				
+				//	gr: maybe a bit of a waste to do any cpu conversion when we can do it on gpu
+				//	gr: only needed if data isnt float				
+				//	todo: get .normDepthBufferFromNormView to get projection matrix
+				let Depth16 = new Uint16Array( DepthInfo.data );
+				let Depthf = new Float32Array( Depth16 );
+				//let Depthf = new Float32Array( DepthInfo.width*DepthInfo.height );
+				//DepthImage.WritePixels( DepthInfo.width, DepthInfo.height, Depth16, 'R16' );
+				DepthImage.WritePixels( DepthInfo.width, DepthInfo.height, Depthf, 'Float1' );
+				
+				
+				//const NonZeros = new Uint16Array(DepthInfo.data).filter( x => x!=0 );
+				//if ( NonZeros.length )
+				//	console.log(`DepthInfo with non zero`,DepthInfo);
+			}
+		}
+		catch(e)
+		{
+			console.error(`Error with getDepthInformation`,e);
+			this.DepthInfoError = e;
+		}
+	}
+	
+	FrameUpdate_Input(Frame,Pose)
+	{
 		//	handle inputs
 		//	gr: we're propogating like a mousebutton for integration, but our Openvr api
 		//		has keyframed input structs per-controller/pose
@@ -467,156 +562,135 @@ class Device_t
 		const MissingInputNames = OldInputNames.filter( Name => !UpdatedInputNames.some( uin => uin == Name) );
 		MissingInputNames.forEach( Name => UpdateInputNode(null,Name,[]) );
 		
-		//	or this.Layer
+	}
+	
+	FrameUpdate_RenderView(Frame,Pose,View)
+	{
 		const glLayer = this.Session.renderState.baseLayer;
 		
-		function GetCameraName(View)
-		{
-			//	different names from different browsers
-			//	webxr spec is expecting 'left', 'right' and 'none' for mono
-			if (typeof View.eye == 'string')
-				return View.eye.toLowerCase();
-			
-			if (typeof View.eye == 'number')
-			{
-				const EyeNames = ['left', 'right'];
-				return EyeNames[View.eye];
-			}
+		//	generate render target
+		const ViewPort = glLayer.getViewport(View);
+		const RenderTarget = new RenderTargetFrameBufferProxy( glLayer.framebuffer, ViewPort, this.RenderContext );
 
-			Pop.Debug(`Improperly handled View.eye=${View.eye}(${typeof View.eye})`);
-			return View.eye;
+		//	generate camera
+		const CameraName = this.GetCameraName(View);
+		const Camera = this.GetCamera(CameraName);
+		
+		//	maybe need a better place to propogate this info (along with chaperone/bounds)
+		//	but for now renderer just needs to know (but input doesnt know!)
+		Camera.IsOriginFloor = IsReferenceSpaceOriginFloor(this.ReferenceSpace.Type);
+		
+		//	AR (and additive, eg. hololens) need to be transparent
+		const TransparentClear = IsTransparentBlendMode(Frame.session.environmentBlendMode);
+
+		//	use the render params on our camera
+		if ( Frame.session.renderState )
+		{
+			Camera.NearDistance = Frame.session.renderState.depthNear || Camera.NearDistance;
+			Camera.FarDistance = Frame.session.renderState.depthFar || Camera.FarDistance;
+			Camera.FovVertical = Frame.session.renderState.inlineVerticalFieldOfView || Camera.FovVertical;
 		}
 		
-		//	extract depth textures
-		//	https://immersive-web.github.io/depth-sensing/
-		if ( Frame.getDepthInformation && !this.DepthInfoError )
-		{
-			//	on quest, the function exists but it throws an exception as its unsupported, 
-			//	we can assume its the same for all views really.
-			//	todo: better way to catch lack of support and skip the exception?
-			try
-			{
-				for ( let View of Pose.views )
-				{
-					const DepthInfo = Frame.getDepthInformation(View);
-					if ( !DepthInfo )
-						continue;
-						
-					const NormalDepthToViewDepthTransform = DepthInfo.normDepthBufferFromNormView.matrix;
-						
-					const CameraName = GetCameraName(View);
-					const DepthImage = this.GetDepthImage(CameraName);
-					
-					//	store meta on image (should be camera?)
-					DepthImage.NormalDepthToViewDepthTransform = NormalDepthToViewDepthTransform;
-					
-					//	gr: maybe a bit of a waste to do any cpu conversion when we can do it on gpu
-					//	gr: only needed if data isnt float				
-					//	todo: get .normDepthBufferFromNormView to get projection matrix
-					let Depth16 = new Uint16Array( DepthInfo.data );
-					let Depthf = new Float32Array( Depth16 );
-					//let Depthf = new Float32Array( DepthInfo.width*DepthInfo.height );
-					//DepthImage.WritePixels( DepthInfo.width, DepthInfo.height, Depth16, 'R16' );
-					DepthImage.WritePixels( DepthInfo.width, DepthInfo.height, Depthf, 'Float1' );
-					
-					/*
-					const NonZeros = new Uint16Array(DepthInfo.data).filter( x => x!=0 );
-					if ( NonZeros.length )
-						console.log(`DepthInfo with non zero`,DepthInfo);
-					*/
-				}
-			}
-			catch(e)
-			{
-				console.error(`Error with getDepthInformation`,e);
-				this.DepthInfoError = e;
-			}
-		}
+		//	update camera
+		//	view has an XRRigidTransform (quest)
+		//	https://developer.mozilla.org/en-US/docs/Web/API/XRRigidTransform
+		Camera.Transform = View.transform;	//	stored for debugging
 		
+		//	write position (w should always be 0
+		Camera.Position = [View.transform.position.x,View.transform.position.y,View.transform.position.z];
 		
-		const RenderView = function(View)
+		//	get rotation but remove the translation (so we use .Position)
+		//	we also want the inverse for our camera-local purposes
+		Camera.Rotation4x4 = View.transform.inverse.matrix;
+		SetMatrixTranslation(Camera.Rotation4x4,0,0,0,1);
+		
+		Camera.ProjectionMatrix = View.projectionMatrix;
+		
+		Camera.DepthImage = this.GetDepthImage(CameraName);
+		
+		//	would be nice if we could have some generic camera uniforms and only generate one set of commands?
+		let RenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
+		
+		//	force any clear-colours of null (device) render target to have alpha=0 for AR/transparent devices
+		//	gr: should we do this before, or after parsing...
+		if ( TransparentClear )
 		{
-			//	generate render target
-			const ViewPort = glLayer.getViewport(View);
-			const RenderTarget = new RenderTargetFrameBufferProxy( glLayer.framebuffer, ViewPort, this.RenderContext );
-
-			//	generate camera
-			const CameraName = GetCameraName(View);
-			const Camera = this.GetCamera(CameraName);
-			
-			//	maybe need a better place to propogate this info (along with chaperone/bounds)
-			//	but for now renderer just needs to know (but input doesnt know!)
-			Camera.IsOriginFloor = IsOriginFloor;
-			
-			//	AR (and additive, eg. hololens) need to be transparent
-			const TransparentClear = IsTransparentBlendMode(Frame.session.environmentBlendMode);
-
-			//	use the render params on our camera
-			if ( Frame.session.renderState )
+			function SetRenderTargetCommandClearTransparent(Command)
 			{
-				Camera.NearDistance = Frame.session.renderState.depthNear || Camera.NearDistance;
-				Camera.FarDistance = Frame.session.renderState.depthFar || Camera.FarDistance;
-				Camera.FovVertical = Frame.session.renderState.inlineVerticalFieldOfView || Camera.FovVertical;
-			}
-			
-			//	update camera
-			//	view has an XRRigidTransform (quest)
-			//	https://developer.mozilla.org/en-US/docs/Web/API/XRRigidTransform
-			Camera.Transform = View.transform;	//	stored for debugging
-			
-			//	write position (w should always be 0
-			Camera.Position = [View.transform.position.x,View.transform.position.y,View.transform.position.z];
-			
-			//	get rotation but remove the translation (so we use .Position)
-			//	we also want the inverse for our camera-local purposes
-			Camera.Rotation4x4 = View.transform.inverse.matrix;
-			SetMatrixTranslation(Camera.Rotation4x4,0,0,0,1);
-			
-			Camera.ProjectionMatrix = View.projectionMatrix;
-			
-			Camera.DepthImage = this.GetDepthImage(CameraName);
-			
-			//	would be nice if we could have some generic camera uniforms and only generate one set of commands?
-			let RenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
-			
-			//	force any clear-colours of null (device) render target to have alpha=0 for AR/transparent devices
-			//	gr: should we do this before, or after parsing...
-			if ( TransparentClear )
-			{
-				function SetRenderTargetCommandClearTransparent(Command)
-				{
-					if ( Command[0] != 'SetRenderTarget' )
-						return Command;
-					//	only applies to device target
-					if ( Command[1] != null )
-						return Command;
-					//	set arg2 (clear colour) to null to not clear
-					Command[2] = null;
+				if ( Command[0] != 'SetRenderTarget' )
 					return Command;
-				}
-				RenderCommands = RenderCommands.map( SetRenderTargetCommandClearTransparent );
+				//	only applies to device target
+				if ( Command[1] != null )
+					return Command;
+				//	set arg2 (clear colour) to null to not clear
+				Command[2] = null;
+				return Command;
 			}
-			
-			//	execute commands
-			RenderCommands = new RenderCommands_t( RenderCommands );
-			this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
+			RenderCommands = RenderCommands.map( SetRenderTargetCommandClearTransparent );
 		}
-		Pose.views.forEach( RenderView.bind(this) );
+		
+		//	execute commands
+		RenderCommands = new RenderCommands_t( RenderCommands );
+		this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
 	}
+	
 	
 	Destroy()
 	{
 		this.Session.end();
+		this.Session = null;
 	}
 	
 	OnMouseEvent_Default(xyz,Button,Controller,Transform)
 	{
 		Pop.Debug(`OnXRInput(${[...arguments]})`);
 	}
+		
+	async WaitForTrackedImage()
+	{
+		//	todo: use promise queue & update from frame update
+		
+		if ( !this.Session.getTrackedImageScores )
+			throw `This XR session doesn't support tracked images`;
+		
+		while ( this.Session )
+		{
+			//	need to decide if we want to look for this image... every frame? (if its a moving target)
+			//	or just once like an anchor.
+			let TrackingScores = await this.Session.getTrackedImageScores();
+			
+			//	https://github.com/immersive-web/marker-tracking/blob/main/explainer.md
+			//	"in the same order as the trackedImages"
+			function CompareScores(a,b)
+			{
+				if ( a > b )	return -1;
+				if ( a < b )	return 1;
+				return 0;
+			}
+			
+			TrackingScores = Array.from(TrackingScores);
+			TrackingScores = TrackingScores.filter( Score => Score != 'untrackable' );
+			TrackingScores.sort( CompareScores );
+			
+			//	todo: handle multiple results, by calling getTrackedImageScores in another thread
+			//		put all results into a promisequeue, and make this function pick off from there
+			if ( TrackingScores.length == 0 )
+			{
+				await Pop.Yield(500);
+				continue;
+			}
+			return TrackingScores[0];
+		}
+		
+		throw `XR Session closed. No more tracked images`;
+	}
 }
 
 
-export async function CreateDevice(RenderContext,GetRenderCommands,OnWaitForCallback)
+//	TrackImages is a dictionary of 
+//	[ImageName] = { Image:PopImage, WidthInMetres:Metres }
+//	to supply to image tracking in case its availible
+export async function CreateDevice(RenderContext,GetRenderCommands,OnWaitForCallback,TrackImages=null)
 {
 	if ( !OnWaitForCallback )
 		throw `CreateDevice() requires OnUserCallback callback for 3rd argument`;
@@ -632,6 +706,28 @@ export async function CreateDevice(RenderContext,GetRenderCommands,OnWaitForCall
 		await Devices[0].WaitForEnd();
 
 	const PlatformXr = GetPlatformXr();
+
+	if ( TrackImages )
+	{
+		async function GetWebXrTrackImageMeta(TrackImage)
+		{
+			const TrackMeta = {};
+			TrackMeta.image = await TrackImage.Image.GetImageBitmap();
+			TrackMeta.widthInMeters = TrackImage.WidthMetres;
+			return TrackMeta;
+		}
+
+		//	convert TrackImages into webxr compatible meta;
+		//	we do this early as it needs to be async and we need to do it before the synchornous callback
+		//	todo: save keys so we can refer back to them later?
+		const TrackImagesMeta = [];
+		for ( let TrackImage of Object.values(TrackImages) )
+		{
+			const Meta = await GetWebXrTrackImageMeta(TrackImage);
+			TrackImagesMeta.push(Meta);
+		}
+		TrackImages = TrackImagesMeta;
+	}
 
 	//	loop until we get a session
 	while(true)
@@ -694,6 +790,16 @@ export async function CreateDevice(RenderContext,GetRenderCommands,OnWaitForCall
 					//	https://immersive-web.github.io/raw-camera-access/
 					Options.optionalFeatures.push('camera-access');
 					
+					
+					if ( TrackImages )
+					{
+						//	gr: if provided, should we force/.requiredFeatures the image-tracking,
+						//		or get support-info after.
+						//		client would have to keep calling CreateDevice and look for specific exceptions?
+						//	our API kinda wants to be as easy as possible from outside...
+					
+						Options.trackedImages = TrackImages;
+					}
 					
 					const RequestSessionPromise = PlatformXr.requestSession(SessionMode,Options);
 					RequestSessionPromise.then( Session => SessionPromise.Resolve(Session) ).catch( e => SessionPromise.Reject(e) );
