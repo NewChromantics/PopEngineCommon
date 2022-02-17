@@ -755,5 +755,19 @@ export default class PopImage
 		const Pixels = await PngBytesToPixels(PngBytes);
 		this.WritePixels( Pixels.Width, Pixels.Height, Pixels.Buffer, Pixels.Format );
 	}
-	
+
+	//	web api specific
+	async GetImageBitmap()
+	{
+		if ( !this.Pixels )
+			throw `Cannot create ImageBitmap from null pixels`;
+		
+		if ( IsHtmlElementPixels(this.Pixels) )
+		{
+			const ImageBitmap = await createImageBitmap(this.Pixels);
+			return ImageBitmap;
+		}
+		
+		throw `todo: create html ImageBitmap from ${typeof this.Pixels} pixels`;
+	}
 }
