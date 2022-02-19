@@ -64,3 +64,25 @@ export function IsFloatFormat(Format)
 			return false;
 	}
 }
+
+export function GetFormatElementSize(PixelFormat)
+{
+	switch(PixelFormat)
+	{
+		//	bytes
+		case 'ChromaU':
+		case 'ChromaV':
+		case 'Greyscale':
+		case 'RGBA':
+		case 'RGB':
+		case 'Depth16mm':	//	two channel x 1byte
+			return 1;
+			
+		case 'Float1':
+		case 'Float2':
+		case 'Float3':
+		case 'Float4':
+			return 4;
+	}
+	throw `unhandled GetFormatElementSize(${PixelFormat})`;
+}
