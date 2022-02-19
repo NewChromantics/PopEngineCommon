@@ -15,50 +15,52 @@ export function CreateCubeGeometry(Min=-1,Max=1,MinY=undefined,MaxY=undefined)
 	if ( MaxY === undefined )	
 		MaxY = Max;
 	
-	let AddTriangle = function(a,b,c,Normal)
+	let AddTriangle = function(a,b,c,Normal,Uvs)
 	{
 		PositionData.push( ...a.slice(0,3) );
 		PositionData.push( ...b.slice(0,3) );
 		PositionData.push( ...c.slice(0,3) );
-		UvData.push( ...a.slice(3,5) );
-		UvData.push( ...b.slice(3,5) );
-		UvData.push( ...c.slice(3,5) );
+		UvData.push( ...Uvs[0] );
+		UvData.push( ...Uvs[1] );
+		UvData.push( ...Uvs[2] );
 		NormalData.push( ...Normal );
 		NormalData.push( ...Normal );
 		NormalData.push( ...Normal );
 	}
 	
 	//	top left near bottom right far
-	let tln = [Min,MinY,Min,		0,0];
-	let trn = [Max,MinY,Min,		1,0];
-	let brn = [Max,MaxY,Min,		1,1];
-	let bln = [Min,MaxY,Min,		0,1];
-	let tlf = [Min,MinY,Max,		0,0];
-	let trf = [Max,MinY,Max,		1,0];
-	let brf = [Max,MaxY,Max,		1,1];
-	let blf = [Min,MaxY,Max,		0,1];
+	let tln = [Min,MinY,Min];
+	let trn = [Max,MinY,Min];
+	let brn = [Max,MaxY,Min];
+	let bln = [Min,MaxY,Min];
+	let tlf = [Min,MinY,Max];
+	let trf = [Max,MinY,Max];
+	let brf = [Max,MaxY,Max];
+	let blf = [Min,MaxY,Max];
 	
+	const UvFirstTriangle = [ [0,0], [1,0], [1,1] ];
+	const UvSecondTriangle = [ [1,1], [0,1], [0,0] ];
 	
 	//	near
-	AddTriangle( tln, trn, brn,	[0,0,-1] );
-	AddTriangle( brn, bln, tln,	[0,0,-1] );
+	AddTriangle( tln, trn, brn,	[0,0,-1], UvFirstTriangle );
+	AddTriangle( brn, bln, tln,	[0,0,-1], UvSecondTriangle );
 	//	far
-	AddTriangle( trf, tlf, blf,	[0,0,1] );
-	AddTriangle( blf, brf, trf,	[0,0,1] );
+	AddTriangle( trf, tlf, blf,	[0,0,1], UvFirstTriangle );
+	AddTriangle( blf, brf, trf,	[0,0,1], UvSecondTriangle );
 	
 	//	top
-	AddTriangle( tln, tlf, trf,	[0,-1,0] );
-	AddTriangle( trf, trn, tln,	[0,-1,0] );
+	AddTriangle( tln, tlf, trf,	[0,-1,0], UvFirstTriangle );
+	AddTriangle( trf, trn, tln,	[0,-1,0], UvSecondTriangle );
 	//	bottom
-	AddTriangle( bln, blf, brf,	[0,1,0] );
-	AddTriangle( brf, brn, bln,	[0,1,0] );
+	AddTriangle( bln, blf, brf,	[0,1,0], UvFirstTriangle );
+	AddTriangle( brf, brn, bln,	[0,1,0], UvSecondTriangle );
 	
 	//	left
-	AddTriangle( tlf, tln, bln,	[-1,0,0] );
-	AddTriangle( bln, blf, tlf,	[-1,0,0] );
+	AddTriangle( tlf, tln, bln,	[-1,0,0], UvFirstTriangle );
+	AddTriangle( bln, blf, tlf,	[-1,0,0], UvSecondTriangle );
 	//	right
-	AddTriangle( trn, trf, brf,	[1,0,0] );
-	AddTriangle( brf, brn, trn,	[1,0,0] );
+	AddTriangle( trn, trf, brf,	[1,0,0], UvFirstTriangle );
+	AddTriangle( brf, brn, trn,	[1,0,0], UvSecondTriangle );
 	
 	const Attributes = {};
 	Attributes.LocalPosition = {};
