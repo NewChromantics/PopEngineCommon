@@ -42,14 +42,15 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	
 	if ( OpenglContext.FloatTextureSupported )
 	{
-		if ( false && gl instanceof WebGL2RenderingContext )
+		if ( gl instanceof WebGL2RenderingContext )
 		{
 			switch ( PixelFormat )
 			{
 				case 'Float1':		return [ gl.R32F,		gl.FLOAT];
 				case 'Float2':		return [ gl.RG32F,		gl.FLOAT];
 				case 'Float3':		return [ gl.RGB32F,		gl.FLOAT];
-				case 'Float4':		return [ gl.RGBA32F,	gl.FLOAT];
+				//case 'Float4':		return [ gl.RGBA32F,	gl.FLOAT];
+				case 'Float4':		return [ gl.RGBA,	gl.FLOAT];
 			}
 		}
 		else
@@ -578,7 +579,7 @@ export default class PopImage
 		}
 		else if ( this.Pixels instanceof Float32Array && !RenderContext.FloatTextureSupported )
 		{
-			Pop.Debug("Float texture not supported, converting to 8bit");
+			Debug("Float texture not supported, converting to 8bit");
 			//	for now, convert to 8bit
 			const NewPixels = FloatToInt8Pixels( this.Pixels, this.PixelsFormat, Width, Height );
 			this.Pixels = NewPixels.Pixels;
@@ -683,11 +684,13 @@ export default class PopImage
 			//	webgl2 correction
 			if ( gl.RGBA32F !== undefined )
 			{
-				if ( this.PixelsFormat == 'Float4' )	InternalFormat = gl.RGBA32F;
+				if ( this.PixelsFormat == 'Float4' )	InternalFormat = gl.RGBA;//	gl.RGBA32F; webgl says "invalid format"
 				if ( this.PixelsFormat == 'Float3' )	InternalFormat = gl.RGB;
 				if ( this.PixelsFormat == 'Float2' )	InternalFormat = gl.LUMINANCE_ALPHA;
 				if ( this.PixelsFormat == 'Float1' )	InternalFormat = gl.LUMINANCE;
 			}
+			
+			//	In WebGL 1, this*FORMAT  must be the same as internalformat
 			
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
 
@@ -729,8 +732,8 @@ export default class PopImage
 		const RepeatMode = gl.CLAMP_TO_EDGE;
 		//const RepeatMode = gl.MIRRORED_REPEAT;
 		//	gr: check support of FloatLinearTextureSupported before allowing linear
-		const FilterMode = this.LinearFilter ? gl.LINEAR : gl.NEAREST;
-		//const FilterMode = gl.NEAREST;
+		//const FilterMode = this.LinearFilter ? gl.LINEAR : gl.NEAREST;
+		const FilterMode = gl.NEAREST;
 		
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, RepeatMode);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, RepeatMode);

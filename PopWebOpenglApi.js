@@ -8,6 +8,7 @@ import Pool from './Pool.js'
 import {IsTypedArray} from './PopApi.js'
 
 import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
+import { GetFormatElementSize,GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
 
 
 
@@ -45,7 +46,10 @@ function GetString(Context,Enum)
 	 'FRAMEBUFFER_INCOMPLETE_ATTACHMENT',
 	 'FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT',
 	 'FRAMEBUFFER_INCOMPLETE_DIMENSIONS',
-	 'FRAMEBUFFER_UNSUPPORTED'
+	 'FRAMEBUFFER_UNSUPPORTED',
+	 //	webgl2
+	 'FRAMEBUFFER_INCOMPLETE_MULTISAMPLE',
+	 'FRAMEBUFFER_INCOMPLETE_VIEW_TARGETS_OVR',
 	];
 	const EnumValues = {};
 	//	number -> string
@@ -228,6 +232,33 @@ function Pop_Opengl_SetGuiControl_SubElementStyle(Element,LeftPercent=0,RightPer
 }
 
 
+
+async function WaitForSync(Sync,Context)
+{
+	const gl = Context;
+	
+	const RecheckMs = 1000/100;
+	async function CheckSync()
+	{
+		const Flags = 0;
+		const WaitNanoSecs = 0;
+		while(true)
+		{
+			const Status = gl.clientWaitSync( Sync, Flags, WaitNanoSecs );
+			if ( Status == gl.WAIT_FAILED )
+				throw `clientWaitSync failed`;
+			if ( Result == gl.TIMEOUT_EXPIRED )
+			{
+				await Pop.Yield( RecheckMs );
+				continue;
+			}
+			//	ALREADY_SIGNALED
+			//	CONDITION_SATISFIED
+			break;
+		}
+	}
+	return CheckSync();
+}
 
 
 
@@ -838,6 +869,7 @@ export class Context
 		const Canvas = this.GetCanvasElement();
 		if ( !Canvas )
 			throw `RenderContext has no canvas`;
+		const IsWebgl2 = (ContextMode=='webgl2');
 		//this.RefreshCanvasResolution();
 		this.OnResize();
 		const Options = Object.assign({}, this.CanvasOptions);
@@ -981,6 +1013,18 @@ export class Context
 		//	gr: doesnt NEED to be enabled??
 		//EnableExtension('EXT_shader_texture_lod');
 		//EnableExtension('OES_standard_derivatives');
+		
+		if ( IsWebgl2 )
+		{
+			InitFloatTexture(gl);
+			InitFloatLinearTexture(gl);
+		}
+
+		Context.CanReadPixelsAsync = function()
+		{
+			return IsWebgl2;
+		}
+		this.CanReadPixelsAsync = Context.CanReadPixelsAsync;
 
 		return Context;
 	}
@@ -1180,10 +1224,19 @@ export class Context
 					{
 						//	todo: need to support depth textures here
 						const TargetImage0 = PassRenderTarget.ColourImages[0];
-						const ReadFormat = TargetImage0.GetFormat();
-						const Pixels = PassRenderTarget.ReadPixels(ReadFormat);
-						//	gr: need to set gl version to match pixels version here
-						TargetImage0.WritePixels(Pixels.Width,Pixels.Height,Pixels.Data,Pixels.Format);
+						if ( this.Context.CanReadPixelsAsync() )
+						{
+							//	sets up buffers and makes a promise for pixel data, 
+							//	which we'll hope has updated by the time the user wants it
+							PassRenderTarget.ReadPixelsAsync(TargetImage0);
+						}
+						else
+						{
+							const ReadFormat = TargetImage0.GetFormat();
+							const Pixels = PassRenderTarget.ReadPixels(ReadFormat);
+							//	gr: need to set gl version to match pixels version here
+							TargetImage0.WritePixels(Pixels.Width,Pixels.Height,Pixels.Data,Pixels.Format);
+						}
 					}
 					catch(e)
 					{
@@ -1953,6 +2006,66 @@ export class RenderTarget
 		
 		throw `ReadPixels() Unhandled readback format ${ReadBackFormat}`;
 	}
+	
+	ReadPixelsAsync(Image,ReadBackFormat)
+	{
+		ReadBackFormat = ReadBackFormat || Image.GetFormat();
+		
+		const gl = this.GetGlContext();
+
+		//	should we pool these buffers?
+		const ReadPixelsBuffer = gl.createBuffer();
+		
+		//	queue commands to read back
+		const x = 0;
+		const y = 0;
+		const w = Image.GetWidth();
+		const h = Image.GetHeight();
+		const Channels = GetChannelsFromPixelFormat(ReadBackFormat);
+		const PixelByteSize = Channels * GetFormatElementSize(ReadBackFormat);
+		const ImageByteSize = w * h * PixelByteSize;
+		const IsFloat = IsFloatFormat(ReadBackFormat);
+		
+		const PixelBufferFormat = IsFloat ? Float32Array : Uint8Array;
+		const PixelBuffer = new PixelBufferFormat( w * h * Channels );
+		
+		const GlFormat = gl.RGBA;
+		const GlType = IsFloat ? gl.FLOAT : gl.UNSIGNED_BYTE;
+		
+		gl.bindBuffer(gl.PIXEL_PACK_BUFFER, Image.ReadPixelsBuffer );
+		gl.bufferData(gl.PIXEL_PACK_BUFFER, PixelBuffer.byteLength, gl.STREAM_READ );
+		const Offset = 0;
+		gl.readPixels( x, y, w, h, GlFormat, GlType, Offset );
+		gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null );
+		
+		//	create a sync point so we know when readpixels commands above have completed
+		const Sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+		
+		function Cleanup()
+		{
+			gl.deleteBuffer(ReadPixelsBuffer);
+		}
+		function OnError(Error)
+		{
+			console.error(`ReadPixelsAsync error ${Error}`);
+		}
+		async function DoRead()
+		{
+			await WaitForSync(Sync,gl);
+			gl.deleteSync(Sync);
+			gl.bindBuffer(gl.PIXEL_PACK_BUFFER, ReadPixelsBuffer);
+			const SourceOffset = 0;
+			const DestinationOffset = 0;
+			const DestinationSize = PixelBuffer.byteLength;
+  			gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, SourceOffset, PixelBuffer, DestinationOffset, DestinationSize );
+  			gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  			//	todo: dont mark gl version as changed
+  			Image.WritePixels( w, h, PixelBuffer, ReadBackFormat );
+		}
+		Image.ReadPixelsBufferPromise = DoRead();
+		Image.ReadPixelsBufferPromise.finally(Cleanup);
+	}
+	
 }
 
 
