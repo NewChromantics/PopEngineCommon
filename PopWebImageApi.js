@@ -703,14 +703,10 @@ export default class PopImage
 		}
 		else if ( this.Pixels instanceof Uint32Array )
 		{
-			Pop.Debug("Image from Uint32Array",this.PixelsFormat);
-			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
-			let SourceFormat = SourceFormatTypes[0];
-			const SourceType = SourceFormatTypes[1];
-			InternalFormat = SourceFormat;
-			
-			//InternalFormat = gl.DEPTH24_STENCIL8;
-			//SourceFormat = gl.DEPTH_STENCIL;
+			//	assume 32bit RGBA
+			const SourceFormat = gl.RGBA;
+			const SourceType = gl.UNSIGNED_INT;
+			const InternalFormat = gl.RGBA32UI;
 			
 			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
 			
