@@ -1857,7 +1857,11 @@ export class RenderTarget
 				break;
 
 			case 'Add':
-				this.SetBlendModeAdd();
+				this.SetBlendModeAddByAlpha();
+				break;
+
+			case 'ExplicitAdd':
+				this.SetBlendModeExplicitAdd();
 				break;
 			}
 	}
@@ -1913,6 +1917,7 @@ export class RenderTarget
 		//GL_FUNC_ADD
 	}
 	
+	//	add based on alpha
 	SetBlendModeAdd()
 	{
 		const gl = this.GetGlContext();
@@ -1921,6 +1926,18 @@ export class RenderTarget
 		//	enable blend
 		gl.enable( gl.BLEND );
 		gl.blendFunc( gl.ONE, gl.ONE_MINUS_SRC_ALPHA );
+		gl.blendEquation( gl.FUNC_ADD );
+	}
+	
+	//	literally add rgba together
+	SetBlendModeExplicitAdd()
+	{
+		const gl = this.GetGlContext();
+		
+		//	set mode
+		//	enable blend
+		gl.enable( gl.BLEND );
+		gl.blendFunc( gl.ONE, gl.ONE );
 		gl.blendEquation( gl.FUNC_ADD );
 	}
 	
