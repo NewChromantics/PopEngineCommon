@@ -918,7 +918,7 @@ export class Context
 		CapabilityNames.forEach(GetCapability);
 		const Extensions = gl.getSupportedExtensions();
 		
-		Pop.Debug(`Created new ${ContextMode} context. Capabilities ${JSON.stringify(Capabilities)}; Extensions ${Extensions}`);
+		Pop.Debug(`Created new ${ContextMode} context. Capabilities ${JSON.stringify(Capabilities)}; Extensions ${Extensions.join('\n')}`);
 		
 		
 		//	handle losing context
