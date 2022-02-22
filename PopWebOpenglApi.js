@@ -869,7 +869,7 @@ export class Context
 		const Canvas = this.GetCanvasElement();
 		if ( !Canvas )
 			throw `RenderContext has no canvas`;
-		const IsWebgl2 = (ContextMode=='webgl2');
+
 		//this.RefreshCanvasResolution();
 		this.OnResize();
 		const Options = Object.assign({}, this.CanvasOptions);
@@ -881,6 +881,7 @@ export class Context
 		if (Options.premultipliedAlpha == undefined) Options.premultipliedAlpha = false;
 		if (Options.alpha == undefined) Options.alpha = true;	//	have alpha buffer
 		const Context = Canvas.getContext( ContextMode, Options );
+		const IsWebgl2 = ( Context instanceof WebGL2RenderingContext );
 		
 		if ( !Context )
 			throw "Failed to initialise " + ContextMode;
@@ -997,6 +998,7 @@ export class Context
 		
 		if ( AllowFloatTextures )
 		{
+			EnableExtension('EXT_color_buffer_float',InitFloatTexture);
 			EnableExtension('OES_texture_float',InitFloatTexture);
 			EnableExtension('OES_texture_float_linear',InitFloatLinearTexture);
 		}
@@ -1014,12 +1016,7 @@ export class Context
 		//EnableExtension('EXT_shader_texture_lod');
 		//EnableExtension('OES_standard_derivatives');
 		
-		if ( IsWebgl2 )
-		{
-			InitFloatTexture(gl);
-			InitFloatLinearTexture(gl);
-		}
-
+		//	readpixels() fails with null as buffer in webgl1, no different symbols
 		Context.CanReadPixelsAsync = function()
 		{
 			return IsWebgl2;
@@ -2190,6 +2187,9 @@ class TextureRenderTarget extends RenderTarget
 		}
 		else
 		{
+			if ( gl instanceof WebGL2RenderingContext )
+				throw `todo: webgl2 colour attachment names for MRT`;
+			
 			//	MRT
 			if ( !gl.WEBGL_draw_buffers )
 				throw "Context doesn't support MultipleRenderTargets/WEBGL_draw_buffers";
