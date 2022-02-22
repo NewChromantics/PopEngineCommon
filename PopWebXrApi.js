@@ -540,6 +540,10 @@ class Device_t
 					if (!Input.gamepad.connected)
 						return;
 				
+					//	todo: convert buttons from bits to 
+					//	device-specific named buttons;
+					//	eg. on quest 4==A or X, and 5==B or Y
+					//	we've changed to named mouse & touch buttons, we should here too
 					const Buttons = Input.gamepad.buttons || [];
 					UpdateInputNode( Input.targetRaySpace, InputName, Buttons );
 				}
