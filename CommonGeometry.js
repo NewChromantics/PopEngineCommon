@@ -17,9 +17,19 @@ export function CreateCubeGeometry(Min=-1,Max=1,MinY=undefined,MaxY=undefined)
 	
 	let AddTriangle = function(a,b,c,Normal,Uvs)
 	{
-		PositionData.push( ...a.slice(0,3) );
-		PositionData.push( ...b.slice(0,3) );
-		PositionData.push( ...c.slice(0,3) );
+		let ReverseWinding = false;
+		if ( ReverseWinding )
+		{
+			PositionData.push( ...c.slice(0,3) );
+			PositionData.push( ...b.slice(0,3) );
+			PositionData.push( ...a.slice(0,3) );
+		}
+		else
+		{
+			PositionData.push( ...a.slice(0,3) );
+			PositionData.push( ...b.slice(0,3) );
+			PositionData.push( ...c.slice(0,3) );
+		}
 		UvData.push( ...Uvs[0] );
 		UvData.push( ...Uvs[1] );
 		UvData.push( ...Uvs[2] );
