@@ -42,22 +42,23 @@ export function CreateCubeGeometry(Min=-1,Max=1,MinY=undefined,MaxY=undefined)
 	const UvSecondTriangle = [ [1,1], [0,1], [0,0] ];
 	
 	//	near
-	AddTriangle( tln, trn, brn,	[0,0,-1], UvFirstTriangle );
-	AddTriangle( brn, bln, tln,	[0,0,-1], UvSecondTriangle );
+	AddTriangle( brn, trn, tln,	[0,0,-1], UvFirstTriangle );
+	AddTriangle( tln, bln, brn,	[0,0,-1], UvSecondTriangle );
+
 	//	far
 	AddTriangle( trf, tlf, blf,	[0,0,1], UvFirstTriangle );
 	AddTriangle( blf, brf, trf,	[0,0,1], UvSecondTriangle );
 	
-	//	top
+	//	top (or bottom depending on camera, it's +y)
 	AddTriangle( tln, tlf, trf,	[0,-1,0], UvFirstTriangle );
 	AddTriangle( trf, trn, tln,	[0,-1,0], UvSecondTriangle );
 	//	bottom
-	AddTriangle( bln, blf, brf,	[0,1,0], UvFirstTriangle );
-	AddTriangle( brf, brn, bln,	[0,1,0], UvSecondTriangle );
-	
+	AddTriangle( brf, blf, bln,	[0,1,0], UvFirstTriangle );
+	AddTriangle( bln, brn, brf,	[0,1,0], UvSecondTriangle );
 	//	left
 	AddTriangle( tlf, tln, bln,	[-1,0,0], UvFirstTriangle );
 	AddTriangle( bln, blf, tlf,	[-1,0,0], UvSecondTriangle );
+	
 	//	right
 	AddTriangle( trn, trf, brf,	[1,0,0], UvFirstTriangle );
 	AddTriangle( brf, brn, trn,	[1,0,0], UvSecondTriangle );
