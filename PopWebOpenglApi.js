@@ -401,7 +401,7 @@ class StateParams_t
 		
 		this.DepthRead = 'LessEqual';	//	need to turn true into this default
 		this.DepthWrite = true;
-		this.CullMode = null;	//	null = none
+		this.CullFacing = null;	//	null = none, 'Front' and 'Back'/true
 		this.BlendMode = 'Alpha';
 		
 		Object.assign( this, Params );
@@ -1807,9 +1807,15 @@ export class RenderTarget
 	{
 		const gl = this.GetGlContext();
 		
-		if ( StateParams.CullMode )
+		if ( StateParams.CullFacing == 'Front' )
 		{
-			throw `Currently not handling CullMode=${StateParams.CullMode}`;
+			gl.enable(gl.CULL_FACE);
+			gl.cullFace(gl.FRONT);
+		}
+		else if ( StateParams.CullFacing == 'Back' )
+		{
+			gl.enable(gl.CULL_FACE);
+			gl.cullFace(gl.BACK);
 		}
 		else
 		{
