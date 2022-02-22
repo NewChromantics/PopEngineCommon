@@ -682,12 +682,13 @@ export default class PopImage
 			InternalFormat = SourceFormat;	//	gr: float3 RGB needs RGB internal
 			
 			//	webgl2 correction
+			//if ( gl instanceof WebGL2RenderingContext )
 			if ( gl.RGBA32F !== undefined )
 			{
-				if ( this.PixelsFormat == 'Float4' )	InternalFormat = gl.RGBA;//	gl.RGBA32F; webgl says "invalid format"
-				if ( this.PixelsFormat == 'Float3' )	InternalFormat = gl.RGB;
-				if ( this.PixelsFormat == 'Float2' )	InternalFormat = gl.LUMINANCE_ALPHA;
-				if ( this.PixelsFormat == 'Float1' )	InternalFormat = gl.LUMINANCE;
+				if ( this.PixelsFormat == 'Float4' )	InternalFormat = gl.RGBA32F;
+				//if ( this.PixelsFormat == 'Float3' )	InternalFormat = gl.RGB;
+				if ( this.PixelsFormat == 'Float2' )	InternalFormat = gl.RG32F;
+				if ( this.PixelsFormat == 'Float1' )	InternalFormat = gl.R32F;
 			}
 			
 			//	In WebGL 1, this*FORMAT  must be the same as internalformat
