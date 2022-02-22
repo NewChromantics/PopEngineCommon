@@ -634,9 +634,16 @@ class Device_t
 		this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
 	}
 	
+	Close()
+	{
+		this.Destroy();
+	}
 	
 	Destroy()
 	{
+		if ( !this.Session )
+			return;
+			
 		this.Session.end();
 		this.Session = null;
 	}
