@@ -298,7 +298,7 @@ export default class WebcodecDecoder
 	{
 		Debug(`H264 PushEndOfFile()`);
 		this.HadInputEof = true;
-		
+
 		function OnVideoDecoderFlushed()
 		{
 			Debug(`OnVideoDecoderFlushed()`);
@@ -312,14 +312,17 @@ export default class WebcodecDecoder
 		
 		//	gr: this function shouldn't throw, flush() will throw if the codec has already been closed;
 		//		this can be manual, but if left idle for too long, chrome will auto-close it
-		try
+		if ( this.Decoder )
 		{
-			Debug(`H264 decoder flush()`);
-			this.Decoder.flush().then(OnVideoDecoderFlushed.bind(this)).catch(OnVideoDecoderFlushError.bind(this));
-		}
-		catch(e)
-		{
-			console.warn(`PushEndOfFile() flush() error; ${e}`);
+			try
+			{
+				Debug(`H264 decoder flush()`);
+				this.Decoder.flush().then(OnVideoDecoderFlushed.bind(this)).catch(OnVideoDecoderFlushError.bind(this));
+			}
+			catch(e)
+			{
+				console.warn(`PushEndOfFile() flush() error; ${e}`);
+			}
 		}
 	}
 	
