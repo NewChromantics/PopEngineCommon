@@ -480,10 +480,17 @@ export default class PopImage
 	{
 		//	auto cleanup any html elements - this may want to be somewhere else
 		//	.close is for decoded video frames
+		if ( this.Pixels && this.Pixels.Free )
+		{
+			this.Pixels.ClosedByPopImage = this.Pixels.timestamp;
+			this.Pixels.Free();
+			this.Pixels = null;
+		}
 		if ( this.Pixels && this.Pixels.close )
 		{
 			this.Pixels.ClosedByPopImage = this.Pixels.timestamp;
 			this.Pixels.close();
+			this.Pixels = null;
 		}
 		
 		this.PixelsVersion = null;
