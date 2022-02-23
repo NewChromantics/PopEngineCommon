@@ -8,44 +8,6 @@ function IntToHexString(Integer)
 	return (Integer).toString(16).toUpperCase();
 }
 
-class DecoderBase
-{
-	constructor()
-	{
-		this.DecodedFrameQueue = new PromiseQueue('WebcodecDecoder DecodedFrames');
-	}
-	
-	async WaitForNextFrame()
-	{
-		return this.DecodedFrameQueue.WaitForNext();
-	}
-	
-	PushData(H264Packet)
-	{
-		throw `PushData() not overloaded`;
-	}
-	
-	OnFrame(Frame)
-	{
-		Frame.Free = function()
-		{
-			Frame.close();
-			Frame.ClosedByFree = Frame.timestamp;
-		};
-
-		//	turn into an image/planes/meta
-		this.DecodedFrameQueue.Push(Frame);
-	}
-	OnFrameEof()
-	{
-		this.DecodedFrameQueue.Push(null);
-	}
-	
-	OnError(Error)
-	{
-		this.DecodedFrameQueue.Reject(Error);
-	}
-};
 
 function HexStringToInts(Hex)
 {
@@ -54,17 +16,22 @@ function HexStringToInts(Hex)
 	Ints = Ints.map( h => Number(h) );
 	return Ints;
 }
+
+//const Debug = console.log;
+function Debug(){}
+
 /*
 	Decoder that uses webcodecs
 */
-export default class WebcodecDecoder extends DecoderBase
+export default class WebcodecDecoder
 {
 	static Name()			{	return 'Webcodec';	}
 	static IsSupported()	{	return VideoDecoder != undefined;	}
 
-	constructor(AvccHeader)
+	constructor(OnFrameFreed)
 	{
-		super();
+		this.DecodedFrameQueue = new PromiseQueue('WebcodecDecoder DecodedFrames');
+		this.OnFrameFreed = OnFrameFreed || function(){};
 		
 		this.Sps = null;
 		this.Pps = null;
@@ -74,6 +41,49 @@ export default class WebcodecDecoder extends DecoderBase
 		this.HadInputEof = false;
 
 		this.SubmittedFramesDecoded = {};	//	[SubmittedFrame] = HasFrameBeenDecoded
+	}
+		
+	async WaitForNextFrame()
+	{
+		return this.DecodedFrameQueue.WaitForNext();
+	}
+	
+	OnFrame(Frame)
+	{
+		Frame.Free = function()
+		{
+			this.OnFrameFreed( Frame.timestamp );
+			Frame.close();
+			Frame.ClosedByFree = Frame.timestamp;
+		}.bind(this);
+
+		//	turn into an image/planes/meta
+		this.DecodedFrameQueue.Push(Frame);
+	
+		//	if there are no more frames queued for decoding
+		//	AND we've had a EOF submitted, there must be no more frames coming
+		const DecoderQueueSize = this.Decoder.decodeQueueSize;
+
+		Debug(`OnFrame(${Frame.timestamp}); DecoderQueueSize=${DecoderQueueSize} had eof=${this.HadInputEof}`);
+		if ( DecoderQueueSize == 0 )
+		{
+			if ( this.HadInputEof )
+			{
+				//	gr: we don't need this, as flush is working again when the system isn't strained
+				//Debug(`Had EOF and no more data queued, triggering EOF outputframe`);	
+				//this.OnFrameEof();
+			}
+		}
+	}
+	
+	OnFrameEof()
+	{
+		this.DecodedFrameQueue.Push(null);
+	}
+	
+	OnError(Error)
+	{
+		this.DecodedFrameQueue.Reject(Error);
 	}
 	
 	SetAvccHeader(AvccHeader)
@@ -115,24 +125,6 @@ export default class WebcodecDecoder extends DecoderBase
 		return Data;
 	}	
 	
-	OnFrame(Frame)
-	{
-		super.OnFrame(Frame);
-	
-		//	if there are no more frames queued for decoding
-		//	AND we've had a EOF submitted, there must be no more frames coming
-		const DecoderQueueSize = this.Decoder.decodeQueueSize;
-		/*
-		console.log(`OnFrame(); DecoderQueueSize=${DecoderQueueSize} had eof=${this.HadInputEof}`);
-		if ( DecoderQueueSize == 0 )
-		{
-			if ( this.HadInputEof )
-			{
-				this.OnFrameEof();
-			}
-		}
-		*/
-	}
 	
 	CreateDecoder(AvccHeader)
 	{
@@ -186,11 +178,13 @@ export default class WebcodecDecoder extends DecoderBase
 
 	Free()
 	{
+		Debug(`PopH264VideoDecoder.free`);
 		function FreeFrame(Frame)
 		{
 			Frame.close();
 		}
 		this.Decoder.flush();
+		//	todo: close after flush
 		//this.Decoder.close();
 		this.DecodedFrameQueue.FlushPending( false, FreeFrame );
 	}
@@ -302,21 +296,26 @@ export default class WebcodecDecoder extends DecoderBase
 	
 	PushEndOfFile()
 	{
-		//console.log(`H264 PushEndOfFile()`);
+		Debug(`H264 PushEndOfFile()`);
 		this.HadInputEof = true;
 		
 		function OnVideoDecoderFlushed()
 		{
-			//console.log(`OnVideoDecoderFlushed()`);
+			Debug(`OnVideoDecoderFlushed()`);
 			this.OnFrameEof();
+		}
+		
+		function OnVideoDecoderFlushError(Error)
+		{
+			Debug(`OnVideoDecoderFlushError(${Error})`);
 		}
 		
 		//	gr: this function shouldn't throw, flush() will throw if the codec has already been closed;
 		//		this can be manual, but if left idle for too long, chrome will auto-close it
 		try
 		{
-			//console.log(`H264 decoder flush()`);
-			this.Decoder.flush().then(OnVideoDecoderFlushed.bind(this));
+			Debug(`H264 decoder flush()`);
+			this.Decoder.flush().then(OnVideoDecoderFlushed.bind(this)).catch(OnVideoDecoderFlushError.bind(this));
 		}
 		catch(e)
 		{
@@ -327,6 +326,9 @@ export default class WebcodecDecoder extends DecoderBase
 	//	todo: detect keyframe from h264 data...
 	PushData(H264Packet,FrameTime)
 	{
+		if ( this.HadInputEof )
+			throw `PushData() to h264 decoder, after it's been flushed/EOF'd`;
+			
 		if ( FrameTime === undefined )
 			throw `Invalid packet FrameTime(${FrameTime})`;
 		
@@ -393,7 +395,7 @@ export default class WebcodecDecoder extends DecoderBase
 			Packet.duration = Duration;
 			Packet.data = H264Packet;
 			const Chunk = new EncodedVideoChunk(Packet);
-			//console.log(`Decoding x${Packet.data.length} (${H264.GetContentName(Meta.Content)})`);
+			Debug(`H264 Decoding ${FrameTime} x${Packet.data.length} (${H264.GetContentName(Meta.Content)})`);
 			this.Decoder.decode(Chunk);
 		}
 		catch(e)
@@ -406,33 +408,3 @@ export default class WebcodecDecoder extends DecoderBase
 };
 
 
-//	type factory
-function GetDecoderType(DecoderName)
-{
-	const AnyDecoder = (DecoderName||'').length==0;
-	
-	if ( AnyDecoder || WebCodecsDecoder.Name() )
-	{
-		return WebcodecDecoder;
-	}
-	
-	return null;
-}
-
-
-class DecoderParams
-{
-	constructor(Json={})
-	{
-		if ( typeof Json == typeof '' )
-			Json = JSON.parse(Json);
-		this.Options = Json;
-	}
-	
-	get DecoderName()
-	{
-		const Name = this.Options.mDecoderName || this.Options.DecoderName;
-		return Name || '';
-	}
-
-}
