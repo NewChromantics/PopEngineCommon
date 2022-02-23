@@ -326,6 +326,17 @@ export class Atom_t
 	}
 };
 
+
+function GetSampleHash(Sample)
+{
+	//	we can use the file position for a unique hash for a sample
+	//	gr: make sure this doesnt fall over with fragmented mp4s
+	const FilePosition = Sample.DataFilePosition;
+	if ( FilePosition === undefined )
+		return false;
+	return FilePosition;
+}
+
 /*
 	this is an async (stream data in, async chunks out)
 	mp4 decoder, based on my C#/unity one https://github.com/NewChromantics/PopCodecs/blob/master/PopMpeg4.cs
@@ -339,6 +350,7 @@ export class Mp4Decoder
 		this.NewAtomQueue = new PromiseQueue('Mp4 decoded atoms');
 		this.NewTrackQueue = new PromiseQueue('Mpeg decoded Tracks');
 		this.NewSamplesQueue = new PromiseQueue('Mpeg Decoded samples');
+		this.SamplesAlreadyOutput = {};	//	[SampleHash] if defined, this sample has already been output
 		
 		this.PendingAtoms = [];	//	pre-decoded atoms pushed into file externally
 		this.RootAtoms = [];	//	trees coming off root atoms
@@ -391,6 +403,47 @@ export class Mp4Decoder
 	async WaitForMoreFileData()
 	{
 		return this.NewByteQueue.WaitForNext();
+	}
+	
+	OnNewSamples(Samples)
+	{
+		//	null == EOF
+		if ( !Samples )
+		{
+			this.NewSamplesQueue.Push( Samples );
+			return;
+		}
+		
+		//	remove samples we've already output
+		//	we need this because if we inject a tail-moov and output samples, 
+		//	when the file comes across that moov again, it processes them and outputs new samples
+		//	todo: somehow detect that atom is a duplicate and skip the decoding of the sample table 
+		//		and just use this as a failsafe
+		function HasOutputSample(Sample)
+		{
+			const Hash = GetSampleHash(Sample);
+			//	unhashable samples (eg dynamic SPS/PPS) don't get filtered
+			if ( !Hash )
+				return false;
+			if ( this.SamplesAlreadyOutput.hasOwnProperty(Hash) )
+				return true;
+			return false;
+		}
+		Samples = Samples.filter( Sample => !HasOutputSample.call(this,Sample) );
+		
+		//	all samples filtered out
+		if ( !Samples.length )
+			return;
+
+		function MarkSampleOutput(Hash)
+		{
+			this.SamplesAlreadyOutput[Hash] = true;
+		}
+		//	mark samples as output
+		const SampleHashs = Samples.map( GetSampleHash ).filter( Hash => Hash!=null );
+		SampleHashs.forEach(MarkSampleOutput.bind(this));
+		
+		this.NewSamplesQueue.Push( Samples );
 	}
 	
 	PushEndOfFile()
@@ -496,7 +549,7 @@ export class Mp4Decoder
 		}
 		
 		//	push a null eof sample when parsing done
-		this.NewSamplesQueue.Push(null);
+		this.OnNewSamples(null);
 	}
 	
 	OnNewTrack(Track,TrackId)
@@ -563,7 +616,7 @@ export class Mp4Decoder
 		
 		const Trun = Atom.GetChildAtom('trun');
 		const Samples = await this.DecodeAtom_FragmentSampleTable( Trun, MoofAtom, Header );
-		this.NewSamplesQueue.Push(Samples);
+		this.OnNewSamples(Samples);
 	}
 	
 	async DecodeAtom_TrackFragmentDelta(Atom)
@@ -926,12 +979,11 @@ export class Mp4Decoder
 				PpsSample.TrackId = FirstSample.TrackId;
 				PpsSample.DurationMs = 0;
 
-				this.NewSamplesQueue.Push( [SpsSample,PpsSample] );
+				this.OnNewSamples( [SpsSample,PpsSample] );
 			}
 		}
 			
-		
-		this.NewSamplesQueue.Push(Samples);
+		this.OnNewSamples(Samples);
 		//	gmhd
 		//	hdlr
 		//	dinf
