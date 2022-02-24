@@ -862,10 +862,9 @@ export class Context
 		setTimeout( RestoreContext, 3*1000 );
 	}
 	
-
 	CreateContext()
 	{
-		const ContextMode = "webgl";
+		const ContextMode = "webgl2";
 		const Canvas = this.GetCanvasElement();
 		if ( !Canvas )
 			throw `RenderContext has no canvas`;
@@ -1010,6 +1009,8 @@ export class Context
 		EnableExtension('ANGLE_instanced_arrays', InitInstancedArrays.bind(this) );
 		EnableExtension('OES_standard_derivatives');
 		
+		EnableExtension('OCULUS_multiview', this.InitOculusMultiview.bind(this) );
+		
 		//	texture load needs extension in webgl1
 		//	in webgl2 it's built in, but requires #version 300 es
 		//	gr: doesnt NEED to be enabled??
@@ -1025,6 +1026,50 @@ export class Context
 
 		return Context;
 	}
+	
+	InitOculusMultiview(gl,Extension)
+	{
+		this.MultiView = Extension;
+		this.MultiViewAllowed = true;
+		this.MultiViewMultiSampled = true;
+	}
+	
+	CreateMultiViewBuffer()
+	{
+	/*
+	leftEye = vrDisplay.getEyeParameters("left");
+rightEye = vrDisplay.getEyeParameters("right");
+
+let width = Math.max(leftEye.renderWidth, rightEye.renderWidth) * ((is_multiview) ? 1 : 2);
+let height = Math.max(leftEye.renderHeight, rightEye.renderHeight);
+*/
+		const ext = this.MultiView;
+		var backFbo = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+		var fbo = null;
+		if (ext) {
+		  fbo = gl.createFramebuffer();
+		  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, fbo);
+
+		  // color texture / attachment
+		  var colorTexture = gl.createTexture();
+		  gl.bindTexture(gl.TEXTURE_2D_ARRAY, colorTexture);
+		  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, width, height, 2);
+		  if (!is_multisampled)
+			ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, colorTexture, 0, 0, 2);
+		  else
+			ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, colorTexture, 0, samples, 0, 2);
+
+		  // depth texture / attachment
+		  var depthStencilTex = gl.createTexture();
+		  gl.bindTexture(gl.TEXTURE_2D_ARRAY, depthStencilTex);
+		  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.DEPTH32F_STENCIL8, width, height, 2);
+		  if (!is_multisampled)
+			ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, depthStencilTex, 0, 0, 2);
+		  else
+			ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, depthStencilTex, 0, samples, 0, 2);
+		}
+	}
+	
 	
 	IsFloatRenderTargetSupported()
 	{

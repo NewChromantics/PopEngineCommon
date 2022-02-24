@@ -255,8 +255,24 @@ class Device_t
 		Options.antialias = true;
 		
 		const OpenglContext = this.RenderContext.GetGlContext();
-		this.Layer = new PlatformXRWebGLLayer( this.Session, OpenglContext, Options );
-		this.Session.updateRenderState({ baseLayer: this.Layer });
+	
+		this.xrGLFactory = new XRWebGLBinding( this.Session, OpenglContext );
+	
+		if ( RenderContext.MultiView )
+		{
+			const gl = OpenglContext;
+			this.Layer = this.xrGLFactory.createProjectionLayer({
+				textureType: "texture-array",
+				depthFormat: do_stencil_buffer.checked ? gl.DEPTH24_STENCIL8 : gl.DEPTH_COMPONENT24
+			});
+			this.Session.updateRenderState({ layers: [this.Layer] });
+		}
+		else
+		{
+			this.Layer = new PlatformXRWebGLLayer( this.Session, OpenglContext, Options );
+			this.Session.updateRenderState({ baseLayer: this.Layer });
+		}
+		
 	}
 	
 	async WaitForEnd()
@@ -424,9 +440,16 @@ class Device_t
 		if ( Frame.getDepthInformation  )
 			this.FrameUpdate_Depth(Frame,Pose);
 		
-		for ( let View of Pose.views )
+		if ( this.RenderContext.MultiView )
 		{
-			this.FrameUpdate_RenderView( Frame, Pose, View );
+			this.FrameUpdate_RenderMultiView( Frame, Pose );
+		}
+		else
+		{
+			for ( let View of Pose.views )
+			{
+				this.FrameUpdate_RenderView( Frame, Pose, View );
+			}
 		}
 	}
 	
@@ -568,15 +591,62 @@ class Device_t
 		
 	}
 	
-	FrameUpdate_RenderView(Frame,Pose,View)
+	FrameUpdate_RenderMultiView( Frame, Pose )
 	{
-		const glLayer = this.Session.renderState.baseLayer;
+		const gl = this.RenderContext.GetContext();
+		const xrGLFactory = this.xrGLFactory;
 		
-		//	generate render target
-		const ViewPort = glLayer.getViewport(View);
-		const RenderTarget = new RenderTargetFrameBufferProxy( glLayer.framebuffer, ViewPort, this.RenderContext );
+		if ( !this.xrFramebuffer )
+		{
+			this.xrFramebuffer = gl.createFramebuffer();
+		}
+		const xrFramebuffer = this.xrFramebuffer;
+		
+		const view = Pose.views[0];
+		//glLayer = xrGLFactory.getViewSubImage( this.session.renderState.layers[0], view);
+		let glLayer = xrGLFactory.getViewSubImage( this.Layer, view);
+		const mv_ext = this.RenderContext.MultiView;
+		glLayer.framebuffer = xrFramebuffer;
+		gl.bindFramebuffer(gl.FRAMEBUFFER, xrFramebuffer);
 
-		//	generate camera
+		//	bind colour
+		mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, glLayer.colorTexture, 0, 0, 2);
+		
+		//	bind depth
+		if ( glLayer.depthStencilTexture === null) 
+		{
+			if (this.depthStencilTex === null) 
+			{
+				console.log("MaxViews = " + gl.getParameter(mv_ext.MAX_VIEWS_OVR));
+				this.depthStencilTex = gl.createTexture();
+				gl.bindTexture(gl.TEXTURE_2D_ARRAY, depthStencilTex);
+				gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.DEPTH_COMPONENT24, viewport.width, viewport.height, 2);
+			}
+		} 
+		else 
+		{
+			this.depthStencilTex = glLayer.depthStencilTexture;
+		}
+		mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, 0, 2);
+		
+		gl.disable(gl.SCISSOR_TEST);
+		
+		const Cameras = [];
+		Cameras.push( this.GetXrCamera( Frame, Pose, Pose.views[0] ) );
+		Cameras.push( this.GetXrCamera( Frame, Pose, Pose.views[1] ) );
+		
+		//	todo: render 1 camera, and use some magic variables
+		//		and apply that to the normal 2 pass mode
+		let RenderCommands = this.GetRenderCommands( this.RenderContext, Cameras[0] );
+		
+		//	execute commands
+		RenderCommands = new RenderCommands_t( RenderCommands );
+		this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
+
+	}
+
+	GetXrCamera(Frame,Pose,View)
+	{
 		const CameraName = this.GetCameraName(View);
 		const Camera = this.GetCamera(CameraName);
 		
@@ -611,7 +681,20 @@ class Device_t
 		Camera.ProjectionMatrix = View.projectionMatrix;
 		
 		Camera.DepthImage = this.GetDepthImage(CameraName);
+		return Camera;
+	}
+
+	FrameUpdate_RenderView(Frame,Pose,View)
+	{
+		const glLayer = this.Session.renderState.baseLayer;
 		
+		//	generate render target
+		const ViewPort = glLayer.getViewport(View);
+		const RenderTarget = new RenderTargetFrameBufferProxy( glLayer.framebuffer, ViewPort, this.RenderContext );
+
+		//	generate camera
+		const Camera = this.GetXrCamera(Frame,Pose,View);
+
 		//	would be nice if we could have some generic camera uniforms and only generate one set of commands?
 		let RenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
 		
