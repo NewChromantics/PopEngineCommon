@@ -161,8 +161,8 @@ export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUnif
 		let FragSource = await Pop.LoadFileAsStringAsync(FragFilename);
 		let VertSource = await Pop.LoadFileAsStringAsync(VertFilename);
 
-		FragSource = RefactorFragShader(FragSource);
-		VertSource = RefactorVertShader(VertSource);
+		//FragSource = RefactorFragShader(FragSource);
+		//VertSource = RefactorVertShader(VertSource);
 
 		const ShaderUniforms = ExtractShaderUniforms( FragSource, VertSource );
 		const ShaderAttribute = ExtractShaderAttributes( FragSource, VertSource );
