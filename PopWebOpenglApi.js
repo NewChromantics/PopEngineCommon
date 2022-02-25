@@ -36,6 +36,7 @@ export let CanRenderToFloat = undefined;
 //	allow turning off float support
 export let AllowFloatTextures = !Pop.GetExeArguments().DisableFloatTextures;
 
+const AllowMultiView = false;
 
 function GetString(Context,Enum)
 {
@@ -1009,7 +1010,8 @@ export class Context
 		EnableExtension('ANGLE_instanced_arrays', InitInstancedArrays.bind(this) );
 		EnableExtension('OES_standard_derivatives');
 		
-		EnableExtension('OCULUS_multiview', this.InitOculusMultiview.bind(this) );
+		if ( AllowMultiView )
+			EnableExtension('OCULUS_multiview', this.InitOculusMultiview.bind(this) );
 		
 		//	texture load needs extension in webgl1
 		//	in webgl2 it's built in, but requires #version 300 es

@@ -69,6 +69,235 @@ class RenderTargetFrameBufferProxy extends RenderTarget
 	}
 }
 
+class RenderTargetMultiviewProxy extends RenderTarget
+{
+	constructor(Session,Layer,RenderContext)
+	{
+		super();
+		this.Session = Session;
+		this.Views = null;
+		this.Layer = Layer;
+		this.RenderContext = RenderContext;
+
+		const gl = this.RenderContext.Context;
+
+		//	grab device FBO
+		this.backFbo = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+		console.log(`Device FBO is ${this.backFbo}`);
+		
+		//this.stereoUtil = new VRStereoUtil(gl);
+		this.CreateStereoBlitter().catch(console.error);
+	}
+	
+	async CreateStereoBlitter()
+	{
+		const VertSource = StereoBlitterVertShader;
+		const FragSource = StereoBlitterFragShader;
+		this.StereoBlitShader = await this.RenderContent.CreateShader(FragSource,VertSource);
+		/*
+			this.program_multiview.bindAttribLocation({
+				v_texcoord: 0,
+			});
+			*/		
+		
+		//	shader doesnt use any geo attribs!
+		const Geo = {};
+		Geo.v_texcoord = {};
+		Geo.v_texcoord.Data = [0,1,2,3];
+		Geo.v_texcoord.Size = 1;
+		this.StereoBlitGeo = await this.RenderContext.CreateGeometry(Geo);
+		this.StereoBlitVao = gl.createVertexArray();
+	}
+	
+	DoStereoBlit(gl,Viewport)
+	{
+		const width = Viewport[2];
+		const height = Viewport[3];
+		const Shader = this.StereoBlitShader;
+
+		const source_texture = this.ColourTexture;
+		
+		gl.activeTexture(gl.TEXTURE0);
+		gl.bindTexture(gl.TEXTURE_2D_ARRAY, source_texture);
+		//const Program = this.StereoBlitShader.GetProgram(this.RenderContext);
+		//this.BindProgram(Program);
+		gl.disable(gl.SCISSOR_TEST);
+		gl.disable(gl.DEPTH_TEST);
+		gl.disable(gl.STENCIL_TEST);
+		gl.colorMask(true, true, true, true);
+		gl.depthMask(false);
+
+		gl.viewport(0, 0, dest_surface_width, dest_surface_height);
+
+		const Uniforms = {};
+		Uniforms.u_scale = [source_rect_uv_width, source_rect_uv_height];
+		Uniforms.u_offset = [source_rect_uv_x, source_rect_uv_y];
+		Uniforms.u_source_texture = 0;
+
+		Shader.Bind( RenderContext );
+		//Geometry.Bind( RenderContext, Shader );
+		gl.bindVertexArray(this.vao);
+		
+		for ( const [UniformName,UniformValue] of Object.entries(Uniforms) )
+			Shader.SetUniform( UniformName, UniformValue );
+			
+		//Geometry.Draw( RenderContext, InstanceCount );
+		gl.drawArrays(gl.TRIANGLES, 0, 12);
+
+		gl.enable(gl.DEPTH_TEST);
+		gl.depthMask(true);
+	}
+	
+	CreateFrameBuffer()
+	{
+		const gl = this.RenderContext.Context;
+
+		//	create one off objects
+		if ( !this.xrGLFactory )
+			this.xrGLFactory = new XRWebGLBinding( this.Session, gl );
+		const xrGLFactory = this.xrGLFactory;
+		
+		if ( !this.Views )
+			throw `Cannot create framebuffer without views`;
+			
+		const View0 = this.Views[0];
+		//glLayer = xrGLFactory.getViewSubImage( this.session.renderState.layers[0], view);
+		let glLayer = xrGLFactory.getViewSubImage( this.Layer, View0 );
+		const mv_ext = this.RenderContext.MultiView;
+		//glLayer.framebuffer = xrFramebuffer;
+		
+		//	setup frame buffer with 2 colour & depth attachments
+		const Framebuffer = gl.createFramebuffer();
+		
+		//	gr: make sure these are the same/consistent
+		//gl.bindFramebuffer(gl.FRAMEBUFFER, Framebuffer);
+		gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, Framebuffer);
+
+		const Viewport = this.GetRenderTargetRect();
+		const Width = Viewport[2];
+		const Height = Viewport[3];
+
+		//	bind colour
+		//	gr: https://github.com/abidaqib/WebXRTest1/blob/40692ecf649b9282f5b38fb570c871cddff8d8ef/layers-samples/proj-multiview.html
+		//		this example just took colour from layer...
+		//		oculus (webvr) example created it's own
+		this.ColourTexture = this.Layer.colorTexture;
+		if ( !this.ColourTexture )
+		{
+			this.ColourTexture = gl.createTexture();
+			gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.ColourTexture);
+			gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, Width, Height, 2);
+		}
+		mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.ColourTexture, 0, 0, 2);
+
+		//	create depth/stencil if not provided
+		this.depthStencilTex = this.Layer.depthStencilTexture;
+		if ( !this.depthStencilTex )
+		{
+			console.log("MaxViews = " + gl.getParameter(mv_ext.MAX_VIEWS_OVR));
+			this.depthStencilTex = gl.createTexture();
+			gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.depthStencilTex);
+			gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.DEPTH_COMPONENT24, Width, Height, 2);
+		}
+		//	attach depth/stencil to framebuffer
+		mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, 0, 2);
+		
+		return Framebuffer;
+	}
+	
+	GetFrameBuffer()
+	{
+		if ( !this.FrameBuffer )
+			this.FrameBuffer = this.CreateFrameBuffer();
+		return this.FrameBuffer;
+	}
+	
+	GetRenderContext()
+	{
+		return this.RenderContext;
+	}
+	
+	UpdateViews(Views)
+	{
+		this.Views = Views;
+	}
+
+	GetRenderTargetRect()
+	{
+		//	these layers dont have viewports
+		function GetViewport(View)
+		{
+			if ( this.Layer.getViewport )
+				return this.Layer.getViewport(View);
+			const Viewport = {x:0,y:0};
+			Viewport.width = this.Layer.textureWidth;
+			Viewport.height = this.Layer.textureHeight;
+			return Viewport;
+		}
+
+		//	2 viewports...
+		const Viewports = this.Views.map(GetViewport.bind(this));
+		let Rect = 
+		[
+			Viewports[0].x,
+			Viewports[0].y,
+			Viewports[0].width,
+			Viewports[0].height
+		];
+		return Rect;
+	}
+	
+	BindRenderTarget(RenderContext)
+	{
+		//	gr: this should be binding as if it's rendering to one eye
+		//	https://developer.oculus.com/documentation/web/web-multiview/#multi-view-webvr-code-example
+		const gl = RenderContext.GetGlContext();
+		const FrameBuffer = this.GetFrameBuffer();
+		if ( FrameBuffer === undefined )
+			throw `RenderTargetFrameBufferProxy BindRenderTarget() with ${FrameBuffer}, invalid`;
+	
+		//	todo: make this common code
+		gl.bindFramebuffer( gl.FRAMEBUFFER, FrameBuffer );
+		
+		const Viewport = this.GetRenderTargetRect();
+		gl.viewport( ...Viewport );
+		
+		this.ResetState();
+		
+		//gl.viewport(0, 0, width, height);
+		//gl.scissor(0, 0, width, height);
+		//gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+		//	webxr on quest needs scissoring
+		//	does this break pixel3 webAR?
+		//	gr: I believe this breaks the looking glass webxr extension
+		gl.scissor( ...Viewport );
+		gl.enable(gl.SCISSOR_TEST);
+			
+		//gl.disable(gl.SCISSOR_TEST);
+
+		//	rendering occurs...
+		//	then we need to blit the texture array to the back buffer
+
+		function Unbind()
+		{
+			//	https://developer.oculus.com/documentation/web/web-multiview/#multi-view-webvr-code-example
+			// "Now we need to copy rendering from the texture2D array into the actual back
+			// buffer to present it on the device"
+			gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, [ gl.DEPTH_STENCIL_ATTACHMENT ]);
+
+			gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.backFbo );
+
+			const width = Viewport[2];
+			const height = Viewport[3];
+			// This function just copies two layers of the texture2D array as side-by-side
+			// stereo into the back buffer.
+			//this.stereoUtil.blit( gl, this.ColourTexture, 0, 0, 1, 1, width*2, height);
+			this.DoStereoBlit(gl,Viewport);
+		}
+		return Unbind.bind(this);
+	}
+}
 
 //	currently webxr lets us create infinite sessions, so monitor when we have a device already created
 let Devices = [];
@@ -256,14 +485,24 @@ class Device_t
 		
 		const OpenglContext = this.RenderContext.GetGlContext();
 	
-		this.xrGLFactory = new XRWebGLBinding( this.Session, OpenglContext );
-	
-		if ( RenderContext.MultiView )
+		//	on desktop this throws when created with inline-vr session
+		this.xrGLFactory = null;
+		try
+		{	
+			this.xrGLFactory = new XRWebGLBinding( this.Session, OpenglContext );
+		}
+		catch(e)
 		{
+			console.warn(e);
+		}
+	
+		if ( RenderContext.MultiView && this.xrGLFactory )
+		{
+			const EnableStencilBuffer = false;
 			const gl = OpenglContext;
 			this.Layer = this.xrGLFactory.createProjectionLayer({
 				textureType: "texture-array",
-				depthFormat: do_stencil_buffer.checked ? gl.DEPTH24_STENCIL8 : gl.DEPTH_COMPONENT24
+				depthFormat: EnableStencilBuffer ? gl.DEPTH24_STENCIL8 : gl.DEPTH_COMPONENT24
 			});
 			this.Session.updateRenderState({ layers: [this.Layer] });
 		}
@@ -416,7 +655,7 @@ class Device_t
 			BrowserAnimationStep(TimeMs);
 		}
 		
-		//Pop.Debug("XR frame",Frame);
+		//Pop.Debug("XR frameFrame);
 		//	request next frame
 		this.Session.requestAnimationFrame( this.OnFrame.bind(this) );
 		
@@ -591,60 +830,27 @@ class Device_t
 		
 	}
 	
+
 	FrameUpdate_RenderMultiView( Frame, Pose )
 	{
-		const gl = this.RenderContext.GetContext();
-		const xrGLFactory = this.xrGLFactory;
-		
-		if ( !this.xrFramebuffer )
+		if ( !this.MultiviewRenderTarget )
 		{
-			this.xrFramebuffer = gl.createFramebuffer();
+			this.MultiviewRenderTarget = new RenderTargetMultiviewProxy( this.Session, this.Layer, this.RenderContext );
 		}
-		const xrFramebuffer = this.xrFramebuffer;
+		const RenderTarget = this.MultiviewRenderTarget;
+		RenderTarget.UpdateViews(Pose.views);
 		
-		const view = Pose.views[0];
-		//glLayer = xrGLFactory.getViewSubImage( this.session.renderState.layers[0], view);
-		let glLayer = xrGLFactory.getViewSubImage( this.Layer, view);
-		const mv_ext = this.RenderContext.MultiView;
-		glLayer.framebuffer = xrFramebuffer;
-		gl.bindFramebuffer(gl.FRAMEBUFFER, xrFramebuffer);
-
-		//	bind colour
-		mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, glLayer.colorTexture, 0, 0, 2);
-		
-		//	bind depth
-		if ( glLayer.depthStencilTexture === null) 
-		{
-			if (this.depthStencilTex === null) 
-			{
-				console.log("MaxViews = " + gl.getParameter(mv_ext.MAX_VIEWS_OVR));
-				this.depthStencilTex = gl.createTexture();
-				gl.bindTexture(gl.TEXTURE_2D_ARRAY, depthStencilTex);
-				gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.DEPTH_COMPONENT24, viewport.width, viewport.height, 2);
-			}
-		} 
-		else 
-		{
-			this.depthStencilTex = glLayer.depthStencilTexture;
-		}
-		mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, 0, 2);
-		
-		gl.disable(gl.SCISSOR_TEST);
-		
-		const Cameras = [];
-		Cameras.push( this.GetXrCamera( Frame, Pose, Pose.views[0] ) );
-		Cameras.push( this.GetXrCamera( Frame, Pose, Pose.views[1] ) );
-		
-		//	todo: render 1 camera, and use some magic variables
-		//		and apply that to the normal 2 pass mode
-		let RenderCommands = this.GetRenderCommands( this.RenderContext, Cameras[0] );
+		//	to get scene commands, we only need one camera
+		//	2nd view stuff is done in shader view multiview
+		const Camera = this.GetXrCamera( Frame, Pose, Pose.views[0] );
+		//Cameras.push( this.GetXrCamera( Frame, Pose, Pose.views[1] ) );
+		let RenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
 		
 		//	execute commands
 		RenderCommands = new RenderCommands_t( RenderCommands );
 		this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
-
 	}
-
+	
 	GetXrCamera(Frame,Pose,View)
 	{
 		const CameraName = this.GetCameraName(View);
@@ -654,9 +860,6 @@ class Device_t
 		//	but for now renderer just needs to know (but input doesnt know!)
 		Camera.IsOriginFloor = IsReferenceSpaceOriginFloor(this.ReferenceSpace.Type);
 		
-		//	AR (and additive, eg. hololens) need to be transparent
-		const TransparentClear = IsTransparentBlendMode(Frame.session.environmentBlendMode);
-
 		//	use the render params on our camera
 		if ( Frame.session.renderState )
 		{
@@ -698,6 +901,9 @@ class Device_t
 		//	would be nice if we could have some generic camera uniforms and only generate one set of commands?
 		let RenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
 		
+		//	AR (and additive, eg. hololens) need to be transparent
+		const TransparentClear = IsTransparentBlendMode(Frame.session.environmentBlendMode);
+
 		//	force any clear-colours of null (device) render target to have alpha=0 for AR/transparent devices
 		//	gr: should we do this before, or after parsing...
 		if ( TransparentClear )
@@ -1034,3 +1240,56 @@ function ExtractHandInputs(InputHand,InputName,GetPose)
 	const FingerInputs = FingerNames.map(GetFingerInput);
 	return FingerInputs;
 }
+
+const StereoBlitterVertShader = `
+#version 300 es
+uniform vec2 u_offset;
+uniform vec2 u_scale;
+out mediump vec3 v_texcoord;
+
+void main() 
+{
+	// offset of eye quad in -1..1 space
+	const float eye_offset_x[12] = float[12] (
+		0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+		1.0, 1.0, 1.0, 1.0, 1.0, 1.0
+	);
+	//  xy - coords of the quad, normalized to 0..1
+	//  xy  - UV of the source texture coordinate.
+	//  z   - texture layer (eye) index - 0 or 1.
+	const vec3 quad_positions[12] = vec3[12]
+	(
+		vec3(0.0, 0.0, 0.0),
+		vec3(1.0, 0.0, 0.0),
+		vec3(0.0, 1.0, 0.0),
+		vec3(0.0, 1.0, 0.0),
+		vec3(1.0, 0.0, 0.0),
+		vec3(1.0, 1.0, 0.0),
+
+		vec3(0.0, 0.0, 1.0),
+		vec3(1.0, 0.0, 1.0),
+		vec3(0.0, 1.0, 1.0),
+
+		vec3(0.0, 1.0, 1.0),
+		vec3(1.0, 0.0, 1.0),
+		vec3(1.0, 1.0, 1.0)
+	);
+
+	const vec2 pos_scale = vec2(0.5, 1.0);
+	vec2 eye_offset = vec2(eye_offset_x[gl_VertexID], 0.0);
+	gl_Position = vec4(((quad_positions[gl_VertexID].xy * u_scale + u_offset) * pos_scale * 2.0) - 1.0 + eye_offset, 0.0, 1.0);
+	v_texcoord = vec3(quad_positions[gl_VertexID].xy * u_scale + u_offset, quad_positions[gl_VertexID].z);
+}
+`;
+
+
+const StereoBlitterFragShader = `
+#version 300 es
+uniform mediump sampler2DArray u_source_texture;
+in mediump vec3 v_texcoord;
+out mediump vec4 output_color;
+void main()
+{
+	output_color = texture(u_source_texture, v_texcoord);
+}
+`;
