@@ -248,7 +248,7 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		this.BindFrameBufferAttachments();
 		
 		gl.disable(gl.SCISSOR_TEST);
-		gl.clearColor( 0, 1, 1, 1 );
+		gl.clearColor( 0, 0, 0, 1 );
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	
 		//	this demo then does one viewport, and one render of instances
@@ -459,6 +459,7 @@ class Device_t
 	{
 		const Options = {};
 		//	scale down frame buffer size to debug frag vs vert bound
+		//	mentioned here: https://developer.oculus.com/documentation/web/webxr-perf-workflow/
 		Options.framebufferScaleFactor = 1.0;
 		Options.antialias = true;
 		
