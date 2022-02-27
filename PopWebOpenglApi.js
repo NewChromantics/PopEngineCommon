@@ -877,7 +877,7 @@ export class Context
 		//this.RefreshCanvasResolution();
 		this.OnResize();
 		const Options = Object.assign({}, this.CanvasOptions);
-		if (Options.antialias == undefined) Options.antialias = false;
+		if (Options.antialias == undefined) Options.antialias = true;
 		if (Options.xrCompatible == undefined) Options.xrCompatible = true;
 		//	default is true. when true, this is causing an rgb blend with white,
 		//	instead of what's behind the canvas, causing a white halo
