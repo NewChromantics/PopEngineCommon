@@ -176,12 +176,11 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		//glLayer = xrGLFactory.getViewSubImage( this.session.renderState.layers[0], view);
 		let glLayer = xrGLFactory.getViewSubImage( this.Layer, View0 );
 		const mv_ext = this.RenderContext.MultiView;
-		//glLayer.framebuffer = xrFramebuffer;
 		
 		//	setup frame buffer with 2 colour & depth attachments
-		const Framebuffer = gl.createFramebuffer();
+		const FrameBuffer = gl.createFramebuffer();
 		
-		gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, Framebuffer);
+		gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, FrameBuffer);
 
 		const Viewport = this.GetRenderTargetRect();
 		const Width = Viewport[2];
@@ -224,11 +223,11 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		//mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, 0, 2);
 		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, this.AntiAliasSamples, 0, 2);
 		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, this.depthStencilTex, 0, this.AntiAliasSamples, 0, 2);
-		
+
 		//	have to bind every frame, so dont bother doing it here
 		//this.BindFrameBufferAttachments(Framebuffer);
 			
-		return Framebuffer;
+		return FrameBuffer;
 	}
 	
 	BindFrameBufferAttachments(FrameBuffer=null)
@@ -313,11 +312,10 @@ class RenderTargetMultiviewProxy extends RenderTarget
 
 		let view = this.Views[0];
 		let glLayer = this.xrGLFactory.getViewSubImage( this.Session.renderState.layers[0], view);
-		//	gr: viewport is same on both layers (no x offset)
-		let viewport = glLayer.viewport;
 		
-		//	is this needed, or just somewhere to save it in the demo?
-		//glLayer.framebuffer = FrameBuffer;
+		//	not sure if we need this, or if it's just somewhere to store the variable in the demo
+		//	doesn't seem to be needed
+		glLayer.framebuffer = FrameBuffer;
 		
 		//	need to do this everyframe otherwise it's incomplete
 		this.BindFrameBufferAttachments();
@@ -330,6 +328,8 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		//	https://immersive-web.github.io/webxr-samples/layers-samples/proj-multiview.html
 		this.ResetState();
 
+		//	gr: viewport is same on both layers (no x offset)
+		//const Viewport = glLayer.viewport;
 		const Viewport = this.GetRenderTargetRect();
 		gl.viewport( ...Viewport );
 		
