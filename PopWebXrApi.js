@@ -270,6 +270,12 @@ class RenderTargetMultiviewProxy extends RenderTarget
 
 		function Unbind()
 		{
+			const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
+			const InvalidateAttachments = [
+			//gl.COLOR_ATTACHMENT0,//	clears eye contents
+			DepthAttachment,
+			];
+			gl.invalidateFramebuffer( gl.DRAW_FRAMEBUFFER, InvalidateAttachments );
 		}
 		return Unbind.bind(this);
 	}
