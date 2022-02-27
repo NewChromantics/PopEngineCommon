@@ -3,7 +3,7 @@ import * as Pop from './PopWebApiCore.js'
 import {CreatePromise} from './PopApi.js'
 import PromiseQueue from './PromiseQueue.js'
 import {BrowserAnimationStep} from './PopWebApi.js'
-import {RenderTarget,RenderCommands_t,GetString} from './PopWebOpenglApi.js'
+import {RenderTarget,RenderCommands_t,GetString,RenderCommand_Draw} from './PopWebOpenglApi.js'
 import Camera_t from './Camera.js'
 import {SetMatrixTranslation,Distance3} from './Math.js'
 import Image_t from './PopWebImageApi.js'
@@ -936,18 +936,36 @@ class Device_t
 		const RenderTarget = this.MultiviewRenderTarget;
 		RenderTarget.UpdateViews(Pose.views);
 		RenderTarget.DeviceFbo = DeviceFbo;
+
+		//	fast/min-test 
+		//const Unbind = RenderTarget.BindRenderTarget(this.RenderContext);
+		//Unbind();
 		
 		//	to get scene commands, we only need one camera
 		//	2nd view stuff is done in shader view multiview
-		const Camera = this.GetXrCamera( Frame, Pose, Pose.views[0] );
-		//Cameras.push( this.GetXrCamera( Frame, Pose, Pose.views[1] ) );
-		let RenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
+		const LeftCamera = this.GetXrCamera( Frame, Pose, Pose.views[0] );
+		const RightCamera = this.GetXrCamera( Frame, Pose, Pose.views[1] );
+		const Cameras = [LeftCamera,RightCamera];
+		let RenderCommands = this.GetRenderCommands( this.RenderContext, LeftCamera );
 		
 		//	execute commands
 		RenderCommands = new RenderCommands_t( RenderCommands );
+		
+		const Viewport = this.MultiviewRenderTarget.GetRenderTargetRect();
+		const InjectedUniforms = {};
+		InjectedUniforms.Pop_CameraWorldToCameraTransforms = Cameras.map( c => c.GetWorldToCameraMatrix() ).map( v => Array.from(v) ).flat(2);
+		InjectedUniforms.Pop_CameraProjectionTransforms = Cameras.map( c => c.GetProjectionMatrix(Viewport) ).map( v => Array.from(v) ).flat(2);
+
+		function InjectCameraUniforms(RenderCommand)
+		{
+			if ( RenderCommand instanceof RenderCommand_Draw )
+			{
+				Object.assign( RenderCommand.Uniforms, InjectedUniforms );
+			}
+		}
+		RenderCommands.Commands.forEach( InjectCameraUniforms );
+		
 		this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
-		//const Unbind = RenderTarget.BindRenderTarget(this.RenderContext);
-		//Unbind();
 	}
 	
 	GetXrCamera(Frame,Pose,View)

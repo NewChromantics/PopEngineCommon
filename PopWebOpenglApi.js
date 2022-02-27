@@ -413,7 +413,7 @@ class StateParams_t
 	}
 }
 
-class RenderCommand_Draw extends RenderCommand_Base
+export class RenderCommand_Draw extends RenderCommand_Base
 {
 	constructor()
 	{
