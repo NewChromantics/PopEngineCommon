@@ -93,7 +93,11 @@ function GetUniformOrAttribMeta(Context,Program,Uniform)
 	
 	switch( Uniform.type )
 	{
-		case gl.SAMPLER_2D:	//	samplers' value is the texture index
+		//	samplers' value is the texture index
+		case gl.SAMPLER_2D:	
+		case gl.SAMPLER_2D_ARRAY:
+		case gl.SAMPLER_CUBE:
+		case gl.SAMPLER_3D:
 		case gl.INT:
 		case gl.UNSIGNED_INT:
 		case gl.BOOL:
@@ -2556,7 +2560,8 @@ export class Shader
 			return false;
 		if( Array.isArray(Value) )					this.SetUniformArray( Uniform, UniformMeta, Value );
 		else if( Value instanceof Float32Array )	this.SetUniformArray( Uniform, UniformMeta, Value );
-		else if ( Value instanceof PopImage )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTextureIndex() );
+		else if ( Value instanceof PopImage )		this.SetUniformPopImage( Uniform, UniformMeta, Value, this.Context.AllocTextureIndex() );
+		else if ( Value instanceof WebGLTexture )	this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTextureIndex() );
 		else if ( typeof Value === 'number' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else if ( typeof Value === 'boolean' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else
@@ -2614,9 +2619,14 @@ export class Shader
 		UniformMeta.SetValues( ValuesExpanded );
 	}
 	
-	SetUniformTexture(Uniform,UniformMeta,Image,TextureIndex)
+	SetUniformPopImage(Uniform,UniformMeta,Image,TextureIndex)
 	{
 		const Texture = Image.GetOpenglTexture( this.Context );
+		this.SetUniformTexture( Uniform, UniformMeta, Texture, TextureIndex );
+	}
+	
+	SetUniformTexture(Uniform,UniformMeta,Texture,TextureIndex)
+	{
 		const gl = this.GetGlContext();
 		//  https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Using_textures_in_WebGL
 		//  WebGL provides a minimum of 8 texture units;
