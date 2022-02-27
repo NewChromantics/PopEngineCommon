@@ -38,7 +38,7 @@ export let AllowFloatTextures = !Pop.GetExeArguments().DisableFloatTextures;
 
 const AllowMultiView = false;
 
-function GetString(Context,Enum)
+export function GetString(Context,Enum)
 {
 	const gl = Context;
 	const Enums =
