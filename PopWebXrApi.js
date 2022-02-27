@@ -78,19 +78,16 @@ class RenderTargetMultiviewProxy extends RenderTarget
 	{
 		super();
 		this.EnableStencilBuffer = EnableStencilBuffer;
+		this.AntiAliasSamples = 2;
 		this.Session = Session;
 		this.Views = null;
 		this.Layer = Layer;
 		this.RenderContext = RenderContext;
 
 		const gl = this.RenderContext.Context;
-
-		//	grab device FBO
-		//this.DeviceFbo = gl.getParameter(gl.FRAMEBUFFER_BINDING);
-		//console.log(`Device FBO is ${this.backFbo}`);
 		
 		//this.stereoUtil = new VRStereoUtil(gl);
-		this.CreateStereoBlitter().catch(console.error);
+		//this.CreateStereoBlitter().catch(console.error);
 	}
 	
 	async CreateStereoBlitter()
@@ -98,11 +95,6 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		const VertSource = StereoBlitterVertShader;
 		const FragSource = StereoBlitterFragShader;
 		this.StereoBlitShader = await this.RenderContext.CreateShader(VertSource,FragSource);
-		/*
-			this.program_multiview.bindAttribLocation({
-				v_texcoord: 0,
-			});
-			*/		
 
 		//	should this rect be in pixels?
 		const Geo = CreateStereoBlitQuadGeometry( [0,0,1,1], 'UvEye' );
@@ -171,7 +163,6 @@ class RenderTargetMultiviewProxy extends RenderTarget
 	CreateFrameBuffer()
 	{
 		const gl = this.RenderContext.Context;
-		const AntiAliasSamples = 1;
 
 		//	create one off objects
 		if ( !this.xrGLFactory )
@@ -213,7 +204,7 @@ class RenderTargetMultiviewProxy extends RenderTarget
 			//gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA8, Width, Height, 2, 0, gl.RGBA, gl.UNSIGNED_BYTE, null );
 		}
 		//mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.ColourTexture, 0, 0, 2);
-		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.ColourTexture, 0, AntiAliasSamples, 0, 2);
+		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.ColourTexture, 0, this.AntiAliasSamples, 0, 2);
 
 		//	create depth/stencil if not provided
 		this.depthStencilTex = this.depthStencilTex || glLayer.depthStencilTexture || this.Layer.depthStencilTexture;
@@ -231,14 +222,37 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		}
 		//	attach depth/stencil to framebuffer
 		//mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, 0, 2);
-		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, AntiAliasSamples, 0, 2);
-		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, this.depthStencilTex, 0, AntiAliasSamples, 0, 2);
+		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, this.AntiAliasSamples, 0, 2);
+		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, this.depthStencilTex, 0, this.AntiAliasSamples, 0, 2);
+		
+		//	have to bind every frame, so dont bother doing it here
+		//this.BindFrameBufferAttachments(Framebuffer);
+			
+		return Framebuffer;
+	}
+	
+	BindFrameBufferAttachments(FrameBuffer=null)
+	{
+		FrameBuffer = FrameBuffer || this.FrameBuffer;
+		
+		const gl = this.RenderContext.Context;
+		const mv_ext = this.RenderContext.MultiView;
+		
+		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
+
+		//	demo re-assigns each frame
+		mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.ColourTexture, 0, this.AntiAliasSamples, 0, 2);
+			
+		//	demo always uses depth_attachment
+		//	https://github.com/immersive-web/webxr-samples/blob/7db0e01bf6ca0814c73dcaa5fb71e37fe340dca5/layers-samples/proj-multiview.html
+		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, this.depthStencilTex, 0, this.AntiAliasSamples, 0, 2);
+		const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
+		mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, DepthAttachment, this.depthStencilTex, 0, this.AntiAliasSamples, 0, 2);
+		
 		
 		const Status = gl.checkFramebufferStatus( gl.DRAW_FRAMEBUFFER );
 		if ( Status != gl.FRAMEBUFFER_COMPLETE )
-			console.log(`XRframebuffer init attachment status not complete: ${GetString(gl,Status)}`);
-		
-		return Framebuffer;
+			console.log(`XRframebuffer attachment status not complete: ${GetString(gl,Status)}`);
 	}
 	
 	GetFrameBuffer()
@@ -295,42 +309,23 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		if ( FrameBuffer === undefined )
 			throw `RenderTargetFrameBufferProxy BindRenderTarget() with ${FrameBuffer}, invalid`;
  
-		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
+		//gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
 
-		//for ( let view of this.Views )
-		for ( let v=0;	v<this.Views.length;	v++ )
-		{
-			let view = this.Views[v];
-			let glLayer = this.xrGLFactory.getViewSubImage( this.Session.renderState.layers[0], view);
-			//	gr: viewport is same on both layers (no x offset)
-			let viewport = glLayer.viewport;
-			glLayer.framebuffer = FrameBuffer;
-			gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
-			
-			//	demo only does this once
-			//	but it does re-assign each frame
-			if ( v == 0 )
-			{
-				const AntiAliasSamples = 1;
-				const mv_ext = this.RenderContext.MultiView;
-				mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.ColourTexture, 0, AntiAliasSamples, 0, 2);
-				
-				//	demo always uses depth_attachment
-				//	https://github.com/immersive-web/webxr-samples/blob/7db0e01bf6ca0814c73dcaa5fb71e37fe340dca5/layers-samples/proj-multiview.html
-				//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, this.depthStencilTex, 0, AntiAliasSamples, 0, 2);
-				const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
-				mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, DepthAttachment, this.depthStencilTex, 0, AntiAliasSamples, 0, 2);
-				
-				const Status = gl.checkFramebufferStatus( gl.DRAW_FRAMEBUFFER );
-				if ( Status != gl.FRAMEBUFFER_COMPLETE )
-					console.log(`XRframebuffer init attachment status not complete: ${GetString(gl,Status)}`);
-
-				gl.disable(gl.SCISSOR_TEST);
-				gl.clearColor( 0, 1, 1, 1 );
-				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-			}
-		}
-
+		let view = this.Views[0];
+		let glLayer = this.xrGLFactory.getViewSubImage( this.Session.renderState.layers[0], view);
+		//	gr: viewport is same on both layers (no x offset)
+		let viewport = glLayer.viewport;
+		
+		//	is this needed, or just somewhere to save it in the demo?
+		//glLayer.framebuffer = FrameBuffer;
+		
+		//	need to do this everyframe otherwise it's incomplete
+		this.BindFrameBufferAttachments();
+		
+		gl.disable(gl.SCISSOR_TEST);
+		gl.clearColor( 0, 1, 1, 1 );
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	
 		//	this demo then does one viewport, and one render of instances
 		//	https://immersive-web.github.io/webxr-samples/layers-samples/proj-multiview.html
 		this.ResetState();
@@ -338,44 +333,16 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		const Viewport = this.GetRenderTargetRect();
 		gl.viewport( ...Viewport );
 		
-		
-		//gl.viewport(0, 0, width, height);
-		//gl.scissor(0, 0, width, height);
-		//gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
 		//	webxr on quest needs scissoring
 		//	does this break pixel3 webAR?
 		//	gr: I believe this breaks the looking glass webxr extension
+		//	gr: for multiview, we don't want to scissor
 		//gl.scissor( ...Viewport );
 		//gl.enable(gl.SCISSOR_TEST);
-			
 		gl.disable(gl.SCISSOR_TEST);
-
-		gl.clearColor( 1, 1, 0, 1 );
-		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-		//	rendering occurs...
-		//	then we need to blit the texture array to the back buffer
 
 		function Unbind()
 		{
-			//	gr: I think this is only for webvr
-			//		babylon js explicitly doesnt do this
-			//	https://github.com/BabylonJS/Babylon.js/blob/9bfda138aa4bd2d1370ca2c2ded5b65acafb1996/src/Engines/Extensions/engine.multiview.ts#L114
-			return;
-			//	https://developer.oculus.com/documentation/web/web-multiview/#multi-view-webvr-code-example
-			// "Now we need to copy rendering from the texture2D array into the actual back
-			// buffer to present it on the device"
-			//gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, [ gl.DEPTH_STENCIL_ATTACHMENT ]);
-
-			gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.DeviceFbo );
-
-			const width = Viewport[2];
-			const height = Viewport[3];
-			// This function just copies two layers of the texture2D array as side-by-side
-			// stereo into the back buffer.
-			//this.stereoUtil.blit( gl, this.ColourTexture, 0, 0, 1, 1, width*2, height);
-			this.DoStereoBlit(gl,Viewport);
 		}
 		return Unbind.bind(this);
 	}
@@ -771,13 +738,11 @@ class Device_t
 			this.FrameUpdate_Depth(Frame,Pose);
 		
 		const gl = this.RenderContext.Context;
-		const DeviceFbo = gl.getParameter(gl.FRAMEBUFFER_BINDING);
-		//console.log(`DefaultBoundFbo ${DefaultBoundFbo}`);
 		
 		
 		if ( this.RenderContext.MultiView )
 		{
-			this.FrameUpdate_RenderMultiView( Frame, Pose, DeviceFbo );
+			this.FrameUpdate_RenderMultiView( Frame, Pose );
 		}
 		else
 		{
@@ -927,7 +892,7 @@ class Device_t
 	}
 	
 
-	FrameUpdate_RenderMultiView( Frame, Pose, DeviceFbo )
+	FrameUpdate_RenderMultiView(Frame, Pose)
 	{
 		if ( !this.MultiviewRenderTarget )
 		{
@@ -935,7 +900,6 @@ class Device_t
 		}
 		const RenderTarget = this.MultiviewRenderTarget;
 		RenderTarget.UpdateViews(Pose.views);
-		RenderTarget.DeviceFbo = DeviceFbo;
 
 		//	fast/min-test 
 		//const Unbind = RenderTarget.BindRenderTarget(this.RenderContext);
