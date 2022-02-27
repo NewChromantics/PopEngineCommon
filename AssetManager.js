@@ -1,4 +1,4 @@
-import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
+import { CleanShaderSource,InsertMacrosToShader,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
 import {GetUniqueHash} from './Hash.js'
 import {ExtractShaderUniforms,ExtractShaderAttributes} from './Shaders.js'
 import Pop from './PopEngine.js'
@@ -141,19 +141,34 @@ export function GetAsset(Name,RenderContext)
 	}
 }
 
+function ShaderMacrosToHash(Macros)
+{
+	if ( !Macros )
+		return ``;
+		
+	let Hash = `_`;
+	for ( let [Macro,Value] of Object.entries(Macros) )
+	{
+		Hash += `${Macro}=${Value}_`;
+	}
+	return Hash;
+}
+
 //	this returns the "asset name"
 //	gr: should this be somewhere else, not in the core asset manager?
-export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUniforms,ShaderAttribs)
+export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderMacros,/*ShaderUniforms,*/ShaderAttribs)
 {
 	//	we now extract these with regex
-	if ( ShaderUniforms )	
-		Pop.Debug(`RegisterShaderAssetFilename(${FragFilename}): ShaderUniforms no longer need to be supplied`);
+	//	gr: 3rd arg is now defines/macros
+	//if ( ShaderUniforms )	
+	//	Pop.Debug(`RegisterShaderAssetFilename(${FragFilename}): ShaderUniforms no longer need to be supplied`);
 		
 	if ( ShaderAttribs )
 		Pop.Debug(`RegisterShaderAssetFilename(${FragFilename}): ShaderAttribs no longer need to be supplied`);
 		
 	//	we use / as its not a valid filename char
-	const AssetName = FragFilename+PopAssetManager.AssetFilenameJoinString+VertFilename;
+	let AssetName = FragFilename+PopAssetManager.AssetFilenameJoinString+VertFilename;
+	AssetName += ShaderMacrosToHash(ShaderMacros);
 
 	async function LoadAndCompileShader(RenderContext)
 	{
@@ -163,6 +178,8 @@ export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUnif
 
 		//FragSource = RefactorFragShader(FragSource);
 		//VertSource = RefactorVertShader(VertSource);
+		FragSource = InsertMacrosToShader(FragSource,ShaderMacros);
+		VertSource = InsertMacrosToShader(VertSource,ShaderMacros);
 
 		const ShaderUniforms = ExtractShaderUniforms( FragSource, VertSource );
 		const ShaderAttribute = ExtractShaderAttributes( FragSource, VertSource );
