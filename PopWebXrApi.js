@@ -3,11 +3,14 @@ import * as Pop from './PopWebApiCore.js'
 import {CreatePromise} from './PopApi.js'
 import PromiseQueue from './PromiseQueue.js'
 import {BrowserAnimationStep} from './PopWebApi.js'
-import {RenderTarget,RenderCommands_t} from './PopWebOpenglApi.js'
+import {RenderTarget,RenderCommands_t,GetString} from './PopWebOpenglApi.js'
 import Camera_t from './Camera.js'
 import {SetMatrixTranslation,Distance3} from './Math.js'
 import Image_t from './PopWebImageApi.js'
 import FrameCounter_t from './FrameCounter.js'
+
+import {CreateBlitQuadGeometry,MergeGeometry} from './CommonGeometry.js'
+
 
 class RenderTargetFrameBufferProxy extends RenderTarget
 {
@@ -49,7 +52,7 @@ class RenderTargetFrameBufferProxy extends RenderTarget
 			throw `RenderTargetFrameBufferProxy BindRenderTarget() with ${FrameBuffer}, invalid`;
 	
 		//	todo: make this common code
-		gl.bindFramebuffer( gl.FRAMEBUFFER, FrameBuffer );
+		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
 		
 		const Viewport = this.GetRenderTargetRect();
 		gl.viewport( ...Viewport );
@@ -71,9 +74,10 @@ class RenderTargetFrameBufferProxy extends RenderTarget
 
 class RenderTargetMultiviewProxy extends RenderTarget
 {
-	constructor(Session,Layer,RenderContext)
+	constructor(Session,Layer,RenderContext,EnableStencilBuffer)
 	{
 		super();
+		this.EnableStencilBuffer = EnableStencilBuffer;
 		this.Session = Session;
 		this.Views = null;
 		this.Layer = Layer;
@@ -82,8 +86,8 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		const gl = this.RenderContext.Context;
 
 		//	grab device FBO
-		this.backFbo = gl.getParameter(gl.FRAMEBUFFER_BINDING);
-		console.log(`Device FBO is ${this.backFbo}`);
+		//this.DeviceFbo = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+		//console.log(`Device FBO is ${this.backFbo}`);
 		
 		//this.stereoUtil = new VRStereoUtil(gl);
 		this.CreateStereoBlitter().catch(console.error);
@@ -93,64 +97,81 @@ class RenderTargetMultiviewProxy extends RenderTarget
 	{
 		const VertSource = StereoBlitterVertShader;
 		const FragSource = StereoBlitterFragShader;
-		this.StereoBlitShader = await this.RenderContent.CreateShader(FragSource,VertSource);
+		this.StereoBlitShader = await this.RenderContext.CreateShader(VertSource,FragSource);
 		/*
 			this.program_multiview.bindAttribLocation({
 				v_texcoord: 0,
 			});
 			*/		
-		
-		//	shader doesnt use any geo attribs!
-		const Geo = {};
-		Geo.v_texcoord = {};
-		Geo.v_texcoord.Data = [0,1,2,3];
-		Geo.v_texcoord.Size = 1;
+
+		//	should this rect be in pixels?
+		const Geo = CreateStereoBlitQuadGeometry( [0,0,1,1], 'UvEye' );
 		this.StereoBlitGeo = await this.RenderContext.CreateGeometry(Geo);
-		this.StereoBlitVao = gl.createVertexArray();
 	}
 	
 	DoStereoBlit(gl,Viewport)
 	{
+		if ( !this.StereoBlitShader )
+		{
+			console.log(`Still waiting for StereoBlitShader`);
+			return;
+		}
+		if ( !this.StereoBlitGeo )
+		{
+			console.log(`Still waiting for StereoBlitGeo`);
+			return;
+		}
+		
 		const width = Viewport[2];
 		const height = Viewport[3];
 		const Shader = this.StereoBlitShader;
-
+		const Geometry = this.StereoBlitGeo;
+/*
 		const source_texture = this.ColourTexture;
 		
 		gl.activeTexture(gl.TEXTURE0);
 		gl.bindTexture(gl.TEXTURE_2D_ARRAY, source_texture);
 		//const Program = this.StereoBlitShader.GetProgram(this.RenderContext);
 		//this.BindProgram(Program);
+		*/
 		gl.disable(gl.SCISSOR_TEST);
 		gl.disable(gl.DEPTH_TEST);
 		gl.disable(gl.STENCIL_TEST);
 		gl.colorMask(true, true, true, true);
 		gl.depthMask(false);
+		gl.viewport( ...Viewport );
+		gl.clearColor( 0, 1, 0, 1 );
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-		gl.viewport(0, 0, dest_surface_width, dest_surface_height);
+		gl.viewport( ...Viewport );
+		//gl.viewport( 0,0,Viewport[2]*2,Viewport[3] );
 
 		const Uniforms = {};
-		Uniforms.u_scale = [source_rect_uv_width, source_rect_uv_height];
-		Uniforms.u_offset = [source_rect_uv_x, source_rect_uv_y];
-		Uniforms.u_source_texture = 0;
+		Uniforms.SourceTextures = this.ColourTexture;
+		//Uniforms.u_scale = [source_rect_uv_width, source_rect_uv_height];
+		//Uniforms.u_offset = [source_rect_uv_x, source_rect_uv_y];
+		//Uniforms.u_source_texture = 0;
 
-		Shader.Bind( RenderContext );
-		//Geometry.Bind( RenderContext, Shader );
-		gl.bindVertexArray(this.vao);
+		Shader.Bind( this.RenderContext );
+		Geometry.Bind( this.RenderContext, Shader );
+		//gl.bindVertexArray(this.vao);
 		
 		for ( const [UniformName,UniformValue] of Object.entries(Uniforms) )
 			Shader.SetUniform( UniformName, UniformValue );
 			
-		//Geometry.Draw( RenderContext, InstanceCount );
+		Geometry.Draw( this.RenderContext );
+		/*
 		gl.drawArrays(gl.TRIANGLES, 0, 12);
 
 		gl.enable(gl.DEPTH_TEST);
 		gl.depthMask(true);
+		*/
 	}
 	
 	CreateFrameBuffer()
 	{
 		const gl = this.RenderContext.Context;
+		const AntiAliasSamples = 1;
 
 		//	create one off objects
 		if ( !this.xrGLFactory )
@@ -169,8 +190,6 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		//	setup frame buffer with 2 colour & depth attachments
 		const Framebuffer = gl.createFramebuffer();
 		
-		//	gr: make sure these are the same/consistent
-		//gl.bindFramebuffer(gl.FRAMEBUFFER, Framebuffer);
 		gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, Framebuffer);
 
 		const Viewport = this.GetRenderTargetRect();
@@ -181,26 +200,43 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		//	gr: https://github.com/abidaqib/WebXRTest1/blob/40692ecf649b9282f5b38fb570c871cddff8d8ef/layers-samples/proj-multiview.html
 		//		this example just took colour from layer...
 		//		oculus (webvr) example created it's own
-		this.ColourTexture = this.Layer.colorTexture;
+		this.ColourTexture = this.ColourTexture || glLayer.colorTexture || this.Layer.colorTexture;
 		if ( !this.ColourTexture )
 		{
 			this.ColourTexture = gl.createTexture();
 			gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.ColourTexture);
 			gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, Width, Height, 2);
+			//	threejs does this
+			//	https://github.com/mrdoob/three.js/commit/c680e4c7159b94514a2121bd64dd17d21ba89c02
+			gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST );
+			gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST );
+			//gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.RGBA8, Width, Height, 2, 0, gl.RGBA, gl.UNSIGNED_BYTE, null );
 		}
-		mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.ColourTexture, 0, 0, 2);
+		//mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.ColourTexture, 0, 0, 2);
+		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.ColourTexture, 0, AntiAliasSamples, 0, 2);
 
 		//	create depth/stencil if not provided
-		this.depthStencilTex = this.Layer.depthStencilTexture;
+		this.depthStencilTex = this.depthStencilTex || glLayer.depthStencilTexture || this.Layer.depthStencilTexture;
 		if ( !this.depthStencilTex )
 		{
 			console.log("MaxViews = " + gl.getParameter(mv_ext.MAX_VIEWS_OVR));
 			this.depthStencilTex = gl.createTexture();
 			gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.depthStencilTex);
 			gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.DEPTH_COMPONENT24, Width, Height, 2);
+			//	threejs
+			gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST );
+			gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.NEAREST );
+			//gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.DEPTH_COMPONENT24, Width, Height, 2, 0, gl.DEPTH_STENCIL, gl.UNSIGNED_INT_24_8, null );
+			//gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.DEPTH_COMPONENT24, Width, Height, 2, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null );
 		}
 		//	attach depth/stencil to framebuffer
-		mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, 0, 2);
+		//mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, 0, 2);
+		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, AntiAliasSamples, 0, 2);
+		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, this.depthStencilTex, 0, AntiAliasSamples, 0, 2);
+		
+		const Status = gl.checkFramebufferStatus( gl.DRAW_FRAMEBUFFER );
+		if ( Status != gl.FRAMEBUFFER_COMPLETE )
+			console.log(`XRframebuffer init attachment status not complete: ${GetString(gl,Status)}`);
 		
 		return Framebuffer;
 	}
@@ -249,20 +285,59 @@ class RenderTargetMultiviewProxy extends RenderTarget
 	
 	BindRenderTarget(RenderContext)
 	{
+		const gl = RenderContext.GetGlContext();
+		
 		//	gr: this should be binding as if it's rendering to one eye
 		//	https://developer.oculus.com/documentation/web/web-multiview/#multi-view-webvr-code-example
-		const gl = RenderContext.GetGlContext();
+		//	working demo here
+		//	https://immersive-web.github.io/webxr-samples/layers-samples/proj-multiview.html
 		const FrameBuffer = this.GetFrameBuffer();
 		if ( FrameBuffer === undefined )
 			throw `RenderTargetFrameBufferProxy BindRenderTarget() with ${FrameBuffer}, invalid`;
-	
-		//	todo: make this common code
-		gl.bindFramebuffer( gl.FRAMEBUFFER, FrameBuffer );
-		
+ 
+		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
+
+		//for ( let view of this.Views )
+		for ( let v=0;	v<this.Views.length;	v++ )
+		{
+			let view = this.Views[v];
+			let glLayer = this.xrGLFactory.getViewSubImage( this.Session.renderState.layers[0], view);
+			//	gr: viewport is same on both layers (no x offset)
+			let viewport = glLayer.viewport;
+			glLayer.framebuffer = FrameBuffer;
+			gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
+			
+			//	demo only does this once
+			//	but it does re-assign each frame
+			if ( v == 0 )
+			{
+				const AntiAliasSamples = 1;
+				const mv_ext = this.RenderContext.MultiView;
+				mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.ColourTexture, 0, AntiAliasSamples, 0, 2);
+				
+				//	demo always uses depth_attachment
+				//	https://github.com/immersive-web/webxr-samples/blob/7db0e01bf6ca0814c73dcaa5fb71e37fe340dca5/layers-samples/proj-multiview.html
+				//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, this.depthStencilTex, 0, AntiAliasSamples, 0, 2);
+				const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
+				mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, DepthAttachment, this.depthStencilTex, 0, AntiAliasSamples, 0, 2);
+				
+				const Status = gl.checkFramebufferStatus( gl.DRAW_FRAMEBUFFER );
+				if ( Status != gl.FRAMEBUFFER_COMPLETE )
+					console.log(`XRframebuffer init attachment status not complete: ${GetString(gl,Status)}`);
+
+				gl.disable(gl.SCISSOR_TEST);
+				gl.clearColor( 0, 1, 1, 1 );
+				gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+			}
+		}
+
+		//	this demo then does one viewport, and one render of instances
+		//	https://immersive-web.github.io/webxr-samples/layers-samples/proj-multiview.html
+		this.ResetState();
+
 		const Viewport = this.GetRenderTargetRect();
 		gl.viewport( ...Viewport );
 		
-		this.ResetState();
 		
 		//gl.viewport(0, 0, width, height);
 		//gl.scissor(0, 0, width, height);
@@ -271,22 +346,29 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		//	webxr on quest needs scissoring
 		//	does this break pixel3 webAR?
 		//	gr: I believe this breaks the looking glass webxr extension
-		gl.scissor( ...Viewport );
-		gl.enable(gl.SCISSOR_TEST);
+		//gl.scissor( ...Viewport );
+		//gl.enable(gl.SCISSOR_TEST);
 			
-		//gl.disable(gl.SCISSOR_TEST);
+		gl.disable(gl.SCISSOR_TEST);
+
+		gl.clearColor( 1, 1, 0, 1 );
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
 		//	rendering occurs...
 		//	then we need to blit the texture array to the back buffer
 
 		function Unbind()
 		{
+			//	gr: I think this is only for webvr
+			//		babylon js explicitly doesnt do this
+			//	https://github.com/BabylonJS/Babylon.js/blob/9bfda138aa4bd2d1370ca2c2ded5b65acafb1996/src/Engines/Extensions/engine.multiview.ts#L114
+			return;
 			//	https://developer.oculus.com/documentation/web/web-multiview/#multi-view-webvr-code-example
 			// "Now we need to copy rendering from the texture2D array into the actual back
 			// buffer to present it on the device"
-			gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, [ gl.DEPTH_STENCIL_ATTACHMENT ]);
+			//gl.invalidateFramebuffer(gl.DRAW_FRAMEBUFFER, [ gl.DEPTH_STENCIL_ATTACHMENT ]);
 
-			gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.backFbo );
+			gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, this.DeviceFbo );
 
 			const width = Viewport[2];
 			const height = Viewport[3];
@@ -448,13 +530,16 @@ class Device_t
 			this.ReferenceSpace.addEventListener('reset', this.OnSpaceChanged.bind(this) );
 			
 		Session.addEventListener('end', this.OnSessionEnded.bind(this) );
-		this.InitLayer( RenderContext );
+		//	this is async so gets called from outside now
+		//this.InitLayer( RenderContext );
 		
 		//	do an initial space update in case its initialised already
 		this.OnSpaceChanged();
-		
-		//	start loop
-		Session.requestAnimationFrame( this.OnFrame.bind(this) );
+	}
+	
+	async WaitForInit()
+	{
+		await this.InitLayer( this.RenderContext );
 	}
 	
 	async WaitForNewSpace()
@@ -476,7 +561,7 @@ class Device_t
 	
 	//	I think here we can re-create layers if context dies,
 	//	without recreating device
-	InitLayer(RenderContext)
+	async InitLayer(RenderContext)
 	{
 		const Options = {};
 		//	scale down frame buffer size to debug frag vs vert bound
@@ -498,12 +583,15 @@ class Device_t
 	
 		if ( RenderContext.MultiView && this.xrGLFactory )
 		{
-			const EnableStencilBuffer = false;
+			this.EnableStencilBuffer = false;
 			const gl = OpenglContext;
+			
 			this.Layer = this.xrGLFactory.createProjectionLayer({
 				textureType: "texture-array",
-				depthFormat: EnableStencilBuffer ? gl.DEPTH24_STENCIL8 : gl.DEPTH_COMPONENT24
+				depthFormat: this.EnableStencilBuffer ? gl.DEPTH24_STENCIL8 : gl.DEPTH_COMPONENT24
 			});
+			
+			//this.Layer = await this.xrGLFactory.requestProjectionLayer(gl.TEXTURE_2D_ARRAY, {stencil: this.EnableStencilBuffer});
 			this.Session.updateRenderState({ layers: [this.Layer] });
 		}
 		else
@@ -512,6 +600,9 @@ class Device_t
 			this.Session.updateRenderState({ baseLayer: this.Layer });
 		}
 		
+		//	this doesnt work unless updateRenderState is called, so place it here
+		//	start loop
+		this.Session.requestAnimationFrame( this.OnFrame.bind(this) );
 	}
 	
 	async WaitForEnd()
@@ -679,9 +770,14 @@ class Device_t
 		if ( Frame.getDepthInformation  )
 			this.FrameUpdate_Depth(Frame,Pose);
 		
+		const gl = this.RenderContext.Context;
+		const DeviceFbo = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+		//console.log(`DefaultBoundFbo ${DefaultBoundFbo}`);
+		
+		
 		if ( this.RenderContext.MultiView )
 		{
-			this.FrameUpdate_RenderMultiView( Frame, Pose );
+			this.FrameUpdate_RenderMultiView( Frame, Pose, DeviceFbo );
 		}
 		else
 		{
@@ -831,14 +927,15 @@ class Device_t
 	}
 	
 
-	FrameUpdate_RenderMultiView( Frame, Pose )
+	FrameUpdate_RenderMultiView( Frame, Pose, DeviceFbo )
 	{
 		if ( !this.MultiviewRenderTarget )
 		{
-			this.MultiviewRenderTarget = new RenderTargetMultiviewProxy( this.Session, this.Layer, this.RenderContext );
+			this.MultiviewRenderTarget = new RenderTargetMultiviewProxy( this.Session, this.Layer, this.RenderContext, this.EnableStencilBuffer );
 		}
 		const RenderTarget = this.MultiviewRenderTarget;
 		RenderTarget.UpdateViews(Pose.views);
+		RenderTarget.DeviceFbo = DeviceFbo;
 		
 		//	to get scene commands, we only need one camera
 		//	2nd view stuff is done in shader view multiview
@@ -849,6 +946,8 @@ class Device_t
 		//	execute commands
 		RenderCommands = new RenderCommands_t( RenderCommands );
 		this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
+		//const Unbind = RenderTarget.BindRenderTarget(this.RenderContext);
+		//Unbind();
 	}
 	
 	GetXrCamera(Frame,Pose,View)
@@ -1148,6 +1247,7 @@ export async function CreateDevice(RenderContext,GetRenderCommands,OnWaitForCall
 			Pop.Debug(`Got XR ReferenceSpace`,ReferenceSpace);
 			
 			const Device = new Device_t( Session, ReferenceSpace, RenderContext, GetRenderCommands );
+			await Device.WaitForInit();
 			
 			//	add to our global list (currently only to make sure we have one at a time)
 			Devices.push( Device );
@@ -1241,55 +1341,61 @@ function ExtractHandInputs(InputHand,InputName,GetPose)
 	return FingerInputs;
 }
 
-const StereoBlitterVertShader = `
-#version 300 es
-uniform vec2 u_offset;
-uniform vec2 u_scale;
-out mediump vec3 v_texcoord;
+const StereoBlitterVertShader = `#version 300 es
+precision mediump float;
+out vec3 SampleUv;//	z = textureN in texture array
+in vec3 UvEye;
 
 void main() 
 {
-	// offset of eye quad in -1..1 space
-	const float eye_offset_x[12] = float[12] (
-		0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-		1.0, 1.0, 1.0, 1.0, 1.0, 1.0
-	);
-	//  xy - coords of the quad, normalized to 0..1
-	//  xy  - UV of the source texture coordinate.
-	//  z   - texture layer (eye) index - 0 or 1.
-	const vec3 quad_positions[12] = vec3[12]
-	(
-		vec3(0.0, 0.0, 0.0),
-		vec3(1.0, 0.0, 0.0),
-		vec3(0.0, 1.0, 0.0),
-		vec3(0.0, 1.0, 0.0),
-		vec3(1.0, 0.0, 0.0),
-		vec3(1.0, 1.0, 0.0),
-
-		vec3(0.0, 0.0, 1.0),
-		vec3(1.0, 0.0, 1.0),
-		vec3(0.0, 1.0, 1.0),
-
-		vec3(0.0, 1.0, 1.0),
-		vec3(1.0, 0.0, 1.0),
-		vec3(1.0, 1.0, 1.0)
-	);
-
-	const vec2 pos_scale = vec2(0.5, 1.0);
-	vec2 eye_offset = vec2(eye_offset_x[gl_VertexID], 0.0);
-	gl_Position = vec4(((quad_positions[gl_VertexID].xy * u_scale + u_offset) * pos_scale * 2.0) - 1.0 + eye_offset, 0.0, 1.0);
-	v_texcoord = vec3(quad_positions[gl_VertexID].xy * u_scale + u_offset, quad_positions[gl_VertexID].z);
+	//	uv = 0..1
+	//	eye = 0,1
+	//vec2 ClipPos = mix( vec2(-1), vec2(1), UvEye.xy );
+	vec2 ScreenSize = vec2(1440*2,1584);
+	vec2 ScreenSizeHalf = vec2( ScreenSize.x, ScreenSize.y/2.0 );
+	
+	//vec2 ClipPos = mix( vec2(0,0), ScreenSizeHalf, UvEye.xy );
+	//vec2 ClipPos = mix( vec2(0,0), ScreenSizeHalf, UvEye.xy );
+	vec2 ClipPos = mix( vec2(-1), vec2(1), UvEye.xy );
+	//ClipPos.x += UvEye.z * ScreenSizeHalf.x;
+	
+	gl_Position = vec4( ClipPos, 0.0, 1.0);
+	SampleUv = UvEye;
 }
 `;
 
 
-const StereoBlitterFragShader = `
-#version 300 es
-uniform mediump sampler2DArray u_source_texture;
-in mediump vec3 v_texcoord;
-out mediump vec4 output_color;
+const StereoBlitterFragShader = `#version 300 es
+precision mediump float;
+uniform mediump sampler2DArray SourceTextures;
+in vec3 SampleUv;
+out vec4 FragColour;
 void main()
 {
-	output_color = texture(u_source_texture, v_texcoord);
+	//FragColour = texture( SourceTextures, SampleUv );
+	FragColour = vec4( SampleUv, 1.0 );
+	FragColour.z = 1.0;
 }
 `;
+
+function CreateStereoBlitQuadGeometry(Rect=[0,0,1,1],Attrib='TexCoord')
+{
+	let l = Rect[0];
+	let t = Rect[1];
+	let m = Rect[0] + (Rect[2]/2);//middle u
+	let r = Rect[0]+Rect[2];
+	let b = Rect[1]+Rect[3];
+	//	3rd unit is left0 or right1
+	const VertexData = [
+		l,t,0,	r,t,0,	r,b,0,	r,b,0,	l,b,0,	l,t,0,	
+		l,t,1,	r,t,1,	r,b,1,	r,b,1,	l,b,1,	l,t,1	
+	];
+
+	const TexCoord = {};
+	TexCoord.Size = 3;
+	TexCoord.Data = VertexData;
+
+	const Geometry = {};
+	Geometry[Attrib] = TexCoord;
+	return Geometry;
+}
