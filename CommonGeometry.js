@@ -129,21 +129,20 @@ export function CreateQuad3Geometry(Min=-1,Max=1)
 	return Attributes;
 }
 
-
-export function CreateBlitQuadGeometry()
+export function CreateBlitQuadGeometry(Rect=[0,0,1,1],Attrib='TexCoord')
 {
-	let l = 0;
-	let t = 0;
-	let r = 1;
-	let b = 1;
+	let l = Rect[0];
+	let t = Rect[1];
+	let r = Rect[0]+Rect[2];
+	let b = Rect[1]+Rect[3];
 	const VertexData = [	l,t,	r,t,	r,b,	r,b, l,b, l,t	];
-	
+
 	const TexCoord = {};
 	TexCoord.Size = 2;
 	TexCoord.Data = VertexData;
 
 	const Geometry = {};
-	Geometry.TexCoord = TexCoord;
+	Geometry[Attrib] = TexCoord;
 	return Geometry;
 }
 
