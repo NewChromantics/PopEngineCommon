@@ -909,6 +909,14 @@ class Device_t
 		//	2nd view stuff is done in shader view multiview
 		const LeftCamera = this.GetXrCamera( Frame, Pose, Pose.views[0] );
 		const RightCamera = this.GetXrCamera( Frame, Pose, Pose.views[1] );
+		
+		//	need something nicer here to pass params to render commands
+		//	this is used by the callback to get shaders with multiview enabled
+		//	maybe we can automate this in the asset system, but... that's becoming very
+		//	self dependent/enclosed
+		LeftCamera.MultiView = true;
+		RightCamera.MultiView = true;
+		
 		const Cameras = [LeftCamera,RightCamera];
 		let RenderCommands = this.GetRenderCommands( this.RenderContext, LeftCamera );
 		
