@@ -87,34 +87,50 @@ async function ParseSize(SizeChunk)
 async function ParseXyzi(Xyzi,Size,Palette)
 {
 	Size = await ParseSize(Size);
-	const Geometry = {};
-	Geometry.Positions = [];
-	Geometry.Colours = [];
 	
 	const Reader = new ChunkReader(Xyzi.Content);
 	const VoxelCount = await Reader.Read32(LittleEndian);
 	
 	//	much faster to only async once
 	const xyzpals = await Reader.ReadBytes( VoxelCount * 4 );
+	
+	//	generate a list of vertexes so we can sort by z
+	const Vertexes = [];
+	
 	for ( let i=0;	i<VoxelCount;	i++ )
 	{
 		let [x,y,z,Pal] = xyzpals.slice( i*4, i*4+4 );
 		const Rgba = Rgba32ToFloat(Palette[Pal]);
 		
 		let xyz = [x,y,z];
-		//	leave 1unit = 1
-		//let Scale = 3.0;
-		//xyz = xyz.map( (v,i) => v/Size[i] );
-		//xyz = xyz.map( v => (v-0.5)*Scale*2 );
-		
 		x = xyz[0];
 		y = xyz[1];
 		z = xyz[2];
 		xyz = [-x,z,-y];
 		
-		Geometry.Positions.push(xyz);
-		Geometry.Colours.push(Rgba);
+		const Vertex = {};
+		Vertex.Position = xyz;
+		Vertex.Colour = Rgba;
+		Vertexes.push( Vertex );
 	}
+	
+	function CompareZ(a,b)
+	{
+		a = a.Position[2];
+		b = b.Position[2];
+		return a < b ? 1 : -1;
+	}
+	Vertexes.sort(CompareZ);
+	
+	const Geometry = {};
+	Geometry.Positions = [];
+	Geometry.Colours = [];
+	function PushVertex(Vertex)
+	{
+		Geometry.Positions.push( Vertex.Position );
+		Geometry.Colours.push( Vertex.Colour );
+	}
+	Vertexes.forEach(PushVertex);
 	
 	return Geometry;
 }
