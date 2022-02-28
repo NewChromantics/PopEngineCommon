@@ -244,6 +244,10 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		//	doesn't seem to be needed
 		glLayer.framebuffer = FrameBuffer;
 		
+		//	https://developer.oculus.com/documentation/web/webxr-ffr/#to-set-and-adjust-ffr-dynamically
+		//	set dynamic FFR...
+		glLayer.fixedFoveation = 1;
+
 		//	need to do this everyframe otherwise it's incomplete
 		this.BindFrameBufferAttachments();
 		
@@ -491,6 +495,11 @@ class Device_t
 				textureType: "texture-array",
 				depthFormat: this.EnableStencilBuffer ? gl.DEPTH24_STENCIL8 : gl.DEPTH_COMPONENT24
 			});
+			
+			//	https://developer.oculus.com/documentation/web/webxr-ffr/#to-set-and-adjust-ffr-dynamically
+			//	set dynamic FFR...
+			//	or is it in the other layer...
+			this.Layer.fixedFoveation = 1;
 			
 			//this.Layer = await this.xrGLFactory.requestProjectionLayer(gl.TEXTURE_2D_ARRAY, {stencil: this.EnableStencilBuffer});
 			this.Session.updateRenderState({ layers: [this.Layer] });
@@ -1113,6 +1122,11 @@ export async function CreateDevice(RenderContext,GetRenderCommands,OnWaitForCall
 					//	https://immersive-web.github.io/raw-camera-access/
 					Options.optionalFeatures.push('camera-access');
 					
+					//	oculus foveated rendering
+					//	https://developer.oculus.com/documentation/web/webxr-ffr/
+					Options.optionalFeatures.push('high-fixed-foveation-level');
+					
+
 					
 					if ( TrackImages )
 					{
