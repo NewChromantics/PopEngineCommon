@@ -2,6 +2,37 @@
 const Default = 'PopApi.js module';
 export default Default; 
 
+
+
+const ZeroArrayCache = {};	//	[Length] = Float32Array(0's)
+export function GetZeroArray(Length)
+{
+	if ( !ZeroArrayCache[Length] )
+	{
+		ZeroArrayCache[Length] = new Float32Array(Length);
+		ZeroArrayCache[Length].fill(0);
+	}
+	return ZeroArrayCache[Length];
+}
+
+
+
+const IndexArrayCache = {};	//	[Length] = Float32Array(0's)
+export function GetIndexArray(Length)
+{
+	if ( !Number.isInteger(Length) )
+		throw `Invalid index-array length ${Length}, needs to be an integer`;
+		 
+	if ( !IndexArrayCache[Length] )
+	{
+		const Values = new Array(Length).fill(0).map( (zero,index) => index );
+		IndexArrayCache[Length] = new Float32Array(Values);
+	}
+	return IndexArrayCache[Length];
+}
+
+
+
 export function GetArrayRandomIndex(Array)
 {
 	if ( !Array.length )
