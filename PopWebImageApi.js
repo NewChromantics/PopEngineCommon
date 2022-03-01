@@ -453,7 +453,7 @@ export default class PopImage
 		//if ( NewTimestamp === OldTimestamp )
 		if ( this.Pixels == Pixels )
 		{
-			console.warn(`Setting pixels to self?? ${this.Pixels}==${Pixels}?${this.Pixels==Pixels}`);
+			//console.warn(`Setting pixels to self?? ${this.Pixels}==${Pixels}?${this.Pixels==Pixels}`);
 		}
 		else
 		{
