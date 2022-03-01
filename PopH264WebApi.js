@@ -178,15 +178,28 @@ export default class WebcodecDecoder
 
 	Free()
 	{
-		Debug(`PopH264VideoDecoder.free`);
+		Debug(`PopH264VideoDecoder.free (Decoder=${this.Decoder})`);
 		function FreeFrame(Frame)
 		{
 			Frame.close();
 		}
-		this.Decoder.flush();
-		//	todo: close after flush
-		//this.Decoder.close();
+		if ( this.Decoder )
+		{
+			//this.Decoder.flush();
+			//	todo: close after flush finishes
+			//	gr: if we're freeing, we don't need any frames, hard close
+			try
+			{
+				this.Decoder.close();
+			}
+			catch(e)
+			{
+				console.warn(`H264Decoder.free() ${e}`);
+			}
+		}
 		this.DecodedFrameQueue.FlushPending( false, FreeFrame );
+		//	get message out that we're done and there wont be any more frames
+		this.DecodedFrameQueue.Reject('H264 decoder freed');
 	}
 	
 	async TestEncoder()
