@@ -12,22 +12,15 @@ import FrameCounter_t from './FrameCounter.js'
 import {CreateBlitQuadGeometry,MergeGeometry} from './CommonGeometry.js'
 
 
-class RenderTargetStereoLayers extends RenderTarget
+class RenderTargetStereoLayersStorage
 {
 	constructor(Factory,Session,Layer,RenderContext)
 	{
-		super();
 		this.Factory = Factory;
 		this.Session = Session;
 		this.Layer = Layer;
 		this.RenderContext = RenderContext;
-		this.View = null;
 		this.FrameBuffer = null;
-	}
-	
-	UpdateView(View)
-	{
-		this.View = View;
 	}
 	
 	GetFrameBuffer()
@@ -40,32 +33,41 @@ class RenderTargetStereoLayers extends RenderTarget
 	CreateFrameBuffer()
 	{
 		const gl = this.RenderContext.Context;
-		if ( !this.View )
-			throw `Cannot create framebuffer without view`;
-		const LayerImage = this.Factory.getViewSubImage( this.Layer, this.View );
 		
 		const FrameBuffer = gl.createFramebuffer();
 		gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, FrameBuffer);
 
-		this.ColourTexture = this.ColourTexture || LayerImage.colorTexture;
-		this.DepthTexture = this.DepthTexture || LayerImage.depthStencilTexture;
 		return FrameBuffer;
 	}
 	
-	BindFrameBufferAttachments(FrameBuffer=null)
+	BindFrameBufferAttachments(FrameBuffer=null,View)
 	{
 		FrameBuffer = FrameBuffer || this.FrameBuffer;
+
+		if ( !View )
+			throw `Cannot create framebuffer without view`;
+		const LayerImage = this.Factory.getViewSubImage( this.Layer, View );
+		
+		this.ColourTexture = this.ColourTexture || LayerImage.colorTexture;
+		this.DepthTexture = this.DepthTexture || LayerImage.depthStencilTexture;
+		
+		
 		
 		const gl = this.RenderContext.Context;
-		
-		//	https://github.com/immersive-web/webxr-samples/blob/main/layers-samples/proj-layer.html
-		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
 
-		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.ColourTexture, 0);
-		//const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
-		const DepthAttachment = gl.DEPTH_ATTACHMENT;
-		gl.framebufferTexture2D(gl.FRAMEBUFFER, DepthAttachment, gl.TEXTURE_2D, this.DepthTexture, 0);
+		//	once per frame per layer (not per view!)
+		if ( this.AttachmentDirty )
+		{	
+			//	https://github.com/immersive-web/webxr-samples/blob/main/layers-samples/proj-layer.html
+			gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
 
+			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.ColourTexture, 0);
+			//const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
+			const DepthAttachment = gl.DEPTH_ATTACHMENT;
+			gl.framebufferTexture2D(gl.FRAMEBUFFER, DepthAttachment, gl.TEXTURE_2D, this.DepthTexture, 0);
+			
+			this.AttachmentDirty = false;
+		}
 		
 		const Status = gl.checkFramebufferStatus( gl.DRAW_FRAMEBUFFER );
 		if ( Status != gl.FRAMEBUFFER_COMPLETE )
@@ -75,6 +77,61 @@ class RenderTargetStereoLayers extends RenderTarget
 	GetRenderContext()
 	{
 		return this.RenderContext;
+	}
+	
+	
+	BindRenderTarget(RenderContext,View)
+	{
+		const gl = RenderContext.GetGlContext();
+		
+		const SubImage = this.Factory.getViewSubImage( this.Layer, View );
+		
+		const FrameBuffer = this.GetFrameBuffer();
+		if ( FrameBuffer === undefined )
+			throw `RenderTargetStereoLayers BindRenderTarget() with ${FrameBuffer}, invalid`;
+	
+		//	needed? is this just JS storage?
+		SubImage.framebuffer = FrameBuffer;
+		
+		//	todo: make this common code
+		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
+		
+		//	need to do this everyframe otherwise it's incomplete
+		this.BindFrameBufferAttachments(FrameBuffer,View);
+		
+		function Unbind()
+		{
+		}
+		return Unbind.bind(this);
+	}
+}
+
+
+class RenderTargetStereoLayerView extends RenderTarget
+{
+	constructor(RenderTargetStereoStorage)
+	{
+		super();
+		this.StereoStorage = RenderTargetStereoStorage;
+		
+		this.Factory = this.StereoStorage.Factory;
+		this.Session = this.StereoStorage.Session;
+		this.Layer = this.StereoStorage.Layer;
+	}
+	
+	UpdateView(View)
+	{
+		this.View = View;
+	}
+	
+	GetFrameBuffer()
+	{
+		return this.StereoStorage.GetFrameBuffer();
+	}
+	
+	GetRenderContext()
+	{
+		return this.StereoStorage.RenderContext;
 	}
 	
 	GetRenderTargetRect()
@@ -98,22 +155,7 @@ class RenderTargetStereoLayers extends RenderTarget
 	BindRenderTarget(RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
-		
-		const View0 = this.View;
-		const SubImage = this.Factory.getViewSubImage( this.Layer, this.View );
-		
-		const FrameBuffer = this.GetFrameBuffer();
-		if ( FrameBuffer === undefined )
-			throw `RenderTargetStereoLayers BindRenderTarget() with ${FrameBuffer}, invalid`;
-	
-		//	needed? is this just JS storage?
-		SubImage.framebuffer = FrameBuffer;
-		
-		//	todo: make this common code
-		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
-		
-		//	need to do this everyframe otherwise it's incomplete
-		this.BindFrameBufferAttachments();
+		const Unbind = this.StereoStorage.BindRenderTarget( RenderContext, this.View );
 		
 		const Viewport = this.GetRenderTargetRect();
 		//const Viewport = SubImage.viewport;
@@ -127,10 +169,7 @@ class RenderTargetStereoLayers extends RenderTarget
 		gl.scissor( ...Viewport );
 		gl.enable(gl.SCISSOR_TEST);
 		
-		function Unbind()
-		{
-		}
-		return Unbind.bind(this);
+		return Unbind;
 	}
 }
 
@@ -310,8 +349,8 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		this.BindFrameBufferAttachments();
 		
 		gl.disable(gl.SCISSOR_TEST);
-		gl.clearColor( 0, 0, 0, 1 );
-		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+		//gl.clearColor( 0, 0, 0, 1 );
+		//gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	
 		//	this demo then does one viewport, and one render of instances
 		//	https://immersive-web.github.io/webxr-samples/layers-samples/proj-multiview.html
@@ -754,9 +793,8 @@ class Device_t
 		}
 		else
 		{
-			const DeviceFrameBuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
 			for ( let View of Pose.views )
-				this.FrameUpdate_RenderStereoView( Frame, Pose, View, DeviceFrameBuffer );
+				this.FrameUpdate_RenderStereoView( Frame, Pose, View );
 		}
 	}
 	
@@ -982,13 +1020,19 @@ class Device_t
 		return Camera;
 	}
 
-	FrameUpdate_RenderStereoView(Frame,Pose,View,DeviceFrameBuffer)
+	FrameUpdate_RenderStereoView(Frame,Pose,View)
 	{
+		//	gr: we need one storage for 1x framebuffer and 1x attachments
+		//		but 2 objects to pass to render commands for different "devices"
+		if ( !this.StereoRenderTargetStorage )
+			this.StereoRenderTargetStorage = new RenderTargetStereoLayersStorage( this.xrGLFactory, this.Session, this.Layer, this.RenderContext );
+		this.StereoRenderTargetStorage.AttachmentDirty = true; 
+			
 		this.StereoRenderTargets = this.StereoRenderTargets || {};
 		
 		if ( !this.StereoRenderTargets[View.eye] )
 		{
-			const Rt = new RenderTargetStereoLayers( this.xrGLFactory, this.Session, this.Layer, this.RenderContext );
+			const Rt = new RenderTargetStereoLayerView( this.StereoRenderTargetStorage );
 			this.StereoRenderTargets[View.eye] = Rt;
 		}
 		
