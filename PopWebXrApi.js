@@ -12,19 +12,64 @@ import FrameCounter_t from './FrameCounter.js'
 import {CreateBlitQuadGeometry,MergeGeometry} from './CommonGeometry.js'
 
 
-class RenderTargetFrameBufferProxy extends RenderTarget
+class RenderTargetStereoLayers extends RenderTarget
 {
-	constructor(OpenglFrameBuffer,Viewport,RenderContext)
+	constructor(Factory,Session,Layer,RenderContext)
 	{
 		super();
-		this.OpenglFrameBuffer = OpenglFrameBuffer;
-		this.Viewport = Viewport;
+		this.Factory = Factory;
+		this.Session = Session;
+		this.Layer = Layer;
 		this.RenderContext = RenderContext;
+		this.View = null;
+		this.FrameBuffer = null;
+	}
+	
+	UpdateView(View)
+	{
+		this.View = View;
 	}
 	
 	GetFrameBuffer()
 	{
-		return this.OpenglFrameBuffer;
+		if ( !this.FrameBuffer )
+			this.FrameBuffer = this.CreateFrameBuffer();
+		return this.FrameBuffer;
+	}
+	
+	CreateFrameBuffer()
+	{
+		const gl = this.RenderContext.Context;
+		if ( !this.View )
+			throw `Cannot create framebuffer without view`;
+		const LayerImage = this.Factory.getViewSubImage( this.Layer, this.View );
+		
+		const FrameBuffer = gl.createFramebuffer();
+		gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, FrameBuffer);
+
+		this.ColourTexture = this.ColourTexture || LayerImage.colorTexture;
+		this.DepthTexture = this.DepthTexture || LayerImage.depthStencilTexture;
+		return FrameBuffer;
+	}
+	
+	BindFrameBufferAttachments(FrameBuffer=null)
+	{
+		FrameBuffer = FrameBuffer || this.FrameBuffer;
+		
+		const gl = this.RenderContext.Context;
+		
+		//	https://github.com/immersive-web/webxr-samples/blob/main/layers-samples/proj-layer.html
+		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
+
+		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.ColourTexture, 0);
+		//const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
+		const DepthAttachment = gl.DEPTH_ATTACHMENT;
+		gl.framebufferTexture2D(gl.FRAMEBUFFER, DepthAttachment, gl.TEXTURE_2D, this.DepthTexture, 0);
+
+		
+		const Status = gl.checkFramebufferStatus( gl.DRAW_FRAMEBUFFER );
+		if ( Status != gl.FRAMEBUFFER_COMPLETE )
+			console.log(`XRframebuffer attachment status not complete: ${GetString(gl,Status)}`);
 	}
 	
 	GetRenderContext()
@@ -34,27 +79,44 @@ class RenderTargetFrameBufferProxy extends RenderTarget
 	
 	GetRenderTargetRect()
 	{
+		if ( !this.View )
+			throw `Missing view, cannot get render target rect`;
+		
+		const LayerImage = this.Factory.getViewSubImage( this.Layer, this.View );
+		const Viewport = LayerImage.viewport;
 		let Rect = 
 		[
-			this.Viewport.x,
-			this.Viewport.y,
-			this.Viewport.width,
-			this.Viewport.height
+			Viewport.x,
+			Viewport.y,
+			Viewport.width,
+			Viewport.height
 		];
 		return Rect;
 	}
 	
+	
 	BindRenderTarget(RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
+		
+		const View0 = this.View;
+		const SubImage = this.Factory.getViewSubImage( this.Layer, this.View );
+		
 		const FrameBuffer = this.GetFrameBuffer();
 		if ( FrameBuffer === undefined )
-			throw `RenderTargetFrameBufferProxy BindRenderTarget() with ${FrameBuffer}, invalid`;
+			throw `RenderTargetStereoLayers BindRenderTarget() with ${FrameBuffer}, invalid`;
 	
+		//	needed? is this just JS storage?
+		SubImage.framebuffer = FrameBuffer;
+		
 		//	todo: make this common code
 		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
 		
+		//	need to do this everyframe otherwise it's incomplete
+		this.BindFrameBufferAttachments();
+		
 		const Viewport = this.GetRenderTargetRect();
+		//const Viewport = SubImage.viewport;
 		gl.viewport( ...Viewport );
 		
 		this.ResetState();
@@ -244,10 +306,6 @@ class RenderTargetMultiviewProxy extends RenderTarget
 		//	doesn't seem to be needed
 		glLayer.framebuffer = FrameBuffer;
 		
-		//	https://developer.oculus.com/documentation/web/webxr-ffr/#to-set-and-adjust-ffr-dynamically
-		//	set dynamic FFR...
-		glLayer.fixedFoveation = 1;
-
 		//	need to do this everyframe otherwise it's incomplete
 		this.BindFrameBufferAttachments();
 		
@@ -274,12 +332,15 @@ class RenderTargetMultiviewProxy extends RenderTarget
 
 		function Unbind()
 		{
+			//	told by @rcabanier the driver does this for us
+			/*
 			const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
 			const InvalidateAttachments = [
 			//gl.COLOR_ATTACHMENT0,//	clears eye contents
 			DepthAttachment,
 			];
 			gl.invalidateFramebuffer( gl.DRAW_FRAMEBUFFER, InvalidateAttachments );
+			*/
 		}
 		return Unbind.bind(this);
 	}
@@ -486,30 +547,34 @@ class Device_t
 			console.warn(e);
 		}
 	
+		this.EnableStencilBuffer = false;
+		const gl = OpenglContext;
+
 		if ( RenderContext.MultiView && this.xrGLFactory )
 		{
-			this.EnableStencilBuffer = false;
-			const gl = OpenglContext;
-			
 			this.Layer = this.xrGLFactory.createProjectionLayer({
 				textureType: "texture-array",
 				depthFormat: this.EnableStencilBuffer ? gl.DEPTH24_STENCIL8 : gl.DEPTH_COMPONENT24
 			});
-			
-			//	https://developer.oculus.com/documentation/web/webxr-ffr/#to-set-and-adjust-ffr-dynamically
-			//	set dynamic FFR...
-			//	or is it in the other layer...
-			this.Layer.fixedFoveation = 1;
 			
 			//this.Layer = await this.xrGLFactory.requestProjectionLayer(gl.TEXTURE_2D_ARRAY, {stencil: this.EnableStencilBuffer});
 			this.Session.updateRenderState({ layers: [this.Layer] });
 		}
 		else
 		{
-			this.Layer = new PlatformXRWebGLLayer( this.Session, OpenglContext, Options );
-			this.Session.updateRenderState({ baseLayer: this.Layer });
+			//this.Layer = new PlatformXRWebGLLayer( this.Session, OpenglContext, Options );
+			this.Layer = this.xrGLFactory.createProjectionLayer({
+				//textureType: "texture",
+				depthFormat: this.EnableStencilBuffer ? gl.DEPTH24_STENCIL8 : gl.DEPTH_COMPONENT24
+			});
+			
+			this.Session.updateRenderState({ layers: [this.Layer] });
 		}
 		
+		//	https://developer.oculus.com/documentation/web/webxr-ffr/#to-set-and-adjust-ffr-dynamically
+		//	set dynamic FFR...
+		this.Layer.fixedFoveation = 1;
+			
 		//	this doesnt work unless updateRenderState is called, so place it here
 		//	start loop
 		this.Session.requestAnimationFrame( this.OnFrame.bind(this) );
@@ -689,10 +754,9 @@ class Device_t
 		}
 		else
 		{
+			const DeviceFrameBuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
 			for ( let View of Pose.views )
-			{
-				this.FrameUpdate_RenderView( Frame, Pose, View );
-			}
+				this.FrameUpdate_RenderStereoView( Frame, Pose, View, DeviceFrameBuffer );
 		}
 	}
 	
@@ -834,7 +898,6 @@ class Device_t
 		
 	}
 	
-
 	FrameUpdate_RenderMultiView(Frame, Pose)
 	{
 		if ( !this.MultiviewRenderTarget )
@@ -919,13 +982,18 @@ class Device_t
 		return Camera;
 	}
 
-	FrameUpdate_RenderView(Frame,Pose,View)
+	FrameUpdate_RenderStereoView(Frame,Pose,View,DeviceFrameBuffer)
 	{
-		const glLayer = this.Session.renderState.baseLayer;
+		this.StereoRenderTargets = this.StereoRenderTargets || {};
 		
-		//	generate render target
-		const ViewPort = glLayer.getViewport(View);
-		const RenderTarget = new RenderTargetFrameBufferProxy( glLayer.framebuffer, ViewPort, this.RenderContext );
+		if ( !this.StereoRenderTargets[View.eye] )
+		{
+			const Rt = new RenderTargetStereoLayers( this.xrGLFactory, this.Session, this.Layer, this.RenderContext );
+			this.StereoRenderTargets[View.eye] = Rt;
+		}
+		
+		const RenderTarget = this.StereoRenderTargets[View.eye];
+		RenderTarget.UpdateView(View);
 
 		//	generate camera
 		const Camera = this.GetXrCamera(Frame,Pose,View);
