@@ -127,11 +127,12 @@ class RenderTargetStereoLayer extends RenderTarget
 		const gl = this.RenderContext.Context;
 		const mv_ext = null;
 		
-		const SubImage = this.XrFactory.getViewSubImage( this.Layer, View );
-		//const ColourTexture = this.ColourTexture;
-		//const DepthTexture = this.DepthTexture;
-		const ColourTexture = SubImage.colorTexture;
-		const DepthTexture = SubImage.depthStencilTexture;
+		//	can use the images we grab once, but we do need to attach every frame
+		const ColourTexture = this.ColourTexture;
+		const DepthTexture = this.DepthTexture;
+		//const SubImage = this.XrFactory.getViewSubImage( this.Layer, View );
+		//const ColourTexture = SubImage.colorTexture;
+		//const DepthTexture = SubImage.depthStencilTexture;
 		
 		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
 
