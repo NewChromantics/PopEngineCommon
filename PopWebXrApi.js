@@ -73,66 +73,85 @@ class RenderTargetViewProxy extends RenderTarget
 }
 
 
-class RenderTargetStereoLayersStorage
+//	this is really storage
+class RenderTargetStereoLayer extends RenderTarget
 {
-	constructor(Factory,Session,Layer,RenderContext)
+	constructor(XrFactory,Session,Layer,RenderContext,EnableStencilBuffer)
 	{
-		this.Factory = Factory;
+		super();
+		this.XrFactory = XrFactory;
+		this.EnableStencilBuffer = EnableStencilBuffer;
+		this.AntiAliasSamples = 2;
 		this.Session = Session;
+		this.Views = null;
 		this.Layer = Layer;
 		this.RenderContext = RenderContext;
-		this.FrameBuffer = null;
+
+		this.AttachmentDirty = true;
+
+		const gl = this.RenderContext.Context;
 	}
 	
-	GetFrameBuffer()
-	{
-		if ( !this.FrameBuffer )
-			this.FrameBuffer = this.CreateFrameBuffer();
-		return this.FrameBuffer;
-	}
-	
-	CreateFrameBuffer()
+	CreateFrameBuffer(View)
 	{
 		const gl = this.RenderContext.Context;
+
+		const SubImage = this.XrFactory.getViewSubImage( this.Layer, View );
+		const mv_ext = null;
 		
+		//	setup frame buffer with 2 colour & depth attachments
 		const FrameBuffer = gl.createFramebuffer();
 		gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, FrameBuffer);
 
+		const Viewport = this.GetRenderTargetRect(View);
+		const Width = Viewport[2];
+		const Height = Viewport[3];
+
+		//	bind colour
+		//	gr: https://github.com/abidaqib/WebXRTest1/blob/40692ecf649b9282f5b38fb570c871cddff8d8ef/layers-samples/proj-multiview.html
+		//		this example just took colour from layer...
+		//		oculus (webvr) example created it's own
+		this.ColourTexture = this.ColourTexture || SubImage.colorTexture;
+		this.DepthTexture = this.DepthTexture || SubImage.depthStencilTexture || this.Layer.depthStencilTexture;
+			
 		return FrameBuffer;
 	}
 	
 	BindFrameBufferAttachments(FrameBuffer=null,View)
 	{
+		if ( !this.AttachmentDirty )
+			return;
+		
 		FrameBuffer = FrameBuffer || this.FrameBuffer;
-
-		if ( !View )
-			throw `Cannot create framebuffer without view`;
-		const LayerImage = this.Factory.getViewSubImage( this.Layer, View );
-		
-		this.ColourTexture = this.ColourTexture || LayerImage.colorTexture;
-		this.DepthTexture = this.DepthTexture || LayerImage.depthStencilTexture;
-		
-		
 		
 		const gl = this.RenderContext.Context;
+		const mv_ext = null;
+		
+		const SubImage = this.XrFactory.getViewSubImage( this.Layer, View );
+		//const ColourTexture = this.ColourTexture;
+		//const DepthTexture = this.DepthTexture;
+		const ColourTexture = SubImage.colorTexture;
+		const DepthTexture = SubImage.depthStencilTexture;
+		
+		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
 
-		//	once per frame per layer (not per view!)
-		if ( this.AttachmentDirty )
-		{	
-			//	https://github.com/immersive-web/webxr-samples/blob/main/layers-samples/proj-layer.html
-			gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
-
-			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.ColourTexture, 0);
-			//const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
-			const DepthAttachment = gl.DEPTH_ATTACHMENT;
-			gl.framebufferTexture2D(gl.FRAMEBUFFER, DepthAttachment, gl.TEXTURE_2D, this.DepthTexture, 0);
-			
-			this.AttachmentDirty = false;
-		}
+		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ColourTexture, 0);
+		//const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
+		const DepthAttachment = gl.DEPTH_ATTACHMENT;
+		gl.framebufferTexture2D(gl.FRAMEBUFFER, DepthAttachment, gl.TEXTURE_2D, DepthTexture, 0);
 		
 		const Status = gl.checkFramebufferStatus( gl.DRAW_FRAMEBUFFER );
 		if ( Status != gl.FRAMEBUFFER_COMPLETE )
 			console.log(`XRframebuffer attachment status not complete: ${GetString(gl,Status)}`);
+
+		this.AttachmentDirty = false;
+	}
+	
+	GetFrameBuffer(View)
+	{
+		if ( !this.FrameBuffer )
+			this.FrameBuffer = this.CreateFrameBuffer(View);
+		return this.FrameBuffer;
 	}
 	
 	GetRenderContext()
@@ -140,59 +159,99 @@ class RenderTargetStereoLayersStorage
 		return this.RenderContext;
 	}
 	
+	UpdateViews(Views)
+	{
+		this.Views = Views;
+	}
+
+	GetRenderTargetRect(View)
+	{
+		if ( !View )	throw `GetRenderTargetRect() View required`;
+		//	viewport is same for both views in multiview
+		const SubImage = this.XrFactory.getViewSubImage( this.Layer, View );
+		const Viewport = SubImage.viewport;
+		return ViewportToRect(Viewport);
+	}
 	
 	BindRenderTarget(RenderContext,View)
 	{
+		if ( !View )
+			throw `View required`;
 		const gl = RenderContext.GetGlContext();
 		
-		const SubImage = this.Factory.getViewSubImage( this.Layer, View );
-		
-		const FrameBuffer = this.GetFrameBuffer();
+		//	gr: this should be binding as if it's rendering to one eye
+		//	https://developer.oculus.com/documentation/web/web-multiview/#multi-view-webvr-code-example
+		//	working demo here
+		//	https://immersive-web.github.io/webxr-samples/layers-samples/proj-multiview.html
+		const FrameBuffer = this.GetFrameBuffer(View);
 		if ( FrameBuffer === undefined )
-			throw `RenderTargetStereoLayers BindRenderTarget() with ${FrameBuffer}, invalid`;
-	
-		//	needed? is this just JS storage?
-		SubImage.framebuffer = FrameBuffer;
+			throw `RenderTargetFrameBufferProxy BindRenderTarget() with ${FrameBuffer}, invalid`;
+ 
+		//gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
+		//const SubImage = this.XrFactory.getViewSubImage( this.Session.renderState.layers[0], View );
+		const SubImage = this.XrFactory.getViewSubImage( this.Layer, View );
 		
-		//	todo: make this common code
-		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
+		//	not sure if we need this, or if it's just somewhere to store the variable in the demo
+		//	doesn't seem to be needed
+		SubImage.framebuffer = FrameBuffer;
 		
 		//	need to do this everyframe otherwise it's incomplete
 		this.BindFrameBufferAttachments(FrameBuffer,View);
 		
+		//	this demo then does one viewport, and one render of instances
+		//	https://immersive-web.github.io/webxr-samples/layers-samples/proj-multiview.html
+		this.ResetState();
+
+		//	gr: viewport is same on both layers (no x offset)
+		//const Viewport = glLayer.viewport;
+		const Viewport = this.GetRenderTargetRect(View);
+		gl.viewport( ...Viewport );
+		
+		//	webxr on quest needs scissoring
+		//	does this break pixel3 webAR?
+		//	gr: I believe this breaks the looking glass webxr extension
+		//	gr: for multiview, we don't want to scissor
+		gl.scissor( ...Viewport );
+		gl.enable(gl.SCISSOR_TEST);
+		//gl.disable(gl.SCISSOR_TEST);
+
+		//gl.clearColor( 0, 0, 0, 1 );
+		//gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	
 		function Unbind()
 		{
+			//	told by @rcabanier the driver does this for us
+			/*
+			const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
+			const InvalidateAttachments = [
+			//gl.COLOR_ATTACHMENT0,//	clears eye contents
+			DepthAttachment,
+			];
+			gl.invalidateFramebuffer( gl.DRAW_FRAMEBUFFER, InvalidateAttachments );
+			*/
 		}
 		return Unbind.bind(this);
 	}
 }
 
 
-class RenderTargetStereoLayerView extends RenderTarget
+class RenderTargetStereoProxy extends RenderTarget
 {
-	constructor(RenderTargetStereoStorage)
+	constructor(StereoRenderTarget,View)
 	{
 		super();
-		this.StereoStorage = RenderTargetStereoStorage;
-		
-		this.Factory = this.StereoStorage.Factory;
-		this.Session = this.StereoStorage.Session;
-		this.Layer = this.StereoStorage.Layer;
-	}
-	
-	UpdateView(View)
-	{
+		this.StereoRenderTarget = StereoRenderTarget;
 		this.View = View;
 	}
-	
+
 	GetFrameBuffer()
 	{
-		return this.StereoStorage.GetFrameBuffer();
+		return this.StereoRenderTarget.GetFrameBuffer(this.View);
 	}
 	
 	GetRenderContext()
 	{
-		return this.StereoStorage.RenderContext;
+		return this.StereoRenderTarget.RenderContext;
 	}
 	
 	GetRenderTargetRect()
@@ -210,8 +269,8 @@ class RenderTargetStereoLayerView extends RenderTarget
 	BindRenderTarget(RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
-		const Unbind = this.StereoStorage.BindRenderTarget( RenderContext, this.View );
-		
+		const Unbind = this.StereoRenderTarget.BindRenderTarget( RenderContext, this.View );
+		/*
 		const Viewport = this.GetRenderTargetRect();
 		//const Viewport = SubImage.viewport;
 		gl.viewport( ...Viewport );
@@ -223,7 +282,7 @@ class RenderTargetStereoLayerView extends RenderTarget
 		//	gr: I believe this breaks the looking glass webxr extension
 		gl.scissor( ...Viewport );
 		gl.enable(gl.SCISSOR_TEST);
-		
+		*/
 		return Unbind;
 	}
 }
@@ -242,8 +301,6 @@ class RenderTargetMultiview extends RenderTarget
 		this.Views = null;
 		this.Layer = Layer;
 		this.RenderContext = RenderContext;
-
-		const gl = this.RenderContext.Context;
 	}
 	
 	CreateFrameBuffer()
@@ -254,8 +311,7 @@ class RenderTargetMultiview extends RenderTarget
 			throw `Cannot create framebuffer without views`;
 			
 		const View0 = this.Views[0];
-		//glLayer = this.XrFactory.getViewSubImage( this.session.renderState.layers[0], view);
-		let glLayer = this.XrFactory.getViewSubImage( this.Layer, View0 );
+		const SubImage = this.XrFactory.getViewSubImage( this.Layer, View0 );
 		const mv_ext = this.RenderContext.MultiView;
 		
 		//	setup frame buffer with 2 colour & depth attachments
@@ -271,7 +327,7 @@ class RenderTargetMultiview extends RenderTarget
 		//	gr: https://github.com/abidaqib/WebXRTest1/blob/40692ecf649b9282f5b38fb570c871cddff8d8ef/layers-samples/proj-multiview.html
 		//		this example just took colour from layer...
 		//		oculus (webvr) example created it's own
-		this.ColourTexture = this.ColourTexture || glLayer.colorTexture || this.Layer.colorTexture;
+		this.ColourTexture = this.ColourTexture || SubImage.colorTexture || this.Layer.colorTexture;
 		if ( !this.ColourTexture )
 		{
 			this.ColourTexture = gl.createTexture();
@@ -287,12 +343,12 @@ class RenderTargetMultiview extends RenderTarget
 		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.ColourTexture, 0, this.AntiAliasSamples, 0, 2);
 
 		//	create depth/stencil if not provided
-		this.depthStencilTex = this.depthStencilTex || glLayer.depthStencilTexture || this.Layer.depthStencilTexture;
-		if ( !this.depthStencilTex )
+		this.DepthTexture = this.DepthTexture || SubImage.depthStencilTexture || this.Layer.depthStencilTexture;
+		if ( !this.DepthTexture )
 		{
 			console.log("MaxViews = " + gl.getParameter(mv_ext.MAX_VIEWS_OVR));
-			this.depthStencilTex = gl.createTexture();
-			gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.depthStencilTex);
+			this.DepthTexture = gl.createTexture();
+			gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.DepthTexture);
 			gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.DEPTH_COMPONENT24, Width, Height, 2);
 			//	threejs
 			gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.NEAREST );
@@ -301,9 +357,9 @@ class RenderTargetMultiview extends RenderTarget
 			//gl.texImage3D(gl.TEXTURE_2D_ARRAY, 0, gl.DEPTH_COMPONENT24, Width, Height, 2, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null );
 		}
 		//	attach depth/stencil to framebuffer
-		//mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, 0, 2);
-		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.depthStencilTex, 0, this.AntiAliasSamples, 0, 2);
-		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, this.depthStencilTex, 0, this.AntiAliasSamples, 0, 2);
+		//mv_ext.framebufferTextureMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.DepthTexture, 0, 0, 2);
+		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_ATTACHMENT, this.DepthTexture, 0, this.AntiAliasSamples, 0, 2);
+		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, this.DepthTexture, 0, this.AntiAliasSamples, 0, 2);
 
 		//	have to bind every frame, so dont bother doing it here
 		//this.BindFrameBufferAttachments(Framebuffer);
@@ -325,9 +381,9 @@ class RenderTargetMultiview extends RenderTarget
 			
 		//	demo always uses depth_attachment
 		//	https://github.com/immersive-web/webxr-samples/blob/7db0e01bf6ca0814c73dcaa5fb71e37fe340dca5/layers-samples/proj-multiview.html
-		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, this.depthStencilTex, 0, this.AntiAliasSamples, 0, 2);
+		//mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, gl.DEPTH_STENCIL_ATTACHMENT, this.DepthTexture, 0, this.AntiAliasSamples, 0, 2);
 		const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
-		mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, DepthAttachment, this.depthStencilTex, 0, this.AntiAliasSamples, 0, 2);
+		mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, DepthAttachment, this.DepthTexture, 0, this.AntiAliasSamples, 0, 2);
 		
 		
 		const Status = gl.checkFramebufferStatus( gl.DRAW_FRAMEBUFFER );
@@ -864,8 +920,7 @@ class Device_t
 		}
 		else if ( this.LayerType == 'StereoLayer' )
 		{
-			for ( let View of Pose.views )
-				this.FrameUpdate_RenderStereoLayersView( Frame, Pose, View );
+			this.FrameUpdate_RenderStereoLayer( Frame, Pose );
 		}
 		else
 			throw `Unknown layer type ${this.LayerType}`;
@@ -1130,107 +1185,54 @@ class Device_t
 		this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
 	}
 
-	FrameUpdate_RenderStereoLayersView(Frame,Pose,View)
+	FrameUpdate_RenderStereoLayer(Frame,Pose)
 	{
 		//	gr: we need one storage for 1x framebuffer and 1x attachments
 		//		but 2 objects to pass to render commands for different "devices"
 		if ( !this.StereoRenderTargetStorage )
-			this.StereoRenderTargetStorage = new RenderTargetStereoLayersStorage( this.xrGLFactory, this.Session, this.Layer, this.RenderContext );
+			this.StereoRenderTargetStorage = new RenderTargetStereoLayer( this.XrFactory, this.Session, this.Layer, this.RenderContext, this.EnableStencilBuffer );
+		//	dirty so target will re-attach target & bind framebuffer
 		this.StereoRenderTargetStorage.AttachmentDirty = true; 
-			
-		this.StereoRenderTargets = this.StereoRenderTargets || {};
 		
-		if ( !this.StereoRenderTargets[View.eye] )
+		const Views = Pose.views;
+		
+		for ( let View of Views )
 		{
-			const Rt = new RenderTargetStereoLayerView( this.StereoRenderTargetStorage );
-			this.StereoRenderTargets[View.eye] = Rt;
-		}
+			const RenderTarget = new RenderTargetStereoProxy( this.StereoRenderTargetStorage, View );
 		
-		const RenderTarget = this.StereoRenderTargets[View.eye];
-		RenderTarget.UpdateView(View);
+			//	generate camera
+			const Camera = this.GetXrCamera(Frame,Pose,View);
 
-		//	generate camera
-		const Camera = this.GetXrCamera(Frame,Pose,View);
-
-		//	would be nice if we could have some generic camera uniforms and only generate one set of commands?
-		let RenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
+			//	would be nice if we could have some generic camera uniforms and only generate one set of commands?
+			let RenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
 		
-		//	AR (and additive, eg. hololens) need to be transparent
-		const TransparentClear = IsTransparentBlendMode(Frame.session.environmentBlendMode);
+			//	AR (and additive, eg. hololens) need to be transparent
+			const TransparentClear = IsTransparentBlendMode(Frame.session.environmentBlendMode);
 
-		//	force any clear-colours of null (device) render target to have alpha=0 for AR/transparent devices
-		//	gr: should we do this before, or after parsing...
-		if ( TransparentClear )
-		{
-			function SetRenderTargetCommandClearTransparent(Command)
+			//	force any clear-colours of null (device) render target to have alpha=0 for AR/transparent devices
+			//	gr: should we do this before, or after parsing...
+			if ( TransparentClear )
 			{
-				if ( Command[0] != 'SetRenderTarget' )
+				function SetRenderTargetCommandClearTransparent(Command)
+				{
+					if ( Command[0] != 'SetRenderTarget' )
+						return Command;
+					//	only applies to device target
+					if ( Command[1] != null )
+						return Command;
+					//	set arg2 (clear colour) to null to not clear
+					Command[2] = null;
 					return Command;
-				//	only applies to device target
-				if ( Command[1] != null )
-					return Command;
-				//	set arg2 (clear colour) to null to not clear
-				Command[2] = null;
-				return Command;
+				}
+				RenderCommands = RenderCommands.map( SetRenderTargetCommandClearTransparent );
 			}
-			RenderCommands = RenderCommands.map( SetRenderTargetCommandClearTransparent );
-		}
 		
-		//	execute commands
-		RenderCommands = new RenderCommands_t( RenderCommands );
-		this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
+			//	execute commands
+			RenderCommands = new RenderCommands_t( RenderCommands );
+			this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
+		}
 	}
 	
-	FrameUpdate_RenderStereoLayersView(Frame,Pose,View)
-	{
-		//	gr: we need one storage for 1x framebuffer and 1x attachments
-		//		but 2 objects to pass to render commands for different "devices"
-		if ( !this.StereoRenderTargetStorage )
-			this.StereoRenderTargetStorage = new RenderTargetStereoLayersStorage( this.xrGLFactory, this.Session, this.Layer, this.RenderContext );
-		this.StereoRenderTargetStorage.AttachmentDirty = true; 
-			
-		this.StereoRenderTargets = this.StereoRenderTargets || {};
-		
-		if ( !this.StereoRenderTargets[View.eye] )
-		{
-			const Rt = new RenderTargetStereoLayerView( this.StereoRenderTargetStorage );
-			this.StereoRenderTargets[View.eye] = Rt;
-		}
-		
-		const RenderTarget = this.StereoRenderTargets[View.eye];
-		RenderTarget.UpdateView(View);
-
-		//	generate camera
-		const Camera = this.GetXrCamera(Frame,Pose,View);
-
-		//	would be nice if we could have some generic camera uniforms and only generate one set of commands?
-		let RenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
-		
-		//	AR (and additive, eg. hololens) need to be transparent
-		const TransparentClear = IsTransparentBlendMode(Frame.session.environmentBlendMode);
-
-		//	force any clear-colours of null (device) render target to have alpha=0 for AR/transparent devices
-		//	gr: should we do this before, or after parsing...
-		if ( TransparentClear )
-		{
-			function SetRenderTargetCommandClearTransparent(Command)
-			{
-				if ( Command[0] != 'SetRenderTarget' )
-					return Command;
-				//	only applies to device target
-				if ( Command[1] != null )
-					return Command;
-				//	set arg2 (clear colour) to null to not clear
-				Command[2] = null;
-				return Command;
-			}
-			RenderCommands = RenderCommands.map( SetRenderTargetCommandClearTransparent );
-		}
-		
-		//	execute commands
-		RenderCommands = new RenderCommands_t( RenderCommands );
-		this.RenderContext.ProcessRenderCommands( RenderCommands, RenderTarget );
-	}
 	
 	Close()
 	{
