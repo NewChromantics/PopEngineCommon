@@ -36,7 +36,7 @@ export let CanRenderToFloat = undefined;
 //	allow turning off float support
 export let AllowFloatTextures = !Pop.GetExeArguments().DisableFloatTextures;
 
-const AllowMultiView = false;
+const AllowMultiView = true;
 
 export function GetString(Context,Enum)
 {
