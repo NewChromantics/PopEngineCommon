@@ -252,7 +252,7 @@ async function WaitForSync(Sync,Context)
 			const Status = gl.clientWaitSync( Sync, Flags, WaitNanoSecs );
 			if ( Status == gl.WAIT_FAILED )
 				throw `clientWaitSync failed`;
-			if ( Result == gl.TIMEOUT_EXPIRED )
+			if ( Status == gl.TIMEOUT_EXPIRED )
 			{
 				await Pop.Yield( RecheckMs );
 				continue;
@@ -1026,6 +1026,8 @@ export class Context
 		//	readpixels() fails with null as buffer in webgl1, no different symbols
 		Context.CanReadPixelsAsync = function()
 		{
+			//	gr: not currently working
+			return false;
 			return IsWebgl2;
 		}
 		this.CanReadPixelsAsync = Context.CanReadPixelsAsync;
