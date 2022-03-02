@@ -140,7 +140,7 @@ class RenderTargetStereoLayer extends RenderTarget
 		//const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
 		const DepthAttachment = gl.DEPTH_ATTACHMENT;
 		gl.framebufferTexture2D(gl.FRAMEBUFFER, DepthAttachment, gl.TEXTURE_2D, DepthTexture, 0);
-		
+
 		const Status = gl.checkFramebufferStatus( gl.DRAW_FRAMEBUFFER );
 		if ( Status != gl.FRAMEBUFFER_COMPLETE )
 			console.log(`XRframebuffer attachment status not complete: ${GetString(gl,Status)}`);
@@ -212,10 +212,18 @@ class RenderTargetStereoLayer extends RenderTarget
 		//	does this break pixel3 webAR?
 		//	gr: I believe this breaks the looking glass webxr extension
 		//	gr: for multiview, we don't want to scissor
-		gl.scissor( ...Viewport );
-		gl.enable(gl.SCISSOR_TEST);
+		//gl.scissor( ...Viewport );
+		//gl.enable(gl.SCISSOR_TEST);
 		//gl.disable(gl.SCISSOR_TEST);
 
+/*	if i scissor & clear... it clears the left eye. right eye is fine
+		gl.enable(gl.SCISSOR_TEST);
+		gl.scissor(...Viewport);
+		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+		gl.disable(gl.SCISSOR_TEST);
+*/
+		//	disabling scissor jumps frame rate to 50, but only get right eye
+		gl.disable(gl.SCISSOR_TEST);
 		//gl.clearColor( 0, 0, 0, 1 );
 		//gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 	
