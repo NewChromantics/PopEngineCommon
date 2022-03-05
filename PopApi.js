@@ -1,4 +1,5 @@
 //	some generic javascript helpers used in web & native
+//	mostly array related things
 const Default = 'PopApi.js module';
 export default Default; 
 
@@ -249,7 +250,7 @@ export function JoinTypedArrays(Arrays,DeprecatedSecondArray)
 {
 	if ( DeprecatedSecondArray )
 	{
-		Pop.Debug(`JoinTypedArrays(a,b,c) deprecated, pass an array of typed arrays as first arg`);
+		throw `JoinTypedArrays(a,b,c) deprecated, pass an array of typed arrays as first arg`;
 		Arrays = Array.from(arguments);
 	}
 	
