@@ -5,15 +5,15 @@ export default Default;
 
 
 
-const ZeroArrayCache = {};	//	[Length] = Float32Array(0's)
-export function GetZeroArray(Length)
+const ZeroFloatArrayCache = {};	//	[Length] = Float32Array(0's)
+export function GetZeroFloatArray(Length)
 {
-	if ( !ZeroArrayCache[Length] )
+	if ( !ZeroFloatArrayCache[Length] )
 	{
-		ZeroArrayCache[Length] = new Float32Array(Length);
-		ZeroArrayCache[Length].fill(0);
+		ZeroFloatArrayCache[Length] = new Float32Array(Length);
+		ZeroFloatArrayCache[Length].fill(0);
 	}
-	return ZeroArrayCache[Length];
+	return ZeroFloatArrayCache[Length];
 }
 
 
