@@ -1514,11 +1514,11 @@ export class Context
 			//	find a buffer associted with this dirtybuffer
 			Buffer = this.GetArrayBuffer( Values );
 			DataValues = Values;
+			gl.bindBuffer(gl.ARRAY_BUFFER, Buffer.Buffer);
 			
 			const Changed = (Buffer.Version == 0) || (Buffer.Version != Values.Version );
 			if ( Changed )
 			{
-				gl.bindBuffer(gl.ARRAY_BUFFER, Buffer.Buffer);
 				gl.bufferData(gl.ARRAY_BUFFER, DataValues, gl.DYNAMIC_DRAW );
 				Buffer.Version++;
 			}
