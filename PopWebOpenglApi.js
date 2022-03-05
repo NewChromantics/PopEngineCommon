@@ -6,6 +6,7 @@ import {GetUniqueHash} from './Hash.js'
 import {CreatePromise} from './PopApi.js'
 import Pool from './Pool.js'
 import {IsTypedArray} from './PopApi.js'
+import DirtyBuffer from './DirtyBuffer.js'
 
 import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
 import { GetFormatElementSize,GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
@@ -558,6 +559,8 @@ export class Context
 		this.ActiveTextureRef = {};
 		this.TextureRenderTargets = [];	//	this is a context asset, so maybe it shouldn't be kept here
 		
+		this.ArrayBuffers = {};	//	cache of object-hash associated gl buffers
+
 		this.BindEvents();
 		
 		try
@@ -1369,7 +1372,8 @@ export class Context
 						const Values = UniformValue;
 						const Bind = this.AllocAndBindAttribInstances( AttributeMeta, Values );
 						const Buffer = Bind.Buffer;
-						PoolArrayBuffers.push( Buffer );
+						if ( Buffer.Pooled )
+							PoolArrayBuffers.push( Buffer );
 						
 						if ( InstanceCount != 0 )
 							if ( Bind.InstanceCount < InstanceCount )
@@ -1444,6 +1448,24 @@ export class Context
 		return this.Context;
 	}
 	
+	//	get a buffer associated with an object, alloc if none
+	//	todo: merge this into the pool? just so all buffers are in the same place
+	GetArrayBuffer(ArrayObject)
+	{
+		const Hash = GetUniqueHash(ArrayObject);
+		if ( this.ArrayBuffers.hasOwnProperty(Hash) )
+			return this.ArrayBuffers[Hash];
+		
+		const gl = this.Context;
+		
+		//	new one!
+		const Buffer = {};
+		Buffer.Buffer = gl.createBuffer();
+		Buffer.Version = 0;
+		this.ArrayBuffers[Hash] = Buffer;
+		return Buffer;
+	}
+	
 	AllocArrayBuffer(FloatCount)
 	{
 		function PopFromFreeList(FreeItems,Meta)
@@ -1466,6 +1488,7 @@ export class Context
 			const Buffer = {};
 			Buffer.Buffer = gl.createBuffer();
 			Buffer.Floats = new Float32Array(Meta);
+			Buffer.Pooled = true;
 			return Buffer;
 		}
 		
@@ -1481,44 +1504,95 @@ export class Context
 	
 	AllocAndBindAttribInstances(AttributeMeta,Values)
 	{
-		//if ( !Array.isArray(Values) )
-		//	throw `AllocAndBindAttribInstances(${AttributeMeta.Name}) expecting array of values (per instance)`;
-	
-		//	flatten as needed
-		//	gr: this is mega expensive
-		if ( Values.flat )
-			if ( Array.isArray(Values[0]) )
-				Values = Values.flat(2);
-		
-		//	alloc a buffer from a pool
-		const Buffer = this.AllocArrayBuffer(Values.length);
 		const gl = this.Context;
-		gl.bindBuffer(gl.ARRAY_BUFFER, Buffer.Buffer);
-						
-		//	this needs to unroll the values into one giant array...
-		//	if this an array of typed arrays, we need some more work
-		let DataValues = Values;
-		if ( !IsTypedArray(DataValues) )
-		{
-			DataValues = Buffer.Floats;
-			DataValues.set( Values );
-		}
 		
+		let DataValues;
+		let Buffer;
+		
+		if ( IsTypedArray(Values) )
+		{
+			//	find a buffer associted with this dirtybuffer
+			Buffer = this.GetArrayBuffer( Values );
+			DataValues = Values;
+			
+			const Changed = (Buffer.Version == 0) || (Buffer.Version != Values.Version );
+			if ( Changed )
+			{
+				gl.bindBuffer(gl.ARRAY_BUFFER, Buffer.Buffer);
+				gl.bufferData(gl.ARRAY_BUFFER, DataValues, gl.DYNAMIC_DRAW );
+				Buffer.Version++;
+			}
+			Values.Version = Buffer.Version;
+		}
+		else if ( Values instanceof DirtyBuffer )
+		{
+			//	find a buffer associted with this dirtybuffer
+			Buffer = this.GetArrayBuffer( Values );
+			
+			//	update changes
+			gl.bindBuffer(gl.ARRAY_BUFFER, Buffer.Buffer);
+			const Changes = Values.PopChanges();
+			
+			DataValues = Values.Data;
+			
+			//	new buffer, need to write all data
+			if ( Buffer.Version == 0 )
+			{
+				gl.bufferData(gl.ARRAY_BUFFER, DataValues, gl.DYNAMIC_DRAW );
+				Buffer.Version++;
+			}
+			else if ( Changes.length )
+			{
+				for ( let ChangeRange of Changes )
+				{
+					const StartIndex = ChangeRange[0];
+					const LastIndex = ChangeRange[1];
+					const SubDataValues = Values.Data.subarray( StartIndex, LastIndex+1 );
+					const ByteOffset = StartIndex * DataValues.BYTES_PER_ELEMENT;
+					gl.bufferSubData(gl.ARRAY_BUFFER, ByteOffset, SubDataValues);
+				}
+				Buffer.Version++;
+			}
+		}
+		else
+		{
+			//if ( !Array.isArray(Values) )
+			//	throw `AllocAndBindAttribInstances(${AttributeMeta.Name}) expecting array of values (per instance)`;
+		
+			//	flatten as needed
+			//	gr: this is mega expensive
+			if ( Values.flat )
+				if ( Array.isArray(Values[0]) )
+					Values = Values.flat(2);
+			
+			//	alloc a buffer from a pool
+			Buffer = this.AllocArrayBuffer(Values.length);
+			gl.bindBuffer(gl.ARRAY_BUFFER, Buffer.Buffer);
+							
+			//	this needs to unroll the values into one giant array...
+			//	if this an array of typed arrays, we need some more work
+			DataValues = Values;
+			if ( !IsTypedArray(DataValues) )
+			{
+				DataValues = Buffer.Floats;
+				DataValues.set( Values );
+			}
+			//	gl.get = sync = slow!
+			//	init buffer size (or resize if bigger than before)
+			//const BufferSize = gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE);
+			//if ( DataValues.byteLength > BufferSize )
+			//	gl.bufferData(gl.ARRAY_BUFFER, DataValues.byteLength, gl.DYNAMIC_DRAW, null );
+			//const NewBufferSize = gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE);
+			//gl.bufferSubData(gl.ARRAY_BUFFER, 0, DataValues);
+			gl.bufferData(gl.ARRAY_BUFFER, DataValues, gl.DYNAMIC_DRAW );
+		}
+
 		//	gr: we should forcibly clip the data if we already have a InstanceCount determined
 		//		as the attributes have to align
 		let DetectedInstanceCount = DataValues.length / AttributeMeta.ElementSize;
 		if ( DetectedInstanceCount != Math.floor(DetectedInstanceCount) )
 			throw `Attribute ${AttributeMeta.Name} has misaligned input`; 
 
-		//	gl.get = sync = slow!
-		//	init buffer size (or resize if bigger than before)
-		//const BufferSize = gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE);
-		//if ( DataValues.byteLength > BufferSize )
-		//	gl.bufferData(gl.ARRAY_BUFFER, DataValues.byteLength, gl.DYNAMIC_DRAW, null );
-		//const NewBufferSize = gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE);
-		//gl.bufferSubData(gl.ARRAY_BUFFER, 0, DataValues);
-		gl.bufferData(gl.ARRAY_BUFFER, DataValues, gl.DYNAMIC_DRAW );
-						
 		const ValueDataSize = AttributeMeta.ElementSize * DataValues.BYTES_PER_ELEMENT;
 		
 		//	matrixes are multiples of value*elementsize as all shader things are 4 floats at max
