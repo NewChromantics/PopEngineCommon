@@ -33,6 +33,14 @@ class RenderTargetViewProxy extends RenderTarget
 		this.Layer = Layer;
 		this.View = View;
 	}
+
+	//	dont clear xr frame buffers
+	ClearColour(r,g,b,a)
+	{
+	}
+	ClearDepth()
+	{
+	}
 	
 	GetRenderTargetRect()
 	{
@@ -90,6 +98,14 @@ class RenderTargetStereoLayer extends RenderTarget
 		this.AttachmentDirty = true;
 
 		const gl = this.RenderContext.Context;
+	}
+	
+	//	dont clear xr frame buffers
+	ClearColour(r,g,b,a)
+	{
+	}
+	ClearDepth()
+	{
 	}
 	
 	CreateFrameBuffer(View)
@@ -263,6 +279,14 @@ class RenderTargetStereoProxy extends RenderTarget
 		super();
 		this.StereoRenderTarget = StereoRenderTarget;
 		this.View = View;
+	}
+
+	//	dont clear xr frame buffers
+	ClearColour(r,g,b,a)
+	{
+	}
+	ClearDepth()
+	{
 	}
 
 	GetFrameBuffer()
