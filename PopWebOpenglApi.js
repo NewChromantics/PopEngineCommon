@@ -1042,12 +1042,6 @@ export class Context
 	InitOculusMultiview(gl,Extension)
 	{
 		this.MultiView = Extension;
-		this.MultiViewAllowed = true;
-		this.MultiViewMultiSampled = true;
-	}
-	
-	CreateMultiViewBuffer()
-	{
 	}
 	
 	InitRenderToTextureMsaa(gl,Extension)
