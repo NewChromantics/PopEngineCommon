@@ -1016,6 +1016,7 @@ export class Context
 		EnableExtension('OES_element_index_uint', this.Init32BitBufferIndexes.bind(this) );
 		EnableExtension('ANGLE_instanced_arrays', InitInstancedArrays.bind(this) );
 		EnableExtension('OES_standard_derivatives');
+		EnableExtension('WEBGL_multisampled_render_to_texture', this.InitRenderToTextureMsaa.bind(this) );
 		
 		if ( AllowMultiView )
 			EnableExtension('OCULUS_multiview', this.InitOculusMultiview.bind(this) );
@@ -1049,6 +1050,11 @@ export class Context
 	{
 	}
 	
+	InitRenderToTextureMsaa(gl,Extension)
+	{
+		gl.framebufferTexture2DMultisampleEXT = Extension.framebufferTexture2DMultisampleEXT;
+		this.RenderToTextureMsaa = Extension;
+	}
 	
 	IsFloatRenderTargetSupported()
 	{

@@ -136,15 +136,27 @@ class RenderTargetStereoLayer extends RenderTarget
 		
 		gl.bindFramebuffer( gl.DRAW_FRAMEBUFFER, FrameBuffer );
 
-		gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ColourTexture, 0);
 		//const DepthAttachment = this.EnableStencilBuffer ? gl.DEPTH_STENCIL_ATTACHMENT : gl.DEPTH_ATTACHMENT;
 		const DepthAttachment = gl.DEPTH_ATTACHMENT;
-		gl.framebufferTexture2D(gl.FRAMEBUFFER, DepthAttachment, gl.TEXTURE_2D, DepthTexture, 0);
-
+		
+		//	use MSAA if the extension is availible
+		if ( this.AntiAliasSamples>1 && gl.framebufferTexture2DMultisampleEXT )
+		{
+			gl.framebufferTexture2DMultisampleEXT(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ColourTexture, 0, 4);
+			gl.framebufferTexture2DMultisampleEXT(gl.FRAMEBUFFER, DepthAttachment, gl.TEXTURE_2D, DepthTexture, 0, 4);
+		}
+		else
+		{
+			gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ColourTexture, 0);
+			gl.framebufferTexture2D(gl.FRAMEBUFFER, DepthAttachment, gl.TEXTURE_2D, DepthTexture, 0);
+		}
+		
+		//	gr: i thought this would cause a flush, but doesn't seem to?
+		/*
 		const Status = gl.checkFramebufferStatus( gl.DRAW_FRAMEBUFFER );
 		if ( Status != gl.FRAMEBUFFER_COMPLETE )
 			console.log(`XRframebuffer attachment status not complete: ${GetString(gl,Status)}`);
-
+		*/
 		this.AttachmentDirty = false;
 	}
 	
