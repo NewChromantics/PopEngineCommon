@@ -2404,7 +2404,7 @@ export function GetStraightnessOfPoints(Positions)
 	return TotalDot;
 }
 
-export function GetRectsFromIndexes(StartIndex,EndIndex,Width,Channels)
+export function GetRectsFromIndexes(StartIndex,EndIndex,Width,Channels,RectsNeedToStripeIndexes=true)
 {
 	let Stride = Channels * Width;
 	
@@ -2429,7 +2429,34 @@ export function GetRectsFromIndexes(StartIndex,EndIndex,Width,Channels)
 		Rect.y = y;
 		Rect.w = RowWidth;
 		Rect.h = 1;
-		//	todo: merge with above if possible
+		
+		function MergeRect(LastRect)
+		{
+			if ( LastRect.x != Rect.x )	return false;
+			if ( LastRect.w != Rect.w )	return false;
+			if ( LastRect.y+LastRect.h != Rect.y )	
+				return false;
+			
+			//	if we need data to stripe, (ie, full width rects), check it
+			if ( RectsNeedToStripeIndexes )
+			{
+				if ( Rect.StartIndex != LastRect.EndIndex+1 )
+					return false;
+			}
+			
+			const Bottom = Rect.y+Rect.h;
+			LastRect.h = Bottom - LastRect.y;
+			LastRect.EndIndex = Rect.EndIndex;
+			return true;
+		}
+		
+		//	merge with above if possible
+		if ( Rects.length )
+		{
+			const LastRect = Rects[Rects.length-1];
+			if ( MergeRect(LastRect) )
+				return;
+		}
 		Rects.push(Rect);
 	}
 	
