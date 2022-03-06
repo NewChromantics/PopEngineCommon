@@ -439,9 +439,9 @@ class RenderTargetMultiview extends RenderTarget
 		mv_ext.framebufferTextureMultisampleMultiviewOVR(gl.DRAW_FRAMEBUFFER, DepthAttachment, this.DepthTexture, 0, this.AntiAliasSamples, 0, 2);
 		
 		
-		const Status = gl.checkFramebufferStatus( gl.DRAW_FRAMEBUFFER );
-		if ( Status != gl.FRAMEBUFFER_COMPLETE )
-			console.log(`XRframebuffer attachment status not complete: ${GetString(gl,Status)}`);
+	//	const Status = gl.checkFramebufferStatus( gl.DRAW_FRAMEBUFFER );
+	//	if ( Status != gl.FRAMEBUFFER_COMPLETE )
+	//		console.log(`XRframebuffer attachment status not complete: ${GetString(gl,Status)}`);
 	}
 	
 	GetFrameBuffer()
