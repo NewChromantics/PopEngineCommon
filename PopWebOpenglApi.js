@@ -1462,6 +1462,7 @@ export class Context
 		const Buffer = {};
 		Buffer.Buffer = gl.createBuffer();
 		Buffer.Version = 0;
+		Buffer.Length = 0;
 		this.ArrayBuffers[Hash] = Buffer;
 		return Buffer;
 	}
@@ -1535,10 +1536,24 @@ export class Context
 			
 			DataValues = Values.Data;
 			
+			const AlignmentLength = 100;
+			let PaddedLength = DataValues.length + AlignmentLength;
+			PaddedLength -= PaddedLength % AlignmentLength;
+			
+			let WriteAll = (Buffer.Version==0);
+			//	need to resize buffer
+			if ( Buffer.Length < PaddedLength )
+				WriteAll = true;
+			
 			//	new buffer, need to write all data
-			if ( Buffer.Version == 0 )
+			if ( WriteAll )
 			{
-				gl.bufferData(gl.ARRAY_BUFFER, DataValues, gl.DYNAMIC_DRAW );
+				const PaddedSize = PaddedLength * DataValues.BYTES_PER_ELEMENT;
+				//	set size then write data so we can have biggger buffer than current size
+				console.log(`New buffer size (writing all data) Length=${DataValues.length} PaddedLength=${PaddedLength}`);
+				gl.bufferData(gl.ARRAY_BUFFER, PaddedSize, gl.DYNAMIC_DRAW );
+				gl.bufferSubData(gl.ARRAY_BUFFER, 0, DataValues);
+				Buffer.Length = PaddedLength;
 				Buffer.Version++;
 			}
 			else if ( Changes.length )

@@ -22,6 +22,11 @@ export default class DirtyBuffer
 			this.set( InitialData );
 		}
 	}
+	
+	get length()
+	{
+		return this.Data ? this.Data.length : 0;
+	}
 
 	PopChanges()
 	{
@@ -53,6 +58,9 @@ export default class DirtyBuffer
 	push(Array)
 	{
 		const NewIndex = this.Data ? this.Data.length : 0;
+		//	maybe in future we want to use a chunk array to reduce allocs
+		//	or have a bigger array buffer and return a few when something
+		//	wants the data
 		this.Data = JoinTypedArrays( [this.Data, Array] );
 		this.MarkChanged( NewIndex, Array.length );
 	}
