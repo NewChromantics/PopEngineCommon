@@ -1536,7 +1536,7 @@ export class Context
 			
 			DataValues = Values.Data;
 			
-			const AlignmentLength = 100;
+			const AlignmentLength = 1024*2;
 			let PaddedLength = DataValues.length + AlignmentLength;
 			PaddedLength -= PaddedLength % AlignmentLength;
 			
