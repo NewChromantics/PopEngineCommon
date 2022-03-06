@@ -1561,8 +1561,8 @@ export class Context
 				for ( let ChangeRange of Changes )
 				{
 					const StartIndex = ChangeRange[0];
-					const LastIndex = ChangeRange[1];
-					const SubDataValues = Values.Data.subarray( StartIndex, LastIndex+1 );
+					const EndIndex = ChangeRange[1];
+					const SubDataValues = Values.Data.subarray( StartIndex, EndIndex+1 );
 					const ByteOffset = StartIndex * DataValues.BYTES_PER_ELEMENT;
 					gl.bufferSubData(gl.ARRAY_BUFFER, ByteOffset, SubDataValues);
 				}

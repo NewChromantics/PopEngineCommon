@@ -2403,3 +2403,56 @@ export function GetStraightnessOfPoints(Positions)
 		TotalDot *= Dot;
 	return TotalDot;
 }
+
+export function GetRectsFromIndexes(StartIndex,EndIndex,Width,Channels)
+{
+	let Stride = Channels * Width;
+	
+	if ( StartIndex % Channels != 0 )
+		throw `Expecting first index ${StartIndex} to align with channels ${Channels}`;
+	if ( EndIndex % Channels != Channels-1 )
+		throw `Expecting end index ${EndIndex} to align with channels ${Channels}`;
+	
+	const StartPixel = StartIndex/Channels;
+	const EndPixel = Math.floor(EndIndex /Channels);
+	
+	const Rects = [];	
+	function PushRow(x,y,RowWidth)
+	{
+		let Rect = {};
+		Rect.StartIndex = (y*Width) + x;
+		Rect.EndIndex = Rect.StartIndex + RowWidth;
+		Rect.StartIndex *= Channels;
+		Rect.EndIndex *= Channels;
+		Rect.EndIndex -= 1;
+		Rect.x = x;
+		Rect.y = y;
+		Rect.w = RowWidth;
+		Rect.h = 1;
+		//	todo: merge with above if possible
+		Rects.push(Rect);
+	}
+	
+	//	split indexes into rows
+	let Pixel = StartPixel;
+	while ( Pixel <= EndPixel )
+	{
+		let y = Math.floor( Pixel / Width );
+		let RowStart = Pixel % Width;
+		
+		let RowStartPixel = (y*Width) + RowStart;
+		let RowEndPixel = (y*Width) + Width-1;
+		
+		RowEndPixel = Math.min( RowEndPixel, EndPixel );
+
+		const RowWidth = (RowEndPixel - RowStartPixel)+1;
+		
+		PushRow( RowStart, y, RowWidth );
+		
+		if ( RowWidth == 0 )
+			throw `mis calculation, avoid infinite loop`;
+		Pixel += RowWidth;
+	}
+	
+	return Rects;
+}
