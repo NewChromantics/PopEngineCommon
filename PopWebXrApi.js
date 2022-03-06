@@ -347,7 +347,15 @@ class RenderTargetMultiview extends RenderTarget
 		this.Layer = Layer;
 		this.RenderContext = RenderContext;
 	}
-	
+	/*gr: wrong, clearing is still better
+	//	dont clear xr frame buffers
+	ClearColour(r,g,b,a)
+	{
+	}
+	ClearDepth()
+	{
+	}
+	*/
 	CreateFrameBuffer()
 	{
 		const gl = this.RenderContext.Context;
