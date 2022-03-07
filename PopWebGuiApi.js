@@ -1,6 +1,7 @@
 import PromiseQueue from './PromiseQueue.js'
 import * as Pop from './PopWebApiCore.js'
 import * as FileSystem from './FileSystem.js'
+import * as ColourUtils from './Colour.js'
 
 const Default = 'Pop Gui module';
 export default Default;
@@ -1587,13 +1588,13 @@ export class Colour
 	GetValue()
 	{
 		let RgbHex = this.InputElement.value;
-		let Rgbf = Pop.Colour.HexToRgbf( RgbHex );
+		let Rgbf = ColourUtils.HexToRgbf( RgbHex );
 		return Rgbf;
 	}
 	
 	SetValue(Value)
 	{
-		let RgbHex = Pop.Colour.RgbfToHex( Value );
+		let RgbHex = ColourUtils.RgbfToHex( Value );
 		if ( this.ValueCache === RgbHex )
 			return;
 		this.InputElement.value = RgbHex;
