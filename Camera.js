@@ -36,6 +36,7 @@ export class Camera
 	constructor(CopyCamera)
 	{
 		this.FovVertical = 45;
+		this.ZForwardIsNegative = false;
 
 		this.Up = [0,1,0];
 		this.Position = [ 0,2,20 ];
@@ -288,8 +289,7 @@ export class Camera
 		Matrix[9] = 0;
 		//	gr: this should now work in both ways, but one of them is mirrored.
 		//		false SHOULD match old engine style... but is directx
-		const ZForwardIsNegative = false;
-		if ( ZForwardIsNegative )
+		if ( this.ZForwardIsNegative )
 		{
 			//	opengl
 			Matrix[10] = -(-Near-Far) / (Near-Far);
