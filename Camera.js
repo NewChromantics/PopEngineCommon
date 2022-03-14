@@ -181,14 +181,11 @@ export class Camera
 		if ( this.FocalCenter !== false )
 			throw `Something is changing the .FocalCenter which is old API`;
 		
-		/*
-		const Focal = this.GetPixelFocalLengths();
-		//	image size from calibrated focal lengths
-		const ImageWidth = 800;
-		const ImageHeight = 800;
-		const OpenglFocal = this.PixelToOpenglFocalLengths( Focal, [ImageWidth, ImageHeight] );
-		*/
-
+		if ( this.PixelFocals )
+		{
+			const Focal = this.PixelToOpenglFocalLengths( this.PixelFocals, this.PixelFocals.ImageSize );
+			return Focal;
+		}
 
 		const OpenglFocal = {};
 
