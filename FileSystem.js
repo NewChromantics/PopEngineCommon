@@ -325,6 +325,12 @@ export async function LoadFileAsStringAsync(Filename)
 	return Contents;
 }
 
+export async function LoadFileAsJsonAsync(Filename)
+{
+	const String = await LoadFileAsStringAsync(Filename);
+	const Json = JSON.parse(String);
+	return Json;
+}
 
 export async function LoadFileAsArrayBufferAsync(Filename)
 {
