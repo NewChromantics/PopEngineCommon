@@ -289,7 +289,23 @@ export function JoinTypedArrays(Arrays,DeprecatedSecondArray)
 	return NewArray;
 }
 
-
+export function SplitArrayIntoChunks(TheArray,ChunkSize)
+{
+	if ( ChunkSize == 1 )
+		return TheArray;
+	if ( !Number.isInteger(ChunkSize) || ChunkSize < 2 )
+		throw `SplitArrayIntoChunks(${ChunkSize}) needs an integer >= 1 to split into`;
+	
+	//	find out if there's a faster approach
+	const Chunks = [];
+	for ( let i=0;	i<TheArray.length;	i+=ChunkSize )
+	{
+		const SliceFunc = TheArray.subarray ? TheArray.subarray : TheArray.slice;
+		const Chunk = SliceFunc.call( TheArray, i, i+ChunkSize );
+		Chunks.push(Chunk);
+	}
+	return Chunks;
+}
 
 //	array of chunks to avoid joining typed arrays, with
 //	a handy function to grab a slice that could straddle
