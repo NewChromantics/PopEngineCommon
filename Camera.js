@@ -255,6 +255,7 @@ export class Camera
 	}
 	
 	//	GetOpencvProjectionMatrix but 4x4 with z correction for near/far
+	//	rename to CameraToScreen/View
 	GetProjectionMatrix(ViewRect)
 	{
 		//	overriding user-provided matrix
@@ -304,6 +305,13 @@ export class Camera
 		Matrix[15] = 0;
 		
 		return Matrix;
+	}
+
+	GetScreenToCameraTransform(ViewRect)
+	{
+		const CameraToScreen = this.GetProjectionMatrix(ViewRect);
+		const ScreenToCamera = PopMath.MatrixInverse4x4( CameraToScreen );
+		return ScreenToCamera;
 	}
 	
 	
@@ -390,11 +398,12 @@ export class Camera
 	{
 		//	todo: correct viewrect with aspect ratio of viewport
 		//		maybe change input to Viewport to match GetProjection matrix?
-		let Matrix = this.GetProjectionMatrix( ViewRect );
-		Matrix = PopMath.MatrixInverse4x4( Matrix );
+		let CameraToScreen = this.GetProjectionMatrix( ViewRect );
+		let ScreenToCamera = PopMath.MatrixInverse4x4( CameraToScreen );
 		//	put into world space
-		Matrix = PopMath.MatrixMultiply4x4( this.GetLocalToWorldMatrix(), Matrix );
-		return Matrix;
+		let LocalToWorld = this.GetLocalToWorldMatrix();
+		let ScreenToWorld = PopMath.MatrixMultiply4x4( LocalToWorld, ScreenToCamera );
+		return ScreenToWorld;
 	}
 	
 	GetUp()
@@ -667,8 +676,8 @@ export class Camera
 		const RayNear = this.NearDistance;
 		const RayFar = RayDistance || this.FarDistance;
 		
-		let ScreenToCameraTransform = Camera.GetProjectionMatrix( ViewRect );
-		ScreenToCameraTransform = PopMath.MatrixInverse4x4( ScreenToCameraTransform );
+		let CameraToScreenTransform = Camera.GetProjectionMatrix( ViewRect );
+		let ScreenToCameraTransform = PopMath.MatrixInverse4x4( CameraToScreenTransform );
 		
 		let StartMatrix = PopMath.CreateTranslationMatrix( x, y, RayNear );
 		let EndMatrix = PopMath.CreateTranslationMatrix( x, y, RayFar );
