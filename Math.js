@@ -179,6 +179,10 @@ export function Multiply2(a,b)
 
 export function Multiply3(a,b)
 {
+	if ( !Array.isArray(a) )
+		a = [a,a,a];
+	if ( !Array.isArray(b) )
+		b = [b,b,b];
 	return [ a[0]*b[0], a[1]*b[1], a[2]*b[2] ];
 }
 
@@ -1057,6 +1061,18 @@ export function GetBox3Corners(BoxMin,BoxMax)
 	 [BoxMax[0], BoxMax[1], BoxMax[2] ],
 	 ];
 	return BoxCorners;
+}
+
+export function BoxCenterSizeToMinMax(Center,Size)
+{
+	//	if size is radius, this is halfed again
+	const HalfSize = Multiply3( Size, 0.5*0.50 );
+	const Box = {};
+	Box.Min = Subtract3( Center, HalfSize );
+	Box.Max = Add3( Center, HalfSize );
+	//Box.Size = HalfSize;
+	Box.Size = Subtract3( Box.Max, Box.Min );
+	return Box;
 }
 
 export function GetBoundingBoxsBoundingBox(BoundingBoxs)
