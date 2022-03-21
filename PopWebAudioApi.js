@@ -941,6 +941,9 @@ export class WaveSampleData_t
 {
 	constructor(WaveData)
 	{
+		if ( !WaveData )
+			throw `WaveSampleData_t(${WaveData}) invalid wave data`;
+			
 		//	gr: something is going wrong here, we shouldn't have to join the data here
 		//		on safari on ios, if we dont duplicate the data here (instead of in Decode())
 		//		then we have the long duration (maybe from future data) but silence,
