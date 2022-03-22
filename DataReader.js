@@ -1,5 +1,5 @@
-import Pop from './PopEngine.js'
-import {IsTypedArray,JoinTypedArrays,BytesToString,StringToBytes,BytesToBigInt} from './PopApi.js'
+import {Debug,Warning,Yield} from './PopWebApiCore.js'
+import {ChunkArray,IsTypedArray,JoinTypedArrays,BytesToString,StringToBytes,BytesToBigInt} from './PopApi.js'
 
 //	when we push this data to a decoder, it signals no more data coming
 export const EndOfFileMarker = 'eof';
@@ -24,7 +24,12 @@ export class DataReader
 		
 		this.ExternalFilePosition = ExternalFilePosition;
 		this.FilePosition = InitialPositon;
-		this.FileBytes = Data;
+		
+		//	using chunk array for slightly slower access (of big data)
+		//	but faster than doing lots of unncessary JoinTypedArray calls
+		this.FileBytes = new ChunkArray();
+		this.FileBytes.push(Data);
+		
 		this.WaitForMoreData = WaitForMoreData;	//	async func that returns more data
 	}
 	
@@ -40,15 +45,19 @@ export class DataReader
 		const EndPosition = FilePosition + Length;
 		while ( EndPosition > this.FileBytes.length )
 		{
-			Pop.Debug(`waiting for ${EndPosition-this.FileBytes.length} more bytes...`);
+			//Pop.Debug(`waiting for ${EndPosition-this.FileBytes.length} more bytes...`);
 			
 			const NewBytes = await this.WaitForMoreData();
-			if ( NewBytes == EndOfFileMarker )
-				throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
+			//	this is slow when NewBytes is massive!, do a quick length check
+			if ( NewBytes.length == EndOfFileMarker.length )
+				if ( NewBytes == EndOfFileMarker )
+					throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
 			
-			Pop.Debug(`New bytes x${NewBytes.length}`);
-			this.FileBytes = JoinTypedArrays([this.FileBytes,NewBytes]);
-			Pop.Debug(`File size now x${this.FileBytes.length}`);
+			//Pop.Debug(`New bytes x${NewBytes.length}`);
+			//this.FileBytes = JoinTypedArrays([this.FileBytes,NewBytes]);
+			this.FileBytes.push(NewBytes);
+			
+			//Pop.Debug(`File size now x${this.FileBytes.length}`);
 		}
 		const Bytes = this.FileBytes.slice( FilePosition, EndPosition );
 		if ( Bytes.length != Length )
@@ -79,11 +88,14 @@ export class DataReader
 		return Int;
 	}
 	
-	async Read32()
+	async Read32(LittleEndian=true)
 	{
 		const Bytes = await this.GetBytes(this.FilePosition,32/8);
 		this.FilePosition += 32/8;
-		const Int = (Bytes[0]<<24) | (Bytes[1]<<16) | (Bytes[2]<<8) | (Bytes[3]<<0);
+		const ShiftBigEndian = [0,8,16,24];
+		const ShiftLittleEndian = [24,16,8,0];
+		const Shift = LittleEndian ? ShiftLittleEndian : ShiftBigEndian;
+		const Int = (Bytes[0]<<Shift[0]) | (Bytes[1]<<Shift[1]) | (Bytes[2]<<Shift[2]) | (Bytes[3]<<Shift[3]);
 		return Int;
 	}
 	
@@ -131,13 +143,14 @@ export class DataReader
 			
 			while ( EndPosition > this.FileBytes.length )
 			{
-				Pop.Debug(`waiting for ${EndPosition-this.FileBytes.length} more bytes...`);
+				//Pop.Debug(`waiting for ${EndPosition-this.FileBytes.length} more bytes...`);
 				const NewBytes = await this.WaitForMoreData();
 				if ( NewBytes == EndOfFileMarker )
 					throw EndOfFileMarker;//`No more data (EOF) and waiting on ${EndPosition-this.FileBytes.length} more bytes`;
 			
 				//Pop.Debug(`New bytes x${NewBytes.length}`);
-				this.FileBytes = JoinTypedArrays([this.FileBytes,NewBytes]);
+				//this.FileBytes = JoinTypedArrays([this.FileBytes,NewBytes]);
+				this.FileBytes.push(NewBytes);
 				//Pop.Debug(`File size now x${this.FileBytes.length}`);
 			}
 			

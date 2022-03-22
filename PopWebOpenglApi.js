@@ -4,8 +4,12 @@ const Default = 'Pop Opengl module';
 export default Default;
 import {GetUniqueHash} from './Hash.js'
 import {CreatePromise} from './PopApi.js'
+import Pool from './Pool.js'
+import {IsTypedArray} from './PopApi.js'
+import DirtyBuffer from './DirtyBuffer.js'
 
 import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
+import { GetFormatElementSize,GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
 
 
 
@@ -33,8 +37,9 @@ export let CanRenderToFloat = undefined;
 //	allow turning off float support
 export let AllowFloatTextures = !Pop.GetExeArguments().DisableFloatTextures;
 
+const AllowMultiView = true;
 
-function GetString(Context,Enum)
+export function GetString(Context,Enum)
 {
 	const gl = Context;
 	const Enums =
@@ -43,7 +48,10 @@ function GetString(Context,Enum)
 	 'FRAMEBUFFER_INCOMPLETE_ATTACHMENT',
 	 'FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT',
 	 'FRAMEBUFFER_INCOMPLETE_DIMENSIONS',
-	 'FRAMEBUFFER_UNSUPPORTED'
+	 'FRAMEBUFFER_UNSUPPORTED',
+	 //	webgl2
+	 'FRAMEBUFFER_INCOMPLETE_MULTISAMPLE',
+	 'FRAMEBUFFER_INCOMPLETE_VIEW_TARGETS_OVR',
 	];
 	const EnumValues = {};
 	//	number -> string
@@ -61,6 +69,87 @@ function GetString(Context,Enum)
 	return "<" + Enum + ">";
 }
 
+function GetUniformOrAttribMeta(Context,Program,Uniform)
+{
+	const gl = Context;
+	const Meta = {};
+	
+	Meta.ElementCount = Uniform.size;
+	Meta.ElementSize = undefined;
+			
+	//	match name even if it's an array
+	//	todo: struct support
+	Meta.Name = Uniform.name.split('[')[0];
+	//	note: uniform consists of structs, Array[Length] etc
+
+	let AttribLocation = gl.getAttribLocation( Program, Uniform.name );
+	let UniformLocation = gl.getUniformLocation( Program, Uniform.name );
+	//	invalid attribs are -1 or number
+	//	invalid uniforms are null or WebGLUniformLocation
+	AttribLocation = (AttribLocation == -1) ? null : AttribLocation;
+	Meta.Location = UniformLocation || AttribLocation;
+	Meta.GlType = Uniform.type;
+	Meta.ElementType = Uniform.type;
+	Meta.ElementRows = 1;
+	
+	switch( Uniform.type )
+	{
+		//	samplers' value is the texture index
+		case gl.SAMPLER_2D:	
+		case gl.SAMPLER_2D_ARRAY:
+		case gl.SAMPLER_CUBE:
+		case gl.SAMPLER_3D:
+		case gl.INT:
+		case gl.UNSIGNED_INT:
+		case gl.BOOL:
+			Meta.ElementSize = 1;
+			Meta.SetValues = function(v)	{	gl.uniform1iv( Meta.Location, v );	};
+			break;
+		case gl.FLOAT:
+			Meta.ElementSize = 1;
+			Meta.SetValues = function(v)	{	gl.uniform1fv( Meta.Location, v );	};
+			break;
+		case gl.FLOAT_VEC2:
+			Meta.ElementType = gl.FLOAT;
+			Meta.ElementSize = 2;
+			Meta.SetValues = function(v)	{	gl.uniform2fv( Meta.Location, v );	};
+			break;
+		case gl.FLOAT_VEC3:
+			Meta.ElementType = gl.FLOAT;
+			Meta.ElementSize = 3;
+			Meta.SetValues = function(v)	{	gl.uniform3fv( Meta.Location, v );	};
+			break;
+		case gl.FLOAT_VEC4:
+			Meta.ElementType = gl.FLOAT;
+			Meta.ElementSize = 4;
+			Meta.SetValues = function(v)	{	gl.uniform4fv( Meta.Location, v );	};
+			break;
+		case gl.FLOAT_MAT2:
+			Meta.ElementType = gl.FLOAT;
+			Meta.ElementSize = 2*2;
+			Meta.ElementRows = 2;
+			Meta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix2fv( Meta.Location, Transpose, v );	};
+			break;
+		case gl.FLOAT_MAT3:
+			Meta.ElementType = gl.FLOAT;
+			Meta.ElementSize = 3*3;
+			Meta.ElementRows = 3;
+			Meta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix3fv( Meta.Location, Transpose, v );	};
+			break;
+		case gl.FLOAT_MAT4:
+			Meta.ElementType = gl.FLOAT;
+			Meta.ElementSize = 4*4;
+			Meta.ElementRows = 4;
+			Meta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix4fv( Meta.Location, Transpose, v );	};
+			break;
+
+		default:
+			Meta.SetValues = function(v)	{	throw `Unhandled type ${Uniform.type} on ${Uniform.name}`;	};
+			break;
+	}
+	return Meta;
+}
+
 
 //	gl.isFrameBuffer is expensive! probably flushing
 const TestFrameBuffer = false;
@@ -68,7 +157,7 @@ const TestFrameBuffer = false;
 //	gr; VAO's are current disabled whilst attrib locations are fixed.
 //		and now we're using attribs properly, disable before enable!
 const DisableOldVertexAttribArrays = true;
-const AllowVao = !Pop.GetExeArguments().DisableVao;
+const AllowVao = false;//!Pop.GetExeArguments().DisableVao;
 
 //	I was concerned active texture was being used as render target and failing to write
 const CheckActiveTexturesBeforeRenderTargetBind = false;	
@@ -149,6 +238,33 @@ function Pop_Opengl_SetGuiControl_SubElementStyle(Element,LeftPercent=0,RightPer
 }
 
 
+
+async function WaitForSync(Sync,Context)
+{
+	const gl = Context;
+	
+	const RecheckMs = 1000/100;
+	async function CheckSync()
+	{
+		const Flags = 0;
+		const WaitNanoSecs = 0;
+		while(true)
+		{
+			const Status = gl.clientWaitSync( Sync, Flags, WaitNanoSecs );
+			if ( Status == gl.WAIT_FAILED )
+				throw `clientWaitSync failed`;
+			if ( Status == gl.TIMEOUT_EXPIRED )
+			{
+				await Pop.Yield( RecheckMs );
+				continue;
+			}
+			//	ALREADY_SIGNALED
+			//	CONDITION_SATISFIED
+			break;
+		}
+	}
+	return CheckSync();
+}
 
 
 
@@ -291,14 +407,14 @@ class StateParams_t
 		
 		this.DepthRead = 'LessEqual';	//	need to turn true into this default
 		this.DepthWrite = true;
-		this.CullMode = null;	//	null = none
+		this.CullFacing = null;	//	null = none, 'Front' and 'Back'/true
 		this.BlendMode = 'Alpha';
 		
 		Object.assign( this, Params );
 	}
 }
 
-class RenderCommand_Draw extends RenderCommand_Base
+export class RenderCommand_Draw extends RenderCommand_Base
 {
 	constructor()
 	{
@@ -418,8 +534,11 @@ export class Context
 		//	proper way to detect when canvas is removed from the dom (and our context should die)
 		if ( CanvasIsElement )
 		{
-			this.CanvasObserver = new MutationObserver( this.OnCanvasObservation.bind(this) );
-			this.CanvasObserver.observe( this.CanvasElement, { childList: true } );
+			this.CanvasMutationObserver = new MutationObserver( this.OnCanvasMutationObservation.bind(this) );
+			this.CanvasMutationObserver.observe( this.CanvasElement, { childList: true } );
+
+			this.CanvasResizeObserver = new ResizeObserver( this.OnCanvasResizeObservation.bind(this) );
+			this.CanvasResizeObserver.observe( this.CanvasElement );
 		}
 		
 		this.Context = null;
@@ -440,6 +559,8 @@ export class Context
 		this.ActiveTextureRef = {};
 		this.TextureRenderTargets = [];	//	this is a context asset, so maybe it shouldn't be kept here
 		
+		this.ArrayBuffers = {};	//	cache of object-hash associated gl buffers
+
 		this.BindEvents();
 		
 		try
@@ -456,10 +577,15 @@ export class Context
 		this.RenderLoop();
 	}
 	
-	OnCanvasObservation(Event)
+	OnCanvasMutationObservation(Event)
 	{
 		Pop.Debug(`Something happened to canvas; ${Event}`);
 		this.Close();
+	}
+
+	OnCanvasResizeObservation(Event)
+	{
+		this.RefreshCanvasResolution();
 	}
 
 	Close()
@@ -482,7 +608,13 @@ export class Context
 		}
 		
 		this.CanvasElement = null;
-		this.CanvasObserver.disconnect();		
+		if ( this.CanvasMutationObserver )
+			this.CanvasMutationObserver.disconnect();
+		if ( this.CanvasResizeObserver )
+			this.CanvasResizeObserver.disconnect();
+			
+		this.CanvasMutationObserver = null;
+		this.CanvasResizeObserver = null;
 	}
 
 	OnOrientationChange(ResizeEvent)
@@ -669,7 +801,7 @@ export class Context
 				Width = WindowInnerSize[0];
 			if (!Height)
 				Height = WindowInnerSize[1];
-			Rect = [0,0,Width,Height];
+			let Rect = [0,0,Width,Height];
 			Pop.Debug("SetCanvasSize defaulting to ",Rect,"ParentSize=" + ParentSize,"ParentInnerSize=" + ParentInnerSize,"WindowInnerSize=" + WindowInnerSize);
 			return Rect;
 		}
@@ -685,7 +817,9 @@ export class Context
 		//	not needed for offscreen canvases (should this ever be called?)
 		if ( !CanvasIsElement )
 			return;
-		
+
+		//	assume something has happened that has made us this the size has changed, make sure it gets refreshed
+		this.ScreenRectCache = null;		
 
 		//	gr: this function now should always just get the rect via dom, 
 		//		if it can't get it from itself, from it's parent
@@ -736,13 +870,13 @@ export class Context
 		setTimeout( RestoreContext, 3*1000 );
 	}
 	
-
 	CreateContext()
 	{
-		const ContextMode = "webgl";
+		const ContextMode = "webgl2";
 		const Canvas = this.GetCanvasElement();
 		if ( !Canvas )
 			throw `RenderContext has no canvas`;
+
 		//this.RefreshCanvasResolution();
 		this.OnResize();
 		const Options = Object.assign({}, this.CanvasOptions);
@@ -754,6 +888,7 @@ export class Context
 		if (Options.premultipliedAlpha == undefined) Options.premultipliedAlpha = false;
 		if (Options.alpha == undefined) Options.alpha = true;	//	have alpha buffer
 		const Context = Canvas.getContext( ContextMode, Options );
+		const IsWebgl2 = ( Context instanceof WebGL2RenderingContext );
 		
 		if ( !Context )
 			throw "Failed to initialise " + ContextMode;
@@ -791,7 +926,7 @@ export class Context
 		CapabilityNames.forEach(GetCapability);
 		const Extensions = gl.getSupportedExtensions();
 		
-		Pop.Debug(`Created new ${ContextMode} context. Capabilities ${JSON.stringify(Capabilities)}; Extensions ${Extensions}`);
+		Pop.Debug(`Created new ${ContextMode} context. Capabilities ${JSON.stringify(Capabilities)}; Extensions ${Extensions.join('\n')}`);
 		
 		
 		//	handle losing context
@@ -831,6 +966,24 @@ export class Context
 			this.Int32TextureSupported = true;
 		}.bind(this);
 
+		function InitInstancedArrays(Context,Extension)
+		{
+			console.log(`ANGLE_instanced_arrays supported; InitInstancedArrays()`);
+			Context.vertexAttribDivisor = function(Location,Divisor)
+			{
+				return Extension.vertexAttribDivisorANGLE(...arguments);
+			}
+			
+			Context.drawArraysInstanced = function()
+			{
+				return Extension.drawArraysInstancedANGLE(...arguments);
+			}
+
+			Context.drawElementsInstanced = function()
+			{
+				return Extension.drawElementsInstancedANGLE(...arguments);
+			}
+		}
 		
 		const EnableExtension = function(ExtensionName,Init)
 		{
@@ -852,22 +1005,49 @@ export class Context
 		
 		if ( AllowFloatTextures )
 		{
+			EnableExtension('EXT_color_buffer_float',InitFloatTexture);
 			EnableExtension('OES_texture_float',InitFloatTexture);
 			EnableExtension('OES_texture_float_linear',InitFloatLinearTexture);
 		}
 		EnableExtension('WEBGL_depth_texture',InitDepthTexture);
 		EnableExtension('EXT_blend_minmax');
-		EnableExtension('OES_vertex_array_object', this.InitVao.bind(this) );
+		EnableExtension('OES_vertex_array_object', this.InitVaoExtension.bind(this) );
 		EnableExtension('WEBGL_draw_buffers', this.InitMultipleRenderTargets.bind(this) );
 		EnableExtension('OES_element_index_uint', this.Init32BitBufferIndexes.bind(this) );
+		EnableExtension('ANGLE_instanced_arrays', InitInstancedArrays.bind(this) );
+		EnableExtension('OES_standard_derivatives');
+		EnableExtension('WEBGL_multisampled_render_to_texture', this.InitRenderToTextureMsaa.bind(this) );
+		
+		if ( AllowMultiView )
+			EnableExtension('OCULUS_multiview', this.InitOculusMultiview.bind(this) );
 		
 		//	texture load needs extension in webgl1
 		//	in webgl2 it's built in, but requires #version 300 es
 		//	gr: doesnt NEED to be enabled??
 		//EnableExtension('EXT_shader_texture_lod');
 		//EnableExtension('OES_standard_derivatives');
+		
+		//	readpixels() fails with null as buffer in webgl1, no different symbols
+		Context.CanReadPixelsAsync = function()
+		{
+			//	gr: not currently working
+			return false;
+			return IsWebgl2;
+		}
+		this.CanReadPixelsAsync = Context.CanReadPixelsAsync;
 
 		return Context;
+	}
+	
+	InitOculusMultiview(gl,Extension)
+	{
+		this.MultiView = Extension;
+	}
+	
+	InitRenderToTextureMsaa(gl,Extension)
+	{
+		gl.framebufferTexture2DMultisampleEXT = Extension.framebufferTexture2DMultisampleEXT;
+		this.RenderToTextureMsaa = Extension;
 	}
 	
 	IsFloatRenderTargetSupported()
@@ -898,7 +1078,7 @@ export class Context
 	}
 
 	
-	InitVao(Context,Extension)
+	InitVaoExtension(Context,Extension)
 	{
 		//	already enabled with webgl2
 		if ( Context.createVertexArray )
@@ -969,13 +1149,22 @@ export class Context
 		return RenderCommands.Promise;
 	}
 	
-	RenderLoop()
+	async RenderLoop()
 	{
 		//	wait for new paint event ("render thread")
 		//	process all queued render-submissions (which resolve a promise)
 		
-		let Render = function(Timestamp)
+		//	gr: this is now an async function, using pop engine
+		//	WaitForFrame()
+		//	instead of request animation frame
+		//	so that this renderloop still executes in say, XR mode
+		//	to flush out gpu queued work (even if we don't render to screen)
+		//	Is this a problem where we need to render whilst inside requestAnimationFrame() callback?
+		
+		while ( true )
 		{
+			const Timestep = await Pop.WaitForFrame();
+		
 			if ( !this.IsOpen )
 			{
 				console.warn(`RenderContext.IsOpen=${this.IsOpen}; ending render loop`);
@@ -991,8 +1180,10 @@ export class Context
 			{
 				//	Renderloop error, failed to get context... waiting to try again
 				console.error("OnRender error: ",e);
-				setTimeout( Render.bind(this), RetryGetContextMs );
-				return;
+				await Pop.Yield(RetryGetContextMs);
+				//setTimeout( Render.bind(this), RetryGetContextMs );
+				//return;
+				continue;
 			}
 			
 			//	pop all the commands so we don't get stuck in an infinite loop if a command queues more commands
@@ -1010,15 +1201,17 @@ export class Context
 				catch(e)
 				{
 					RenderCommands.OnError(e);
+					//	slow down for shader errors etc
+					//	gr: this should be done by caller in the promise rejection
+					//await Pop.Yield(20);
 				}
 			}
 			
 			//	request next frame, before any render fails, so we will get exceptions thrown for debugging, but recover
-			window.requestAnimationFrame( Render.bind(this) );
+			//window.requestAnimationFrame( Render.bind(this) );
 
 			Stats.Renders++;
 		}
-		window.requestAnimationFrame( Render.bind(this) );
 	}
 	
 	//	Device render target is the target for "null"
@@ -1033,6 +1226,15 @@ export class Context
 		let ReadBackPass = false;
 		let InsidePass = false;
 		
+		//	release any pool-allocated array buffers
+		//	these could still be rendering... maybe this needs to be after a glfinish?
+		let PoolArrayBuffers = [];
+		const ReleaseArrayBuffers = function()
+		{
+			if ( this.ArrayBufferPool )
+				PoolArrayBuffers.forEach( this.ArrayBufferPool.Release.bind(this.ArrayBufferPool) );
+		}.bind(this);
+		
 		const EndPass = function()
 		{
 			if ( InsidePass )
@@ -1043,10 +1245,19 @@ export class Context
 					{
 						//	todo: need to support depth textures here
 						const TargetImage0 = PassRenderTarget.ColourImages[0];
-						const ReadFormat = TargetImage0.GetFormat();
-						const Pixels = PassRenderTarget.ReadPixels(ReadFormat);
-						//	gr: need to set gl version to match pixels version here
-						TargetImage0.WritePixels(Pixels.Width,Pixels.Height,Pixels.Data,Pixels.Format);
+						if ( this.Context.CanReadPixelsAsync() )
+						{
+							//	sets up buffers and makes a promise for pixel data, 
+							//	which we'll hope has updated by the time the user wants it
+							PassRenderTarget.ReadPixelsAsync(TargetImage0);
+						}
+						else
+						{
+							const ReadFormat = TargetImage0.GetFormat();
+							const Pixels = PassRenderTarget.ReadPixels(ReadFormat);
+							//	gr: need to set gl version to match pixels version here
+							TargetImage0.WritePixels(Pixels.Width,Pixels.Height,Pixels.Data,Pixels.Format);
+						}
 					}
 					catch(e)
 					{
@@ -1066,8 +1277,11 @@ export class Context
 		const NewPass = function(SetRenderTargetCommand,ClearColour,ReadBack)
 		{
 			//	zero alpha = no clear so we just load old contents
-			if ( ClearColour && ClearColour[3] <= 0.0 )
-				ClearColour = null;
+			//		so alpha needs to be null
+			//	gr: we sometimes WANT zero alpha (eg, clearing a texture to 0,0,0,0)
+			//	so explicitly needs to be missing clear colour to not clear
+			//if ( ClearColour && ClearColour[3] <= 0.0 )
+			//	ClearColour = null;
 				
 			EndPass();
 			let Target;	
@@ -1097,6 +1311,11 @@ export class Context
 			{
 				PassRenderTarget.ClearColour(...ClearColour);
 			}
+			else // always clear depth... make this an option!
+			{
+				PassRenderTarget.ClearDepth();
+			}
+			
 			PassRenderTarget.ResetState();
 			//PassRenderTarget.SetBlendModeAlpha();
 		}.bind(this);
@@ -1121,20 +1340,58 @@ export class Context
 					//	bind geo & shader (these are intrinsicly linked by attribs, we should change code
 					//	so they HAVE to be bound together)
 					Shader.Bind( RenderContext );
+
+					//	gr: change this around so we set all uniforms, 
+					//		then setup attributes in one go
+
+					//	seems to be okay after, putting after in case array buffers mess anything up
+					//	but we may need to be after so uniform-attribs override geo attribs
 					Geometry.Bind( RenderContext, Shader );
+
+					let InstanceCount = 0;
 
 					//	set uniforms on shader
 					for ( let UniformKey in RenderCommand.Uniforms )
 					{
 						const UniformValue = RenderCommand.Uniforms[UniformKey];
-						Shader.SetUniform( UniformKey, UniformValue );
+						if ( Shader.SetUniform( UniformKey, UniformValue ) )
+							continue;
+
+						//	gr: this also picks up uniforms that have been optimised out...
+						const AttributeMeta = Shader.GetAttributeMeta(UniformKey);
+						if ( !AttributeMeta )
+							continue;
+					
+						//console.log(`Turn ${UniformKey} into attrib`,AttributeMeta);
+						//	prep for instancing support;
+						//	if there are uniforms provided that are attributes, (AND not in geo?)
+						//	we need to turn these values into an attribute buffer and bind it
+						
+						//	gr: for instancing, this needs to be an array for each instance...
+						//	gr: now auto unrolling and expecting to align...
+						const Values = UniformValue;
+						const Bind = this.AllocAndBindAttribInstances( AttributeMeta, Values );
+						const Buffer = Bind.Buffer;
+						if ( Buffer.Pooled )
+							PoolArrayBuffers.push( Buffer );
+						
+						if ( InstanceCount != 0 )
+							if ( Bind.InstanceCount < InstanceCount )
+								console.warn(`Attribute ${AttributeMeta.Name} detected ${Bind.InstanceCount} instances, but already detected ${InstanceCount}`);
+						
+						//	things wont render if any input data isnt aligned to instance count
+						//	should we change this to min()>0 so something will render?
+						if ( InstanceCount == 0 )
+							InstanceCount = Bind.InstanceCount;
+						else
+							InstanceCount = Math.min( InstanceCount, Bind.InstanceCount );
 					}
-										
+
 					//	sokol sets state every frame, we should too
 					PassRenderTarget.SetState(StateParams);
 
 					//	draw polygons
-					Geometry.Draw(RenderContext);
+					Geometry.Draw( RenderContext, InstanceCount );
 				}
 				else if ( RenderCommand instanceof RenderCommand_SetRenderTarget ) 
 				{
@@ -1167,6 +1424,7 @@ export class Context
 		finally
 		{
 			EndPass();
+			ReleaseArrayBuffers();
 		}
 	}
 
@@ -1188,6 +1446,203 @@ export class Context
 			this.InitialiseContext();
 		}
 		return this.Context;
+	}
+	
+	//	get a buffer associated with an object, alloc if none
+	//	todo: merge this into the pool? just so all buffers are in the same place
+	GetArrayBuffer(ArrayObject)
+	{
+		const Hash = GetUniqueHash(ArrayObject);
+		if ( this.ArrayBuffers.hasOwnProperty(Hash) )
+			return this.ArrayBuffers[Hash];
+		
+		const gl = this.Context;
+		
+		//	new one!
+		const Buffer = {};
+		Buffer.Buffer = gl.createBuffer();
+		Buffer.Version = 0;
+		Buffer.Length = 0;
+		this.ArrayBuffers[Hash] = Buffer;
+		return Buffer;
+	}
+	
+	AllocArrayBuffer(FloatCount)
+	{
+		function PopFromFreeList(FreeItems,Meta)
+		{
+			//	todo: match length, maybe hash on meta (meta=size)
+			if ( !FreeItems.length )
+				return false;	//	no match
+				
+			const First = FreeItems.shift();
+			//	make sure float array aligns
+			if ( First.Floats.length != Meta )
+				First.Floats = new Float32Array(Meta);
+			return First;
+		}
+		function Alloc(Meta)
+		{
+			if ( !Meta )
+				throw `Now expected to pass length as meta for buffer pool`;
+			const gl = this.Context;
+			const Buffer = {};
+			Buffer.Buffer = gl.createBuffer();
+			Buffer.Floats = new Float32Array(Meta);
+			Buffer.Pooled = true;
+			return Buffer;
+		}
+		
+		if ( !this.ArrayBufferPool )
+		{
+			this.ArrayBufferPool = new Pool(`ArrayBufferPool`,Alloc.bind(this),Pop.Warning,PopFromFreeList.bind(this));
+		}
+		
+		const Buffer = this.ArrayBufferPool.Alloc(...arguments);
+		return Buffer;
+	}
+	
+	
+	AllocAndBindAttribInstances(AttributeMeta,Values)
+	{
+		const gl = this.Context;
+		
+		let DataValues;
+		let Buffer;
+		
+		if ( IsTypedArray(Values) )
+		{
+			//	find a buffer associted with this dirtybuffer
+			Buffer = this.GetArrayBuffer( Values );
+			DataValues = Values;
+			gl.bindBuffer(gl.ARRAY_BUFFER, Buffer.Buffer);
+			
+			const Changed = (Buffer.Version == 0) || (Buffer.Version != Values.Version );
+			if ( Changed )
+			{
+				gl.bufferData(gl.ARRAY_BUFFER, DataValues, gl.DYNAMIC_DRAW );
+				Buffer.Version++;
+			}
+			Values.Version = Buffer.Version;
+		}
+		else if ( Values instanceof DirtyBuffer )
+		{
+			//	find a buffer associted with this dirtybuffer
+			Buffer = this.GetArrayBuffer( Values );
+			
+			//	update changes
+			gl.bindBuffer(gl.ARRAY_BUFFER, Buffer.Buffer);
+			const Changes = Values.PopChanges();
+			
+			DataValues = Values.Data;
+			
+			const AlignmentLength = 1024*2;
+			let PaddedLength = DataValues.length + AlignmentLength;
+			PaddedLength -= PaddedLength % AlignmentLength;
+			
+			let WriteAll = (Buffer.Version==0);
+			//	need to resize buffer
+			if ( Buffer.Length < PaddedLength )
+				WriteAll = true;
+			
+			//	new buffer, need to write all data
+			if ( WriteAll )
+			{
+				const PaddedSize = PaddedLength * DataValues.BYTES_PER_ELEMENT;
+				//	set size then write data so we can have biggger buffer than current size
+				console.log(`New buffer size (writing all data) Length=${DataValues.length} PaddedLength=${PaddedLength}`);
+				gl.bufferData(gl.ARRAY_BUFFER, PaddedSize, gl.DYNAMIC_DRAW );
+				gl.bufferSubData(gl.ARRAY_BUFFER, 0, DataValues);
+				Buffer.Length = PaddedLength;
+				Buffer.Version++;
+			}
+			else if ( Changes.length )
+			{
+				for ( let ChangeRange of Changes )
+				{
+					const StartIndex = ChangeRange[0];
+					const EndIndex = ChangeRange[1];
+					const SubDataValues = Values.Data.subarray( StartIndex, EndIndex+1 );
+					const ByteOffset = StartIndex * DataValues.BYTES_PER_ELEMENT;
+					gl.bufferSubData(gl.ARRAY_BUFFER, ByteOffset, SubDataValues);
+				}
+				Buffer.Version++;
+			}
+		}
+		else
+		{
+			//if ( !Array.isArray(Values) )
+			//	throw `AllocAndBindAttribInstances(${AttributeMeta.Name}) expecting array of values (per instance)`;
+		
+			//	flatten as needed
+			//	gr: this is mega expensive
+			if ( Values.flat )
+				if ( Array.isArray(Values[0]) )
+					Values = Values.flat(2);
+			
+			//	alloc a buffer from a pool
+			Buffer = this.AllocArrayBuffer(Values.length);
+			gl.bindBuffer(gl.ARRAY_BUFFER, Buffer.Buffer);
+							
+			//	this needs to unroll the values into one giant array...
+			//	if this an array of typed arrays, we need some more work
+			DataValues = Values;
+			if ( !IsTypedArray(DataValues) )
+			{
+				DataValues = Buffer.Floats;
+				DataValues.set( Values );
+			}
+			//	gl.get = sync = slow!
+			//	init buffer size (or resize if bigger than before)
+			//const BufferSize = gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE);
+			//if ( DataValues.byteLength > BufferSize )
+			//	gl.bufferData(gl.ARRAY_BUFFER, DataValues.byteLength, gl.DYNAMIC_DRAW, null );
+			//const NewBufferSize = gl.getBufferParameter(gl.ARRAY_BUFFER, gl.BUFFER_SIZE);
+			//gl.bufferSubData(gl.ARRAY_BUFFER, 0, DataValues);
+			gl.bufferData(gl.ARRAY_BUFFER, DataValues, gl.DYNAMIC_DRAW );
+		}
+
+		//	gr: we should forcibly clip the data if we already have a InstanceCount determined
+		//		as the attributes have to align
+		let DetectedInstanceCount = DataValues.length / AttributeMeta.ElementSize;
+		if ( DetectedInstanceCount != Math.floor(DetectedInstanceCount) )
+			throw `Attribute ${AttributeMeta.Name} has misaligned input`; 
+
+		const ValueDataSize = AttributeMeta.ElementSize * DataValues.BYTES_PER_ELEMENT;
+		
+		//	matrixes are multiples of value*elementsize as all shader things are 4 floats at max
+		//	so we iterate the sub parts to describe
+		//	gr: maybe we can cache this layout so only needs updating if the pooled buffer is dirty
+		//	https://stackoverflow.com/a/38853623/355753
+		const Rows = AttributeMeta.ElementRows;
+		
+		function BindAttribArray(Row)
+		{
+			const ValueStride = ValueDataSize;
+			const Normalised = false;
+			const RowSize = AttributeMeta.ElementSize / AttributeMeta.ElementRows;
+			if ( RowSize != Math.floor(RowSize) )
+				throw `Attribute ${AttributeMeta.Name} ElementSize vs ElementRows not aligned`;
+			const RowStride = RowSize * DataValues.BYTES_PER_ELEMENT;
+			const Location = AttributeMeta.Location + Row;
+			const Type = AttributeMeta.ElementType;	//	gl.FLOAT int etc
+			const Offset = RowStride * Row;
+			gl.enableVertexAttribArray(Location);
+			gl.vertexAttribPointer( Location, RowSize, Type, Normalised, ValueStride, Offset);
+			//	this line says this attribute only changes for each 1 instance
+			//	and enables instancing
+			gl.vertexAttribDivisor( Location, 1);
+		}
+		
+		for ( let Row=0;	Row<Rows;	Row++ )
+		{
+			BindAttribArray(Row);
+		}
+		
+		const BindMeta = {};
+		BindMeta.Buffer = Buffer;
+		BindMeta.InstanceCount = DetectedInstanceCount;
+		return BindMeta;
 	}
 	
 	OnAllocatedTexture(Image)
@@ -1343,7 +1798,10 @@ export class Context
 	
 	async CreateShader(VertSource,FragSource,UniformDescriptions,AttribDescriptions)
 	{
-		//	todo: deprecate Uniform&Attribs explicitly (we regex them now, only sokol needs it, not webgl)
+		//	todo: deprecate Uniform&Attribs explicitly
+		//	we regex them now in AssetManager, and only sokol (not webgl) needs it, so
+		//	even that regex should be native side
+		
 		//		and force adding a name for debugging
 		const ShaderName = `A shader`;
 		//	gr: I think this can be synchronous in webgl
@@ -1446,7 +1904,7 @@ export class RenderTarget
 		gl.disable(gl.CULL_FACE);
 		gl.disable(gl.BLEND);
 		gl.enable(gl.DEPTH_TEST);
-		gl.enable(gl.SCISSOR_TEST);
+		//gl.enable(gl.SCISSOR_TEST);
 		gl.disable(gl.SCISSOR_TEST);
 		//	to make blending work well, don't reject things on same plane
 		gl.depthFunc(gl.LEQUAL);
@@ -1456,9 +1914,15 @@ export class RenderTarget
 	{
 		const gl = this.GetGlContext();
 		
-		if ( StateParams.CullMode )
+		if ( StateParams.CullFacing == 'Front' )
 		{
-			throw `Currently not handling CullMode=${StateParams.CullMode}`;
+			gl.enable(gl.CULL_FACE);
+			gl.cullFace(gl.FRONT);
+		}
+		else if ( StateParams.CullFacing == 'Back' )
+		{
+			gl.enable(gl.CULL_FACE);
+			gl.cullFace(gl.BACK);
 		}
 		else
 		{
@@ -1494,7 +1958,7 @@ export class RenderTarget
 				break;
 
 			case 'Alpha':
-				this.SetBlendModeBlit();
+				this.SetBlendModeAlpha();
 				break;
 
 			case 'Min':
@@ -1506,7 +1970,11 @@ export class RenderTarget
 				break;
 
 			case 'Add':
-				this.SetBlendModeAdd();
+				this.SetBlendModeAddByAlpha();
+				break;
+
+			case 'ExplicitAdd':
+				this.SetBlendModeExplicitAdd();
 				break;
 			}
 	}
@@ -1518,6 +1986,7 @@ export class RenderTarget
 		gl.enable( gl.BLEND );
 		gl.blendFunc( gl.ONE, gl.ZERO );
 		gl.blendEquation( gl.FUNC_ADD );
+		gl.disable( gl.BLEND );
 	}
 	
 	SetBlendModeAlpha()
@@ -1527,7 +1996,7 @@ export class RenderTarget
 		//	set mode
 		//	enable blend
 		gl.enable( gl.BLEND );
-		gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
+		gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 		gl.blendEquation( gl.FUNC_ADD );
 	}
 	
@@ -1561,6 +2030,7 @@ export class RenderTarget
 		//GL_FUNC_ADD
 	}
 	
+	//	add based on alpha
 	SetBlendModeAdd()
 	{
 		const gl = this.GetGlContext();
@@ -1568,7 +2038,19 @@ export class RenderTarget
 		//	set mode
 		//	enable blend
 		gl.enable( gl.BLEND );
-		gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
+		gl.blendFunc( gl.ONE, gl.ONE_MINUS_SRC_ALPHA );
+		gl.blendEquation( gl.FUNC_ADD );
+	}
+	
+	//	literally add rgba together
+	SetBlendModeExplicitAdd()
+	{
+		const gl = this.GetGlContext();
+		
+		//	set mode
+		//	enable blend
+		gl.enable( gl.BLEND );
+		gl.blendFunc( gl.ONE, gl.ONE );
 		gl.blendEquation( gl.FUNC_ADD );
 	}
 	
@@ -1654,6 +2136,66 @@ export class RenderTarget
 		
 		throw `ReadPixels() Unhandled readback format ${ReadBackFormat}`;
 	}
+	
+	ReadPixelsAsync(Image,ReadBackFormat)
+	{
+		ReadBackFormat = ReadBackFormat || Image.GetFormat();
+		
+		const gl = this.GetGlContext();
+
+		//	should we pool these buffers?
+		const ReadPixelsBuffer = gl.createBuffer();
+		
+		//	queue commands to read back
+		const x = 0;
+		const y = 0;
+		const w = Image.GetWidth();
+		const h = Image.GetHeight();
+		const Channels = GetChannelsFromPixelFormat(ReadBackFormat);
+		const PixelByteSize = Channels * GetFormatElementSize(ReadBackFormat);
+		const ImageByteSize = w * h * PixelByteSize;
+		const IsFloat = IsFloatFormat(ReadBackFormat);
+		
+		const PixelBufferFormat = IsFloat ? Float32Array : Uint8Array;
+		const PixelBuffer = new PixelBufferFormat( w * h * Channels );
+		
+		const GlFormat = gl.RGBA;
+		const GlType = IsFloat ? gl.FLOAT : gl.UNSIGNED_BYTE;
+		
+		gl.bindBuffer(gl.PIXEL_PACK_BUFFER, Image.ReadPixelsBuffer );
+		gl.bufferData(gl.PIXEL_PACK_BUFFER, PixelBuffer.byteLength, gl.STREAM_READ );
+		const Offset = 0;
+		gl.readPixels( x, y, w, h, GlFormat, GlType, Offset );
+		gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null );
+		
+		//	create a sync point so we know when readpixels commands above have completed
+		const Sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+		
+		function Cleanup()
+		{
+			gl.deleteBuffer(ReadPixelsBuffer);
+		}
+		function OnError(Error)
+		{
+			console.error(`ReadPixelsAsync error ${Error}`);
+		}
+		async function DoRead()
+		{
+			await WaitForSync(Sync,gl);
+			gl.deleteSync(Sync);
+			gl.bindBuffer(gl.PIXEL_PACK_BUFFER, ReadPixelsBuffer);
+			const SourceOffset = 0;
+			const DestinationOffset = 0;
+			const DestinationSize = PixelBuffer.byteLength;
+  			gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, SourceOffset, PixelBuffer, DestinationOffset, DestinationSize );
+  			gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+  			//	todo: dont mark gl version as changed
+  			Image.WritePixels( w, h, PixelBuffer, ReadBackFormat );
+		}
+		Image.ReadPixelsBufferPromise = DoRead();
+		Image.ReadPixelsBufferPromise.finally(Cleanup);
+	}
+	
 }
 
 
@@ -1755,6 +2297,9 @@ class TextureRenderTarget extends RenderTarget
 		}
 		else
 		{
+			if ( gl instanceof WebGL2RenderingContext )
+				throw `todo: webgl2 colour attachment names for MRT`;
+			
 			//	MRT
 			if ( !gl.WEBGL_draw_buffers )
 				throw "Context doesn't support MultipleRenderTargets/WEBGL_draw_buffers";
@@ -1869,10 +2414,13 @@ class TextureRenderTarget extends RenderTarget
 				const ImageTarget = this.ColourImages[0];
 				const Texture = ImageTarget.OpenglTexture;
 				gl.bindTexture(gl.TEXTURE_2D,Texture);
-				PreviousFilter = ImageTarget.LinearFilter;
-				const FilterMode = gl.LINEAR;
+				
+				/*
+				//	restore filter mode
+				const FilterMode = ImageTarget.LinearFilter ? gl.LINEAR : gl.NEAREST;
 				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, FilterMode);
 				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, FilterMode);
+				*/
 				//gl.bindTexture(gl.TEXTURE_2D,null);
 			}
 		}
@@ -1983,6 +2531,7 @@ export class Shader
 		this.ProgramContextVersion = null;
 		this.Context = null;			//	 need to remove this, currently still here for SetUniformConvinience
 		this.UniformMetaCache = null;	//	may need to invalidate this on new context
+		this.AttributeMetaCache = null;	//	may need to invalidate this on new context
 		this.VertShaderSource = VertShaderSource;
 		this.FragShaderSource = FragShaderSource;
 	}
@@ -1999,8 +2548,9 @@ export class Shader
 		{
 			this.Program = this.CompileProgram( RenderContext );
 			this.ProgramContextVersion = RenderContext.ContextVersion;
-			this.UniformMetaCache = null;
 			this.Context = RenderContext;
+			this.UniformMetaCache = this.GetUniformMetas();
+			this.AttributeMetaCache = this.GetAttributeMetas();
 		}
 		return this.Program;
 	}
@@ -2066,10 +2616,11 @@ export class Shader
 	{
 		const UniformMeta = this.GetUniformMeta(Uniform);
 		if ( !UniformMeta )
-			return;
+			return false;
 		if( Array.isArray(Value) )					this.SetUniformArray( Uniform, UniformMeta, Value );
 		else if( Value instanceof Float32Array )	this.SetUniformArray( Uniform, UniformMeta, Value );
-		else if ( Value instanceof PopImage )		this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTextureIndex() );
+		else if ( Value instanceof PopImage )		this.SetUniformPopImage( Uniform, UniformMeta, Value, this.Context.AllocTextureIndex() );
+		else if ( Value instanceof WebGLTexture )	this.SetUniformTexture( Uniform, UniformMeta, Value, this.Context.AllocTextureIndex() );
 		else if ( typeof Value === 'number' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else if ( typeof Value === 'boolean' )		this.SetUniformNumber( Uniform, UniformMeta, Value );
 		else
@@ -2078,6 +2629,7 @@ export class Shader
 			console.log(Value);
 			throw "Failed to set uniform " +Uniform + " to " + ( typeof Value );
 		}
+		return true;
 	}
 	
 	SetUniformArray(UniformName,UniformMeta,Values)
@@ -2126,9 +2678,14 @@ export class Shader
 		UniformMeta.SetValues( ValuesExpanded );
 	}
 	
-	SetUniformTexture(Uniform,UniformMeta,Image,TextureIndex)
+	SetUniformPopImage(Uniform,UniformMeta,Image,TextureIndex)
 	{
 		const Texture = Image.GetOpenglTexture( this.Context );
+		this.SetUniformTexture( Uniform, UniformMeta, Texture, TextureIndex );
+	}
+	
+	SetUniformTexture(Uniform,UniformMeta,Texture,TextureIndex)
+	{
 		const gl = this.GetGlContext();
 		//  https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Tutorial/Using_textures_in_WebGL
 		//  WebGL provides a minimum of 8 texture units;
@@ -2157,6 +2714,26 @@ export class Shader
 		UniformMeta.SetValues( [Value] );
 	}
 	
+	
+	GetAttributeMetas()
+	{
+		if ( this.AttributeMetaCache )
+			return this.AttributeMetaCache;
+	
+		//	iterate and cache!
+		this.AttributeMetaCache = {};
+		let gl = this.GetGlContext();
+		let Count = gl.getProgramParameter( this.Program, gl.ACTIVE_ATTRIBUTES );
+		for ( let i=0;	i<Count;	i++ )
+		{
+			const UniformMeta = gl.getActiveAttrib( this.Program, i );
+			const Meta = GetUniformOrAttribMeta( gl, this.Program, UniformMeta );
+			Meta.Location = gl.getAttribLocation( this.Program, UniformMeta.name );
+			this.AttributeMetaCache[Meta.Name] = Meta;
+		}
+		return this.AttributeMetaCache;
+	}
+	
 	GetUniformMetas()
 	{
 		if ( this.UniformMetaCache )
@@ -2168,72 +2745,33 @@ export class Shader
 		let UniformCount = gl.getProgramParameter( this.Program, gl.ACTIVE_UNIFORMS );
 		for ( let i=0;	i<UniformCount;	i++ )
 		{
-			let UniformMeta = gl.getActiveUniform( this.Program, i );
-			UniformMeta.ElementCount = UniformMeta.size;
-			UniformMeta.ElementSize = undefined;
-			//	match name even if it's an array
-			//	todo: struct support
-			let UniformName = UniformMeta.name.split('[')[0];
-			//	note: uniform consists of structs, Array[Length] etc
-			
-			UniformMeta.Location = gl.getUniformLocation( this.Program, UniformMeta.name );
-			switch( UniformMeta.type )
-			{
-				case gl.SAMPLER_2D:	//	samplers' value is the texture index
-				case gl.INT:
-				case gl.UNSIGNED_INT:
-				case gl.BOOL:
-					UniformMeta.ElementSize = 1;
-					UniformMeta.SetValues = function(v)	{	gl.uniform1iv( UniformMeta.Location, v );	};
-					break;
-				case gl.FLOAT:
-					UniformMeta.ElementSize = 1;
-					UniformMeta.SetValues = function(v)	{	gl.uniform1fv( UniformMeta.Location, v );	};
-					break;
-				case gl.FLOAT_VEC2:
-					UniformMeta.ElementSize = 2;
-					UniformMeta.SetValues = function(v)	{	gl.uniform2fv( UniformMeta.Location, v );	};
-					break;
-				case gl.FLOAT_VEC3:
-					UniformMeta.ElementSize = 3;
-					UniformMeta.SetValues = function(v)	{	gl.uniform3fv( UniformMeta.Location, v );	};
-					break;
-				case gl.FLOAT_VEC4:
-					UniformMeta.ElementSize = 4;
-					UniformMeta.SetValues = function(v)	{	gl.uniform4fv( UniformMeta.Location, v );	};
-					break;
-				case gl.FLOAT_MAT2:
-					UniformMeta.ElementSize = 2*2;
-					UniformMeta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix2fv( UniformMeta.Location, Transpose, v );	};
-					break;
-				case gl.FLOAT_MAT3:
-					UniformMeta.ElementSize = 3*3;
-					UniformMeta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix3fv( UniformMeta.Location, Transpose, v );	};
-					break;
-				case gl.FLOAT_MAT4:
-					UniformMeta.ElementSize = 4*4;
-					UniformMeta.SetValues = function(v)	{	const Transpose = false;	gl.uniformMatrix4fv( UniformMeta.Location, Transpose, v );	};
-					break;
-
-				default:
-					UniformMeta.SetValues = function(v)	{	throw "Unhandled type " + UniformMeta.type + " on " + UniformName;	};
-					break;
-			}
-			
-			this.UniformMetaCache[UniformName] = UniformMeta;
+			const UniformMeta = gl.getActiveUniform( this.Program, i );
+			const Meta = GetUniformOrAttribMeta( gl, this.Program, UniformMeta );
+			this.UniformMetaCache[Meta.Name] = Meta;
 		}
 		return this.UniformMetaCache;
 	}
 
-	GetUniformMeta(MatchUniformName)
+	GetUniformMeta(Name)
 	{
 		const Metas = this.GetUniformMetas();
-		if ( !Metas.hasOwnProperty(MatchUniformName) )
+		if ( !Metas.hasOwnProperty(Name) )
 		{
 			//throw "No uniform named " + MatchUniformName;
 			//Pop.Debug("No uniform named " + MatchUniformName);
 		}
-		return Metas[MatchUniformName];
+		return Metas[Name];
+	}
+	
+	GetAttributeMeta(Name)
+	{
+		const Metas = this.GetAttributeMetas();
+		if ( !Metas.hasOwnProperty(Name) )
+		{
+			//throw "No uniform named " + MatchUniformName;
+			//Pop.Debug("No uniform named " + MatchUniformName);
+		}
+		return Metas[Name];
 	}
 	
 }
@@ -2248,6 +2786,44 @@ function GetOpenglElementType(OpenglContext,Elements)
 }
 
 
+//	turn our plain striped attrib layout into opengl-data
+//	for geometry, but working towards generic vertex-attrib/vao layout caching in the context
+function GetOpenglAttributes(Attribs,RenderContext)
+{
+	const gl = RenderContext;
+	
+	function CleanupAttrib(Attrib)
+	{
+		//	fix attribs
+		//	data as array doesn't work properly and gives us
+		//	gldrawarrays attempt to access out of range vertices in attribute 0
+		if ( Array.isArray(Attrib.Data) )
+			Attrib.Data = new Float32Array( Attrib.Data );
+			
+		Attrib.Stride = Attrib.Stride || 0;
+	}
+			
+	function AttribNameToOpenglAttrib(Name,Index)
+	{
+		//	should get location from shader binding!
+		const Attrib = Attribs[Name];
+		CleanupAttrib(Attrib);
+		
+		const OpenglAttrib = {};
+		OpenglAttrib.Name = Name;
+		OpenglAttrib.Floats = Attrib.Data;
+		OpenglAttrib.Size = Attrib.Size;
+		OpenglAttrib.Type = GetOpenglElementType( gl, Attrib.Data );
+		OpenglAttrib.DataIndex = Index;
+		OpenglAttrib.Stride = Attrib.Stride;
+		//	we do NOT store location here, it's per-shader, not per geometry
+
+		return OpenglAttrib;
+	}
+	const OpenglAttributes = Object.keys( Attribs ).map( AttribNameToOpenglAttrib );
+	return OpenglAttributes;
+}
+
 //	attributes are keyed objects for each semantic
 //	Attrib['Position'].Size = 3
 //	Attrib['Position'].Data = <float32Array(size*vertcount)>
@@ -2260,9 +2836,11 @@ export class TriangleBuffer
 		this.VertexBuffer = null;
 		this.IndexBuffer = null;
 		this.Vao = null;
+		this.VaoContext = null;
 		this.TriangleIndexes = null;
 		this.TriangleIndexesType = null;	//	gl.UNSIGNED_INT or gl.UNSIGNED_SHORT, but require OES_element_index_uint for 32bit
 		this.Attribs = Attribs;
+		this.OpenglAttributes = null;			//	calc-once opengl layouts. This should be a seperate thing (which can make use of VAO)
 		
 		//	backwards compatibility
 		if ( typeof Attribs == 'string' )
@@ -2362,9 +2940,20 @@ export class TriangleBuffer
 		RenderContext.OnDeletedGeometry( this );
 	}
 	
+	Free()
+	{
+		//	gr: free() needs to do more than this
+		this.DeleteVao();
+	}
+	
 	DeleteVao()
 	{
+		if ( !this.Vao )
+			return;
+		
+		this.VaoContext.deleteVertexArray(this.Vao);
 		this.Vao = null;
+		this.VaoContext = null;
 	}
 	
 	GetVao(RenderContext,Shader)
@@ -2382,16 +2971,17 @@ export class TriangleBuffer
 			const gl = RenderContext.GetGlContext();
 			//this.Vao = gl.OES_vertex_array_object.createVertexArrayOES();
 			this.Vao = gl.createVertexArray();
+			this.VaoContext = gl;
+			
+			//	this currently initialises opengl layout
+			this.GetVertexBuffer(RenderContext);
+			
 			//	setup buffer & bind stuff in the vao
 			gl.bindVertexArray( this.Vao );
-			let VertexBuffer = this.GetVertexBuffer( RenderContext );
-			let IndexBuffer = this.GetIndexBuffer( RenderContext );
-			gl.bindBuffer( gl.ARRAY_BUFFER, VertexBuffer );
-			gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, IndexBuffer );
 			//	we'll need this if we start having multiple attributes
-			if ( DisableOldVertexAttribArrays )
-				for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
-					gl.disableVertexAttribArray(i);
+			//if ( DisableOldVertexAttribArrays )
+			//	for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
+			//		gl.disableVertexAttribArray(i);
 			this.BindVertexPointers( RenderContext, Shader );
 		
 			gl.bindVertexArray( null );
@@ -2399,7 +2989,12 @@ export class TriangleBuffer
 		return this.Vao;
 	}
 			
-	
+	//	todo: VAO's are a description of attributes, and not tied to buffers
+	//	our rendercontext should pool, hash & share VAO's (shader locations + attrib layouts)
+	//	https://stackoverflow.com/a/61583362/355753 
+	//	^^ explains this well; "Setting buffer binding state is much cheaper than setting vertex format state."
+	//	then we can make triangle buffers fast by fetching known VAO formats and binding new(or reusing)
+	//	buffers when rendering
 	CreateVertexBuffer(RenderContext)
 	{
 		const gl = RenderContext.GetGlContext();
@@ -2419,52 +3014,27 @@ export class TriangleBuffer
 			this.IndexCount = (FirstAttrib.Data.length / FirstAttrib.Size);
 		}
 		
+		//	this needs changing for non-triangle geometry
 		if ( this.IndexCount % 3 != 0 )
 		{
 			throw "Triangle index count not divisible by 3";
 		}
 		
-		function CleanupAttrib(Attrib)
-		{
-			//	fix attribs
-			//	data as array doesn't work properly and gives us
-			//	gldrawarrays attempt to access out of range vertices in attribute 0
-			if ( Array.isArray(Attrib.Data) )
-				Attrib.Data = new Float32Array( Attrib.Data );
-				
-			Attrib.Stride = Attrib.Stride || 0;
-		}		
 		
-		let TotalByteLength = 0;
-		function AttribNameToOpenglAttrib(Name,Index)
-		{
-			//	should get location from shader binding!
-			const Attrib = Attribs[Name];
-			CleanupAttrib(Attrib);
-			
-			const OpenglAttrib = {};
-			OpenglAttrib.Name = Name;
-			OpenglAttrib.Floats = Attrib.Data;
-			OpenglAttrib.Size = Attrib.Size;
-			OpenglAttrib.Type = GetOpenglElementType( gl, Attrib.Data );
-			OpenglAttrib.DataIndex = Index;
-			OpenglAttrib.Stride = Attrib.Stride;
-			//	null means we haven't assigned it from the shader
-			//	note; this means we really need a location PER shader, change this to {}[Shader.UniqueHash] = Location
-			OpenglAttrib.Location = null;
+		//	get the opengl-vertex/attrib layout
+		this.OpenglAttributes = GetOpenglAttributes(Attribs,gl);
 
+		let TotalByteLength = 0;
+		for ( let Attrib of Object.values(Attribs) )
 			TotalByteLength += Attrib.Data.byteLength;
-			return OpenglAttrib;
-		}
 		
-		this.Attributes = Object.keys( Attribs ).map( AttribNameToOpenglAttrib );
 		
 		//	todo: detect when attribs all use same buffer and have a stride (interleaved data)
 		//	concat data
 		let TotalData = new Float32Array( TotalByteLength / 4 );//Float32Array.BYTES_PER_ELEMENT );
 		
 		let TotalDataOffset = 0;
-		for ( let Attrib of this.Attributes )
+		for ( let Attrib of this.OpenglAttributes )
 		{
 			TotalData.set( Attrib.Floats, TotalDataOffset );
 			Attrib.ByteOffset = TotalDataOffset * Float32Array.BYTES_PER_ELEMENT;
@@ -2492,7 +3062,7 @@ export class TriangleBuffer
 				Attrib.ByteOffset = AttribByteOffset;
 				AttribByteOffset += Attrib.Floats.byteLength;
 			}
-			this.Attributes.forEach( BufferAttribData );
+			this.OpenglAttributes.forEach( BufferAttribData );
 			this.OpenglByteSize = AttribByteOffset;
 		}
 		
@@ -2528,65 +3098,102 @@ export class TriangleBuffer
 		//	setup offset in buffer
 		let InitAttribute = function(Attrib)
 		{
-			//	not yet fetched attrib location from shader
-			if ( Attrib.Location === null )
-			{
-				if ( !Shader )
-					throw `Unknown location for attrib ${Attrib.Name} but no shader provided`;
-					
-				Attrib.Location = gl.getAttribLocation( Shader.Program, Attrib.Name );
-			}
-			
 			//	this shader doesn't use this attrib
-			if ( Attrib.Location == -1 )
+			const ShaderAttrib = Shader.GetAttributeMeta(Attrib.Name);
+			if ( !ShaderAttrib )
 				return;
 			
+			const Location = ShaderAttrib.Location;
 			let Normalised = false;
 			let StrideBytes = Attrib.Stride;
 			let OffsetBytes = Attrib.ByteOffset;
-			gl.vertexAttribPointer( Attrib.Location, Attrib.Size, Attrib.Type, Normalised, StrideBytes, OffsetBytes );
-			gl.enableVertexAttribArray( Attrib.Location );
+			gl.enableVertexAttribArray( Location );
+			gl.vertexAttribPointer( Location, Attrib.Size, Attrib.Type, Normalised, StrideBytes, OffsetBytes );
+			//	repeats per vertex(0) not per instance(1)
+			gl.vertexAttribDivisor( Location, 0 );
 		}
-		this.Attributes.forEach( InitAttribute );
+		this.OpenglAttributes.forEach( InitAttribute );
 	}
 	
 	Bind(RenderContext,Shader)
 	{
-		const Vao = AllowVao ? this.GetVao( RenderContext, Shader ) : null;
 		const gl = RenderContext.GetGlContext();
 
+		//	gr: need to clear all bindings on a fresh geo binding;
+		//		the problem here was some old instancd attributes were still bound
+		//	we'll need this if we start having multiple attributes
+		/*
+		if ( DisableOldVertexAttribArrays )
+		{
+			for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
+			{
+				gl.vertexAttribDivisor( i, 0);
+				gl.disableVertexAttribArray(i);
+			}
+		}
+		*/
+
+		let VertexBuffer = this.GetVertexBuffer( RenderContext );
+		let IndexBuffer = this.GetIndexBuffer( RenderContext );
+		
+		//	bind the vertex layout
+		const Vao = AllowVao ? this.GetVao( RenderContext, Shader ) : null;
 		if ( Vao )
 		{
+			//	todo: need to fix VAO's;
+			//		need to establish the exact things stored in a vao
+			//		and whether we need vao per shader+geo or just per geo
+			//	currently broken as we're using 1 geo for 2 shaders with different attrib locations
+			//	VAO contains
+			//		- buffer
+			//		- vertex offset
+			//		- vertex divisor?
+			//		- attribute location?
 			gl.bindVertexArray( Vao );
+			function InitAttribute(Attrib)
+			{
+				const ShaderAttrib = Shader.GetAttributeMeta(Attrib.Name);
+				if ( !ShaderAttrib )
+					return;
+				gl.enableVertexAttribArray( ShaderAttrib.Location );
+			}
+			this.OpenglAttributes.forEach( InitAttribute );
 		}
 		else
 		{
-			const VertexBuffer = this.GetVertexBuffer(RenderContext);
-			const IndexBuffer = this.GetIndexBuffer(RenderContext);
-			gl.bindBuffer( gl.ARRAY_BUFFER, VertexBuffer );
-			gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, IndexBuffer );
+			//	this currently initialises opengl layout
+			this.GetVertexBuffer(RenderContext);
 			
-			//	we'll need this if we start having multiple attributes
-			if ( DisableOldVertexAttribArrays )
-				for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
-					gl.disableVertexAttribArray(i);
 			//	gr: we get glDrawArrays: attempt to access out of range vertices in attribute 0, if we dont update every frame (this seems wrong)
 			//		even if we call gl.enableVertexAttribArray
+			gl.bindBuffer( gl.ARRAY_BUFFER, VertexBuffer );
+			gl.bindBuffer( gl.ELEMENT_ARRAY_BUFFER, IndexBuffer );
 			this.BindVertexPointers( RenderContext, Shader );
 		}
+
 	}
 	
-	Draw(RenderContext)
+	Draw(RenderContext,Instances=0)
 	{
 		const gl = RenderContext.GetGlContext();
+
+		//	in future, we may use instances=0 for something, if we have a
+		//	platform we cannot call instancing on
+		//	instances=0 renders nothing (as expected!)
+		Instances = Math.max( 1, Instances );
+
+		//	gr: it seems we can provide an extra instanced param to drawXXX() without any problems
+		//		we can also just use the instanced params	
 		if ( this.TriangleIndexes )
 		{
 			const Offset = 0;
-			gl.drawElements( this.PrimitiveType, this.IndexCount, this.TriangleIndexesType, Offset );
+			//gl.drawElements( this.PrimitiveType, this.IndexCount, this.TriangleIndexesType, Offset, Instances );
+			gl.drawElementsInstanced( this.PrimitiveType, this.IndexCount, this.TriangleIndexesType, Offset, Instances );
 		}
 		else
 		{
-			gl.drawArrays( this.PrimitiveType, 0, this.IndexCount );
+			//gl.drawArrays( this.PrimitiveType, 0, this.IndexCount, Instances );
+			gl.drawArraysInstanced( this.PrimitiveType, 0, this.IndexCount, Instances );
 		}
 	}
 	

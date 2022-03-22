@@ -1,6 +1,23 @@
 //	chrome having trouble with cyclical import
 //import Pop from './PopEngine.js'
 
+//	create a promise function with the Resolve & Reject functions attached so we can call them
+export function CreatePromise()
+{
+	let Callbacks = {};
+	let PromiseHandler = function (Resolve,Reject)
+	{
+		Callbacks.Resolve = Resolve;
+		Callbacks.Reject = Reject;
+	}
+	let Prom = new Promise(PromiseHandler);
+	Prom.Resolve = Callbacks.Resolve;
+	Prom.Reject = Callbacks.Reject;
+	return Prom;
+}
+
+
+
 //	a promise queue that manages multiple listeners
 //	gr: this is getting out of sync with the cyclic-fixing-copy in WebApi. Make it seperate!
 export default class PromiseQueue
@@ -46,21 +63,6 @@ export default class PromiseQueue
 	//	allocate a promise, maybe deprecate this for the API WaitForNext() that makes more sense for a caller
 	Allocate()
 	{
-		//	create a promise function with the Resolve & Reject functions attached so we can call them
-		function CreatePromise()
-		{
-			let Callbacks = {};
-			let PromiseHandler = function (Resolve,Reject)
-			{
-				Callbacks.Resolve = Resolve;
-				Callbacks.Reject = Reject;
-			}
-			let Prom = new Promise(PromiseHandler);
-			Prom.Resolve = Callbacks.Resolve;
-			Prom.Reject = Callbacks.Reject;
-			return Prom;
-		}
-		
 		const NewPromise = CreatePromise();
 		this.Promises.push( NewPromise );
 		return NewPromise;

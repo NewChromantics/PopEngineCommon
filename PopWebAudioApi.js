@@ -1,8 +1,9 @@
-Pop.Audio = {};
+import PromiseQueue from './PromiseQueue.js'
+import {CreatePromise} from './PromiseQueue.js'
+import {Debug,Warning} from './PopWebApiCore.js'
 
-
-
-
+import {JoinTypedArrays} from './PopApi.js'
+import {WaitForForegroundChange,IsForeground} from './PopWebApi.js'
 
 //	gr: back to a sound pool system
 //	gr: all this is designed for SimpleSound
@@ -18,15 +19,15 @@ class TSecurityItem
 		this.DebugName = DebugName;
 		this.OnSecurityResolve = OnSecurityResolve;
 		this.ResolvingPromise = null;
-		this.SecurityResolved = Pop.CreatePromise();
+		this.SecurityResolved = CreatePromise();
 	}
 	
 	OnError(Error)
 	{
-		Pop.Debug(`Exception resolving security item ${this.DebugName}; ${Error}`);
+		Debug(`Exception resolving security item ${this.DebugName}; ${Error}`);
 		//	the call to the thing to MAKE the promise failed, so put in a failing one
 		if ( !this.SecurityResolved )
-			this.SecurityResolved = Pop.CreatePromise();
+			this.SecurityResolved = CreatePromise();
 		this.SecurityResolved.Reject(Error);
 	}
 	
@@ -34,13 +35,13 @@ class TSecurityItem
 	{
 		try
 		{
-			Pop.Debug(`Resolving security item ${this.DebugName}`);
+			Debug(`Resolving security item ${this.DebugName}`);
 			this.ResolvingPromise = this.OnSecurityResolve();
 			const OnError = this.OnError.bind(this);
 			
 			const OnResolved = function(Value)
 			{
-				Pop.Debug(`Security -> Resolve, Resolved ${Value} (${this.DebugName})`);
+				Debug(`Security -> Resolve, Resolved ${Value} (${this.DebugName})`);
 				this.SecurityResolved.Resolve(Value); 
 			}.bind(this);
 			
@@ -82,12 +83,12 @@ function PreallocAudio(BufferSize)
 		const ForceAllocNew = true;
 		const NewAudio = await AllocAudio(SilentMp3Url,`PreAlloc#${Index}`,AllowNew,ForceAllocNew);
 		ReadyAudioPool.push(NewAudio);
-		Pop.Debug(`Preallocated, ReadyAudioPool now ${ReadyAudioPool.length}`);
+		Debug(`Preallocated, ReadyAudioPool now ${ReadyAudioPool.length}`);
 	}
 	
 	function OnPreloadFailed(Error)
 	{
-		Pop.Warning(`Preload has failed ${Error}, what to do now... ReadyAudioPool now ${ReadyAudioPool.length}`);
+		Warning(`Preload has failed ${Error}, what to do now... ReadyAudioPool now ${ReadyAudioPool.length}`);
 	}
 	
 	for ( let i=0;	i<BufferSize;	i++ )
@@ -102,11 +103,11 @@ PreallocAudio(0);
 
 function FreeAudio(Sound)
 {
-	Pop.Debug(`Sound pause (FreeAudio)`);
+	Debug(`Sound pause (FreeAudio)`);
 	Sound.pause();
 	Sound.muted = true;
 	ReadyAudioPool.push(Sound);
-	Pop.Debug(`Freed audio; ReadyAudioPool now ${ReadyAudioPool.length}`);
+	Debug(`Freed audio; ReadyAudioPool now ${ReadyAudioPool.length}`);
 }
 
 //	resolves when we have an audio that is ready to be played and manipulated
@@ -116,7 +117,7 @@ async function AllocAudio(SourceUrl,DebugName,AllowNew=false,ForceAllocNew=false
 	{
 		function OnError(Error)
 		{
-			Pop.Warning(`Audio Prepare ${DebugName} exception; ${Error}`);
+			Warning(`Audio Prepare ${DebugName} exception; ${Error}`);
 		}
 	
 		//	reconfigure to have correct data, but not playing
@@ -137,14 +138,14 @@ async function AllocAudio(SourceUrl,DebugName,AllowNew=false,ForceAllocNew=false
 		Sound.muted = false;
 	}
 	
-	Pop.Debug(`AllocAudio(${DebugName} readypool: ${ReadyAudioPool.length}`);
+	Debug(`AllocAudio(${DebugName} readypool: ${ReadyAudioPool.length}`);
 	if ( !ForceAllocNew )
 	{
 		if ( ReadyAudioPool.length )
 		{
 			const Sound = ReadyAudioPool.shift();
 			UsedAudioPool.push(Sound);
-			Pop.Debug(`AllocAudio(${DebugName} popped from pool, readypool now: ${ReadyAudioPool.length}`);
+			Debug(`AllocAudio(${DebugName} popped from pool, readypool now: ${ReadyAudioPool.length}`);
 		
 			await PrepareSound(Sound);
 		
@@ -164,7 +165,7 @@ async function AllocAudio(SourceUrl,DebugName,AllowNew=false,ForceAllocNew=false
 		{
 			//	call play as soon as security clicks and return promise
 			const PlayPromise = Sound.play();
-			PlayPromise.catch(Pop.Warning);
+			PlayPromise.catch(Warning);
 			return PlayPromise;
 		}
 		await WaitForSecurityItem(OnSecurity,DebugName);
@@ -184,45 +185,46 @@ async function AllocAudio(SourceUrl,DebugName,AllowNew=false,ForceAllocNew=false
 
 
 
+let GlobalContext = null;
 
-Pop.Audio.AudioContextPromise = Pop.CreatePromise();
-Pop.Audio.ContextStateChanged = new Pop.PromiseQueue('Pop.Audio.ContextStateChanged');
+const AudioContextPromise = CreatePromise();
+const ContextStateChanged = new PromiseQueue('ContextStateChanged');
 
-let DomTriggerPromise = Pop.CreatePromise();
+let DomTriggerPromise = CreatePromise();
 function OnDomTrigger(Event)
 {
 	//	on safari, this has to be inside the actual event callback
 	//	gr: re-added for safari, because of this https://stackoverflow.com/a/54119854/355753
 	//	"I can vouch that simply adding these two lines of code improved audio performance – Brian Risk Jan 9 at 1:18"
-	if ( !Pop.Audio.Context )
+	if ( !GlobalContext )
 	{
 		const TAudioContext = window.AudioContext || window.webkitAudioContext;
-		Pop.Audio.Context = new TAudioContext();
+		GlobalContext = new TAudioContext();
 		
 		function OnStateChanged(e)
 		{
-			Pop.Debug(`State changed: ${Pop.Audio.Context.state}`,e);
-			Pop.Audio.ContextStateChanged.Push(Pop.Audio.Context.state);
+			Debug(`State changed: ${GlobalContext.state}`,e);
+			ContextStateChanged.Push(GlobalContext.state);
 		}
-		Pop.Audio.Context.onstatechange = OnStateChanged;
+		GlobalContext.onstatechange = OnStateChanged;
 	}
 	
 	//	always try and resume on click
-	if ( Pop.Audio.Context )
+	if ( GlobalContext )
 	{
 		function OnResume()
 		{
-			Pop.Debug(`OnResume Audio context state ${Pop.Audio.Context.state}`);
-			Pop.Audio.AudioContextPromise.Resolve(Pop.Audio.Context);
+			Debug(`OnResume Audio context state ${GlobalContext.state}`);
+			AudioContextPromise.Resolve(GlobalContext);
 		}
 		function OnError(e)
 		{
-			Pop.Warning(`Context resume error ${e}`);
+			Warning(`Context resume error ${e}`);
 		}
 
-		Pop.Debug(`Audio context resume() state=${Pop.Audio.Context.state}`);
-		Pop.Audio.Context.resume().then(OnResume).catch(OnError);
-		//Pop.Audio.Context.sspended().then(OnResume).catch(OnError);
+		Debug(`Audio context resume() state=${GlobalContext.state}`);
+		GlobalContext.resume().then(OnResume).catch(OnError);
+		//GlobalContext.sspended().then(OnResume).catch(OnError);
 	}
 	
 	
@@ -237,7 +239,7 @@ function OnDomTrigger(Event)
 		}
 		catch(e)
 		{
-			Pop.Warning(`SecurityResolve failed, ${e}, re-adding`);
+			Warning(`SecurityResolve failed, ${e}, re-adding`);
 			PendingSecurityItems.push(Item);
 		}
 	}
@@ -266,31 +268,31 @@ async function WaitForClick()
 
 //	gr: I dont like double negatives, but matching Audio.muted
 //	https://www.w3schools.com/TAGs/av_prop_muted.asp
-Pop.Audio._GlobalMutedA = false;
-Pop.Audio._GlobalMutedB = false;
-Pop.WebApi.MutedChangePromises = new WebApi_PromiseQueue();
+let _GlobalMutedA = false;
+let _GlobalMutedB = false;
+let MutedChangePromises = new PromiseQueue();
 
-Pop.Audio.SetMuted = function(Muted)
+function SetMuted(Muted)
 {
-	Pop.Audio._GlobalMutedA = Muted;
-	Pop.WebApi.MutedChangePromises.Push(Muted);
+	_GlobalMutedA = Muted;
+	MutedChangePromises.Push(Muted);
 }
-Pop.Audio.SetMutedB = function(Muted)
+function SetMutedB(Muted)
 {
-	Pop.Audio._GlobalMutedB = Muted;
-	Pop.WebApi.MutedChangePromises.Push(Muted);
+	_GlobalMutedB = Muted;
+	MutedChangePromises.Push(Muted);
 }
 
-Pop.Audio.IsMuted = function()
+export function IsMuted()
 {
-	const Background = !Pop.WebApi.IsForeground();
-	const Muted = Background || Pop.Audio._GlobalMutedA || Pop.Audio._GlobalMutedB;
+	const Background = !IsForeground();
+	const Muted = Background || _GlobalMutedA || _GlobalMutedB;
 	return Muted;
 }
 
-Pop.Audio.WaitForMutedChange = async function()
+async function WaitForMutedChange()
 {
-	return Pop.WebApi.MutedChangePromises.WaitForNext();
+	return MutedChangePromises.WaitForNext();
 }
 
 
@@ -302,36 +304,36 @@ async function AudioContextGlobalMuteThread()
 {
 	const OnMutedChange = function(Muted)
 	{
-		Pop.Debug(`OnMutedChange AudioContextGlobalMuteThread`);
+		Debug(`OnMutedChange AudioContextGlobalMuteThread`);
 		//	no context yet
-		if ( !Pop.Audio.Context )
+		if ( !GlobalContext )
 			return;
 			
 		function OnSuspendError(Error)
 		{
-			Pop.Warning(`Suspend context error ${Error}`);
+			Warning(`Suspend context error ${Error}`);
 		}
 		function OnResumeError(Error)
 		{
-			Pop.Warning(`Resume context error ${Error}`);
+			Warning(`Resume context error ${Error}`);
 		}
 			
 		if ( Muted )
-			Pop.Audio.Context.suspend().catch(OnSuspendError);
+			GlobalContext.suspend().catch(OnSuspendError);
 		else
-			Pop.Audio.Context.resume().catch(OnResumeError);
+			GlobalContext.resume().catch(OnResumeError);
 
 	}.bind(this);
 	
 	//	do an initial state in case we start a sound when we expect it silent
 	while(true)
 	{
-		const Muted = Pop.Audio.IsMuted();	//	checks foreground & state
-		Pop.Debug(`AudioContextGlobalMuteThread(${this.Name}) Muted=${Muted}`);
+		const Muted = IsMuted();	//	checks foreground & state
+		Debug(`AudioContextGlobalMuteThread(${this.Name}) Muted=${Muted}`);
 		OnMutedChange(Muted);
 
-		const OnForeground = Pop.WebApi.WaitForForegroundChange();
-		const OnMuted = Pop.Audio.WaitForMutedChange();
+		const OnForeground = WaitForForegroundChange();
+		const OnMuted = WaitForMutedChange();
 		await Promise.race([OnForeground,OnMuted]);
 	}
 }
@@ -426,7 +428,7 @@ function ArrayBufferToBase64(Data,MimeBase64Prefix)
 }
 
 //	simply play a sound with HTMLAudio objects, no effects
-Pop.Audio.SimpleSound = class
+export class SimpleSound
 {
 	constructor(WaveData,Name)
 	{
@@ -466,12 +468,12 @@ Pop.Audio.SimpleSound = class
 		//	do an initial state in case we start a sound when we expect it silent
 		while(this.Sound)
 		{
-			const Muted = Pop.Audio.IsMuted();	//	checks foreground & state
+			const Muted = IsMuted();	//	checks foreground & state
 			Pop.Debug(`SimpleSound(${this.Name}) Muted=${Muted}`);
 			OnMutedChange(Muted);
 
-			const OnForeground = Pop.WebApi.WaitForForegroundChange();
-			const OnMuted = Pop.Audio.WaitForMutedChange();
+			const OnForeground = WaitForForegroundChange();
+			const OnMuted = WaitForMutedChange();
 			await Promise.race([OnForeground,OnMuted]);
 		}
 	}
@@ -788,10 +790,10 @@ Pop.Audio.SimpleSound = class
 	GetDurationMs()
 	{
 		if ( !this.Sound )
-			throw `Pop.Audio.SimpleSound ${this.Name} unknown duration (not loaded)`;
+			throw `SimpleSound ${this.Name} unknown duration (not loaded)`;
 		const DurationSecs = this.Sound.duration;
 		if ( isNaN(DurationSecs) )
-			throw `Pop.Audio.SimpleSound ${this.Name} unknown duration (not known)`;
+			throw `SimpleSound ${this.Name} unknown duration (not known)`;
 		
 		const DurationMs = Math.floor(DurationSecs * 1000);
 		return DurationMs;
@@ -800,15 +802,14 @@ Pop.Audio.SimpleSound = class
 }
 
 
-Pop.Audio.Context = null;
 
 
-Pop.Audio.WaitForContext = async function()
+export async function WaitForContext()
 {
-	return await Pop.Audio.AudioContextPromise;
+	return await AudioContextPromise;
 }
 
-Pop.Audio.SoundInstanceCounter = 1000;
+let SoundInstanceCounter = 1000;
 
 
 
@@ -936,7 +937,7 @@ function SplitMp3(DataChunks,HasEof,Frames,RemainderData)
 	}
 }
 
-class WaveSampleData_t
+export class WaveSampleData_t
 {
 	constructor(WaveData)
 	{
@@ -961,19 +962,19 @@ class WaveSampleData_t
 		//	safari doesn't currently support the promise version of this
 		//	https://github.com/chrisguttandin/standardized-audio-context
 		//this.SampleBuffer = await Context.decodeAudioData( this.WaveData.buffer );
-		const DecodeAudioPromise = Pop.CreatePromise();
+		const DecodeAudioPromise = CreatePromise();
 		
 		//	decodeAudioData detaches the data from the original source so becomes empty
 		//	as this can affect the original file, we duplicate here
-		const ContiguiousData = isTypedArray(WaveData) ? WaveData.slice() : Pop.JoinTypedArrays(WaveData);
+		const ContiguiousData = isTypedArray(WaveData) ? WaveData.slice() : JoinTypedArrays(WaveData);
 		const DataCopy = ContiguiousData.slice();
-		//const DataCopy = isTypedArray(WaveData) ? WaveData.slice() : Pop.JoinTypedArrays(...WaveData);
+		//const DataCopy = isTypedArray(WaveData) ? WaveData.slice() : JoinTypedArrays(...WaveData);
 		//	gr; reuse data as in the constructor we're already copying it
 		//const DataCopy = this.WaveData;
 		
 		Context.decodeAudioData( DataCopy.buffer, DecodeAudioPromise.Resolve, DecodeAudioPromise.Reject );
 		const SampleBuffer = await DecodeAudioPromise;
-		//Pop.Debug(`Audio ${this.Name} duration: ${this.KnownDurationMs}ms`);
+		//Debug(`Audio ${this.Name} duration: ${this.KnownDurationMs}ms`);
 		return SampleBuffer;
 	}
 	
@@ -988,12 +989,13 @@ class WaveSampleData_t
 		if ( this.WaveData instanceof AudioBuffer )
 		{
 			this.SampleBuffer = this.WaveData;
-			return;
+			return this.SampleBuffer;
 		}
 		
 		//	decode
 		//	todo: crop data to last mp3 frame (if we know this data isn't complete)
 		this.SampleBuffer = await this.DecodeAudioBuffer(Context,this.WaveData);
+		return this.SampleBuffer;
 	}
 	
 	GetDurationMs()
@@ -1009,7 +1011,7 @@ class WaveSampleData_t
 }
 
 //	more complex WebAudio sound
-Pop.Audio.Sound = class
+export class Sound
 {
 	constructor(WaveData,Name)
 	{
@@ -1031,7 +1033,7 @@ Pop.Audio.Sound = class
 		this.Looping = false;
 		this.KnownDurationMs = null;
 		this.Name = Name;
-		this.UniqueInstanceNumber = Pop.Audio.SoundInstanceCounter++;
+		this.UniqueInstanceNumber = SoundInstanceCounter++;
 
 		//	to reduce job queue, when we have a new target time or stop command
 		//	we update this value to non-null and queue a UpdatePlayState
@@ -1042,17 +1044,17 @@ Pop.Audio.Sound = class
 		this.PlayTargetRequestTime = undefined;
 		
 		//	run state
-		this.ActionQueue = new Pop.PromiseQueue();
+		this.ActionQueue = new PromiseQueue();
 		this.Alive = true;	//	help get out of update loop
-		this.Update().catch(Pop.Warning);
+		this.Update().catch(Warning);
 		
 		this.SetSample(WaveData);
 	}
 	
 	UpdateMutedState()
 	{
-		const Muted = Pop.Audio.IsMuted();	//	checks foreground & state
-		Pop.Debug(`Sound(${this.Name}) Muted=${Muted}`);
+		const Muted = IsMuted();	//	checks foreground & state
+		Debug(`Sound(${this.Name}) Muted=${Muted}`);
 		this.SetVolume( Muted ? 0 : 1 );
 	}
 	
@@ -1063,8 +1065,8 @@ Pop.Audio.Sound = class
 		{
 			this.UpdateMutedState();
 
-			const OnForeground = Pop.WebApi.WaitForForegroundChange();
-			const OnMuted = Pop.Audio.WaitForMutedChange();
+			const OnForeground = WaitForForegroundChange();
+			const OnMuted = WaitForMutedChange();
 			await Promise.race([OnForeground,OnMuted]);
 		}
 	}
@@ -1072,7 +1074,7 @@ Pop.Audio.Sound = class
 	GetDurationMs()
 	{
 		if ( this.KnownDurationMs == null )
-			throw `Pop.Audio.Sound ${this.Name} has [currently] unknown duration`;
+			throw `Sound ${this.Name} has [currently] unknown duration`;
 		return this.KnownDurationMs;
 	}
 	
@@ -1151,7 +1153,7 @@ Pop.Audio.Sound = class
 	async Update()
 	{
 		//	load
-		const Context = await Pop.Audio.WaitForContext();
+		const Context = await WaitForContext();
 
 		this.GlobalUpdateCheckThread().then(Pop.Debug).catch(Pop.Warning);
 
@@ -1543,7 +1545,7 @@ Pop.Audio.Sound = class
 
 
 //	https://github.com/Tonejs/Tone.js/blob/dd10bfa4b526f4b78ac48877fce31efac745329c/Tone/effect/Reverb.ts#L108
-Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDelaySecs=0.01)
+async function GenerateImpulseResponseWaveBuffer(DecaySecs=0.7,PreDelaySecs=0.01)
 {
 	function CreateNoiseBuffer(Context)
 	{
@@ -1570,7 +1572,7 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 		return whiteNoise;
 	}
 	
-	const Context = await Pop.Audio.WaitForContext();
+	const Context = await WaitForContext();
 
 	//	test noise buffer creation
 	//return CreateNoiseBuffer(Context);
@@ -1628,9 +1630,9 @@ Pop.Audio.GenerateImpulseResponseWaveBuffer = async function(DecaySecs=0.7,PreDe
 	return AudioBuffer;
 }
 
-Pop.Audio.FakeMidiInputName = 'FakeMidiInput';
+let FakeMidiInputName = 'FakeMidiInput';
 
-Pop.Audio.GetMidiInputs = async function ()
+async function GetMidiInputs()
 {
 	if (!window.navigator.requestMIDIAccess)
 		throw `Midi devices not supported`;
@@ -1648,11 +1650,11 @@ Pop.Audio.GetMidiInputs = async function ()
 	return Inputs;
 }
 
-Pop.Audio.FakeMidiInput = class
+class FakeMidiInput
 {
 	constructor()
 	{
-		this.name = Pop.Audio.FakeMidiInputName;
+		this.name = FakeMidiInputName;
 
 		//	listen to keynboard
 		window.addEventListener('keydown',this.OnKeyDown.bind(this));
@@ -1712,7 +1714,7 @@ Pop.Audio.FakeMidiInput = class
 	}
 }
 
-Pop.Audio.MidiDevice = class
+class MidiDevice
 {
 	constructor(Name)
 	{
@@ -1728,11 +1730,11 @@ Pop.Audio.MidiDevice = class
 
 	async Init(Name)
 	{
-		const Inputs = await Pop.Audio.GetMidiInputs();
+		const Inputs = await GetMidiInputs();
 
-		if (Name == Pop.Audio.FakeMidiInputName)
+		if (Name == FakeMidiInputName)
 		{
-			this.Input = new Pop.Audio.FakeMidiInput();
+			this.Input = new FakeMidiInput();
 		}
 		else
 		{
@@ -1776,37 +1778,37 @@ Pop.Audio.MidiDevice = class
 	}
 }
 
-//	Pop.Midi = file format, so put these under Pop.Audio
-Pop.Audio.OnNewMidiDevicePromiseQueue = null;
+//	Pop.Midi = file format, so put these under 
+let OnNewMidiDevicePromiseQueue = null;
 
-Pop.Audio.EnumMidiDevicesLoop = async function(IncludeFakeDevice)
+async function EnumMidiDevicesLoop(IncludeFakeDevice)
 {
-	Pop.Audio.OnNewMidiDevicePromiseQueue = new Pop.PromiseQueue();
+	OnNewMidiDevicePromiseQueue = new Pop.PromiseQueue();
 
-	const Inputs = await Pop.Audio.GetMidiInputs();
+	const Inputs = await GetMidiInputs();
 	for ( let Input of Inputs )
 	{
 		const DeviceName = Input.name;
-		Pop.Audio.OnNewMidiDevicePromiseQueue.Push(DeviceName);
+		OnNewMidiDevicePromiseQueue.Push(DeviceName);
 	}
 
 	//	add our fake device last
 	if ( IncludeFakeDevice )
 	{
-		const FakeDeviceName = Pop.Audio.FakeMidiInputName;
-		Pop.Audio.OnNewMidiDevicePromiseQueue.Push(FakeDeviceName);
+		const FakeDeviceName = FakeMidiInputName;
+		OnNewMidiDevicePromiseQueue.Push(FakeDeviceName);
 	}
 	
 	//	how to we wait for new devices?
 }
 
-Pop.Audio.WaitForNewMidiDevice = async function(IncludeFakeDevice)
+async function WaitForNewMidiDevice(IncludeFakeDevice)
 {
 	//	start the watch loop
-	if (!Pop.Audio.OnNewMidiDevicePromiseQueue)
+	if (!OnNewMidiDevicePromiseQueue)
 	{
-		Pop.Audio.EnumMidiDevicesLoop(IncludeFakeDevice);
+		EnumMidiDevicesLoop(IncludeFakeDevice);
 	}
 
-	return Pop.Audio.OnNewMidiDevicePromiseQueue.WaitForNext();
+	return OnNewMidiDevicePromiseQueue.WaitForNext();
 }

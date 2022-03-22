@@ -1,6 +1,8 @@
 import { GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
 import {LoadFileAsImageAsync} from './FileSystem.js'
-import {Debug} from './PopWebApiCore.js'
+import {Debug,Warning} from './PopWebApiCore.js'
+import DirtyBuffer from './DirtyBuffer.js'
+import {GetRectsFromIndexes} from './Math.js'
 
 //	gr: I forget what browser this was for! add comments when we know!
 //	ImageBitmap should also be supported
@@ -42,14 +44,15 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 	
 	if ( OpenglContext.FloatTextureSupported )
 	{
-		if ( false && gl instanceof WebGL2RenderingContext )
+		if ( gl instanceof WebGL2RenderingContext )
 		{
 			switch ( PixelFormat )
 			{
 				case 'Float1':		return [ gl.R32F,		gl.FLOAT];
 				case 'Float2':		return [ gl.RG32F,		gl.FLOAT];
 				case 'Float3':		return [ gl.RGB32F,		gl.FLOAT];
-				case 'Float4':		return [ gl.RGBA32F,	gl.FLOAT];
+				//case 'Float4':		return [ gl.RGBA32F,	gl.FLOAT];
+				case 'Float4':		return [ gl.RGBA,	gl.FLOAT];
 			}
 		}
 		else
@@ -444,6 +447,20 @@ export default class PopImage
 		}
 		
 		this.Size = [Width,Height];
+		
+		//	in case old data needs to be freed, delete before re-assigning
+		let NewTimestamp = Pixels.timestamp;
+		let OldTimestamp = this.Pixels ? this.Pixels.timestamp : null;
+		//console.log(`texture ${OldTimestamp}->${NewTimestamp}`);
+		//if ( NewTimestamp === OldTimestamp )
+		if ( this.Pixels == Pixels )
+		{
+			//console.warn(`Setting pixels to self?? ${this.Pixels}==${Pixels}?${this.Pixels==Pixels}`);
+		}
+		else
+		{
+			this.DeletePixels();
+		}
 		this.Pixels = Pixels;
 		this.PixelsFormat = Format;
 		this.PixelsVersion = this.GetLatestVersion()+1;
@@ -464,6 +481,14 @@ export default class PopImage
 	
 	DeletePixels()
 	{
+		//	auto cleanup any html elements - this may want to be somewhere else
+		//	.close is for decoded video frames
+		if ( this.Pixels && this.Pixels.close )
+		{
+			this.Pixels.ClosedByPopImage = this.Pixels.timestamp;
+			this.Pixels.close();
+		}
+		
 		this.PixelsVersion = null;
 		this.Pixels = null;
 		this.PixelsFormat = null;
@@ -523,6 +548,9 @@ export default class PopImage
 		//	update from pixels
 		const gl = RenderContext.GetGlContext();
 		
+		//	if true, we cannot do sub-image updates
+		let NewTexture = false;
+		
 		if ( !this.OpenglTexture )
 		{
 			//	create texture
@@ -530,6 +558,7 @@ export default class PopImage
 			this.OpenglVersion = undefined;
 			this.OpenglTextureContextVersion = RenderContext.ContextVersion;
 			this.OpenglOwnerContext = RenderContext;
+			NewTexture = true;
 		}
 		const Texture = this.OpenglTexture;
 		
@@ -556,7 +585,7 @@ export default class PopImage
 		}
 		else if ( this.Pixels instanceof Float32Array && !RenderContext.FloatTextureSupported )
 		{
-			Pop.Debug("Float texture not supported, converting to 8bit");
+			Debug("Float texture not supported, converting to 8bit");
 			//	for now, convert to 8bit
 			const NewPixels = FloatToInt8Pixels( this.Pixels, this.PixelsFormat, Width, Height );
 			this.Pixels = NewPixels.Pixels;
@@ -578,26 +607,48 @@ export default class PopImage
 			 */
 		}
 		
-		if ( !this.Pixels )
+		let PixelData = this.Pixels;
+		//	array of [First,Last] element-indexes for sub-image updates
+		let Changes = [];
+		
+		//	sub-image updates with DirtyBuffer
+		//	todo: version to sync
+		if ( PixelData instanceof DirtyBuffer )
+		{
+			//	if new texture, we update all pixels.
+			if ( !NewTexture )
+			{
+				Changes = PixelData.PopChanges();
+				//	current setup means we need to do WritePixels() with same buffer, when we 
+				//	want new pixels, so we (shouldnt) reach here if there are no changes....
+				if ( !Changes.length )
+					console.warn(`Updating ${this.Name} with dirty buffer, but no changes`);
+				//else
+				//	console.warn(`Updating ${this.Name} with dirty buffer, x${Changes.length} changes`);
+			}
+			PixelData = PixelData.Data;
+		}
+		
+		if ( !PixelData )
 		{
 		}
-		else if ( IsHtmlElementPixels(this.Pixels) )
+		else if ( IsHtmlElementPixels(PixelData) )
 		{
 			//Pop.Debug("Image from Image",this.PixelsFormat);
 			const SourceFormat = gl.RGBA;
 			const SourceType = gl.UNSIGNED_BYTE;
-			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, SourceFormat, SourceType, this.Pixels );
-			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * this.Pixels.width * this.Pixels.height;
+			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, SourceFormat, SourceType, PixelData );
+			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * PixelData.width * PixelData.height;
 			if ( isNaN(this.OpenglByteSize) )
 			{
-				Pop.Warning(`Nan size: ${this.OpenglByteSize}`);
+				//Warning(`Nan size: ${this.OpenglByteSize}`);
 				this.OpenglByteSize=0;
 			}
 		}
-		else if ( this.Pixels instanceof Uint8Array || this.Pixels instanceof Uint8ClampedArray )
+		else if ( PixelData instanceof Uint8Array || PixelData instanceof Uint8ClampedArray )
 		{
-			if ( this.Pixels instanceof Uint8ClampedArray )
-				this.Pixels = new Uint8Array(this.Pixels);
+			if ( PixelData instanceof Uint8ClampedArray )
+				PixelData = new Uint8Array(PixelData);
 			
 			//Pop.Debug("Image from Uint8Array",this.PixelsFormat);
 			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
@@ -611,7 +662,7 @@ export default class PopImage
 			if ( this.PixelsFormat == 'Float1' )	SourceFormat = gl.LUMINANCE;
 
 			InternalFormat = SourceFormatTypes[0];
-			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
+			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, PixelData );
 			
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
 			if ( isNaN(this.OpenglByteSize) )
@@ -620,7 +671,7 @@ export default class PopImage
 				this.OpenglByteSize=0;
 			}
 		}
-		else if ( this.Pixels instanceof Uint16Array )
+		else if ( PixelData instanceof Uint16Array )
 		{
 			Debug("Image from Uint16Array",this.PixelsFormat);
 			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
@@ -650,7 +701,7 @@ export default class PopImage
 				this.OpenglByteSize=0;
 			}
 		}
-		else if ( this.Pixels instanceof Float32Array )
+		else if ( PixelData instanceof Float32Array )
 		{
 			//Debug("Image from Float32Array",this.PixelsFormat);
 			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
@@ -659,15 +710,38 @@ export default class PopImage
 			InternalFormat = SourceFormat;	//	gr: float3 RGB needs RGB internal
 			
 			//	webgl2 correction
+			//if ( gl instanceof WebGL2RenderingContext )
 			if ( gl.RGBA32F !== undefined )
 			{
 				if ( this.PixelsFormat == 'Float4' )	InternalFormat = gl.RGBA32F;
-				if ( this.PixelsFormat == 'Float3' )	InternalFormat = gl.RGB;
-				if ( this.PixelsFormat == 'Float2' )	InternalFormat = gl.LUMINANCE_ALPHA;
-				if ( this.PixelsFormat == 'Float1' )	InternalFormat = gl.LUMINANCE;
+				//if ( this.PixelsFormat == 'Float3' )	InternalFormat = gl.RGB;
+				if ( this.PixelsFormat == 'Float2' )	InternalFormat = gl.RG32F;
+				if ( this.PixelsFormat == 'Float1' )	InternalFormat = gl.R32F;
 			}
 			
-			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
+			//	In WebGL 1, this*FORMAT  must be the same as internalformat
+			if ( Changes.length )
+			{
+				//	sub image updates
+				for ( let [StartIndex,EndIndex] of Changes )
+				{
+					//	can only do partial updates via subimage, so we need to turn index ranges into rects
+					//	then try and merge
+					const Channels = this.GetChannels();
+					const Rects = GetRectsFromIndexes(StartIndex,EndIndex,Width,Channels);
+					
+					//	todo: merge rects with above if possible, but ideally dirtybuffer has already squashed changes
+					for ( let Rect of Rects )
+					{
+						const SubDataValues = PixelData.subarray( Rect.StartIndex, Rect.EndIndex+1 );
+						gl.texSubImage2D( gl.TEXTURE_2D, MipLevel, Rect.x, Rect.y, Rect.w, Rect.h, SourceFormat, SourceType, SubDataValues );
+					}
+				}
+			}
+			else
+			{
+				gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, PixelData );
+			}
 
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
 			if ( isNaN(this.OpenglByteSize) )
@@ -676,29 +750,26 @@ export default class PopImage
 				this.OpenglByteSize=0;
 			}
 		}
-		else if ( this.Pixels instanceof Uint32Array )
+		else if ( PixelData instanceof Uint32Array )
 		{
-			Pop.Debug("Image from Uint32Array",this.PixelsFormat);
-			const SourceFormatTypes = PixelFormatToOpenglFormat( gl, this.PixelsFormat );
-			let SourceFormat = SourceFormatTypes[0];
-			const SourceType = SourceFormatTypes[1];
-			InternalFormat = SourceFormat;
+			//	assume 32bit RGBA
+			const SourceFormat = gl.RGBA;
+			const SourceType = gl.UNSIGNED_INT;
+			const InternalFormat = gl.RGBA32UI;
 			
-			//InternalFormat = gl.DEPTH24_STENCIL8;
-			//SourceFormat = gl.DEPTH_STENCIL;
-			
-			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, this.Pixels );
+			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, PixelData );
 			
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
 			if ( isNaN(this.OpenglByteSize) )
 			{
-				Pop.Warning(`Nan size: ${this.OpenglByteSize}`);
+				Warning(`Nan size: ${this.OpenglByteSize}`);
 				this.OpenglByteSize=0;
 			}
 		}
 		else
 		{
-			throw "Unhandled Pixel buffer format " + (typeof this.Pixels);// + "/" + this.Pixels.prototype.constructor;
+			const Constructor = this.Pixels.constructor ? this.Pixels.constructor.name : ''; 
+			throw `Unhandled Pixel buffer format ${typeof this.Pixels} (${Constructor})`;
 		}
 		
 		RenderContext.OnAllocatedTexture( this );
@@ -733,5 +804,19 @@ export default class PopImage
 		const Pixels = await PngBytesToPixels(PngBytes);
 		this.WritePixels( Pixels.Width, Pixels.Height, Pixels.Buffer, Pixels.Format );
 	}
-	
+
+	//	web api specific
+	async GetImageBitmap()
+	{
+		if ( !this.Pixels )
+			throw `Cannot create ImageBitmap from null pixels`;
+		
+		if ( IsHtmlElementPixels(this.Pixels) )
+		{
+			const ImageBitmap = await createImageBitmap(this.Pixels);
+			return ImageBitmap;
+		}
+		
+		throw `todo: create html ImageBitmap from ${typeof this.Pixels} pixels`;
+	}
 }

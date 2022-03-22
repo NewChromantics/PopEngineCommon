@@ -24,7 +24,10 @@ export function CreateRandomImage(Width,Height)
 
 export function CreateColourTexture(Colour4)
 {
-	let NewTexture = new Pop.Image(`Colour ${Colour4}`);
+	//	avoid misinterpreting our colour name as a filename
+	const Name = `Colour ${Colour4}`.split('.').join('_');
+	
+	let NewTexture = new Pop.Image(Name);
 	if ( Array.isArray(Colour4) )
 		Colour4 = new Float32Array(Colour4);
 	NewTexture.WritePixels( 1, 1, Colour4, 'Float4' );
@@ -60,4 +63,26 @@ export function IsFloatFormat(Format)
 		default:
 			return false;
 	}
+}
+
+export function GetFormatElementSize(PixelFormat)
+{
+	switch(PixelFormat)
+	{
+		//	bytes
+		case 'ChromaU':
+		case 'ChromaV':
+		case 'Greyscale':
+		case 'RGBA':
+		case 'RGB':
+		case 'Depth16mm':	//	two channel x 1byte
+			return 1;
+			
+		case 'Float1':
+		case 'Float2':
+		case 'Float3':
+		case 'Float4':
+			return 4;
+	}
+	throw `unhandled GetFormatElementSize(${PixelFormat})`;
 }

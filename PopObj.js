@@ -153,13 +153,19 @@ export default function ParseObjGeometry(Contents,OnGeometry,OnDebug)
 	
 	function OnNormal(Values)
 	{
+		Values = Values.map(parseFloat);
+		//	we invert z position, so we need to do the same on normal...
+		//	gr: is this correct? simply a localspace inversion?
+		Values[2] = -Values[2];
 		Normals.push( Values );
 	}
 
 	function OnTexCoord(Values)
 	{
 		//	pad to 3 values (for now) for the OnVertex alignment check
-		Values.length = 3;
+		Values = Values.map(parseFloat);
+		Values.push(0,0,0);
+		Values = Values.slice(0,3);
 		TexCoords.push( Values );
 	}
 

@@ -27,8 +27,18 @@ class DecoderBase
 	
 	OnFrame(Frame)
 	{
+		Frame.Free = function()
+		{
+			Frame.close();
+			Frame.ClosedByFree = Frame.timestamp;
+		};
+
 		//	turn into an image/planes/meta
 		this.DecodedFrameQueue.Push(Frame);
+	}
+	OnFrameEof()
+	{
+		this.DecodedFrameQueue.Push(null);
 	}
 	
 	OnError(Error)
@@ -61,6 +71,9 @@ export default class WebcodecDecoder extends DecoderBase
 		this.AvccHeader = null;
 		this.Decoder = null;
 		//this.TestEncoder();
+		this.HadInputEof = false;
+
+		this.SubmittedFramesDecoded = {};	//	[SubmittedFrame] = HasFrameBeenDecoded
 	}
 	
 	SetAvccHeader(AvccHeader)
@@ -102,6 +115,25 @@ export default class WebcodecDecoder extends DecoderBase
 		return Data;
 	}	
 	
+	OnFrame(Frame)
+	{
+		super.OnFrame(Frame);
+	
+		//	if there are no more frames queued for decoding
+		//	AND we've had a EOF submitted, there must be no more frames coming
+		const DecoderQueueSize = this.Decoder.decodeQueueSize;
+		/*
+		console.log(`OnFrame(); DecoderQueueSize=${DecoderQueueSize} had eof=${this.HadInputEof}`);
+		if ( DecoderQueueSize == 0 )
+		{
+			if ( this.HadInputEof )
+			{
+				this.OnFrameEof();
+			}
+		}
+		*/
+	}
+	
 	CreateDecoder(AvccHeader)
 	{
 		const DecoderOptions = {};
@@ -110,8 +142,14 @@ export default class WebcodecDecoder extends DecoderBase
 		const Decoder = new VideoDecoder( DecoderOptions );
 
 		this.ExpectsAnnexB = true;
-		//	need to convert to array other wise integeer conversion doesnt work
+		//	need to convert to array otherwise integer conversion doesnt work
 		let abc = Array.from( AvccHeader.slice(1,4) );
+		
+		//	chrome on mac with CR data streams/grove/grove-30fps-2
+		//	errors with "ambiguous code" and wont decode
+		if ( abc[2] == 0x3c )
+			abc[2] = 0x34;
+			
 		abc = abc.map( IntToHexString ).join('');
 		const Config = {};
 		Config.codec = `avc1.${abc}`;
@@ -260,6 +298,30 @@ export default class WebcodecDecoder extends DecoderBase
 			}
 		}
 		return CodecNames;
+	}
+	
+	PushEndOfFile()
+	{
+		//console.log(`H264 PushEndOfFile()`);
+		this.HadInputEof = true;
+		
+		function OnVideoDecoderFlushed()
+		{
+			//console.log(`OnVideoDecoderFlushed()`);
+			this.OnFrameEof();
+		}
+		
+		//	gr: this function shouldn't throw, flush() will throw if the codec has already been closed;
+		//		this can be manual, but if left idle for too long, chrome will auto-close it
+		try
+		{
+			//console.log(`H264 decoder flush()`);
+			this.Decoder.flush().then(OnVideoDecoderFlushed.bind(this));
+		}
+		catch(e)
+		{
+			console.warn(`PushEndOfFile() flush() error; ${e}`);
+		}
 	}
 	
 	//	todo: detect keyframe from h264 data...

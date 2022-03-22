@@ -1,6 +1,48 @@
 import Pop from './PopEngine.js'
 
 
+export class Clock
+{
+	constructor(TimeMs,GetLiveTimeMs=Pop.GetTimeNowMs)
+	{
+		this.GetLiveTimeMs = GetLiveTimeMs;
+		this.ClockTimeMs = TimeMs;
+		this.AppTimeMs = this.GetLiveTimeMs();
+		
+		this.PausedAppTime = null;
+	}
+	
+	get TimeMs()
+	{
+		if ( this.PausedAppTime ) 
+			return this.ClockTimeMs;
+			
+		const Elapsed = this.GetLiveTimeMs() - this.AppTimeMs;
+		return this.ClockTimeMs + Elapsed;
+	}
+	
+	Pause()
+	{
+		if ( this.PausedAppTime )
+			return;
+		
+		//	reset our origin time to the current time and we can resume from that again later
+		this.ClockTimeMs = this.TimeMs;
+		this.PausedAppTime = this.GetLiveTimeMs();
+		this.AppTimeMs = null;
+	}
+	
+	Resume()
+	{
+		if ( !this.PausedAppTime )
+			return;
+		
+		this.PausedAppTime = null;
+		this.AppTimeMs = this.GetLiveTimeMs();
+	}
+}
+
+
 export default class FrameCounter
 {
 	constructor(CounterName="",LapTimeMs=1000)
