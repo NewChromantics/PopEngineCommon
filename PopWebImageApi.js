@@ -3,6 +3,8 @@ import {LoadFileAsImageAsync} from './FileSystem.js'
 import {Debug,Warning} from './PopWebApiCore.js'
 import DirtyBuffer from './DirtyBuffer.js'
 import {GetRectsFromIndexes} from './Math.js'
+import {CreatePromise} from './PromiseQueue.js'
+
 
 //	gr: I forget what browser this was for! add comments when we know!
 //	ImageBitmap should also be supported
@@ -361,8 +363,19 @@ export default class PopImage
 			return;
 		throw `Todo: Pixel format conversion from ${this.PixelsFormat} to ${NewFormat}`;
 	}
+	
+	async GetAsHtmlImage()
+	{
+		const ImageElement = document.createElement('img');
+		const ImageLoaded = CreatePromise();
+		ImageElement.onload = (x) => ImageLoaded.Resolve();
+		ImageElement.onerror = (e) => ImageLoaded.Reject(e);
+		ImageElement.src = this.GetDataUrl();
+		await ImageLoaded;
+		return ImageElement;
+	}
 
-	GetDataUrl()
+	GetAsHtmlCanvas()
 	{
 		const Canvas = document.createElement('canvas');
 		const Context = Canvas.getContext('2d');
@@ -374,14 +387,24 @@ export default class PopImage
 		let Pixels = new Uint8ClampedArray(this.GetPixelBuffer());
 		const Img = new ImageData(Pixels,Width,Height);
 		Context.putImageData(Img,0,0);
+		
+		//	make a Free() function
+		Canvas.Free = function()
+		{
+			//	destroy canvas (safari suggests its hanging around)
+			//	this frees up canvas memory
+			Canvas.width = 0;
+			Canvas.height = 0;
+			//delete Canvas;	//	not allowed in strict mode
+		};
+		return Canvas;
+	}
 
+	GetDataUrl()
+	{
+		const Canvas = this.GetAsHtmlCanvas();
 		const data = Canvas.toDataURL("image/png");
-
-		//	destroy canvas (safari suggests its hanging around)
-		Canvas.width = 0;
-		Canvas.height = 0;
-		//delete Canvas;	//	not allowed in strict mode
-
+		Canvas.Free();
 		return data;
 	}
 
