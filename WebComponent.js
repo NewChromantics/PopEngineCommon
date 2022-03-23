@@ -3,11 +3,11 @@ const ElementName = `popengine-canvas`;
 export default ElementName;
 
 
-import Pop from '../PopEngine/PopEngine.js'
-import Camera_t from '../PopEngine/Camera.js'
-
-const DefaultClearColour = [36, 99, 166].map( x => x/255 );
-
+import Pop from './PopEngine.js'
+import Camera_t from './Camera.js'
+import AssetManager from './AssetManager.js'
+import {CompileShader} from './AssetManager.js'
+import {CreatePromise} from './PromiseQueue.js'
 
 export class Renderer_t
 {
@@ -37,9 +37,7 @@ export class Renderer_t
 		this.RenderContext = new Pop.Opengl.Context(this.RenderView);
 		
 		this.BindMouseCameraControls( this.RenderView );
-		
-		let Rendering = true;
-		
+	
 		//	nicest way atm to pause rendering whilst xr is rendering
 		let LastXrRenderTime = null;
 
@@ -146,9 +144,13 @@ export class PopEngineCanvas extends HTMLElement
 	constructor()
 	{
 		super();
+	
+		//	the pop assetmanager is still a singleton atm
+		this.AssetManager = AssetManager;
 
 		this.DomEvents = {};	//	cached dom events eg. 'load'(onload) 'dataevent'(ondataevent)
 		this.Renderer = null;
+		this.LoadedPromise = CreatePromise();
 	}
 
 	static ElementName()	{	return ElementName;	}
@@ -168,11 +170,14 @@ export class PopEngineCanvas extends HTMLElement
 		const Css = `
 		${ImportCss}
 		
+		/* these can all be overriden by host */
 		:host
 		{
-			background:	red;
+			background:	#333;
 			position:	relative;
 			display:	block;
+			min-width:	20px;
+			min-height:	20px;
 		}
 		
 		canvas
@@ -184,20 +189,6 @@ export class PopEngineCanvas extends HTMLElement
 			bottom:		0px;
 			width:		100%;
 			height:		100%;
-		}
-		
-		#Debug
-		{
-			padding:	0.5em;
-			opacity:	0.6;
-			background:	rgba(0,0,0,0.5);
-			color:		#eee;
-			position:	absolute;
-			top:		1em;
-			right:		1em;
-			max-height:	calc( 100% - 1em - 1em);
-			width:		50%;
-			overflow-y:	scroll;
 		}
 		
 		#StartXr
@@ -239,7 +230,7 @@ export class PopEngineCanvas extends HTMLElement
 		
 		//	this is for DOM load reporting
 		//	not part of HTMLMediaPlayer
-		this.OnLoad();
+		this.OnLoad(this);
 	}
 	
 	disconnectedCallback()
@@ -342,12 +333,28 @@ export class PopEngineCanvas extends HTMLElement
 	{
 		function GetRenderCommands(RenderContext,Camera)
 		{
-			
+			//	convert new rendercommands (names for assets)
+			//	to old system (assets)
+			//	we will move this at some point to the engine
+			//	when we figure out how to deal with images in the same way
+			function UpdateRenderCommand(Command)
+			{
+				if ( Command[0] == 'Draw' )
+				{
+					//	geo
+					Command[1] = this.AssetManager.GetAsset(Command[1],RenderContext);
+					//	shader
+					Command[2] = this.AssetManager.GetAsset(Command[2],RenderContext);
+				}
+			}
+					
 			try
 			{
 				const ExternalCommands = this.CallDomEvent('getrendercommands',arguments);
 				if ( !ExternalCommands )
-					throw `No external commands recieved`;
+					throw `No external commands returned from event`;
+				//	gr; should this make a copy?
+				ExternalCommands.forEach( UpdateRenderCommand.bind(this) );
 				return ExternalCommands;
 			}
 			catch(e)
@@ -362,7 +369,37 @@ export class PopEngineCanvas extends HTMLElement
 			}
 		}
 		
+		//	this has its own render thread
 		this.Renderer = new Renderer_t(this.CanvasElement, GetRenderCommands.bind(this) );
+		this.LoadedPromise.Resolve();
+	}
+	
+	//	todo: turn this into a more generic RegisterAsset() and assume the user uses the right names in the right places
+	RegisterGeometry(Name,GetGeometryAsync)
+	{
+		async function FetchTriangleBuffer(RenderContext)
+		{
+			const Geometry = await GetGeometryAsync();
+			const TriangleBuffer = await RenderContext.CreateGeometry(Geometry);
+			return TriangleBuffer;
+		}
+		this.AssetManager.RegisterAssetAsyncFetchFunction(Name,FetchTriangleBuffer);
+	}
+	
+	RegisterShader(Name,GetShaderSourceAsync)
+	{
+		async function FetchShader(RenderContext)
+		{
+			const [VertSource,FragSource,Macros] = await GetShaderSourceAsync();
+			const Shader = await CompileShader( RenderContext, Name, VertSource, FragSource, Macros );
+			return Shader;
+		}
+		this.AssetManager.RegisterAssetAsyncFetchFunction(Name,FetchShader);
+	}
+
+	async WaitForLoad()
+	{
+		return this.LoadedPromise;
 	}
 }	
 
