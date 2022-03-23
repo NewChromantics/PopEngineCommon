@@ -154,6 +154,22 @@ function ShaderMacrosToHash(Macros)
 	return Hash;
 }
 
+export async function CompileShader(RenderContext,Name,VertSource,FragSource,Macros)
+{
+	//FragSource = RefactorFragShader(FragSource);
+	//VertSource = RefactorVertShader(VertSource);
+	FragSource = InsertMacrosToShader(FragSource,Macros);
+	VertSource = InsertMacrosToShader(VertSource,Macros);
+
+	const ShaderUniforms = ExtractShaderUniforms( FragSource, VertSource );
+	const ShaderAttributes = ExtractShaderAttributes( FragSource, VertSource );
+
+	Pop.Debug(`LoadAndCompileShader ${Name}. Uniforms; ${JSON.stringify(ShaderUniforms)}`);
+	const Shader = await RenderContext.CreateShader( VertSource, FragSource, ShaderUniforms, ShaderAttributes );
+	return Shader;
+}
+
+
 //	this returns the "asset name"
 //	gr: should this be somewhere else, not in the core asset manager?
 export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderMacros,/*ShaderUniforms,*/ShaderAttribs)
@@ -176,19 +192,7 @@ export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderMacr
 		let FragSource = await Pop.LoadFileAsStringAsync(FragFilename);
 		let VertSource = await Pop.LoadFileAsStringAsync(VertFilename);
 
-		//FragSource = RefactorFragShader(FragSource);
-		//VertSource = RefactorVertShader(VertSource);
-		FragSource = InsertMacrosToShader(FragSource,ShaderMacros);
-		VertSource = InsertMacrosToShader(VertSource,ShaderMacros);
-
-		const ShaderUniforms = ExtractShaderUniforms( FragSource, VertSource );
-		const ShaderAttribute = ExtractShaderAttributes( FragSource, VertSource );
-
-		//const Shader = new Pop.Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
-		//const Shader = new Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
-		Pop.Debug(`LoadAndCompileShader ${AssetName}. Uniforms; ${JSON.stringify(ShaderUniforms)}`);
-		const Shader = await RenderContext.CreateShader( VertSource, FragSource, ShaderUniforms, ShaderAttribs );
-		return Shader;
+		return await CompileShader( RenderContext, AssetName, VertSource, FragSource, ShaderMacros );
 	}
 
 	RegisterAssetAsyncFetchFunction(AssetName,LoadAndCompileShader);
