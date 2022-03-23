@@ -364,29 +364,39 @@ export default class PopImage
 		throw `Todo: Pixel format conversion from ${this.PixelsFormat} to ${NewFormat}`;
 	}
 	
-	async GetAsHtmlImage()
+	async GetAsHtmlImage(Scale=1)
 	{
 		const ImageElement = document.createElement('img');
 		const ImageLoaded = CreatePromise();
 		ImageElement.onload = (x) => ImageLoaded.Resolve();
 		ImageElement.onerror = (e) => ImageLoaded.Reject(e);
-		ImageElement.src = this.GetDataUrl();
+		ImageElement.src = await this.GetDataUrl(Scale);
 		await ImageLoaded;
 		return ImageElement;
 	}
 
-	GetAsHtmlCanvas()
+	async GetAsHtmlCanvas(Scale=1)
 	{
 		const Canvas = document.createElement('canvas');
 		const Context = Canvas.getContext('2d');
 		const Width = this.GetWidth();
 		const Height = this.GetHeight();
-		Canvas.width = Width;
-		Canvas.height = Height;
+		Canvas.width = Math.floor(Width * Scale);
+		Canvas.height = Math.floor(Height * Scale);
 
 		let Pixels = new Uint8ClampedArray(this.GetPixelBuffer());
 		const Img = new ImageData(Pixels,Width,Height);
-		Context.putImageData(Img,0,0);
+		
+		if ( Scale == 1 )
+		{
+			Context.putImageData(Img,0,0);
+		}
+		else
+		{
+			//	Context.drawImage(Img,0,0,Canvas.width,Canvas.height);
+			const Bitmap = await createImageBitmap(Img);
+			Context.drawImage(Bitmap,0,0,Canvas.width,Canvas.height);
+		}
 		
 		//	make a Free() function
 		Canvas.Free = function()
@@ -400,9 +410,9 @@ export default class PopImage
 		return Canvas;
 	}
 
-	GetDataUrl()
+	async GetDataUrl(Scale=1)
 	{
-		const Canvas = this.GetAsHtmlCanvas();
+		const Canvas = await this.GetAsHtmlCanvas(Scale);
 		const data = Canvas.toDataURL("image/png");
 		Canvas.Free();
 		return data;
