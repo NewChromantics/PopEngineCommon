@@ -457,6 +457,8 @@ RenderCommandTypeMap['ReadPixels'] = RenderCommand_ReadPixels;
 
 function ParseRenderCommand(PushCommand,CommandParams)
 {
+	if ( !CommandParams )
+		return;
 	const Name = CommandParams[0];//.shift();
 	const Type = RenderCommandTypeMap[Name];
 	if ( !Type )
