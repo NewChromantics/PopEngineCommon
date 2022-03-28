@@ -112,13 +112,20 @@ export class Renderer_t
 	BindMouseCameraControls(RenderView)
 	{
 		const Camera = this.Camera;
+		let MoveScalar = 10;
 		
 		RenderView.OnMouseDown = function(x,y,Button,FirstDown=true)
 		{
 			if ( Button == 'Left' )
 				Camera.OnCameraOrbit( x, y, 0, FirstDown!=false );
+				
+				
 			if ( Button == 'Right' )
+			{
+				x *= MoveScalar;
+				y *= MoveScalar;
 				Camera.OnCameraPanLocal( x, y, 0, FirstDown!=false );
+			}
 		}
 		
 		RenderView.OnMouseMove = function(x,y,Button)
@@ -128,11 +135,15 @@ export class Renderer_t
 		
 		RenderView.OnMouseScroll = function(x,y,Button,Delta)
 		{
+		x *= MoveScalar;
+		y *= MoveScalar;
+		Delta[1] *= MoveScalar;
+		
 			//	zoom clamps to lookat, panlocalz moves lookat
-			//Camera.OnCameraPanLocal( x, y, 0, true );
-			//Camera.OnCameraPanLocal( x, y, -Delta[1] * 10.0, false );
-			Camera.OnCameraZoom( -Delta[1] * 0.1 );
-		}
+			Camera.OnCameraPanLocal( x, y, 0, true );
+			Camera.OnCameraPanLocal( x, y, -Delta[1] * 10.0, false );
+			//Camera.OnCameraZoom( -Delta[1] * 0.1 );
+		}.bind(this);
 	}
 }
 
