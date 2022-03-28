@@ -331,7 +331,7 @@ export class PopEngineCanvas extends HTMLElement
 	
 	async RenderThread()
 	{
-		function GetRenderCommands(RenderContext,Camera)
+		function GetRenderCommands(RenderContext,Camera,ScreenRect)
 		{
 			//	convert new rendercommands (names for assets)
 			//	to old system (assets)
@@ -339,6 +339,7 @@ export class PopEngineCanvas extends HTMLElement
 			//	when we figure out how to deal with images in the same way
 			function UpdateRenderCommand(Command)
 			{
+				if ( !Command )	return;
 				if ( Command[0] == 'Draw' )
 				{
 					//	geo
@@ -350,7 +351,9 @@ export class PopEngineCanvas extends HTMLElement
 					
 			try
 			{
-				const ExternalCommands = this.CallDomEvent('getrendercommands',arguments);
+				//	dont send render context to external commands any more
+				const GetRenderCommandsArgs = [Camera,ScreenRect];
+				const ExternalCommands = this.CallDomEvent('getrendercommands',GetRenderCommandsArgs);
 				if ( !ExternalCommands )
 					throw `No external commands returned from event`;
 				//	gr; should this make a copy?
