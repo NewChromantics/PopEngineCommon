@@ -121,7 +121,7 @@ export function GetAsset(Name,RenderContext)
 	function OnFailedToLoadAsset(Error)
 	{
 		Pop.Warning(`todo: handle failed async loading of ${Name}! ${Error}`);
-		delete ContextPendings[Name];
+		//delete ContextPendings[Name];
 	}
 	
 	//	start async load
