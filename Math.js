@@ -2254,32 +2254,28 @@ export function CalcHomography(src,dest,Plane='xy')
 	
 	//	gr: to let us invert, need determinet to be non zero
 	let m22 = 1;
-	//	gr: don't know why this is transposed (in C and JS) compared to c#! maybe accessors are different for double arrays? madness
-	let Transpose = true;
 	
-	if (Transpose && Plane == 'xy' )
+	if ( Plane == 'xy' )
 	{
 		//	z = identity
 		Row0 = [ P[0][8], P[1][8],	0, P[2][8] ];
 		Row1 = [ P[3][8], P[4][8],	0, P[5][8] ];
 		Row2 = [ 0, 		0, 		m22, 0 ];
+		//	translation
 		Row3 = [ P[6][8], P[7][8],	0, 1 ];
-	}
-	else if (Plane == 'xy' )
-	{
-		//	z = identity
-		Row0 = [ P[0][8], P[3][8],	0, P[6][8] ];
-		Row1 = [ P[1][8], P[4][8],	0, P[7][8] ];
-		Row2 = [ 0, 		0, 		m22, 0 ];
-		Row3 = [ P[2][8], P[5][8],	0, 1 ];
 	}
 	else if ( Plane == 'xz' )
 	{
 		//	y = identity
-		Row0 = [ P[0][8],	0,		P[3][8],	P[6][8] ];
+		Row0 = [ P[0][8],	0,		P[1][8],	P[2][8] ];
 		Row1 = [ 0,			m22,	0,			0		 ];
-		Row2 = [ P[1][8],	0, 		P[4][8],	P[7][8] ];
-		Row3 = [ P[2][8],	0,		P[5][8],	1 ];
+		Row2 = [ P[3][8],	0, 		P[4][8],	P[5][8] ];
+		//	translation
+		Row3 = [ P[6][8],	0,		P[7][8],	1 ];
+	}
+	else
+	{
+		throw `Unhandled output plane ${Plane}; expecting xy or xz`;
 	}
 	
 	//	if we setrow() for each, we'll get an exception as unity checks validity of the matrix
