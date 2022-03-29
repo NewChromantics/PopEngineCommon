@@ -186,6 +186,15 @@ export function Multiply3(a,b)
 	return [ a[0]*b[0], a[1]*b[1], a[2]*b[2] ];
 }
 
+export function Divide3(a,b)
+{
+	if ( !Array.isArray(a) )
+		a = [a,a,a];
+	if ( !Array.isArray(b) )
+		b = [b,b,b];
+	return [ a[0]/b[0], a[1]/b[1], a[2]/b[2] ];
+}
+
 export function Cross3(a,b)
 {
 	let x = a[1] * b[2] - a[2] * b[1];
