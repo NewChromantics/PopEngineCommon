@@ -2291,7 +2291,144 @@ export function CalcHomography(src,dest,Plane='xy')
 	return HomographyMtx;
 }
 
+//	this expects to be a homography transform to a... 0..1 square on a plane
+//	if you decide 0...1 means something else, that's fine!
+export function GetCameraPoseFromHomography(Homography4x4)
+{
+	//	gr: all this code is based on 3x3 column major
+	//		which we dont do. depending on the plane mode we've filled a row
+	//	which is what xyw() is for
+	/*
+	//	z = identity
+		Row0 = [ P[0][8], P[1][8],	0, P[2][8] ];
+		Row1 = [ P[3][8], P[4][8],	0, P[5][8] ];
+		Row2 = [ 0, 		0, 		m22, 0 ];
+		//	translation
+		Row3 = [ P[6][8], P[7][8],	0, 1 ];
+	*/
+	if ( Homography4x4.length != 4*4 )
+		throw `Expecting a 4x4 homography; length=${Homography4x4.length}`;
 
+	function GetColumn(c)
+	{
+		return GetRow(c);
+		let Col = [c+0,c+4,c+8,c+12].map( Index => Homography4x4[Index] );
+		return xyw(Col);
+	}
+	function GetRow(r)
+	{
+		let Row = Homography4x4.slice( r*4, (r+1)*4 );
+		return xyw(Row);
+	}
+	
+	//	https://stackoverflow.com/a/10781165/355753
+	//pose = Mat::eye(3, 4, CV_32FC1);      // 3x4 matrix, the camera pose
+	//let Pose = CreateIdentityMatrix();
+	let Pose4x4 = 
+	[
+		1,0,0,0,
+		0,1,0,0,
+		0,0,1,0,
+		0,0,0,1
+	];
+	function SetColumn(c,xyz)
+	{
+		//Pose4x4[c+0] = xyz[0];
+		//Pose4x4[c+4] = xyz[1];
+		//Pose4x4[c+8] = xyz[2];
+		//	set transposed
+		//	column is row when transposed
+		Pose4x4[ (c*4)+0 ] = xyz[0];
+		Pose4x4[ (c*4)+1 ] = xyz[1];
+		Pose4x4[ (c*4)+2 ] = xyz[2];
+	}
+	
+	let norm1 = Length3(GetColumn(0));
+	let norm2 = Length3(GetColumn(1));
+	let tnorm = (norm1 + norm2) / 2.0;	// Normalization value 
+
+	function xyw(xyzw)
+	{
+		return [xyzw[0], xyzw[1], xyzw[3] ];
+	}
+
+	//	another implementation here
+	//	https://stackoverflow.com/q/17027277/355753
+
+	//Mat p1 = H.col(0);       // Pointer to first column of H
+	//Mat p2 = pose.col(0);    // Pointer to first column of pose (empty)
+	//cv::normalize(p1, p2);   // Normalize the rotation, and copies the column to pose
+	let col0 = Normalise3( GetColumn(0) );
+	SetColumn(0, col0);
+
+	//p1 = H.col(1);           // Pointer to second column of H
+	//p2 = pose.col(1);        // Pointer to second column of pose (empty)
+	//cv::normalize(p1, p2);   // Normalize the rotation and copies the column to pose
+	let col1 = Normalise3( GetColumn(1) );
+	SetColumn(1, col1);
+
+	//Mat p3 = p1.cross(p2);   // Computes the cross-product of p1 and p2
+	//Mat c2 = pose.col(2);    // Pointer to third column of pose
+	//p3.copyTo(c2);       // Third column is the crossproduct of columns one and two
+	let p1 = col0;//GetColumn(0);
+	let p2 = col1;//GetColumn(1);
+	let p3 = Cross3( p1, p2 );
+	SetColumn(2,p3);
+
+	//	translation
+	//pose.col(3) = H.col(2) / tnorm;  //vector t [R|t] is the last column of pose
+	//	col2 is col3 in our 4x4
+	//let col2 = GetColumn(2);
+	let col2 = GetColumn(3);
+	col2 = Divide3( col2, [tnorm,tnorm,tnorm] );
+	SetColumn(3,col2);
+
+	return Pose4x4;
+/*
+	//	gr: adapted from my c# version, https://github.com/NewChromantics/PopOpenvrOsc/blob/e36841046d06344b8411695c94e760d43f75e1b0/Assets/Calibration/PopHomography.cs#L10
+	//	which I think was just taken from opencv's decompose homography
+	//	https://stackoverflow.com/questions/17027277/android-opencv-homography-to-camera-pose-considering-camera-intrinsics-and-ba 
+	//	opencv says, dont do that though, use solvepnp
+	
+	
+	
+	let h = Homography4x4;
+	let norm1 = Length4(GetColumn(0));
+	let norm2 = Length4(GetColumn(1));
+	let tnorm = (norm1 + norm2) / 2.0;	// Normalization value 
+
+	function xyw(xyzw)
+	{
+		return [xyzw[0], xyzw[1], xyzw[3] ];
+	}
+
+	function Mult(v3,Scale)
+	{
+		return Mult3( v3, [Scale,Scale,Scale] );
+	}
+
+	//  actually 3x4 so normalisation might need to be corrected (extra 0 in z!) 
+	let col0 = Normalise3( xyw( GetColumn(0) ) ); 
+	let col1 = Normalise3( xyw( GetColumn(1) ) ); 
+	//Pose.SetColumn(0, ); 
+	//Pose.SetColumn(1,); 
+	let col2 = Cross3( col0, col1 );
+	
+	//double[] buffer = new double[3]; 
+	//h.col(2).get(0, 0, buffer); 
+	var Buffer0 = col2.x; 
+	var Buffer1 = col2.y; 
+	var Buffer2 = col2.z; 
+	//  row 0 col 3  
+	var Row0Col3 = Buffer0 / tnorm; 
+	var Row1Col3 = Buffer1 / tnorm; 
+	var Row2Col3 = Buffer2 / tnorm; 
+	var Col3 = new Vector4(Row0Col3, Row1Col3, Row2Col3, 1); 
+
+	Position = Col3; 
+	//Rotation = Quaternion.LookRotation(col2, mult(col1,1) ); 
+	*/
+}
 
 //	returns false for parralel lines
 //	returns [x,y,TimeAlongAOfIntersection]
