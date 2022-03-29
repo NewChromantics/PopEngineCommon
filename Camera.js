@@ -254,6 +254,32 @@ export class Camera
 		return Matrix;
 	}
 	
+	
+	makePerspective( left, right, top, bottom, near, far ) 
+	{
+		if ( far === undefined ) {
+
+			console.warn( 'THREE.Matrix4: .makePerspective() has been redefined and has a new signature. Please check the docs.' );
+
+		}
+
+		const te = [];
+		const x = 2 * near / ( right - left );
+		const y = 2 * near / ( top - bottom );
+
+		const a = ( right + left ) / ( right - left );
+		const b = ( top + bottom ) / ( top - bottom );
+		const c = - ( far + near ) / ( far - near );
+		const d = - 2 * far * near / ( far - near );
+
+		te[ 0 ] = x;	te[ 4 ] = 0;	te[ 8 ] = a;	te[ 12 ] = 0;
+		te[ 1 ] = 0;	te[ 5 ] = y;	te[ 9 ] = b;	te[ 13 ] = 0;
+		te[ 2 ] = 0;	te[ 6 ] = 0;	te[ 10 ] = c;	te[ 14 ] = d;
+		te[ 3 ] = 0;	te[ 7 ] = 0;	te[ 11 ] = - 1;	te[ 15 ] = 0;
+
+		return te;
+	}
+	
 	//	GetOpencvProjectionMatrix but 4x4 with z correction for near/far
 	//	rename to CameraToScreen/View
 	GetProjectionMatrix(ViewRect)
@@ -263,20 +289,20 @@ export class Camera
 			return this.ProjectionMatrix;
 		
 		const OpenglFocal = this.GetOpenglFocalLengths( ViewRect );
-		
+		const Far = this.FarDistance;
+		const Near = this.NearDistance;
+	
 		let Matrix = [];
-		Matrix[0] = OpenglFocal.fx;
+		Matrix[0] = (Near) / OpenglFocal.fx;
 		Matrix[1] = OpenglFocal.s;
 		Matrix[2] = OpenglFocal.cx;
 		Matrix[3] = 0;
 		
 		Matrix[4] = 0;
-		Matrix[5] = OpenglFocal.fy;
+		Matrix[5] = (Near) / OpenglFocal.fy;
 		Matrix[6] = OpenglFocal.cy;
 		Matrix[7] = 0;
 		
-		const Far = this.FarDistance;
-		const Near = this.NearDistance;
 		
 		//	near...far in opengl needs to resovle to -1...1
 		//	gr: glDepthRange suggests programmable opengl pipeline is 0...1
@@ -285,6 +311,7 @@ export class Camera
 		//	http://ogldev.atspace.co.uk/www/tutorial12/tutorial12.html
 		Matrix[8] = 0;
 		Matrix[9] = 0;
+		/*
 		//	gr: this should now work in both ways, but one of them is mirrored.
 		//		false SHOULD match old engine style... but is directx
 		if ( this.ZForwardIsNegative )
@@ -299,9 +326,17 @@ export class Camera
 			Matrix[10] = (-Near-Far) / (Near-Far);
 			Matrix[11] = 1;
 		}
+		*/
+		const c = - ( Far + Near ) / ( Far - Near );
+		const d = - 2 * Far * Near / ( Far - Near );
+		//Matrix[10] = (-Near-Far) / (Near-Far);
+		Matrix[10] = c;
+		Matrix[11] = -1;
+			
 		Matrix[12] = 0;
 		Matrix[13] = 0;
-		Matrix[14] = (2*Far*Near) / (Near-Far);
+		//Matrix[14] = (2*Far*Near) / (Near-Far);
+		Matrix[14] = d;
 		Matrix[15] = 0;
 		
 		return Matrix;
