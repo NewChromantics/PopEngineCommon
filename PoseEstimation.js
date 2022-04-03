@@ -182,9 +182,10 @@ class Posit
 		}
 	  }
 
-	  i0i0 = i0[0] * i0[0] + i0[1] * i0[1] + i0[2] * i0[2];
-	  j0j0 = j0[0] * j0[0] + j0[1] * j0[1] + j0[2] * j0[2];
-	  i0j0 = i0[0] * j0[0] + i0[1] * j0[1] + i0[2] * j0[2];
+		//	magnitude/length squared of scale from image to object?
+		i0i0 = i0[0] * i0[0] + i0[1] * i0[1] + i0[2] * i0[2];
+		j0j0 = j0[0] * j0[0] + j0[1] * j0[1] + j0[2] * j0[2];
+		i0j0 = i0[0] * j0[0] + i0[1] * j0[1] + i0[2] * j0[2];
 
 	  //Lambda and mu
 	  delta = (j0j0 - i0i0) * (j0j0 - i0i0) + 4.0 * (i0j0 * i0j0);
@@ -271,10 +272,8 @@ class Posit
 	{
 		var np = this.objectPoints.length, zmin = Infinity, zi;
 
-		//	gr: this is assuming a z plane, switched to Y, but should be based on normal?
-		//		but translation code in pos() also explicitly writes to z, so maybe it has to be this way
+		//	project to z
 		let PlaneIndex = 2;
-		//let PlaneIndex = 1;
 		
 		for ( let i=0; i < np; ++ i)
 		{
@@ -352,13 +351,15 @@ class Posit
 
 		this.pos(sopImagePoints, rotation1, rotation2, translation);
 
-		for (i = 0; i < 3; ++ i){
-		  translation1[i] = translation[i] -
+		//	matrix multiply the object positions to get image coords back
+		for (i = 0; i < 3; ++ i)
+		{
+			translation1[i] = translation[i] -
 			(rotation1[i][0] * this.objectPoints[0][0] +
 			 rotation1[i][1] * this.objectPoints[0][1] +
 			 rotation1[i][2] * this.objectPoints[0][2]);
 			
-		  translation2[i] = translation[i] -
+			translation2[i] = translation[i] -
 			(rotation2[i][0] * this.objectPoints[0][0] +
 			 rotation2[i][1] * this.objectPoints[0][1] +
 			 rotation2[i][2] * this.objectPoints[0][2]);
@@ -385,39 +386,48 @@ class Posit
 		  }
 		}
 
-		if ( (error1.euclidean < 0.0) && (error2.euclidean >= 0.0) ){
-		  error = error2;
-		  for (i = 0; i < 3; ++ i){
-			for (j = 0; j < 3; ++ j){
-			  rotation[i][j] = rotation2[i][j];
+		if ( (error1.euclidean < 0.0) && (error2.euclidean >= 0.0) )
+		{
+			error = error2;
+			for (i = 0; i < 3; ++ i)
+			{
+				for (j = 0; j < 3; ++ j)
+				{
+					rotation[i][j] = rotation2[i][j];
+				}
 			}
-		  }
 		}
 		
-		if ( (error2.euclidean < 0.0) && (error1.euclidean >= 0.0) ){
-		  error = error1;
-		  for (i = 0; i < 3; ++ i){
-			for (j = 0; j < 3; ++ j){
-			  rotation[i][j] = rotation1[i][j];
+		if ( (error2.euclidean < 0.0) && (error1.euclidean >= 0.0) )
+		{
+			error = error1;
+			for (i = 0; i < 3; ++ i)
+			{
+				for (j = 0; j < 3; ++ j)
+				{
+					rotation[i][j] = rotation1[i][j];
+				}
 			}
-		  }
 		}
 
-		for (i = 0; i < np; ++ i){
-		  factor = 0.0;
-		  for (j = 0; j < 3; ++ j){
-			factor += this.objectVectors[i][j] * rotation[2][j] / translation[2];
-		  }
-		  sopImagePoints[i].x = (1.0 + factor) * imagePoints[i].x;
-		  sopImagePoints[i].y = (1.0 + factor) * imagePoints[i].y;
+		for (i = 0; i < np; ++ i)
+		{
+			factor = 0.0;
+			for (j = 0; j < 3; ++ j)
+			{
+				factor += this.objectVectors[i][j] * rotation[2][j] / translation[2];
+			}
+			sopImagePoints[i].x = (1.0 + factor) * imagePoints[i].x;
+			sopImagePoints[i].y = (1.0 + factor) * imagePoints[i].y;
 		}
 
 		oldImageDifference = imageDifference;
 		imageDifference = 0.0;
 		
-		for (i = 0; i < np; ++ i){
-		  imageDifference += Math.abs(sopImagePoints[i].x - oldSopImagePoints[i].x);
-		  imageDifference += Math.abs(sopImagePoints[i].y - oldSopImagePoints[i].y);
+		for (i = 0; i < np; ++ i)
+		{
+			imageDifference += Math.abs(sopImagePoints[i].x - oldSopImagePoints[i].x);
+			imageDifference += Math.abs(sopImagePoints[i].y - oldSopImagePoints[i].y);
 		}
 
 		delta = Math.abs(imageDifference - oldImageDifference);
