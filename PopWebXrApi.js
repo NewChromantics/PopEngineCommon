@@ -990,7 +990,7 @@ class Device_t
 		{
 			const DeviceFrameBuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
 			for ( let View of Pose.views )
-				this.FrameUpdate_RenderClassic( Frame, Pose, View, DeviceFrameBuffer );
+				this.FrameUpdate_RenderClassic( Frame, Pose, View, DeviceFrameBuffer, Frame.BackgroundImage );
 		}
 		else if ( this.LayerType == 'StereoLayer' )
 		{
@@ -1223,12 +1223,13 @@ class Device_t
 	}
 	
 	//	non-layer rendering
-	FrameUpdate_RenderClassic(Frame,Pose,View,DeviceFrameBuffer)
+	FrameUpdate_RenderClassic(Frame,Pose,View,DeviceFrameBuffer,BackgroundImage)
 	{
 		const RenderTarget = new RenderTargetViewProxy( this.Layer, View, this.RenderContext );
 		
 		//	generate camera
 		const Camera = this.GetXrCamera(Frame,Pose,View);
+		Camera.BackgroundImage = BackgroundImage;
 
 		//	would be nice if we could have some generic camera uniforms and only generate one set of commands?
 		let RenderCommands = this.GetRenderCommands( this.RenderContext, Camera );
