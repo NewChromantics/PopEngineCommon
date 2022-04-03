@@ -99,18 +99,63 @@ function mat4_invert(out, a) {
     return out;
   }
 
+
+class WebBarcodeDetector
+{
+	constructor()
+	{
+		const Options = {};
+		Options.formats = ['qr_code'];
+		this.Detector = new BarcodeDetector(Options);
+	}
+	
+	async detect(Image)
+	{
+	/*
+		function PxToUv(xy)
+		{
+			let u = xy.x / Frame.Meta.Width;
+			let v = xy.y / Frame.Meta.Height;
+			return [u,v];
+		}
+		*/
+		const Markers = await this.Detector.detect(Image);
+		
+		function MakeMarkerOutput(Marker)
+		{
+			const Output = {};
+			Output.corners = Marker.cornerPoints;
+			Output.value = Marker.rawValue;
+			return Output;
+		}
+		const OutputMarkers = Markers.map(MakeMarkerOutput);
+		
+		return OutputMarkers;
+	}
+}
+
+
+
 //	todo: make this detection async so we can match native API
 //		and spin off onto a worker thread
 async function DetectMarkers(imageData,MarkerSize=1)
 {
 	if ( !DetectorInstance )
 	{
-		DetectorInstance = new AR.Detector();
+		try
+		{
+			DetectorInstance = new WebBarcodeDetector();
+		}
+		catch(e)
+		{
+			console.error(e)
+			DetectorInstance = new AR.Detector();
+		}
 	}
 
 	const ImageWidth = imageData.width;
 	const ImageHeight = imageData.height;
-	const Markers = DetectorInstance.detect(imageData);
+	const Markers = await DetectorInstance.detect(imageData);
 	
 	
 	//	calculate pose for each marker
@@ -965,7 +1010,7 @@ AR.Detector = function(){
   this.candidates = [];
 };
 
-AR.Detector.prototype.detect = function(image){
+AR.Detector.prototype.detect = async function(image){
   CV.grayscale(image, this.grey);
   CV.adaptiveThreshold(this.grey, this.thres, 2, 7);
   
