@@ -25,6 +25,11 @@ export class Renderer_t
 		this.RenderingPromise = this.RenderThread( Canvas, GetRenderCommands, XrOnWaitForCallback );
 	}
 	
+	GetRenderContext()
+	{
+		return this.RenderContext;
+	}
+	
 	Free()
 	{
 		this.Running = false;
@@ -414,6 +419,13 @@ export class PopEngineCanvas extends HTMLElement
 	async WaitForLoad()
 	{
 		return this.LoadedPromise;
+	}
+	
+	GetRenderContext()
+	{
+		if ( !this.Renderer )
+			return null;
+		return this.Renderer.GetRenderContext();
 	}
 }	
 
