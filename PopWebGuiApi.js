@@ -1,19 +1,438 @@
-Pop.Gui = {};
+import PromiseQueue from './PromiseQueue.js'
+import * as Pop from './PopWebApiCore.js'
+import * as FileSystem from './FileSystem.js'
+
+const Default = 'Pop Gui module';
+export default Default;
+
+
+export let DebugMouseEvent = function(){};	//	Pop.Debug;
+
+
+//	wrapper for a generic element which converts input (touch, mouse etc) into
+//	our mouse functions
+function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseScroll)
+{
+	//	touchend doesn't tell us what touches were released;
+	//	so call this function to keep track of them
+	let LastTouches = [];
+	//	gr: touch identifier is unique, so not persistent. Whilst this would be better, (returning TouchXXX for button)
+	//		we cannot detect say, double-tap from the same source, so we still need to use the tracked "names" (indexes)
+	let RegisteredTouchButtons = {};	//	[Identifier] = TouchIndexWhenActivated = ButtonIndex
+	let ArchiveRegisteredTouchButtons = {};
+	
+	
+	function UpdateTouches(MouseEvent)
+	{
+		function TouchIdentifierPresent(Identifier,TouchArray)
+		{
+			const Match = TouchArray.find( t => t.identifier == Identifier );
+			return Match!=null;
+		}
+	
+		//	not a touch device
+		if ( !MouseEvent.touches )
+			return;
+		
+		//	turn touches into array
+		const NewTouches = Array.from( MouseEvent.touches );
+		
+		function GetNextUnassignedButtonIndex()
+		{
+			//	shouldn't have 1000 touch buttons, loop for safety
+			const UsedButtonIndexes = Object.values(RegisteredTouchButtons);
+			for ( let bi=0;	bi<1000;	bi++ )
+			{
+				const Match = UsedButtonIndexes.find( Value => Value===bi );
+				if ( Match !== undefined )
+					continue;
+				return bi;
+			}
+			throw `Failed to find /1000 a free button index`;
+		}
+		
+		function UpdateIdentifierButton(Touch)
+		{
+			if ( RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
+				return;
+			
+			const ButtonIndex = GetNextUnassignedButtonIndex();
+			DebugMouseEvent(`New touch ${Touch.identifier} = Button ${ButtonIndex}`);
+			RegisteredTouchButtons[Touch.identifier] = ButtonIndex;
+			ArchiveRegisteredTouchButtons[Touch.identifier] = ButtonIndex;
+		}
+		function UnregisterTouch(Touch)
+		{
+			//	gr: we cannot unregister, as some things use the identifer later
+			if ( !RegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
+			{
+				DebugMouseEvent(`UnregisterTouch ${Touch.identifier} but not registered`);
+				return;
+			}
+			const Button = RegisteredTouchButtons[Touch.identifier];
+			DebugMouseEvent(`UnregisterTouch ${Touch.identifier} button was ${Button}`);
+			delete RegisteredTouchButtons[Touch.identifier];
+		}
+
+		//	assign button indexes for new touches
+		NewTouches.forEach(UpdateIdentifierButton);
+	
+		//	find changes
+		const RemovedTouches = LastTouches.filter( t => !TouchIdentifierPresent(t.identifier,NewTouches) );
+		const AddedTouches = NewTouches.filter( t => !TouchIdentifierPresent(t.identifier,LastTouches) );
+		
+		//	removed button assignments for deleted touches
+		RemovedTouches.forEach(UnregisterTouch);		
+		
+		MouseEvent.Touches = NewTouches;
+		MouseEvent.RemovedTouches = RemovedTouches;
+		MouseEvent.AddedTouches = AddedTouches;
+		LastTouches = NewTouches;
+	}
+	
+	function GetButtonNameFromTouch(Touch)
+	{
+		//	can't use unique identifier (safari) as we need to track buttons between touches
+		//return `Touch${Touch.identifier}`;
+
+		//	gr: registered = active
+		function GetButtonIndexFromTouch(Touch)
+		{
+			if ( !ArchiveRegisteredTouchButtons.hasOwnProperty(Touch.identifier) )
+			{
+				Pop.Warning(`Touch ${Touch.identifier} has no registered button. Returning 0`);
+				return 0;
+			}
+			return ArchiveRegisteredTouchButtons[Touch.identifier];
+		}
+		const ButtonIndex = GetButtonIndexFromTouch(Touch);
+		return `Touch${ButtonIndex}`;
+	}
+	
+	function GetPositionFromTouch(Touch)
+	{
+		return GetMousePos(Touch,null);
+	}
+
+	//	annoying distinctions
+	let GetButtonFromMouseEventButton = function(MouseButton,AlternativeButton,TouchArray)
+	{
+		//	html/browser definitions
+		const BrowserMouseLeft = 0;
+		const BrowserMouseMiddle = 1;
+		const BrowserMouseRight = 2;
+
+		//	handle event & button arg
+		if ( typeof MouseButton == "object" )
+		{
+			let MouseEvent = MouseButton;
+			
+			//	gr: still needs re-working for touches
+			//	look at specific touch list
+			if ( TouchArray )
+			{
+				//	have to assume there's always one?
+				return GetButtonNameFromTouch(TouchArray[0]);
+			}
+			//	this needs a fix for touches
+			else if ( MouseEvent.Touches )
+			{
+				return GetButtonNameFromTouch(MouseEvent.Touches[0]);
+			}
+			else
+			{
+				MouseButton = MouseEvent.button;
+				AlternativeButton = (MouseEvent.ctrlKey == true);
+			}
+		}
+		
+		if ( AlternativeButton )
+		{
+			switch ( MouseButton )
+			{
+				case BrowserMouseLeft:	return 'Back';
+				case BrowserMouseRight:	return 'Forward';
+			}
+		}
+		
+		//	gr: where is back and forward mouse buttons??
+		switch ( MouseButton )
+		{
+			case BrowserMouseLeft:		return 'Left';
+			case BrowserMouseMiddle:	return 'Middle';
+			case BrowserMouseRight:		return 'Right';
+		}
+		throw "Unhandled MouseEvent.button (" + MouseButton + ")";
+	}
+	
+	let GetButtonsFromMouseEventButtons = function(MouseEvent,IncludeTouches)
+	{
+		//	note: button bits don't match mousebutton!
+		//	https://www.w3schools.com/jsref/event_buttons.asp
+		//	https://www.w3schools.com/jsref/event_button.asp
+		//	index = 0 left, 1 middle, 2 right (DO NOT MATCH the bits!)
+		//	gr: ignore back and forward as they're not triggered from mouse down, just use the alt mode
+		//let ButtonMasks = [ 1<<0, 1<<2, 1<<1, 1<<3, 1<<4 ];
+		const ButtonMasks = [ 1<<0, 1<<2, 1<<1 ];
+		const ButtonMask = MouseEvent.buttons || 0;	//	undefined if touches
+		const AltButton = (MouseEvent.ctrlKey==true);
+		const Buttons = [];
+		
+		for ( let i=0;	i<ButtonMasks.length;	i++ )
+		{
+			if ( ( ButtonMask & ButtonMasks[i] ) == 0 )
+				continue;
+			let ButtonIndex = i;
+			let ButtonName = GetButtonFromMouseEventButton( ButtonIndex, AltButton );
+			if ( ButtonName === null )
+				continue;
+			Buttons.push( ButtonName );
+		}
+
+		//	mobile
+		if ( IncludeTouches && MouseEvent.Touches )
+		{
+			function PushTouch(Touch,Index)
+			{
+				const ButtonName = GetButtonNameFromTouch( Touch );
+				if ( ButtonName === null )
+					return;
+				Buttons.push( ButtonName );
+			}
+			MouseEvent.Touches.forEach( PushTouch );
+		}
+
+		return Buttons;
+	}
+	
+	//	gr: should api revert to uv?
+	let GetMousePos = function(MouseEvent,TouchArray)
+	{
+		const Rect = Element.getBoundingClientRect();
+		
+		//	touch event, need to handle multiple touch states
+		if ( TouchArray )
+			MouseEvent = TouchArray[0];
+		else if ( MouseEvent.Touches )
+			MouseEvent = MouseEvent.Touches[0];
+		
+		const ClientX = MouseEvent.pageX || MouseEvent.clientX;
+		const ClientY = MouseEvent.pageY || MouseEvent.clientY;
+		const x = ClientX - Rect.left;
+		const y = ClientY - Rect.top;
+		return [x,y];
+	}
+	
+	function ReportTouches(MouseEvent)
+	{
+		if ( MouseEvent.AddedTouches )
+		{
+			function ReportNewTouch(Touch)
+			{
+				const Button = GetButtonNameFromTouch(Touch);
+				const Position = GetPositionFromTouch(Touch);
+				DebugMouseEvent(`Touch MouseDown ${Position} button ${Button}`);
+				OnMouseDown(...Position,Button);
+			}
+			MouseEvent.AddedTouches.forEach(ReportNewTouch);
+		}
+		
+		//	update positions
+		if ( MouseEvent.Touches )
+		{
+			function ReportTouchMove(Touch)
+			{
+				const Button = GetButtonNameFromTouch(Touch);
+				const Position = GetPositionFromTouch(Touch);
+				DebugMouseEvent(`Touch MouseMove ${Position} button ${Button}`);
+				OnMouseMove(...Position,Button);
+			}
+			MouseEvent.Touches.forEach(ReportTouchMove);
+		}
+		
+		if ( MouseEvent.RemovedTouches )
+		{
+			function ReportOldTouch(Touch)
+			{
+				const Button = GetButtonNameFromTouch(Touch);
+				const Position = GetPositionFromTouch(Touch);
+				DebugMouseEvent(`Touch MouseUp ${Position} button ${Button}`);
+				OnMouseUp(...Position,Button);
+			}
+			MouseEvent.RemovedTouches.forEach(ReportOldTouch);
+		}
+		
+	}
+	
+	let MouseMove = function(MouseEvent)
+	{
+		UpdateTouches(MouseEvent);
+		ReportTouches(MouseEvent);
+		
+		if ( !MouseEvent.changedTouches )
+		{
+			const Pos = GetMousePos(MouseEvent);
+			const Buttons = GetButtonsFromMouseEventButtons( MouseEvent, false );
+			
+			if ( Buttons.length == 0 )
+			{
+				DebugMouseEvent(`MouseMove ${Pos} zero buttons ${Buttons}`);
+				Buttons.push(null);
+			}
+			
+			//	report each button as its own mouse move
+			DebugMouseEvent(`MouseMove ${Pos} buttons ${Buttons}`);
+			for ( let Button of Buttons )
+				OnMouseMove( Pos[0], Pos[1], Button );
+		}
+		MouseEvent.preventDefault();
+	}
+	
+	let MouseDown = function(MouseEvent)
+	{
+		UpdateTouches(MouseEvent);
+		ReportTouches(MouseEvent);
+		
+		if ( !MouseEvent.changedTouches )
+		{
+			const Pos = GetMousePos(MouseEvent);
+			const Button = GetButtonFromMouseEventButton(MouseEvent);
+			DebugMouseEvent(`MouseDown ${Pos} ${Button}`);
+			OnMouseDown( Pos[0], Pos[1], Button );
+		}
+		MouseEvent.preventDefault();
+	}
+	
+	let MouseUp = function(MouseEvent)
+	{
+		UpdateTouches(MouseEvent);
+		ReportTouches(MouseEvent);
+		
+		if ( !MouseEvent.changedTouches )
+		{
+			//	todo: trigger multiple buttons (for multiple touches)
+			const Pos = GetMousePos(MouseEvent,MouseEvent.RemovedTouches);
+			const Button = GetButtonFromMouseEventButton(MouseEvent,null,MouseEvent.RemovedTouches);
+		
+			//	gr: hack for kandinsky, i need to know when touches are (all) released to turn off "hover"
+			//		this will probably change again, as this is probably a common thing
+			//		plus its at this level we should deal with touch+mouse cursor (desktop touchscreen, or ipad+mouse)
+			//		and maybe XR's touching-button, but not pressing-button 
+			const Meta = {};
+			Meta.IsTouch = MouseEvent.touches != undefined;	//	gr: this will break on screens with a touch screen
+		
+			DebugMouseEvent(`MouseUp ${Pos} ${Button} ${JSON.stringify(Meta)}`);
+			OnMouseUp( Pos[0], Pos[1], Button, Meta );
+		}
+		MouseEvent.preventDefault();
+	}
+	
+	let MouseWheel = function(MouseEvent)
+	{
+		UpdateTouches(MouseEvent);
+		ReportTouches(MouseEvent);
+		
+		const Pos = GetMousePos(MouseEvent);
+		const Button = GetButtonFromMouseEventButton(MouseEvent);
+		
+		//	gr: maybe change scale based on
+		//WheelEvent.deltaMode = DOM_DELTA_PIXEL, DOM_DELTA_LINE, DOM_DELTA_PAGE
+		const DeltaScale = 0.01;
+		const WheelDelta = [ MouseEvent.deltaX * DeltaScale, MouseEvent.deltaY * DeltaScale, MouseEvent.deltaZ * DeltaScale ];
+		OnMouseScroll( Pos[0], Pos[1], Button, WheelDelta );
+		MouseEvent.preventDefault();
+	}
+	
+	let ContextMenu = function(MouseEvent)
+	{
+		//	allow use of right mouse down events
+		//MouseEvent.stopImmediatePropagation();
+		MouseEvent.preventDefault();
+		return false;
+	}
+	
+	//	use add listener to allow pre-existing canvas elements to retain any existing callbacks
+	Element.addEventListener('mousemove', MouseMove );
+	Element.addEventListener('wheel', MouseWheel, false );
+	Element.addEventListener('contextmenu', ContextMenu, false );
+	Element.addEventListener('mousedown', MouseDown, false );
+	Element.addEventListener('mouseup', MouseUp, false );
+	
+	Element.addEventListener('touchmove', MouseMove );
+	Element.addEventListener('touchstart', MouseDown, false );
+	Element.addEventListener('touchend', MouseUp, false );
+	Element.addEventListener('touchcancel', MouseUp, false );
+	//	not currently handling up
+	//this.Element.addEventListener('mouseup', MouseUp, false );
+	//this.Element.addEventListener('mouseleave', OnDisableDraw, false );
+	//this.Element.addEventListener('mouseenter', OnEnableDraw, false );
+	
+
+}
+
+
+//	wrapper for a generic element which converts input (touch, mouse etc) into
+//	our mouse functions
+function TElementKeyHandler(Element,OnKeyDown,OnKeyUp)
+{
+	function GetKeyFromKeyEventButton(KeyEvent)
+	{
+		// DebugMouseEvent("KeyEvent",KeyEvent);
+		return KeyEvent.key;
+	}
+	
+	const KeyDown = function(KeyEvent)
+	{
+		//	if an input element has focus, ignore event
+		if ( KeyEvent.srcElement instanceof HTMLInputElement )
+		{
+			DebugMouseEvent("Ignoring OnKeyDown as input has focus",KeyEvent);
+			return false;
+		}
+		//Pop.Debug("OnKey down",KeyEvent);
+		
+		const Key = GetKeyFromKeyEventButton(KeyEvent);
+		const Handled = OnKeyDown( Key );
+		if ( Handled === true )
+			KeyEvent.preventDefault();
+	}
+	
+	const KeyUp = function(KeyEvent)
+	{
+		const Key = GetKeyFromKeyEventButton(KeyEvent);
+		const Handled = OnKeyUp( Key );
+		if ( Handled === true )
+			KeyEvent.preventDefault();
+	}
+	
+
+	Element = document;
+	
+	//	use add listener to allow pre-existing canvas elements to retain any existing callbacks
+	Element.addEventListener('keydown', KeyDown );
+	Element.addEventListener('keyup', KeyUp );
+}
+
+
+
+
+
 
 
 const PopGuiStorage = window.sessionStorage;
 
 //	should have some general Pop API to use session storage, localstorage, cookies etc crossplatform
-Pop.Gui.ReadSettingJson = function(Key)
+export function ReadSettingJson(Key)
 {
 	const Json = PopGuiStorage.getItem(Key);
 	if ( !Json )
-		throw `No setting for ${Key}`;
+		//throw `No setting for ${Key}`;
+		return null;
 	const Object = JSON.parse(Json);
 	return Object;
 }
 
-Pop.Gui.WriteSettingJson = function(Key,Object)
+export function WriteSettingJson(Key,Object)
 {
 	const Json = JSON.stringify(Object);
 	PopGuiStorage.setItem(Key,Json);
@@ -39,6 +458,9 @@ function IsHtmlString(Value)
 function SetGuiControlStyle(Element,Rect)
 {
 	if ( !Rect )
+		return;
+	//	assume this is a element id and not configuration
+	if ( typeof Rect == 'string' )
 		return;
 	
 	//	to allow vw/% etc, we're using w/h now
@@ -165,19 +587,21 @@ function GetElementRect(Element)
 
 function SetGuiControl_Draggable(Element)
 {
+	if ( !Element )
+		return;
 	const RectKey = `${Element.id}_WindowRect`;
 	function LoadRect()
 	{
 		//	if an element is draggable, see if we've got a previos position to restore
 		//	todo: make sure previous pos fits on new screen when we restore
-		try
+		const NewRect = ReadSettingJson(RectKey);
+		if ( NewRect )
 		{
-			const NewRect = Pop.Gui.ReadSettingJson(RectKey);
 			const x = NewRect.x;
 			const y = NewRect.y;
 			SetElementPosition( Element, x, y );
 		}
-		catch(e)
+		else
 		{
 			Pop.Warning(`Failed to restore window position for ${RectKey}`);
 		}
@@ -193,7 +617,7 @@ function SetGuiControl_Draggable(Element)
 			const Rect = {};
 			Rect.x = ElementRect.x
 			Rect.y = ElementRect.y;
-			Pop.Gui.WriteSettingJson(RectKey,Rect);
+			WriteSettingJson(RectKey,Rect);
 		}
 		catch(e)
 		{
@@ -358,29 +782,46 @@ function SetGuiControl_Draggable(Element)
 	LoadRect();
 }
 
-Pop.Gui.Window = function(Name,Rect,Resizable)
+export class Window
 {
-	//	child controls should be added to this
-	//	todo: rename to ChildContainer
-	this.ElementParent = null;
-	this.ElementWindow = null;
-	this.ElementTitleBar = null;
-	this.RestoreHeight = null;		//	if non-null, stores the height we were before minimising
-	this.TitleBarClickLastTime = null;	//	to detect double click 
+	constructor(Name,Rect,Resizable)
+	{
+		//	child controls should be added to this
+		//	todo: rename to ChildContainer
+		this.ElementParent = null;
+		this.ElementWindow = null;
+		this.ElementTitleBar = null;
+		this.RestoreHeight = null;		//	if non-null, stores the height we were before minimising
+		this.TitleBarClickLastTime = null;	//	to detect double click 
+		
+			
+		let Parent = document.body;
+		if ( typeof Rect == 'string' )
+		{
+			Parent = document.getElementById(Rect);
+		}
+		else if ( Rect instanceof HTMLElement )
+		{
+			Parent = Rect;
+			Rect = Parent.id;
+		}
+		
+		this.ElementWindow = this.CreateElement( Name, Parent, Rect );
+	}
 
 	//	gr: element may not be assigned yet, maybe rework construction of controls
-	this.AddChildControl = function(Child,Element)
+	AddChildControl(Child,Element)
 	{
 		//Element.style.zIndex = 2;
 		this.ElementParent.appendChild( Element );
 	}
 	
-	this.GetContainerElement = function()
+	GetContainerElement()
 	{
 		return this.ElementParent;
 	}
 	
-	this.CreateElement = function(Name,Parent,Rect)
+	CreateElement(Name,Parent,Rect)
 	{
 		let Element = document.createElement('div');
 		if ( Rect == Parent.id )
@@ -440,7 +881,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		return Element;
 	}
 	
-	this.OnTitleBarClick = function(Event)
+	OnTitleBarClick(Event)
 	{
 		const DoubleClickMaxTime = 300;
 		
@@ -459,24 +900,24 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		this.TitleBarClickLastTime = Pop.GetTimeNowMs();				
 	}
 	
-	this.EnableScrollbars = function(Horizontal,Vertical)
+	EnableScrollbars(Horizontal,Vertical)
 	{
 		this.ElementParent.style.overflowY = Vertical ? 'scroll' : 'hidden';
 		this.ElementParent.style.overflowX = Horizontal ? 'scroll' : 'hidden';
 	}
 
-	this.SetMinimised = function(Minimise=true)
+	SetMinimised(Minimise=true)
 	{
 		if ( this.IsMinimised() != Minimise )
 		   this.OnToggleMinimise();
 	}
 												   
-	this.IsMinimised = function ()
+	IsMinimised()
 	{
 		return (this.RestoreHeight !== null);
 	}
 
-	this.Flash = function(Enable)
+	Flash(Enable)
 	{
 		//	gr: turn this into an async func!
 		const FlashOn = function()
@@ -514,7 +955,7 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		}
 	}
 
-	this.OnToggleMinimise = function (DoubleClickEvent)
+	OnToggleMinimise(DoubleClickEvent)
 	{
 		//Pop.Debug(`OnToggleMinimise`);
 		//	check height of window to see if it's minimised
@@ -532,30 +973,38 @@ Pop.Gui.Window = function(Name,Rect,Resizable)
 		}
 	}
 
-	let Parent = document.body;
-	if ( typeof Rect == 'string' )
-	{
-		Parent = document.getElementById(Rect);
-	}
-	else if ( Rect instanceof HTMLElement )
-	{
-		Parent = Rect;
-		Rect = Parent.id;
-	}
-	
-	this.ElementWindow = this.CreateElement( Name, Parent, Rect );
 }
 
-function GetExistingElement(Name)
+function GetExistingElement(Name,ExpectedType=null)
 {
-	if ( typeof Name != 'string' )
+	if ( Name == null )
 		return null;
-	
-	let Element = document.getElementById(Name);
-	if ( Element )
-		return Element;
-	
-	return null;
+		
+	//	search for element
+	let Element;
+	if ( typeof Name == 'string' )
+	{
+		Element = document.getElementById(Name);
+		if ( !Element )
+			throw `No existing element named ${Name}`;
+	}
+	else if ( Name instanceof HTMLElement )
+	{
+		Element = Name;
+	}
+	else
+	{
+		return null;
+	}	
+		
+	//	verify (input) type
+	if ( ExpectedType )
+	{
+		if ( Element.type != ExpectedType )
+			throw `Found element ${Name} but type is ${Element.type} not ${ExpectedType}`;
+	}
+
+	return Element;
 }
 
 
@@ -593,16 +1042,17 @@ function GetButtonFromMouseEventButton(MouseButton,AlternativeButton)
 	{
 		switch ( MouseButton )
 		{
-			case BrowserMouseLeft:	return Pop.SoyMouseButton.Back;
-			case BrowserMouseRight:	return Pop.SoyMouseButton.Forward;
+			case BrowserMouseLeft:	return 'Back';
+			case BrowserMouseRight:	return 'Forward';
 		}
 	}
-	
+		
+	//	gr: where is back and forward mouse buttons??
 	switch ( MouseButton )
 	{
-		case BrowserMouseLeft:		return Pop.SoyMouseButton.Left;
-		case BrowserMouseMiddle:	return Pop.SoyMouseButton.Middle;
-		case BrowserMouseRight:		return Pop.SoyMouseButton.Right;
+		case BrowserMouseLeft:		return 'Left';
+		case BrowserMouseMiddle:	return 'Middle';
+		case BrowserMouseRight:		return 'Right';
 	}
 	throw "Unhandled MouseEvent.button (" + MouseButton + ")";
 }
@@ -625,7 +1075,7 @@ function GetMousePos(MouseEvent,Element)
 
 
 
-Pop.Gui.SetStyle = function(Element,Key,Value)
+function SetStyle(Element,Key,Value)
 {
 	//	change an attribute
 	Element.setAttribute(Key,Value);
@@ -636,11 +1086,11 @@ Pop.Gui.SetStyle = function(Element,Key,Value)
 }
 
 //	finally doing proper inheritance for gui
-Pop.Gui.BaseControl = class
+export class BaseControl
 {
 	constructor()
 	{
-		this.OnDragDropQueue = new Pop.PromiseQueue();
+		this.OnDragDropQueue = new PromiseQueue();
 
 		//	WaitForDragDrop() can provide a function to rename files
 		//	this may have issues with multi-callers or race conditions
@@ -651,31 +1101,40 @@ Pop.Gui.BaseControl = class
 
 	BindEvents()
 	{
+		//Pop.Debug(`BindEvents`);
 		const Element = this.GetElement();
 		Element.addEventListener('drop',this.OnDragDrop.bind(this));
 		Element.addEventListener('dragover',this.OnTryDragDropEvent.bind(this));
 		
+		
+		//	gr: is this all the new input system, which does
+		//		multitouch, XR, mouse
+		//		Name,[x,y,z]
+		const OnMouseDown = function()	{	return this.OnMouseDown ? this.OnMouseDown(...arguments) : false;	};
+		const OnMouseMove = function()	{	return this.OnMouseMove ? this.OnMouseMove(...arguments) : false;	};
+		const OnMouseUp = function()	{	return this.OnMouseUp ? this.OnMouseUp(...arguments) : false;	};
+		const OnMouseScroll = function(){	return this.OnMouseScroll ? this.OnMouseScroll(...arguments) : false;	};
+		
+		TElementMouseHandler( Element, OnMouseDown.bind(this), OnMouseMove.bind(this), OnMouseUp.bind(this) , OnMouseScroll.bind(this) );
+
+		/*
 		//	need to move all these from Opengl window
-		Element.addEventListener('wheel', this.OnMouseWheelEvent.bind(this), false );
+		Element.addEventListener('wheel', this.OnMouseWheelEvent.bind(this) );
+		
+		/*
+		Element.addEventListener('mousemove', MouseMove );
+		Element.addEventListener('wheel', MouseWheel, false );
+		Element.addEventListener('contextmenu', ContextMenu, false );
+		Element.addEventListener('mousedown', MouseDown, false );
+		Element.addEventListener('mouseup', MouseUp, false );
+	
+		Element.addEventListener('touchmove', MouseMove );
+		Element.addEventListener('touchstart', MouseDown, false );
+		Element.addEventListener('touchend', MouseUp, false );
+		Element.addEventListener('touchcancel', MouseUp, false );
+		*/
 	}
 	
-	OnMouseWheelEvent(MouseEvent)
-	{
-		//	if no overload/assigned event, ignore the event
-		if ( !this.OnMouseScroll )
-			return;
-		
-		const Element = this.GetElement();
-		const Pos = GetMousePos(MouseEvent,Element);
-		const Button = GetButtonFromMouseEventButton(MouseEvent);
-		
-		//	gr: maybe change scale based on
-		//WheelEvent.deltaMode = DOM_DELTA_PIXEL, DOM_DELTA_LINE, DOM_DELTA_PAGE
-		const DeltaScale = 0.01;
-		const WheelDelta = [ MouseEvent.deltaX * DeltaScale, MouseEvent.deltaY * DeltaScale, MouseEvent.deltaZ * DeltaScale ];
-		this.OnMouseScroll( Pos[0], Pos[1], Button, WheelDelta );
-		MouseEvent.preventDefault();
-	}
 
 	GetDragDropFilenames(Files)
 	{
@@ -719,6 +1178,7 @@ Pop.Gui.BaseControl = class
 		async function LoadFilesAsync(Files)
 		{
 			const NewFilenames = this.GetDragDropFilenames(Files);
+			const FinalAddedFiles = [];
 			async function LoadFile(File,FileIndex)
 			{
 				const Filename = NewFilenames[FileIndex];
@@ -726,8 +1186,8 @@ Pop.Gui.BaseControl = class
 				Pop.Debug(`Filename ${File.name}->${Filename} mime ${Mime}`);
 				const FileArray = await File.arrayBuffer();
 				const File8 = new Uint8Array(FileArray);
-				Pop.SetFileCache(Filename,File8);
-				NewFilenames.push(Filename);
+				FileSystem.SetFileCache(Filename,File8);
+				FinalAddedFiles.push(Filename);
 			}
 			//	make a promise for each file
 			const LoadPromises = Files.map(LoadFile.bind(this));
@@ -735,7 +1195,7 @@ Pop.Gui.BaseControl = class
 			await Promise.all(LoadPromises);
 
 			//	now notify with new filenames
-			this.OnDragDropQueue.Push(NewFilenames);
+			this.OnDragDropQueue.Push(FinalAddedFiles);
 		}
 
 		Event.preventDefault();
@@ -762,7 +1222,7 @@ Pop.Gui.BaseControl = class
 	SetStyle(Key,Value)
 	{
 		const Element = this.GetElement();
-		Pop.Gui.SetStyle(Element,Key,Value);
+		SetStyle(Element,Key,Value);
 	}
 	
 	SetRect(Rect)
@@ -778,8 +1238,42 @@ Pop.Gui.BaseControl = class
 }
 
 
+export class RenderView extends BaseControl
+{
+	constructor(Parent,Rect)
+	{
+		super(...arguments);
 
-Pop.Gui.Label = class extends Pop.Gui.BaseControl
+		//	native is expecting a named element
+		if ( typeof Rect == typeof '' )
+			Rect = document.getElementById(Rect);
+
+		if ( Rect instanceof HTMLCanvasElement )
+		{
+		}
+		else
+		{
+			throw `Currently require rect(${Rect}) to be a canvas`;
+		}
+		
+		this.Element = Rect;
+		this.BindEvents();
+	}
+	
+	GetElement()
+	{
+		return this.Element;
+	}
+	
+	GetScreenRect()
+	{
+		return [0,0,this.Element.width,this.Element.height];
+	}
+}
+
+
+
+export class Label extends BaseControl
 {
 	constructor(Parent,Rect)
 	{
@@ -793,6 +1287,11 @@ Pop.Gui.Label = class extends Pop.Gui.BaseControl
 	GetElement()
 	{
 		return this.Element;
+	}
+	
+	SetText()
+	{
+		this.SetValue(...arguments);
 	}
 	
 	SetValue(Value)
@@ -811,13 +1310,12 @@ Pop.Gui.Label = class extends Pop.Gui.BaseControl
 
 	CreateElement(Parent,Rect)
 	{
-		let Div = GetExistingElement(Parent);
+		let Div = GetExistingElement(Rect) || GetExistingElement(Parent);
 		if ( Div )
 			return Div;
 		
 		Div = document.createElement('div');
-		if ( Rect )
-			SetGuiControlStyle( Div, Rect );
+		SetGuiControlStyle( Div, Rect );
 		
 		Div.innerText = 'Pop.Gui.Label';
 		Parent.AddChildControl( Parent, Div );
@@ -827,7 +1325,7 @@ Pop.Gui.Label = class extends Pop.Gui.BaseControl
 
 
 
-Pop.Gui.Button = class extends Pop.Gui.BaseControl
+export class Button extends BaseControl
 {
 	constructor(Parent,Rect)
 	{
@@ -899,8 +1397,7 @@ Pop.Gui.Button = class extends Pop.Gui.BaseControl
 		//	gr: hard to style buttons/inputs, no benefit afaik, but somehow we shoulld make this an option
 		const ElementType = 'input';
 		Div = document.createElement(ElementType);
-		if ( Rect )
-			SetGuiControlStyle( Div, Rect );
+		SetGuiControlStyle( Div, Rect );
 		Div.type = 'button';
 		
 		Div.innerText = 'Pop.Gui.Button innertext';
@@ -910,18 +1407,23 @@ Pop.Gui.Button = class extends Pop.Gui.BaseControl
 	}
 }
 
-Pop.Gui.Slider = function(Parent,Rect,Notches)
+export class Slider
 {
-	this.InputElement = null;
-	this.ValueCache = undefined;
+	constructor(Parent,Rect,Notches)
+	{
+		this.InputElement = null;
+		this.ValueCache = undefined;
 	
-	this.SetMinMax = function(Min,Max)
+		this.Element = this.CreateElement(Parent,Rect);
+	}
+	
+	SetMinMax(Min,Max)
 	{
 		this.InputElement.min = Min;
 		this.InputElement.max = Max;
 	}
 	
-	this.SetValue = function(Value)
+	SetValue(Value)
 	{
 		if ( this.ValueCache === Value )
 			return;
@@ -933,7 +1435,7 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		this.InputElement.dispatchEvent(new Event('change'));
 	}
 	
-	this.OnElementChanged = function(Event)
+	OnElementChanged(Event)
 	{
 		//	call our callback
 		let Value = this.InputElement.valueAsNumber;
@@ -941,25 +1443,19 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		this.OnChanged( Value );
 	}
 	
-	this.CreateElement = function(Parent)
+	CreateElement(Parent,Rect)
 	{
-		const ListenToInput = function(InputElement)
+		const ExistingSlider = GetExistingElement(Rect,'range');
+		if ( ExistingSlider )
 		{
-			InputElement.addEventListener('input', this.OnElementChanged.bind(this) );
-			//	this is event is triggered from this.SetValue() so creates a loop
-			//InputElement.addEventListener('change', this.OnElementChanged.bind(this) );
-		}.bind(this);
-		
-		let Div = GetExistingElement(Parent);
-		if ( Div )
-		{
-			this.InputElement = Div;
-			ListenToInput(Div);
-			return Div;
+			this.InputElement = ExistingSlider;
+			this.SetupEvents();
+			return ExistingSlider;
 		}
 		
 		let Input = document.createElement('input');
 		this.InputElement = Input;
+		this.SetupEvents();
 		
 		//	gr: what are defaults in pop?
 		Input.min = 0;
@@ -968,9 +1464,9 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		Input.type = 'range';
 		SetGuiControl_SubElementStyle( Input );
 		//Input.oninput = this.OnElementChanged.bind(this);
-		ListenToInput(Input);
 		
-		Div = document.createElement('div');
+		
+		let Div = document.createElement('div');
 		SetGuiControlStyle( Div, Rect );
 		//Div.innerText = 'Pop.Gui.Slider';
 		
@@ -980,39 +1476,51 @@ Pop.Gui.Slider = function(Parent,Rect,Notches)
 		return Div;
 	}
 	
-	this.Element = this.CreateElement(Parent);
+	SetupEvents()
+	{
+		this.InputElement.addEventListener('input', this.OnElementChanged.bind(this) );
+		//	this is event is triggered from this.SetValue() so creates a loop
+		//InputElement.addEventListener('change', this.OnElementChanged.bind(this) );
+	}
 }
 
 
-Pop.Gui.TickBox = function(Parent,Rect)
+export class TickBox
 {
-	this.Label = '';
-	this.InputElement = null;
-	this.LabelElement = null;
+	constructor(Parent,Rect)
+	{
+		this.Label = '';
+		this.InputElement = null;
+		this.LabelElement = null;
+	
+		this.Element = this.CreateElement(Parent,Rect);
+		this.RefreshLabel();
+	}
 
-	this.GetValue = function()
+	GetValue()
 	{
 		return this.InputElement.checked;
 	}
 	
-	this.SetValue = function(Value)
+	SetValue(Value)
 	{
 		this.InputElement.checked = Value;
 		this.RefreshLabel();
 	}
 	
-	this.SetLabel = function(Value)
+	SetLabel(Value)
 	{
 		this.Label = Value;
 		this.RefreshLabel();
 	}
 	
-	this.RefreshLabel = function()
+	RefreshLabel()
 	{
-		this.LabelElement.innerText = this.Label;
+		if ( this.LabelElement )
+			this.LabelElement.innerText = this.Label;
 	}
 
-	this.OnElementChanged = function(Event)
+	OnElementChanged(Event)
 	{
 		//	call our callback
 		let Value = this.GetValue();
@@ -1020,8 +1528,16 @@ Pop.Gui.TickBox = function(Parent,Rect)
 		this.OnChanged( Value );
 	}
 	
-	this.CreateElement = function(Parent)
+	CreateElement(Parent,Rect)
 	{
+		const ExistingCheckbox = GetExistingElement(Rect,'checkbox');
+		if ( ExistingCheckbox )
+		{
+			this.InputElement = ExistingCheckbox;
+			this.SetupEvents();
+			return;
+		}
+	
 		let Input = document.createElement('input');
 		this.InputElement = Input;
 		
@@ -1029,8 +1545,7 @@ Pop.Gui.TickBox = function(Parent,Rect)
 		Input.checked = true;
 		Input.type = 'checkbox';
 		SetGuiControl_SubElementStyle( Input, 0, 50 );
-		Input.oninput = this.OnElementChanged.bind(this);
-	
+		
 		let Label = document.createElement('label');
 		this.LabelElement = Label;
 		Label.innerText = 'checkbox';
@@ -1044,30 +1559,39 @@ Pop.Gui.TickBox = function(Parent,Rect)
 		Div.appendChild( Label );
 		Parent.AddChildControl( this, Div );
 
+		this.SetupEvents();
+
 		return Div;
 	}
 	
-	this.Element = this.CreateElement(Parent);
-	this.RefreshLabel();
+	SetupEvents()
+	{
+		this.InputElement.oninput = this.OnElementChanged.bind(this);
+	}
 }
 
 
 
-Pop.Gui.Colour = function(Parent,Rect)
+export class Colour
 {
-	this.InputElement = null;
-	this.LabelElement = null;
-	this.LabelTextCache = undefined;
-	this.ValueCache = undefined;
+	constructor(Parent,Rect)
+	{
+		this.InputElement = null;
+		this.LabelElement = null;
+		this.LabelTextCache = undefined;
+		this.ValueCache = undefined;
 	
-	this.GetValue = function()
+		this.Element = this.CreateElement(Parent,Rect);
+	}
+	
+	GetValue()
 	{
 		let RgbHex = this.InputElement.value;
 		let Rgbf = Pop.Colour.HexToRgbf( RgbHex );
 		return Rgbf;
 	}
 	
-	this.SetValue = function(Value)
+	SetValue(Value)
 	{
 		let RgbHex = Pop.Colour.RgbfToHex( Value );
 		if ( this.ValueCache === RgbHex )
@@ -1076,7 +1600,7 @@ Pop.Gui.Colour = function(Parent,Rect)
 		this.ValueCache = RgbHex;
 	}
 	
-	this.SetLabel = function(Value)
+	SetLabel(Value)
 	{
 		if ( this.LabelTextCache === Value )
 			return;
@@ -1084,23 +1608,31 @@ Pop.Gui.Colour = function(Parent,Rect)
 		this.LabelTextCache = Value;
 	}
 	
-	this.OnElementChanged = function(Event)
+	OnElementChanged(Event)
 	{
 		//	call our callback
 		let Value = this.GetValue();
 		this.OnChanged( Value );
 	}
 	
-	this.CreateElement = function(Parent)
+	CreateElement(Parent,Rect)
 	{
+		const ExistingElement = GetExistingElement(Rect,'color');
+		if ( ExistingElement )
+		{
+			this.InputElement = ExistingElement;
+			this.SetupEvents();
+			return;
+		}
+		
 		let Input = document.createElement('input');
 		this.InputElement = Input;
+		this.SetupEvents();
 		
 		//	gr: what are defaults in pop?
 		Input.checked = true;
 		Input.type = 'color';
 		SetGuiControl_SubElementStyle( Input, 0, 20 );
-		Input.oninput = this.OnElementChanged.bind(this);
 		
 		let Label = document.createElement('label');
 		this.LabelElement = Label;
@@ -1117,11 +1649,14 @@ Pop.Gui.Colour = function(Parent,Rect)
 		return Div;
 	}
 	
-	this.Element = this.CreateElement(Parent);
+	SetupEvents()
+	{
+		this.InputElement.oninput = this.OnElementChanged.bind(this);
+	}
 }
 
 
-Pop.Gui.TextBox = class extends Pop.Gui.BaseControl
+export class TextBox extends BaseControl
 {
 	constructor(Parent,Rect)
 	{
@@ -1182,23 +1717,17 @@ Pop.Gui.TextBox = class extends Pop.Gui.BaseControl
 	CreateElement(Parent,Rect)
 	{
 		//	if it already exists, need to work out if it's an input or container
-		const ExistingElement = GetExistingElement(Parent);
+		const ExistingElement = GetExistingElement(Parent,'text');
 		if (ExistingElement)
 		{
-			//	existing
-			if (ExistingElement.type == "text")
-			{
-				ExistingElement.InputElement = ExistingElement;
-				ExistingElement.LabelElement = {};//	dummy
-				return ExistingElement;
-			}
-			throw `Handle existing element for label`;
+			ExistingElement.InputElement = ExistingElement;
+			ExistingElement.LabelElement = {};//	dummy
+			return ExistingElement;
 		}
 
 		const ElementType = 'span';//'input';
 		const Div = document.createElement(ElementType);
-		if (Rect)
-			SetGuiControlStyle(Div,Rect);
+		SetGuiControlStyle(Div,Rect);
 		Parent.AddChildControl(Parent,Div);
 
 		const Input = document.createElement('input');
@@ -1231,7 +1760,7 @@ Pop.Gui.TextBox = class extends Pop.Gui.BaseControl
 }
 
 
-Pop.Gui.ImageMap = class extends Pop.Gui.BaseControl
+export class ImageMap extends BaseControl
 {
 	constructor(Parent,Rect)
 	{
@@ -1290,7 +1819,7 @@ Pop.Gui.ImageMap = class extends Pop.Gui.BaseControl
 
 
 
-Pop.Gui.Table = class extends Pop.Gui.BaseControl
+export class Table extends BaseControl
 {
 	constructor(Parent,Rect)
 	{
@@ -1322,10 +1851,19 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 			throw `Pop.Gui.Table.SetValue(${Rows}) expecting an array of keyed objects`;
 
 		//	merge new keys
-		if (Rows.length > 0)
+		//	gr: this could get pretty slow... hmm
 		{
-			const NewKeys = Object.keys(Rows[0]);
-			this.KnownKeys = Array.from(new Set(this.KnownKeys.concat(NewKeys)));
+			const Keys = {};
+			for ( let Key of this.KnownKeys )
+				Keys[Key] = null;
+				
+			for ( let Row of Rows )
+			{
+				const RowKeys = Object.keys(Row);
+				for ( let Key of RowKeys )
+					Keys[Key] = null;
+			}
+			this.KnownKeys = Object.keys(Keys);
 			this.KnownKeys = this.KnownKeys.filter(NotSpecialKey);
 		}
 
@@ -1370,7 +1908,7 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 		{
 			for ( let [StyleName,Value] of Object.entries(Style) )
 			{
-				Pop.Gui.SetStyle(Element,StyleName,Value);
+				SetStyle(Element,StyleName,Value);
 			}
 		}
 	}
@@ -1408,9 +1946,13 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 			Body.deleteRow(0);
 
 		//	make sure all rows are correct size
+		//	fill columns with blank values in case columns change and we need to reset data
+		//	means we're basically changing dom twice
+		const DummyColumnValues = new Array(Columns.length);
+		DummyColumnValues.fill('');
 		for (let r = 0;r < RowCount;r++)
 		{
-			this.UpdateTableRow(Body.rows[r],Columns);
+			this.UpdateTableRow(Body.rows[r],DummyColumnValues);
 		}
 	}
 
@@ -1446,5 +1988,67 @@ Pop.Gui.Table = class extends Pop.Gui.BaseControl
 			Table.tHead.insertRow(0);
 		if (!Table.tBodies.length)
 			Table.createTBody();
+	}
+}
+
+
+//	using WebComponent_TreeView
+export class Tree extends BaseControl
+{
+	constructor(Parent,Rect)
+	{
+		super(...arguments);
+		
+		this.ChangePromiseQueue = new PromiseQueue('Tree.ChangePromiseQueue');
+		this.SelectionChangePromiseQueue = new PromiseQueue('Tree.SelectionChangePromiseQueue');
+		
+		let Element = Rect;
+		
+		if ( typeof Element == typeof '' )
+			Element = document.getElementById(Element);
+		
+		if ( !Element || Element.nodeName != 'TREE-VIEW')
+			throw `Pop.Gui.Tree expecting Rect of treeview; is ${Element ? Element.nodeName :'null'}`;
+		this.Element = Element;
+		
+		this.BindEvents();
+	}
+	
+	BindEvents()
+	{
+		this.Element.onchange = function(Json,Change)
+		{
+			this.ChangePromiseQueue.Push(Change);
+		}.bind(this);
+		
+		this.Element.onselectionchange = function(SelectedAddresses)
+		{
+			this.SelectionChangePromiseQueue.Push(SelectedAddresses);
+		}.bind(this);
+	}
+	
+	GetElement()
+	{
+		return this.Element;
+	}
+	
+	GetValue()
+	{
+		return this.GetElement().json;
+	}
+	
+	SetValue(Json)
+	{
+		this.GetElement().json = Json;
+	}
+	
+	async WaitForChange()
+	{
+		return this.ChangePromiseQueue.WaitForNext();
+	}
+	
+	async WaitForSelectionChange()
+	{
+		return this.SelectionChangePromiseQueue.WaitForNext();
 	}
 }

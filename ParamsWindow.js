@@ -1,3 +1,7 @@
+import PromiseQueue from './PromiseQueue.js'
+import * as PopMath from './Math.js'
+import Pop from './PopEngine.js'	//	for pop.gui.xxx
+
 //	gr: need to sort a dependency system
 //		PopEngineCommon/PopMath.js
 function isFunction(functionToCheck)
@@ -94,13 +98,14 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 		//	set label (always!)
 		if (LabelControl)
 		{
-			LabelControl.SetValue(Label);
-			if (Control.SetLabel)
-				Control.SetLabel("");
+			LabelControl.SetText(Label);
+			/*
+			if (Control.SetText)
+				Control.SetText("");*/
 		}
-		else if (Control.SetLabel)
+		else if (Control.SetText)
 		{
-			Control.SetLabel(Label);
+			Control.SetText(Label);
 		}
 	}
 	
@@ -109,57 +114,59 @@ function TParamHandler(Control,LabelControl,GetValue,GetLabelForValue,CleanValue
 
 //	dummy window we can swap out quickly in code
 //	change this so params window can just be hidden more easily?
-Pop.DummyParamsWindow = function()
+export class DummyParamsWindow
 {
-	this.OnParamChanged = function(){};
-	this.OnParamsChanged = function(){};
-	this.AddParam = function(){};
-	this.GetParamMetas = function() {	return {};	};
-	this.Window = {};
-	this.Window.SetMinimised = function(){};
+	constructor()
+	{
+		this.OnParamChanged = function(){};
+		this.OnParamsChanged = function(){};
+		this.AddParam = function(){};
+		this.GetParamMetas = function() {	return {};	};
+		this.Window = {};
+		this.Window.SetMinimised = function(){};
+	}
 	
-	this.WaitForParamsChanged = function ()
+	async WaitForParamsChanged()
 	{
 		return new Promise( function(res,rej){} );
 	}
 }
 
-Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
+
+export class ParamsWindow
 {
-	OnAnyChanged = OnAnyChanged || function(){};
+	constructor(Params,OnAnyChanged,WindowRect,WindowName="Params")
+	{
+		this.OnAnyChanged = OnAnyChanged || function(){};
+		
+		this.Params = Params;
 
-	//	if the window rect is a string, then it's for gui/form/div mapping
-	//	but to layout the controls, we still want some value
-	const DefaultWidth = 600;
-	WindowRect = WindowRect || [800,20,DefaultWidth,300];
-	const WindowWidth = !isNaN(WindowRect[2]) ? WindowRect[2] : DefaultWidth;
-	this.ControlTop = 10;
+		//	if the window rect is a string, then it's for gui/form/div mapping
+		//	but to layout the controls, we still want some value
+		const DefaultWidth = 600;
+		WindowRect = WindowRect || [800,20,DefaultWidth,300];
+		const WindowWidth = !isNaN(WindowRect[2]) ? WindowRect[2] : DefaultWidth;
+		this.WindowWidth = WindowWidth;
+		this.ControlTop = 10;
 
-	const LabelLeft = 10;
-	const LabelWidth = WindowWidth * 0.3;
-	const LabelHeight = 18;
-	const ControlLeft = LabelLeft + LabelWidth + 10;
-	const ControlWidth = WindowWidth - ControlLeft - 40;
-	const ControlHeight = LabelHeight;
-	const ControlSpacing = 10;
-
-	this.Window = new Pop.Gui.Window(WindowName,WindowRect,false);
-	this.Window.EnableScrollbars(false,true);
-	this.Handlers = {};
-	this.ParamMetas = {};
-	this.WaitForParamsChangedPromiseQueue = new Pop.PromiseQueue();
-
-	this.WaitForParamsChanged = function ()
+		this.Window = new Pop.Gui.Window(WindowName,WindowRect,false);
+		this.Window.EnableScrollbars(false,true);
+		this.Handlers = {};
+		this.ParamMetas = {};
+		this.WaitForParamsChangedPromiseQueue = new PromiseQueue();
+	}
+	
+	async WaitForParamsChanged()
 	{
 		return this.WaitForParamsChangedPromiseQueue.WaitForNext();
 	}
 
-	this.GetParamMetas = function ()
+	GetParamMetas()
 	{
 		return this.ParamMetas;
 	}
 
-	function GetMetaFromArguments(Arguments)
+	GetMetaFromArguments(Arguments)
 	{
 		//	first is name
 		const Name = Arguments.shift();
@@ -179,9 +186,32 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 	//		AddParam('Float',Math.floor);
 	//	TreatAsType overrides the control
 	//		AddParam('Port',0,1,Math.floor,'String')
-	this.AddParam = function (Name,Min,Max,CleanValue,TreatAsType)
+	AddParam(Name,Min,Max,CleanValue,TreatAsType)
 	{
-		this.ParamMetas[Name] = GetMetaFromArguments(Array.from(arguments));
+		try
+		{
+			this.AddParamUnsafe(...arguments);
+		}
+		catch(e)
+		{
+			Pop.Warning(e);
+		}
+	}
+	
+	AddParamUnsafe(Name,Min,Max,CleanValue,TreatAsType)
+	{
+		const Params = this.Params;
+		const WindowWidth = this.WindowWidth;
+		const LabelLeft = 10;
+		const LabelWidth = WindowWidth * 0.3;
+		const LabelHeight = 18;
+		const ControlLeft = LabelLeft + LabelWidth + 10;
+		const ControlWidth = WindowWidth - ControlLeft - 40;
+		const ControlHeight = LabelHeight;
+		const ControlSpacing = 10;
+
+
+		this.ParamMetas[Name] = this.GetMetaFromArguments(Array.from(arguments));
 
 		//	AddParam('x',Math.floor)
 		if (isFunction(Min) && CleanValue === undefined)
@@ -215,7 +245,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 		let SetValue = function (Value,IsFinalValue)
 		{
 			Params[Name] = Value;
-			OnAnyChanged(Params,Name,Value,IsFinalValue);
+			this.OnAnyChanged(Params,Name,Value,IsFinalValue);
 			this.WaitForParamsChangedPromiseQueue.Push([Params,Name,Value,IsFinalValue]);
 		}.bind(this);
 		let IsValueSignificantChange = function (Old,New)
@@ -224,33 +254,52 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 		}
 		let GetLabelForValue = undefined;
 
+		function MakeControl(Type,Rect,Suffix='')
+		{
+			try
+			{
+				return new Type(Window,`${Name}${Suffix}`);
+			}
+			catch(e)
+			{
+				return new Type(Window,Rect);
+			}
+		}
+
+
 		let Window = this.Window;
 		let ControlTop = this.ControlTop;
 		const LabelTop = ControlTop;
-		const LabelControl = new Pop.Gui.Label(Window,[LabelLeft,LabelTop,LabelWidth,LabelHeight]);
-		LabelControl.SetValue(Name);
+		const LabelControl = MakeControl(Pop.Gui.Label,[LabelLeft,LabelTop,LabelWidth,LabelHeight],'Label');
+		LabelControl.SetText(Name);
 		let Control = null;
 
 		if (TreatAsType == 'Button' && Pop.Gui.Button !== undefined)
 		{
-			Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.Button,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			Control.OnClicked = function ()
 			{
 				//	call the control's OnChanged func
 				const Value = GetValue();
-				Control.OnChanged(Value,true);
+				//	gr: if a function assigned, call it
+				//		otherwise, we're triggering a fake change
+				if ( isFunction(Value) )
+					Value();
+				else
+					Control.OnChanged(Value,true);
 			}
+			GetLabelForValue = () => {	return Name;	}; 
 			//const Control = new Pop.Gui.Button(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			//Control.SetLabel(Name);
 		}
 		else if (typeof Params[Name] === 'boolean')
 		{
-			Control = new Pop.Gui.TickBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.TickBox,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			CleanValue = function (Value) { return Value == true; }
 		}
 		else if (isString(Params[Name]))
 		{
-			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.TextBox,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 		}
 		else if (TreatAsType == 'Colour' && Pop.Gui.Colour === undefined)
 		{
@@ -259,7 +308,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 			//	todo: swap tickbox for a button when we have one
 			//	gr: lets use a text box for now
 			//	gr: could make 3 text boxes here
-			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.TextBox,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			const ColourDecimals = 3;
 			function StringToColourfff(String)
 			{
@@ -342,7 +391,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 		}
 		else if (TreatAsType == 'Colour' && Pop.Gui.Colour !== undefined)
 		{
-			Control = new Pop.Gui.Colour(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.Colour,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			CleanValue = function (Valuefff)
 			{
 				Pop.Debug(`CleanValue(${Valuefff}) for colour`);
@@ -362,7 +411,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 			if (!CleanValue)
 				CleanValue = function (v) { return Number(v); };
 
-			Control = new Pop.Gui.TextBox(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.TextBox,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 
 			const RealGetValue = GetValue;
 			const RealSetValue = SetValue;
@@ -414,7 +463,7 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 			const TickMin = 0;
 			const TickMax = (CleanValue === Math.floor) ? (Max - Min) : 1000;
 			const Notches = (CleanValue === Math.floor) ? (Max - Min) : 10;
-			Control = new Pop.Gui.Slider(Window,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
+			Control = MakeControl(Pop.Gui.Slider,[ControlLeft,ControlTop,ControlWidth,ControlHeight]);
 			Control.SetMinMax(TickMin,TickMax,Notches);
 
 			const RealGetValue = GetValue;
@@ -423,21 +472,21 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 			GetValue = function ()
 			{
 				const RealValue = RealGetValue();
-				const NormValue = Math.Range(Min,Max,RealValue);
-				const ControlValue = Math.Lerp(TickMin,TickMax,NormValue);
+				const NormValue = PopMath.Range(Min,Max,RealValue);
+				const ControlValue = PopMath.Lerp(TickMin,TickMax,NormValue);
 				return ControlValue;
 			}
 			SetValue = function (ControlValue,IsFinalValue)
 			{
-				const NormValue = Math.Range(TickMin,TickMax,ControlValue);
-				const RealValue = Math.Lerp(Min,Max,NormValue);
+				const NormValue = PopMath.Range(TickMin,TickMax,ControlValue);
+				const RealValue = PopMath.Lerp(Min,Max,NormValue);
 				//	this should have been cleaned, but maybe needs it agian?
 				RealSetValue(RealValue,IsFinalValue);
 			}
 			GetLabelForValue = function (ControlValue)
 			{
-				const NormValue = Math.Range(TickMin,TickMax,ControlValue);
-				const RealValue = Math.Lerp(Min,Max,NormValue);
+				const NormValue = PopMath.Range(TickMin,TickMax,ControlValue);
+				const RealValue = PopMath.Lerp(Min,Max,NormValue);
 				let Value = RealCleanValue(RealValue);
 				if (IsEnum)
 				{
@@ -449,11 +498,11 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 			}
 			CleanValue = function (ControlValue)
 			{
-				let NormValue = Math.Range(TickMin,TickMax,ControlValue);
-				let RealValue = Math.Lerp(Min,Max,NormValue);
+				let NormValue = PopMath.Range(TickMin,TickMax,ControlValue);
+				let RealValue = PopMath.Lerp(Min,Max,NormValue);
 				let Value = RealCleanValue(RealValue);
-				NormValue = Math.Range(Min,Max,RealValue);
-				ControlValue = Math.Lerp(TickMin,TickMax,NormValue);
+				NormValue = PopMath.Range(Min,Max,RealValue);
+				ControlValue = PopMath.Lerp(TickMin,TickMax,NormValue);
 				return ControlValue;
 			}
 		}
@@ -480,10 +529,10 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 
 		this.ControlTop += ControlHeight;
 		this.ControlTop += ControlSpacing;
-	}.bind(this);
+	}
 	
 	//	changed externally, update display
-	this.OnParamChanged = function (Name)
+	OnParamChanged(Name)
 	{
 		const Handler = this.Handlers[Name];
 		if (!Handler)
@@ -493,10 +542,10 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 			return;
 		}
 		Handler.UpdateDisplay();
-	}.bind(this);
+	}
 
 	//	changed externally
-	this.OnParamsChanged = function ()
+	OnParamsChanged()
 	{
 		const Keys = Object.keys(this.Handlers);
 		//Pop.Debug("OnParamsChanged",Keys);
@@ -512,21 +561,12 @@ Pop.ParamsWindow = function(Params,OnAnyChanged,WindowRect,WindowName="Params")
 				Pop.Debug("OnParamChanged(" + Key + ") error",e);
 			}
 		}
-	}.bind(this);
-	
+	}	
 }
 
 
 
-function CreateParamsWindow(Params,OnAnyChanged,WindowRect)
-{
-	Pop.Warn("Using deprecated CreateParamsWindow(), switch to new Pop.TParamsWindow");
-	const Window = new Pop.ParamsWindow(Params,OnAnyChanged,WindowRect);
-	return Window;
-}
-
-
-function RunParamsWebsocketServer(Port,OnJsonRecieved)
+export function RunParamsWebsocketServer(Port,OnJsonRecieved)
 {
 	let CurrentSocket = null;
 	
@@ -591,7 +631,7 @@ function RunParamsWebsocketServer(Port,OnJsonRecieved)
 	return Output;
 }
 
-function RunParamsHttpServer(Params,ParamsWindow,Port=80)
+export function RunParamsHttpServer(Params,ParamsWindow,Port=80)
 {
 	function OnJsonRecieved(Json)
 	{
@@ -686,3 +726,4 @@ function RunParamsHttpServer(Params,ParamsWindow,Port=80)
 	return Http;
 }
 
+export default ParamsWindow;

@@ -1,5 +1,6 @@
-//	depends on Pop.Gui.ImageMap
-Pop.Gui.Timeline = class
+//	gr: this should be importing gui, image
+
+export default class TimelineViewer
 {
 	constructor(Name,Rect,GetData)
 	{
@@ -13,7 +14,7 @@ Pop.Gui.Timeline = class
 		this.SmearData = false;
 		this.TrackHeight = 1;		//	allow height from GetDataColour to draw graphs
 
-		this.KnownUniforms = [];
+		this.KnownUniforms = {};	//	each key is a uniform
 		this.GetData = GetData;
 		this.OnDataChanged();
 		this.RedrawLoop();
@@ -51,7 +52,7 @@ Pop.Gui.Timeline = class
 		const Height = 7;
 		const Pixels = new Uint8Array(Width*Height*Components);
 		Pixels.fill(255);
-		this.ViewImage = new Pop.Image();
+		this.ViewImage = new Pop.Image('Timeline No Data');
 		this.ViewImage.WritePixels( Width, Height, Pixels, Format );
 		function Write(x,y,Colour)
 		{
@@ -86,13 +87,19 @@ Pop.Gui.Timeline = class
 		this.ImageMap.SetImage(this.ViewImage);
 	}
 	
+	//	if uniforms aren't getting auto-set, you can do it manually
+	RegisterUniform(Name)
+	{
+		this.KnownUniforms[Name] = true;
+	}
+	
 	UpdateUniforms(Data)
 	{
 		//	gr: this line is slow on massive data objects, maybe ditch and instead just 
 		//		update uniforms as we hit ones we haven't seen.
 		const Times = Object.keys(Data).map(parseFloat).filter( t => !isNaN(t) );
 		if ( !Times.length )
-			return this.KnownUniforms;
+			return Object.keys(this.KnownUniforms);
 		
 		//	check a few times for keys, bit expensive to do all though
 		for ( let i=0;	i<5 && i<Times.length;	i++ )
@@ -100,10 +107,12 @@ Pop.Gui.Timeline = class
 			const Frame0 = Data[Times[i]];
 			//	merge uniforms
 			const NewUniforms = Object.keys(Frame0);
-			this.KnownUniforms = Array.from(new Set(this.KnownUniforms.concat(NewUniforms)));
+			
+			NewUniforms.forEach( k => this.KnownUniforms[k] = true );
+			//this.KnownUniforms = Array.from(new Set(this.KnownUniforms.concat(NewUniforms)));
 		}
 		
-		return this.KnownUniforms;
+		return Object.keys(this.KnownUniforms);
 	}
 	
 	Redraw()
@@ -174,7 +183,7 @@ Pop.Gui.Timeline = class
 		{
 			const Pixels = new Uint8Array(Width*Height*Components);
 			Pixels.fill(123);
-			this.ViewImage = new Pop.Image();
+			this.ViewImage = new Pop.Image('Timeline Data');
 			this.ViewImage.WritePixels( Width, Height, Pixels, Format );
 			Pixels.fill(255);
 		}

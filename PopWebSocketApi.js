@@ -1,5 +1,7 @@
-Pop.Websocket = {};
+import PromiseQueue from './PromiseQueue.js'
 
+const Default = 'Websocket API';
+export default Default;
 
 function GetWebsocketError(Event)
 {
@@ -17,16 +19,16 @@ function GetWebsocketError(Event)
 
 
 //	wrapper for websocket
-Pop.Websocket.Client = class
+export class Client
 {
-	constructor(Hostname,Port=80)
+	constructor(Hostname,Port=80,Path='')
 	{
-		this.OnConnectPromises = new Pop.PromiseQueue('WebsocketClient Connects');
-		this.OnMessagePromises = new Pop.PromiseQueue('WebsocketClient Messages');
+		this.OnConnectPromises = new PromiseQueue('WebsocketClient Connects');
+		this.OnMessagePromises = new PromiseQueue('WebsocketClient Messages');
 	
 		//	because we need messages to stay in order, but blobs(binary) needs to be async processed
 		//	we need to keep the data in order and process the data seperately on a thread
-		this.PendingMessageData = new Pop.PromiseQueue('WebsocketClient PendingMessages');
+		this.PendingMessageData = new PromiseQueue('WebsocketClient PendingMessages');
 		
 		this.ProcessPendingMessageDataThread().catch(this.OnError.bind(this));
 						
@@ -58,7 +60,18 @@ Pop.Websocket.Client = class
 
 		let ServerAddress = `${Hostname}:${Port}`;
 		if (!ServerAddress.startsWith('ws://') && !ServerAddress.startsWith('wss://'))
-			ServerAddress = 'ws://' + ServerAddress;
+		{
+			//	gr: on chrome, we cannot connect to secure from insecure and vice versa, so default
+			//		use protocol matching window location
+			//	gr: localhost is considered secure, but for testing, it doesnt usually have a certificate
+			//const Protocol = window.isSecureContext ? 'wss://' : 'ws://';
+			const Protocol = window.location.protocol=='https:' ? 'wss://' : 'ws://';
+			ServerAddress = Protocol + ServerAddress;
+		}
+
+		//	add path
+		ServerAddress += `/${Path}`;
+
 		this.Socket = new WebSocket(ServerAddress);
 		this.Socket.onerror = this.OnError.bind(this);
 		this.Socket.onclose = this.OnDisconnected.bind(this);
@@ -179,7 +192,7 @@ Pop.Websocket.Client = class
 }
 
 //	asynchronously returns a websocket client once it connects
-Pop.Websocket.Connect = async function(Hostname,Port=80)
+export async function Connect(Hostname,Port=80)
 {
 	const Socket = new Pop.Websocket.Client(Hostname,Port);
 	await Socket.WaitForConnect();

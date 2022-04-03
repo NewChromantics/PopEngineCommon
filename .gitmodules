@@ -4,3 +4,12 @@
 [submodule "Tarball.js"]
 	path = Tarball.js
 	url = https://github.com/ankitrohatgi/tarballjs.git
+[submodule "libarchive.js"]
+	path = libarchive.js
+	url = https://github.com/nika-begiashvili/libarchivejs.git
+[submodule "PopGltf.js"]
+	path = PopGltf.js
+	url = https://github.com/NewChromantics/PopGltf.js.git
+[submodule "WebComponent_TreeView"]
+	path = WebComponent_TreeView
+	url = https://github.com/NewChromantics/WebComponent_TreeView.git

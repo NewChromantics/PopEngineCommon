@@ -1,9 +1,57 @@
-//	some generic javascript helpers
+//	some generic javascript helpers used in web & native
+//	mostly array related things
+const Default = 'PopApi.js module';
+export default Default; 
 
-Pop.Array = {};
+
+
+const ZeroFloatArrayCache = {};	//	[Length] = Float32Array(0's)
+export function GetZeroFloatArray(Length)
+{
+	if ( !ZeroFloatArrayCache[Length] )
+	{
+		ZeroFloatArrayCache[Length] = new Float32Array(Length);
+		ZeroFloatArrayCache[Length].fill(0);
+	}
+	return ZeroFloatArrayCache[Length];
+}
+
+
+
+const IndexArrayCache = {};	//	[Length] = Float32Array(0's)
+export function GetIndexArray(Length)
+{
+	if ( !Number.isInteger(Length) )
+		throw `Invalid index-array length ${Length}, needs to be an integer`;
+		 
+	if ( !IndexArrayCache[Length] )
+	{
+		const Values = new Array(Length).fill(0).map( (zero,index) => index );
+		IndexArrayCache[Length] = new Float32Array(Values);
+	}
+	return IndexArrayCache[Length];
+}
+
+
+
+export function GetArrayRandomIndex(Array)
+{
+	if ( !Array.length )
+		return undefined;
+	const Index = Math.floor( Math.random() * Array.length );
+	return Index;
+}
+
+export function GetArrayRandomElement(Array)
+{
+	const Index = GetArrayRandomIndex(Array);
+	if ( Index === undefined )
+		return undefined;
+	return Array[Index];
+}
 
 //	returns shuffled version of array
-Pop.Array.Shuffled = function(Array)
+export function GetArrayShuffled(Array)
 {
 	let ArrayBin = Array.slice();
 	let NewArray = [];
@@ -19,7 +67,7 @@ Pop.Array.Shuffled = function(Array)
 }
 
 //	shuffle in place
-Pop.Array.Shuffle = function(array)
+export function ShuffleArray(array)
 {
 	//	https://stackoverflow.com/a/47900462/355753
 	//	this is faster than splicing
@@ -30,7 +78,7 @@ Pop.Array.Shuffle = function(array)
 	}
 }
 
-Pop.Array.MoveElementFromArrayToArray = function(Element,SourceArray,DestArray)
+export function MoveElementFromArrayToArray(Element,SourceArray,DestArray)
 {
 	const SourceIndex = SourceArray.indexOf( Element );
 	if ( SourceIndex < 0 )
@@ -42,7 +90,7 @@ Pop.Array.MoveElementFromArrayToArray = function(Element,SourceArray,DestArray)
 	DestArray.push( Element );
 }
 
-Pop.Array.IsMatch = function(a,b)
+export function ArrayIsMatch(a,b)
 {
 	if ( a.length !== b.length )
 		return false;
@@ -53,10 +101,19 @@ Pop.Array.IsMatch = function(a,b)
 }
 
 
+
 //	maybe better named as BufferToString? but this should be clear its "text vs binary"
 //	this is for ascii, NOT UTF16 (hence bytes, not shorts)
-Pop.BytesToString = function(Bytes)
+export function BytesToString(Bytes)
 {
+	//	https://stackoverflow.com/questions/6965107/converting-between-strings-and-arraybuffers
+	if ( TextDecoder !== undefined )
+	{
+		const Decoder = new TextDecoder("utf-8");
+		const String = Decoder.decode(Bytes);
+		return String;
+	}
+	
 	let Str = "";
 	for ( let i=0;	i<Bytes.length;	i++ )
 	{
@@ -65,10 +122,27 @@ Pop.BytesToString = function(Bytes)
 	}
 	return Str;
 }
-
-
-Pop.StringToBytes = function(Str,AsArrayBuffer=false)
+/*
+class TextEncoderReplacement
 {
+	encode(String)
+	{
+	}
+}
+
+let TextEncoder_t = this.TextEncoder || TextEncoderReplacement;
+*/
+
+export function StringToBytes(Str,AsArrayBuffer=false)
+{
+	//	https://stackoverflow.com/questions/6965107/converting-between-strings-and-arraybuffers
+	if ( TextEncoder !== undefined )
+	{
+		const Encoder = new TextEncoder("utf-8");
+		const Bytes = Encoder.encode(Str);
+		return Bytes;
+	}
+	
 	let Bytes = [];
 	for ( let i=0;	i<Str.length;	i++ )
 	{
@@ -83,12 +157,45 @@ Pop.StringToBytes = function(Str,AsArrayBuffer=false)
 	return Bytes;
 }
 
+export function BytesToBigInt(Bytes)
+{
+	if ( Bytes.length != 64/8 )
+		throw `BytesToBigInt() expected to be ${64/8} bytes long (is ${Bytes.length})`;
 
+	const Hex = [];
+	function AppendHex(i) 
+	{
+		var h = i.toString(16);
+		if (h.length % 2) 
+		{
+			h = '0' + h;
+		}
+		Hex.push(h);
+	}
+	Bytes.forEach(AppendHex);
+	const HexString = `0x${Hex.join('')}`;
+	const Int = BigInt(HexString);
+}
+
+
+export function Base64ToBytes(Base64)
+{
+	if ( typeof Base64 != typeof '' )
+		throw `Base64ToBytes expects a string (not ${typeof Base64}), need to handle another type?`;
+		
+	//	gr: is this a js built-in (for native), or web only?
+	//		in which case we need an alternative maybe
+	const DataString = atob(Base64);
+	//	convert from the char-data-string to u8 array
+	const Data = StringToBytes(DataString);
+	//const Data = Uint8Array.from(DataString, c => c.charCodeAt(0));
+	return Data;
+}
 
 //	gr: this is to deal with
 //	SomeThing.constructor == Pop.Image <-- chrome/v8
 //	SomeThing.constructor == Pop.Image.constructor <-- javascript core
-function IsObjectInstanceOf(This,TypeConstructor)
+export function IsObjectInstanceOf(This,TypeConstructor)
 {
 	if ( !(This instanceof Object) )
 		return false;
@@ -134,32 +241,47 @@ function IsObjectInstanceOf(This,TypeConstructor)
 }
 
 //	https://stackoverflow.com/a/46999598/355753
-Pop.IsTypedArray = function(obj)
+export function IsTypedArray(obj)
 {
 	return !!obj && obj.byteLength !== undefined;
 }
-function IsTypedArray(obj)
-{
-	Pop.Warning(`Deprecated: IsTypedArray(); use Pop.IsTypedArray()`);
-	return Pop.IsTypedArray(obj);
-}
 
-Pop.JoinTypedArrays = function(a,b,c,etc)
+export function JoinTypedArrays(Arrays,DeprecatedSecondArray)
 {
+	if ( DeprecatedSecondArray )
+	{
+		throw `JoinTypedArrays(a,b,c) deprecated, pass an array of typed arrays as first arg`;
+		Arrays = Array.from(arguments);
+	}
+	
+	if ( !Array.isArray(Arrays) )
+		throw `JoinTypedArrays() expecting array for first arg(${typeof Arrays})`;
+	
+	//	skip some stuff we dont need to join
+	Arrays = Arrays.filter( a => a!=null && a.length!=0 );
+	
+	//	what should we return if empty...
+	if ( Arrays.length == 0 )
+		return new Uint8Array(0);
+	if ( Arrays.length == 1 )
+		return Arrays[0];
+	
+	const a = Arrays[0];
 	//	gr: need some more rigirous checks here
-	if ( !Pop.IsTypedArray(a) )
+	if ( !IsTypedArray(a) )
 		throw `Cannot JoinTypedArrays where 1st not typed array (${a})`;
 
 	const Constructor = a.constructor;
-	const Arrays = Array.from(arguments);
 	const TotalSize = Arrays.reduce( (Accumulator,a) => Accumulator + a.length, 0 );
 
 	const NewArray = new Constructor(TotalSize);
 	let Position = 0;
 	for ( let TheArray of Arrays )
 	{
+		const NameA = TheArray.constructor.name;
+		const NameB = Constructor.name;
 		if ( TheArray.constructor != Constructor )
-			throw `Cannot join to typedarrays of different types`;
+			throw `Cannot join to typedarrays of different types (${NameA} + ${NameB})`;
 	
 		NewArray.set( TheArray, Position );
 		Position += TheArray.length;
@@ -167,9 +289,128 @@ Pop.JoinTypedArrays = function(a,b,c,etc)
 	return NewArray;
 }
 
+export function SplitArrayIntoChunks(TheArray,ChunkSize)
+{
+	if ( ChunkSize == 1 )
+		return TheArray;
+	if ( !Number.isInteger(ChunkSize) || ChunkSize < 2 )
+		throw `SplitArrayIntoChunks(${ChunkSize}) needs an integer >= 1 to split into`;
+	
+	//	find out if there's a faster approach
+	const Chunks = [];
+	for ( let i=0;	i<TheArray.length;	i+=ChunkSize )
+	{
+		const SliceFunc = TheArray.subarray ? TheArray.subarray : TheArray.slice;
+		const Chunk = SliceFunc.call( TheArray, i, i+ChunkSize );
+		Chunks.push(Chunk);
+	}
+	return Chunks;
+}
+
+//	array of chunks to avoid joining typed arrays, with
+//	a handy function to grab a slice that could straddle
+//	chunks
+//	so when storing lots of chunks of say, a file, instead of joining them
+//	use this class, push() chunks, and grab slice()'s as needed 
+//	(instead of joining everything) 
+export class ChunkArray
+{
+	constructor()
+	{
+		this.Chunks = [];
+	}
+	
+	get length()
+	{
+		//const TotalSize = Arrays.reduce( (Accumulator,a) => Accumulator + a.length, 0 );
+
+		let Length = 0;
+		for ( let Chunk of this.Chunks )
+		{
+			Length += Chunk.length;
+		}
+		return Length;
+	}
+	
+	push(Chunk)
+	{
+		this.Chunks.push( Chunk );
+	}
+	
+	slice(Start,End)
+	{
+		if ( Start === undefined && End === undefined )
+			return JoinTypedArrays( this.Chunks );
+
+		if ( End === undefined )
+			throw `todo: handle slice() with no end, but start offset`;
+			
+		if ( Start===undefined || Start < 0 || End < 0 )
+			throw `todo: Handle negative slice(${Start},${End}) params`;
+
+		if ( this.Chunks.length == 0 )
+		{
+			throw `May need to handle this more gracefully... what do we return when no chunks?`;
+			return null;
+		}
+
+		const SliceLength = End-Start;
+		const a = this.Chunks[0];
+		const Constructor = a.constructor;
+		const NewArray = new Constructor(SliceLength);
+		
+		const ChunksToCopy = [];
+		
+		let Position = 0;
+		for ( let TheArray of this.Chunks )
+		{
+			const NameA = TheArray.constructor.name;
+			const NameB = Constructor.name;
+			if ( TheArray.constructor != Constructor )
+				throw `Cannot join to typedarrays of different types (${NameA} + ${NameB})`;
+		
+			//	dont need any of this array
+			let ArrayStart = Position;
+			let ArrayEnd = ArrayStart + TheArray.length;
+			if ( End < ArrayStart || Start >= ArrayEnd )
+			{
+				Position += TheArray.length;
+				continue;
+			}
+			
+			//	whole of this array goes in
+			if ( Start <= ArrayStart && End >= ArrayEnd )
+			{
+				ChunksToCopy.push( TheArray );
+				Position += TheArray.length;
+				continue;
+			}
+			
+			//	only part of this array
+			let StartOfThisArray = Math.max( 0, Start - ArrayStart );
+			let EndOfThisArray = Math.min( End, ArrayEnd );
+			//	make relative to this array for slicing
+			StartOfThisArray = Math.max( 0, StartOfThisArray );
+			EndOfThisArray = EndOfThisArray - ArrayStart;
+
+			//	gr: instead of slice, we should be able to make a new bufferview?
+			const Part = TheArray.slice( StartOfThisArray, EndOfThisArray );
+			ChunksToCopy.push( Part );
+			
+			Position += TheArray.length;
+		}
+		
+		const Slice = JoinTypedArrays(ChunksToCopy);
+		if ( Slice.length != SliceLength )
+			throw `calculated sub chunks wrong`;
+		return Slice;
+	}
+}
+
+
 
 //	create a promise function with the Resolve & Reject functions attached so we can call them
-Pop.CreatePromise = function()
+export function CreatePromise()
 {
 	let Callbacks = {};
 	let PromiseHandler = function(Resolve,Reject)
@@ -183,164 +424,34 @@ Pop.CreatePromise = function()
 	return Prom;
 }
 
-
-//	a promise queue that manages multiple listeners
-//	gr: this is getting out of sync with the cyclic-fixing-copy in WebApi. Make it seperate!
-Pop.PromiseQueue = class
+export function ParseExeArguments(Args)
 {
-	constructor(DebugName='UnnamedPromiseQueue')
+	//	turn into keys & values - gr: we're not doing this in engine! fix so they match!
+	const UrlParams = {};
+	function AddParam(Argument)
 	{
-		this.Name = DebugName;
-		//	pending promises
-		this.Promises = [];
-		//	values we've yet to resolve (each is array capturing arguments from push()
-		this.PendingValues = [];
-	}
-
-	async WaitForNext()
-	{
-		const Promise = this.Allocate();
+		let [Key,Value] = Argument.split('=',2);
+		if ( Value === undefined )
+			Value = true;
 		
-		//	if we have any pending data, flush now, this will return an already-resolved value
-		this.FlushPending();
-		
-		return Promise;
-	}
-
-	//	this waits for next resolve, but when it flushes, it returns LAST entry and clears the rest; LIFO (kinda, last in, only out)
-	async WaitForLatest()
-	{
-		const Promise = this.Allocate();
-
-		//	if we have any pending data, flush now, this will return an already-resolved value
-		this.FlushPending(true);
-
-		return Promise;
-	}
-	
-	ClearQueue()
-	{
-		//	delete values, losing data!
-		this.PendingValues = [];
-	}
-	
-	//	allocate a promise, maybe deprecate this for the API WaitForNext() that makes more sense for a caller
-	Allocate()
-	{
-		//	create a promise function with the Resolve & Reject functions attached so we can call them
-		function CreatePromise()
+		//	attempt some auto conversions
+		if ( typeof Value == 'string' )
 		{
-			let Callbacks = {};
-			let PromiseHandler = function (Resolve,Reject)
-			{
-				Callbacks.Resolve = Resolve;
-				Callbacks.Reject = Reject;
-			}
-			let Prom = new Promise(PromiseHandler);
-			Prom.Resolve = Callbacks.Resolve;
-			Prom.Reject = Callbacks.Reject;
-			return Prom;
-		}
-		
-		const NewPromise = CreatePromise();
-		this.Promises.push( NewPromise );
-		return NewPromise;
-	}
-	
-	//	put this value in the queue, if its not already there (todo; option to choose oldest or newest position)
-	PushUnique(Value)
-	{
-		const Args = Array.from(arguments);
-		function IsMatch(PendingValue)
-		{
-			//	all arguments are now .PendingValues=[] or .RejectionValues=[]
-			//	we are only comparing PendingValues, lets allow rejections to pile up as
-			//	PushUnique wont be rejections. The Reject() code should have a RejectUnique() if this becomes the case
-			if (!PendingValue.hasOwnProperty('ResolveValues'))
-				return false;
+			const NumberValue = Number(Value);
 
-			const a = PendingValue.ResolveValues;
-			const b = Args;
-			if ( a.length != b.length )	return false;
-			for ( let i=0;	i<a.length;	i++ )
-				if ( a[i] != b[i] )
-					return false;
-			return true;
+			if ( Value === '' )
+				Value = null;
+			else if ( Value == 'null' )
+				Value = null;
+			else if ( !isNaN(NumberValue) )
+				Value = NumberValue;
+			else if ( Value == 'true' )
+				Value = true;
+			else if ( Value == 'false' )
+				Value = false;
 		}
-		//	skip adding if existing match
-		if ( this.PendingValues.some(IsMatch) )
-		{
-			//Pop.Debug(`Skipping non-unique ${Args}`);
-			return;
-		}
-		this.Push(...Args);
+		UrlParams[Key] = Value;
 	}
-	
-	Push()
-	{
-		const Args = Array.from(arguments);
-		const Value = {};
-		Value.ResolveValues = Args;
-		this.PendingValues.push( Value );
-		
-		if ( this.PendingValues.length > 100 )
-			Pop.Warning(`This (${this.Name}) promise queue has ${this.PendingValues.length} pending values and ${this.Promises.length} pending promises`,this);
-		
-		this.FlushPending();
-	}
-	
-	GetQueueSize()
-	{
-		return this.PendingValues.length;
-	}
-	
-	HasPending()
-	{
-		return this.PendingValues.length > 0;
-	}
-	
-	FlushPending(FlushLatestAndClear=false)
-	{
-		//	if there are promises and data's waiting, we can flush next
-		if ( this.Promises.length == 0 )
-			return;
-		if ( this.PendingValues.length == 0 )
-			return;
-		
-		//	flush 0 (FIFO)
-		//	we pre-pop as we want all listeners to get the same value
-		if (FlushLatestAndClear && this.PendingValues.length > 1)
-		{
-			Pop.Warning(`Promise queue FlushLatest dropping ${this.PendingValues.length - 1} elements`);
-		}
-		const Value0 = FlushLatestAndClear ? this.PendingValues.splice(0,this.PendingValues.length).pop() : this.PendingValues.shift();
-		const HandlePromise = function(Promise)
-		{
-			if ( Value0.RejectionValues )
-				Promise.Reject( ...Value0.RejectionValues );
-			else
-				Promise.Resolve( ...Value0.ResolveValues );
-		}
-		
-		//	pop array incase handling results in more promises, so we avoid infinite loop
-		const Promises = this.Promises.splice(0);
-		//	need to try/catch here otherwise some will be lost
-		Promises.forEach( HandlePromise );
-	}
-	
-	Resolve()
-	{
-		throw "PromiseQueue.Resolve() has been deprecated for Push() to enforce the pattern that we're handling a queue of values";
-	}
-	
-	//	reject all the current promises
-	Reject()
-	{
-		const Args = Array.from(arguments);
-		const Value = {};
-		Value.RejectionValues = Args;
-		this.PendingValues.push(Value);
-		this.FlushPending();
-	}
+	Args.forEach(AddParam);
+	return UrlParams;
 }
-

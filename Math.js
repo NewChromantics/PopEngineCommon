@@ -1,242 +1,109 @@
-Pop.Math = {};
+//	can I export Math here?
+const Default = 'Pop Math';
+export default Default;
 
-//	colour conversion namespace
-Pop.Colour = {};
-
-Pop.Colour.RgbfToHex = function(Rgb)
-{
-	let FloatToHex = function(f)
-	{
-		let Byte = Math.floor(f * 255.0);
-		let a = (Byte & 0xf0) >> 4;
-		let b = (Byte & 0x0f) >> 0;
-		let ah = a.toString(16);
-		let bh = b.toString(16);
-		return ah+bh;
-	}
-
-	//	to u8 first
-	let HexRgb = '#' + FloatToHex(Rgb[0]) + FloatToHex(Rgb[1]) + FloatToHex(Rgb[2]);
-	//Pop.Debug(Rgb,HexRgb);
-	return HexRgb;
-}
-
-
-//	returns null if no colour
-Math.ColourToHue = function(Rgbaf)
-{
-	let [r,g,b,a] = [...Rgbaf];
-	
-	//	https://stackoverflow.com/a/26233318/355753
-	const Min = Math.min( r,g,b );
-	const Max = Math.max( r,g,b );
-	
-	if ( Min == Max )
-		return null;
-	
-	//	have a darkness tolerance
-	if ( Max < 0.3 )
-		return null;
-	
-	//	and a brightness tolerance
-	if ( Min > 0.9 )
-		return null;
-	
-	//	todo: change this so it's 0-1 instead of 360
-	let Hue = 0;
-	if ( Max == r )
-	{
-		Hue = (g - b) / (Max - Min);
-	}
-	else if (Max == g)
-	{
-		Hue = 2 + (b - r) / (Max - Min);
-	}
-	else
-	{
-		Hue = 4 + (r - g) / (Max - Min);
-	}
-	
-	Hue = Hue * (360/6);
-	if ( Hue < 0 )
-		Hue += 360;
-	
-	Hue /= 360;
-	return Hue;
-}
-
-Math.HueToColour = function(Hue,Alpha=1)
-{
-	if ( Hue === null )
-		return [0,0,0,Alpha];
-	
-	let Normal = Hue;
-	//	same as NormalToRedGreenBluePurple
-	if ( Normal < 1/6 )
-	{
-		//	red to yellow
-		Normal = Math.Range( 0/6, 1/6, Normal );
-		return [1, Normal, 0, Alpha];
-	}
-	else if ( Normal < 2/6 )
-	{
-		//	yellow to green
-		Normal = Math.Range( 1/6, 2/6, Normal );
-		return [1-Normal, 1, 0, Alpha];
-	}
-	else if ( Normal < 3/6 )
-	{
-		//	green to cyan
-		Normal = Math.Range( 2/6, 3/6, Normal );
-		return [0, 1, Normal, Alpha];
-	}
-	else if ( Normal < 4/6 )
-	{
-		//	cyan to blue
-		Normal = Math.Range( 3/6, 4/6, Normal );
-		return [0, 1-Normal, 1, Alpha];
-	}
-	else if ( Normal < 5/6 )
-	{
-		//	blue to pink
-		Normal = Math.Range( 4/6, 5/6, Normal );
-		return [Normal, 0, 1, Alpha];
-	}
-	else //if ( Normal < 5/6 )
-	{
-		//	pink to red
-		Normal = Math.Range( 5/6, 6/6, Normal );
-		return [1, 0, 1-Normal, Alpha];
-	}
-}
-
-
-
-Math.NormalToRedGreen = function(Normal,Alpha=1)
-{
-	if ( Normal === null )
-		return [0,0,0,Alpha];
-	
-	if ( Normal < 1/2 )
-	{
-		//	red to yellow
-		Normal = Math.Range( 0/2, 1/2, Normal );
-		return [1, Normal, 0, Alpha];
-	}
-	else if ( Normal <= 2/2 )
-	{
-		//	yellow to green
-		Normal = Math.Range( 1/2, 2/2, Normal );
-		return [1-Normal, 1, 0, Alpha];
-	}
-	else
-	{
-		return [0, 0, 1, Alpha];
-	}
-}
-
-Math.DegToRad = function(Degrees)
+export function DegToRad(Degrees)
 {
 	return Degrees * (Math.PI / 180);
 }
 
-Math.RadToDeg = function(Radians)
+export function RadToDeg(Radians)
 {
 	return Radians * (180 / Math.PI);
 }
 
-Math.radians = Math.DegToRad;
-Math.degrees = Math.RadToDeg;
+export const radians = DegToRad;
+export const degrees = RadToDeg;
 
-Math.SinCos = function(Degrees)
+export function SinCos(Degrees)
 {
-	let AngleRad = Math.DegToRad( Degrees );
+	let AngleRad = DegToRad( Degrees );
 	let Sin = Math.sin( AngleRad );
 	let Cos = Math.cos( AngleRad );
 	return [Sin,Cos];
 }
 
 //	note: glsl clamp() is clamp(value,min,max)
-Math.clamp = function(min,max,Value)
+export function clamp(min,max,Value)
 {
 	return Math.min( Math.max(Value, min), max);
 }
-Math.Clamp = Math.clamp;
+export const Clamp = clamp;
 
-Math.Clamp01 = function(Value)
+export function Clamp01(Value)
 {
-	return Math.Clamp(0,1,Value);
+	return Clamp(0,1,Value);
 }
 
 //	note: glsl clamp() is clamp(value,min,max)
-Math.clamp2 = function(Min,Max,Value)
+export function clamp2(Min,Max,Value)
 {
 	if ( !Array.isArray(Min) )	Min = [Min,Min];
 	if ( !Array.isArray(Max) )	Max = [Max,Max];
-	const x = Math.clamp( Min[0], Max[0], Value[0] );
-	const y = Math.clamp( Min[1], Max[1], Value[0] );
+	const x = clamp( Min[0], Max[0], Value[0] );
+	const y = clamp( Min[1], Max[1], Value[0] );
 	return [x,y];
 }
-Math.Clamp2 = Math.clamp2;
+export const Clamp2 = clamp2;
 
 
-Math.range = function(Min,Max,Value)
+export function range(Min,Max,Value)
 {
 	return (Max==Min) ? 0 : (Value-Min) / (Max-Min);
 }
-Math.Range = Math.range;
+export const Range = range;
 
-Math.rangeClamped = function(Min,Max,Value)
+export function rangeClamped(Min,Max,Value)
 {
-	return Math.clamp( 0, 1, Math.range( Min, Max, Value ) );
+	return clamp( 0, 1, range( Min, Max, Value ) );
 }
-Math.RangeClamped = Math.rangeClamped;
+export const RangeClamped = rangeClamped;
 
-Math.lerp = function(Min,Max,Time)
+export function lerp(Min,Max,Time)
 {
 	return Min + (( Max - Min ) * Time);
 }
-Math.Lerp = Math.lerp;
+export const Lerp = lerp;
 
-Math.LerpArray = function(Min,Max,Time)
+export function LerpArray(Min,Max,Time)
 {
 	let Values = Min.slice();
 	for ( let i=0;	i<Min.length;	i++ )
-		Values[i] = Math.Lerp( Min[i], Max[i], Time );
+		Values[i] = Lerp( Min[i], Max[i], Time );
 	return Values;
 }
 
-Math.Lerp2 = Math.LerpArray;
-Math.Lerp3 = Math.LerpArray;
-Math.Lerp4 = Math.LerpArray;
+export const Lerp2 = LerpArray;
+export const Lerp3 = LerpArray;
+export const Lerp4 = LerpArray;
 
-Math.Fract = function(a)
+export function Fract(a)
 {
 	return a % 1;
 }
-Math.fract = Math.Fract;
+export const fract = Fract;
 
 
-Math.Dot2 = function(a,b)
+export function Dot2(a,b)
 {
 	let Dot = (a[0]*b[0]) + (a[1]*b[1]);
 	return Dot;
 }
 
-Math.Dot3 = function(a,b)
+export function Dot3(a,b)
 {
 	let Dot = (a[0]*b[0]) + (a[1]*b[1]) + (a[2]*b[2]);
 	return Dot;
 }
 
-Math.Dot4 = function(a,b)
+export function Dot4(a,b)
 {
 	let Dot = (a[0]*b[0]) + (a[1]*b[1]) + (a[2]*b[2]) + (a[3]*b[3]);
 	return Dot;
 }
 
 
-Math.LengthSq2 = function(xy)
+export function LengthSq2(xy)
 {
 	if ( !Array.isArray(xy) )
 		throw "LengthSq2() expecting 2D xy array";
@@ -248,7 +115,7 @@ Math.LengthSq2 = function(xy)
 }
 
 
-Math.LengthSq3 = function(a,b=[0,0,0])
+export function LengthSq3(a,b=[0,0,0])
 {
 	let dx = a[0] - b[0];
 	let dy = a[1] - b[1];
@@ -258,64 +125,68 @@ Math.LengthSq3 = function(a,b=[0,0,0])
 }
 
 
-Math.Length2 = function(xy)
+export function Length2(xy)
 {
 	if ( !Array.isArray(xy) )
 		throw "Length2() expecting 2D xy array";
 	
-	let LengthSq = Math.LengthSq2( xy );
+	let LengthSq = LengthSq2( xy );
 	let Len = Math.sqrt( LengthSq );
 	return Len;
 }
 
 
-Math.Length3 = function(a)
+export function Length3(a)
 {
-	let LengthSq = Math.LengthSq3( [0,0,0], a );
+	let LengthSq = LengthSq3( [0,0,0], a );
 	let Len = Math.sqrt( LengthSq );
 	return Len;
 }
 
-Math.Normalise2 = function(xy,NormalLength=1)
+export function Normalise2(xy,NormalLength=1)
 {
-	let Length = Math.Length2( xy );
+	let Length = Length2( xy );
 	Length *= 1 / NormalLength;
 	return [ xy[0]/Length, xy[1]/Length ];
 }
 
-Math.Normalise3 = function(a,NormalLength=1)
+export function Normalise3(a,NormalLength=1)
 {
-	let Length = Math.Length3( a );
+	let Length = Length3( a );
 	Length *= 1 / NormalLength;
 	return [ a[0]/Length, a[1]/Length, a[2]/Length ];
 }
 
-Math.Subtract2 = function(a,b)
+export function Subtract2(a,b)
 {
 	return [ a[0]-b[0], a[1]-b[1] ];
 }
 
-Math.Subtract3 = function(a,b)
+export function Subtract3(a,b)
 {
 	return [ a[0]-b[0], a[1]-b[1], a[2]-b[2] ];
 }
 
-Math.Add3 = function(a,b)
+export function Add3(a,b)
 {
 	return [ a[0]+b[0], a[1]+b[1], a[2]+b[2] ];
 }
 
-Math.Multiply2 = function(a,b)
+export function Multiply2(a,b)
 {
 	return [ a[0]*b[0], a[1]*b[1] ];
 }
 
-Math.Multiply3 = function(a,b)
+export function Multiply3(a,b)
 {
+	if ( !Array.isArray(a) )
+		a = [a,a,a];
+	if ( !Array.isArray(b) )
+		b = [b,b,b];
 	return [ a[0]*b[0], a[1]*b[1], a[2]*b[2] ];
 }
 
-Math.Cross3 = function(a,b)
+export function Cross3(a,b)
 {
 	let x = a[1] * b[2] - a[2] * b[1];
 	let y = a[2] * b[0] - a[0] * b[2];
@@ -324,27 +195,27 @@ Math.Cross3 = function(a,b)
 }
 
 
-Math.Distance = function (a,b)
+export function Distance(a,b)
 {
 	let Delta = a - b;
 	return Math.abs(Delta);
 }
 
-Math.Distance2 = function(a,b)
+export function Distance2(a,b)
 {
-	let Delta = Math.Subtract2( a,b );
-	return Math.Length2( Delta );
+	let Delta = Subtract2( a,b );
+	return Length2( Delta );
 }
 
-Math.Distance3 = function(a,b)
+export function Distance3(a,b)
 {
-	let Delta = Math.Subtract3( a,b );
-	return Math.Length3( Delta );
+	let Delta = Subtract3( a,b );
+	return Length3( Delta );
 }
 
-Math.Rotate2 = function(xy,AngleDegrees)
+export function Rotate2(xy,AngleDegrees)
 {
-	const AngleRad = Math.DegToRad( AngleDegrees );
+	const AngleRad = DegToRad( AngleDegrees );
 	const sin = Math.sin(AngleRad);
 	const cos = Math.cos(AngleRad);
 	
@@ -355,7 +226,7 @@ Math.Rotate2 = function(xy,AngleDegrees)
 
 //	this acts like glsl; returns min per-component
 //	min2( [1,100], [2,99] ) = [1,99]
-Math.min2 = function(a,b,c,d,etc)
+export function min2(a,b,c,d,etc)
 {
 	const xs = [...arguments].map( n => n[0] );
 	const ys = [...arguments].map( n => n[1] );
@@ -363,10 +234,10 @@ Math.min2 = function(a,b,c,d,etc)
 	const y = Math.min( ...ys );
 	return [x,y];
 }
-Math.Min2 = Math.min2;
+export const Min2 = min2;
 
 //	this acts like glsl; returns max per-component
-Math.max2 = function(a,b,c,d,etc)
+export function max2(a,b,c,d,etc)
 {
 	const xs = [...arguments].map( n => n[0] );
 	const ys = [...arguments].map( n => n[1] );
@@ -374,13 +245,13 @@ Math.max2 = function(a,b,c,d,etc)
 	const y = Math.max( ...ys );
 	return [x,y];
 }
-Math.Max2 = Math.max2;
+export const Max2 = max2;
 
 
 
 
 //	how many angles to turn A to B
-Math.GetAngleDiffDegrees = function(a,b)
+export function GetAngleDiffDegrees(a,b)
 {
 	//	make angle relative to zero
 	if ( a > 180 )	a -= 360;
@@ -391,7 +262,7 @@ Math.GetAngleDiffDegrees = function(a,b)
 	return b - a;
 }
 
-function SnapRectInsideParent(Rect,ParentRect)
+export function SnapRectInsideParent(Rect,ParentRect)
 {
 	//	don't modify original rect
 	Rect = Rect.slice();
@@ -423,7 +294,7 @@ function SnapRectInsideParent(Rect,ParentRect)
 	return Rect;
 }
 
-function MakeRectSquareCentered(Rect,Grow=true)
+export function MakeRectSquareCentered(Rect,Grow=true)
 {
 	//	default to grow
 	Grow = (Grow!==false);
@@ -460,7 +331,8 @@ function MakeRectSquareCentered(Rect,Grow=true)
 	return Rect;
 }
 
-function GrowRect(Rect,Scale)
+//	scale rect from it's center
+export function GrowRect(Rect,Scale)
 {
 	//	don't modify original rect
 	Rect = Rect.slice();
@@ -476,7 +348,7 @@ function GrowRect(Rect,Scale)
 
 
 
-Math.SplitRect = function(ParentRect,Border,Columns,Rows)
+export function SplitRect(ParentRect,Border,Columns,Rows)
 {
 	let ParentWidth = ParentRect.w;
 	ParentWidth -= Border * (Columns-1);
@@ -506,7 +378,7 @@ Math.SplitRect = function(ParentRect,Border,Columns,Rows)
 	return Rects;
 }
 
-function GetNormalisedRect(ChildRect,ParentRect)
+export function GetNormalisedRect(ChildRect,ParentRect)
 {
 	let pl = ParentRect[0];
 	let pr = pl + ParentRect[2];
@@ -518,10 +390,10 @@ function GetNormalisedRect(ChildRect,ParentRect)
 	let ct = ChildRect[1];
 	let cb = ct + ChildRect[3];
 	
-	let l = Math.Range( pl, pr, cl );
-	let r = Math.Range( pl, pr, cr );
-	let t = Math.Range( pt, pb, ct );
-	let b = Math.Range( pt, pb, cb );
+	let l = Range( pl, pr, cl );
+	let r = Range( pl, pr, cr );
+	let t = Range( pt, pb, ct );
+	let b = Range( pt, pb, cb );
 	let w = r-l;
 	let h = b-t;
 	
@@ -529,7 +401,7 @@ function GetNormalisedRect(ChildRect,ParentRect)
 }
 
 
-Math.ScaleRect = function(ChildRect,ParentRect)
+export function ScaleRect(ChildRect,ParentRect)
 {
 	let pl = ParentRect[0];
 	let pr = pl + ParentRect[2];
@@ -541,17 +413,17 @@ Math.ScaleRect = function(ChildRect,ParentRect)
 	let ct = ChildRect[1];
 	let cb = ct + ChildRect[3];
 	
-	let l = Math.Lerp( pl, pr, cl );
-	let r = Math.Lerp( pl, pr, cr );
-	let t = Math.Lerp( pt, pb, ct );
-	let b = Math.Lerp( pt, pb, cb );
+	let l = Lerp( pl, pr, cl );
+	let r = Lerp( pl, pr, cr );
+	let t = Lerp( pt, pb, ct );
+	let b = Lerp( pt, pb, cb );
 	let w = r-l;
 	let h = b-t;
 	
 	return [l,t,w,h];
 }
 
-function AccumulateRects(RectA,RectB)
+export function AccumulateRects(RectA,RectB)
 {
 	let ra = RectA[0] + RectA[2];
 	let rb = RectB[0] + RectB[2];
@@ -567,7 +439,7 @@ function AccumulateRects(RectA,RectB)
 }
 
 
-function ClipRectsToOverlap(RectA,RectB)
+export function ClipRectsToOverlap(RectA,RectB)
 {
 	let ra = RectA[0] + RectA[2];
 	let rb = RectB[0] + RectB[2];
@@ -583,7 +455,7 @@ function ClipRectsToOverlap(RectA,RectB)
 }
 
 
-Math.PointInsideRect = function(xy,Rect)
+export function PointInsideRect(xy,Rect)
 {
 	let x = xy[0];
 	let y = xy[1];
@@ -597,7 +469,7 @@ Math.PointInsideRect = function(xy,Rect)
 }
 
 //	is a outside b
-function RectIsOutside(RectA,RectB)
+export function RectIsOutside(RectA,RectB)
 {
 	let la = RectA[0];
 	let lb = RectB[0];
@@ -626,7 +498,7 @@ function RectIsOutside(RectA,RectB)
 
 
 //	are these rects overlapping each other 
-function RectIsOverlapped(RectA,RectB)
+export function RectIsOverlapped(RectA,RectB)
 {
 	if ( RectIsOutside( RectA, RectB ) )
 		return false
@@ -645,26 +517,26 @@ function RectIsOverlapped(RectA,RectB)
 
 	//	there's a better way of doing this by putting rectB into RectA space
 	//	but lets do that later
-	if ( Math.PointInsideRect( [la,ta], RectB ) )	return true;
-	if ( Math.PointInsideRect( [ra,ta], RectB ) )	return true;
-	if ( Math.PointInsideRect( [ra,ba], RectB ) )	return true;
-	if ( Math.PointInsideRect( [la,ba], RectB ) )	return true;
+	if ( PointInsideRect( [la,ta], RectB ) )	return true;
+	if ( PointInsideRect( [ra,ta], RectB ) )	return true;
+	if ( PointInsideRect( [ra,ba], RectB ) )	return true;
+	if ( PointInsideRect( [la,ba], RectB ) )	return true;
 	
-	if ( Math.PointInsideRect( [lb,tb], RectA ) )	return true;
-	if ( Math.PointInsideRect( [rb,tb], RectA ) )	return true;
-	if ( Math.PointInsideRect( [rb,bb], RectA ) )	return true;
-	if ( Math.PointInsideRect( [lb,bb], RectA ) )	return true;
+	if ( PointInsideRect( [lb,tb], RectA ) )	return true;
+	if ( PointInsideRect( [rb,tb], RectA ) )	return true;
+	if ( PointInsideRect( [rb,bb], RectA ) )	return true;
+	if ( PointInsideRect( [lb,bb], RectA ) )	return true;
 	
 	return false;
 }
 
 
-Math.GetTriangleArea2 = function(PointA,PointB,PointC)
+export function GetTriangleArea2(PointA,PointB,PointC)
 {
 	//	get edge lengths
-	const a = Math.Distance2( PointA, PointB );
-	const b = Math.Distance2( PointB, PointC );
-	const c = Math.Distance2( PointC, PointA );
+	const a = Distance2( PointA, PointB );
+	const b = Distance2( PointB, PointC );
+	const c = Distance2( PointC, PointA );
 	
 	//	Heron's formula
 	const PerimeterLength = a + b + c;
@@ -674,17 +546,24 @@ Math.GetTriangleArea2 = function(PointA,PointB,PointC)
 	return Area;
 }
 
-Math.GetRectArea = function(Rect)
+export function GetRectCenter(Rect)
+{
+	const Halfw = Rect[2]/2;
+	const Halfh = Rect[3]/2;
+	return [ Rect[0]+Halfw, Rect[1]+Halfh ];
+}
+
+export function GetRectArea(Rect)
 {
 	return Rect[2] * Rect[3];
 }
 
-Math.GetCircleArea = function(Radius)
+export function GetCircleArea(Radius)
 {
 	return Math.PI * (Radius*Radius);
 }
 
-Math.GetBox3Area = function(BoxMin,BoxMax)
+export function GetBox3Area(BoxMin,BoxMax)
 {
 	const Size =
 	[
@@ -697,7 +576,7 @@ Math.GetBox3Area = function(BoxMin,BoxMax)
 }
 
 //	overlap area is the overlap as a fraction of the biggest rect
-function GetOverlapArea(Recta,Rectb)
+export function GetOverlapArea(Recta,Rectb)
 {
 	let Overlap = ClipRectsToOverlap( Recta, Rectb );
 	let OverlapSize = GetRectArea(Overlap);
@@ -706,79 +585,10 @@ function GetOverlapArea(Recta,Rectb)
 }
 
 
-Pop.Colour.HexToRgb = function(HexRgb)
+export function GetSphereSphereIntersection(Sphere4a,Sphere4b)
 {
-	let GetNibble;
-	let NibbleCount = 0;
-	
-	if ( typeof HexRgb == 'string' )
-	{
-		if ( HexRgb[0] != '#' )
-			throw HexRgb + " doesn't begin with #";
-		
-		NibbleCount = HexRgb.length-1;
-		
-		GetNibble = function(CharIndex)
-		{
-			let Char = HexRgb.charCodeAt(CharIndex+1);
-			let a = 'a'.charCodeAt(0);
-			let z = 'z'.charCodeAt(0);
-			let A = 'A'.charCodeAt(0);
-			let Z = 'Z'.charCodeAt(0);
-			let zero = '0'.charCodeAt(0);
-			let nine = '9'.charCodeAt(0);
-			if (Char >= zero && Char <= nine) return (0+Char-zero);
-			if (Char >= a && Char <= z) return (10+Char-a);
-			if (Char >= A && Char <= Z) return (10+Char-A);
-			throw "Non hex-char " + Char;
-		}
-	}
-	else	//	int 0xffaa00
-	{
-		NibbleCount = 6;
-		GetNibble = function(Index)
-		{
-			Index = 5-Index;
-			let i = HexRgb >> (4*Index);
-			i &= 0xf;
-			return i;
-		}
-	}
-	
-	if ( NibbleCount != 3 && NibbleCount != 6 )
-		throw `Hex colour ${HexRgb} expected 3 or 6 nibbles, but is ${NibbleCount}`;
-
-	//Pop.Debug(`Hex colour ${HexRgb} nibbles; ${NibbleCount}`);
-	const NibbleMaps =
-	{
-		3: [0,0,1,1,2,2],
-		6: [0,1,2,3,4,5],
-	};
-	const NibbleMap = NibbleMaps[NibbleCount];
-	const [a,b,c,d,e,f] = NibbleMap.map(GetNibble);
-	
-	const Red = (a<<4) | b;
-	const Green = (c<<4) | d;
-	const Blue = (e<<4) | f;
-	//Pop.Debug(a,b,c,d,e,f);
-	//Pop.Debug(Red,Green,Blue);
-	return [Red,Green,Blue];
-}
-
-Pop.Colour.HexToRgbf = function(HexRgb)
-{
-	let rgb = Pop.Colour.HexToRgb( HexRgb );
-	rgb[0] /= 255;
-	rgb[1] /= 255;
-	rgb[2] /= 255;
-	return rgb;
-}
-
-
-Math.GetSphereSphereIntersection = function(Sphere4a,Sphere4b)
-{
-	let Delta = Math.Subtract3( Sphere4b, Sphere4a );
-	let Distance = Math.Length3( Delta );
+	let Delta = Subtract3( Sphere4b, Sphere4a );
+	let Distance = Length3( Delta );
 	let RadiusA = Sphere4a[3];
 	let RadiusB = Sphere4b[3];
 	if ( Distance > RadiusA + RadiusB )
@@ -793,7 +603,7 @@ Math.GetSphereSphereIntersection = function(Sphere4a,Sphere4b)
 	return Intersection;
 }
 
-Math.MatrixInverse4x4 = function(Matrix)
+export function MatrixInverse4x4(Matrix)
 {
 	let m = Matrix;
 	let r = [];
@@ -827,17 +637,17 @@ Math.MatrixInverse4x4 = function(Matrix)
 }
 
 //	multiply position by matrix
-Math.TransformPosition = function (Position,Transform)
+export function TransformPosition(Position,Transform)
 {
-	const PosMatrix = Math.CreateTranslationMatrix(...Position);
-	const TransMatrix = Math.MatrixMultiply4x4(Transform,PosMatrix);
-	const TransPos = Math.GetMatrixTranslation(TransMatrix,true);
+	const PosMatrix = CreateTranslationMatrix(...Position);
+	const TransMatrix = MatrixMultiply4x4(Transform,PosMatrix);
+	const TransPos = GetMatrixTranslation(TransMatrix,true);
 	return TransPos;
 }
 
 //	gr: I've made this simpler, but its backwards to the other, and usual multiply notation, so maybe no...
 //	order is left-to-right of significance. eg. scale, then move.
-Math.MatrixMultiply4x4Multiple = function()
+export function MatrixMultiply4x4Multiple()
 {
 	//	apply in the right order!
 	let Matrix = null;
@@ -847,7 +657,7 @@ Math.MatrixMultiply4x4Multiple = function()
 		if ( Matrix == null )
 			Matrix = ParentMatrix;
 		else
-			Matrix = Math.MatrixMultiply4x4( ParentMatrix, Matrix );
+			Matrix = MatrixMultiply4x4( ParentMatrix, Matrix );
 	}
 	
 	return Matrix;
@@ -855,7 +665,7 @@ Math.MatrixMultiply4x4Multiple = function()
 
 //	apply A, then B. So A is child, B is parent
 //	gr: but that doesn't seem to be riht
-Math.MatrixMultiply4x4 = function(a,b)
+export function MatrixMultiply4x4(a,b)
 {
 	var a00 = a[0],
 	a01 = a[1],
@@ -906,16 +716,16 @@ Math.MatrixMultiply4x4 = function(a,b)
 	return out;
 }
 
-Math.CreateLookAtRotationMatrix = function(eye,up,center)
+export function CreateLookAtRotationMatrix(eye,up,center)
 {
-	let z = Math.Subtract3( center, eye );
-	z = Math.Normalise3( z );
+	let z = Subtract3( center, eye );
+	z = Normalise3( z );
 	
-	let x = Math.Cross3( up, z );
-	x = Math.Normalise3( x );
+	let x = Cross3( up, z );
+	x = Normalise3( x );
 	
-	let y = Math.Cross3( z,x );
-	y = Math.Normalise3( y );
+	let y = Cross3( z,x );
+	y = Normalise3( y );
 	
 	let tx = 0;
 	let ty = 0;
@@ -932,7 +742,7 @@ Math.CreateLookAtRotationMatrix = function(eye,up,center)
 	return out;
 }
 
-Math.SetMatrixTranslation = function(Matrix,x,y,z,w=1)
+export function SetMatrixTranslation(Matrix,x,y,z,w=1)
 {
 	Matrix[12] = x;
 	Matrix[13] = y;
@@ -940,12 +750,12 @@ Math.SetMatrixTranslation = function(Matrix,x,y,z,w=1)
 	Matrix[15] = w;
 }
 
-Math.CreateTranslationMatrix = function(x,y,z)
+export function CreateTranslationMatrix(x,y,z,w=1)
 {
-	return [ 1,0,0,0,	0,1,0,0,	0,0,1,0,	x,y,z,1	];
+	return [ 1,0,0,0,	0,1,0,0,	0,0,1,0,	x,y,z,w	];
 }
 
-Math.CreateScaleMatrix = function(x,y,z)
+export function CreateScaleMatrix(x,y,z)
 {
 	y = (y === undefined) ? x : y;
 	z = (z === undefined) ? x : z;
@@ -953,7 +763,7 @@ Math.CreateScaleMatrix = function(x,y,z)
 	return [ x,0,0,0,	0,y,0,0,	0,0,z,0,	0,0,0,1	];
 }
 
-Math.CreateTranslationScaleMatrix = function(Position,Scale)
+export function CreateTranslationScaleMatrix(Position,Scale)
 {
 	let sx = Scale[0];
 	let sy = Scale[1];
@@ -964,7 +774,7 @@ Math.CreateTranslationScaleMatrix = function(Position,Scale)
 	return [ sx,0,0,0,	0,sy,0,0,	0,0,sz,0,	tx,ty,tz,1 ];
 }
 
-Math.CreateTranslationQuaternionMatrix = function(Position,Quaternion)
+export function CreateTranslationQuaternionMatrix(Position,Quaternion)
 {
 	const rx = Quaternion[0];
 	const ry = Quaternion[1];
@@ -1002,7 +812,7 @@ Math.CreateTranslationQuaternionMatrix = function(Position,Quaternion)
 	return Matrix;
 }
 
-Math.Matrix3x3ToMatrix4x4 = function(Matrix3,Row4=[0,0,0,1])
+export function Matrix3x3ToMatrix4x4(Matrix3,Row4=[0,0,0,1])
 {
 	let Matrix4 =
 	[
@@ -1014,23 +824,23 @@ Math.Matrix3x3ToMatrix4x4 = function(Matrix3,Row4=[0,0,0,1])
 	return Matrix4;
 }
 
-Math.CreateIdentityMatrix = function()
+export function CreateIdentityMatrix()
 {
-	return Math.CreateTranslationMatrix( 0,0,0 );
+	return CreateTranslationMatrix( 0,0,0 );
 }
 
-Math.GetMatrixScale = function(Matrix)
+export function GetMatrixScale(Matrix)
 {
 	let Rowx = Matrix.slice(0,4);
 	let Rowy = Matrix.slice(4,8);
 	let Rowz = Matrix.slice(8,12);
-	let Scalex = Math.Length3( Rowx );
-	let Scaley = Math.Length3( Rowy );
-	let Scalez = Math.Length3( Rowz );
+	let Scalex = Length3( Rowx );
+	let Scaley = Length3( Rowy );
+	let Scalez = Length3( Rowz );
 	return [Scalex,Scaley,Scalez];
 }
 
-Math.GetMatrixTranslation = function(Matrix,DivW=false)
+export function GetMatrixTranslation(Matrix,DivW=false)
 {
 	//	do we need to /w here?
 	let xyz = Matrix.slice(12,12+3);
@@ -1044,7 +854,7 @@ Math.GetMatrixTranslation = function(Matrix,DivW=false)
 	return xyz;
 }
 
-Math.GetMatrixQuaternion = function(Matrix)
+export function GetMatrixQuaternion(Matrix)
 {
 	function m(col,row)
 	{
@@ -1073,9 +883,9 @@ Math.GetMatrixQuaternion = function(Matrix)
 	return [q.x,q.y,q.z,q.w];
 }
 
-Math.CreateAxisRotationMatrix = function(Axis,Degrees)
+export function CreateAxisRotationMatrix(Axis,Degrees)
 {
-	let Radians = Math.DegToRad( Degrees );
+	let Radians = DegToRad( Degrees );
 	
 	let x = Axis[0];
 	let y = Axis[1];
@@ -1111,7 +921,7 @@ Math.CreateAxisRotationMatrix = function(Axis,Degrees)
 	return out;
 }
 
-Math.Min3 = function(a,b)
+export function Min3(a,b)
 {
 	let Min =
 	[
@@ -1122,7 +932,7 @@ Math.Min3 = function(a,b)
 	return Min;
 }
 
-Math.Max3 = function(a,b)
+export function Max3(a,b)
 {
 	let Max =
 	[
@@ -1134,7 +944,7 @@ Math.Max3 = function(a,b)
 }
 
 
-Math.GetNextPowerOf2 = function(Number)
+export function GetNextPowerOf2(Number)
 {
 	//	round any floats
 	Number = Math.ceil( Number );
@@ -1162,9 +972,9 @@ Math.GetNextPowerOf2 = function(Number)
 }
 
 
-Math.NormalisePlane = function(Plane4)
+export function NormalisePlane(Plane4)
 {
-	let Length = Math.Length3( Plane4 );
+	let Length = Length3( Plane4 );
 	Plane4[0] /= Length;
 	Plane4[1] /= Length;
 	Plane4[2] /= Length;
@@ -1172,16 +982,16 @@ Math.NormalisePlane = function(Plane4)
 }
 
 
-Math.GetNormalisedPlane = function(Plane4)
+export function GetNormalisedPlane(Plane4)
 {
 	Plane4 = Plane4.slice();
-	Math.NormalisePlane( Plane4 );
+	NormalisePlane( Plane4 );
 	return Plane4;
 }
 
 
 //	from https://stackoverflow.com/a/34960913/355753
-Math.GetFrustumPlanes = function(ProjectionMatrix4x4,Normalised=true)
+export function GetFrustumPlanes(ProjectionMatrix4x4,Normalised=true)
 {
 	const FrustumMatrix4x4 = ProjectionMatrix4x4;
 	let left = [];
@@ -1219,12 +1029,12 @@ Math.GetFrustumPlanes = function(ProjectionMatrix4x4,Normalised=true)
 	
 	if ( Normalised )
 	{
-		Math.NormalisePlane( left );
-		Math.NormalisePlane( right );
-		Math.NormalisePlane( top );
-		Math.NormalisePlane( bottom );
-		Math.NormalisePlane( near );
-		Math.NormalisePlane( far );
+		NormalisePlane( left );
+		NormalisePlane( right );
+		NormalisePlane( top );
+		NormalisePlane( bottom );
+		NormalisePlane( near );
+		NormalisePlane( far );
 	}
 	
 	const Planes = {};
@@ -1237,7 +1047,7 @@ Math.GetFrustumPlanes = function(ProjectionMatrix4x4,Normalised=true)
 	return Planes;
 }
 
-Math.GetBox3Corners = function(BoxMin,BoxMax)
+export function GetBox3Corners(BoxMin,BoxMax)
 {
 	const BoxCorners =
 	[
@@ -1253,7 +1063,139 @@ Math.GetBox3Corners = function(BoxMin,BoxMax)
 	return BoxCorners;
 }
 
-Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
+export function BoxCenterSizeToMinMax(Center,Size)
+{
+	//	if size is radius, this is halfed again
+	const HalfSize = Multiply3( Size, 0.5*0.50 );
+	const Box = {};
+	Box.Min = Subtract3( Center, HalfSize );
+	Box.Max = Add3( Center, HalfSize );
+	//Box.Size = HalfSize;
+	Box.Size = Subtract3( Box.Max, Box.Min );
+	return Box;
+}
+
+export function GetBoundingBoxsBoundingBox(BoundingBoxs)
+{
+	//	extract all positions
+	const Mins = BoundingBoxs.map( bb => bb.Min );
+	const Maxs = BoundingBoxs.map( bb => bb.Max );
+	const Positions = Mins.concat(Maxs);
+	return GetBoundingBox(Positions);
+}
+
+
+//	get [min,max] returned from a large set of values
+export function GetMinMax(Values)
+{
+	//	this will crash (too many args) after a certain size
+	//return Math.min( ...Values );
+	
+	const InitalValues = [Number.POSITIVE_INFINITY,Number.NEGATIVE_INFINITY];
+	const MinMax = Values.reduce( ([min, max], val) => [Math.min(min, val), Math.max(max, val)], InitalValues );
+	return MinMax;
+}
+
+export function GetBoundingBox(Positions)
+{
+	//	gr: faster if we can use min(...)
+	let xs,ys,zs;
+	
+	//	array of xyz's
+	if ( Array.isArray(Positions[0]) )
+	{
+		xs = Positions.map( Position => Position[0] );
+		ys = Positions.map( Position => Position[1] );
+		zs = Positions.map( Position => Position[2] );
+	}
+	else
+	{
+		//	can we make this faster by preallocating?
+		let xyzs = [ [], [], [] ];
+		//	gr: tighter loop, but adds modulus...
+		for ( let i=0;	i<Positions.length;	i++ )
+			xyzs[i%3].push( Positions[i] );
+		
+		xs = xyzs[0];
+		ys = xyzs[1];
+		zs = xyzs[2];
+		/*
+		for ( let i=0;	i<Positions.length;	i+=3 )
+		{
+			const x = Positions[i+0];
+			const y = Positions[i+1];
+			const z = Positions[i+2];
+			xs.push(x);
+			ys.push(y);
+			zs.push(z);
+		}
+		*/
+	}
+	
+	//	then get the min/max of each set
+	const MinMaxx = GetMinMax(xs);
+	const MinMaxy = GetMinMax(ys);
+	const MinMaxz = GetMinMax(zs);
+	
+	const BoundingBox = {};
+	BoundingBox.Min =
+	[
+		MinMaxx[0],
+		MinMaxy[0],
+		MinMaxz[0],
+	];
+	BoundingBox.Max =
+	[
+		MinMaxx[1],
+		MinMaxy[1],
+		MinMaxz[1],
+	];
+	return BoundingBox;
+/*
+	//	positions are striped xyz
+	let Min = Positions.slice(0,3);
+	let Max = Min.slice();
+	for ( let i=0;	i<Positions.length;	i+=3 )
+	{
+		const x = Positions[i+0];
+		const y = Positions[i+1];
+		const z = Positions[i+2];
+		Min[0] = Math.min( Min[0], x );
+		Min[1] = Math.min( Min[1], y );
+		Min[2] = Math.min( Min[2], z );
+		Max[0] = Math.max( Max[0], x );
+		Max[1] = Math.max( Max[1], y );
+		Max[2] = Math.max( Max[2], z );
+	}
+	const Bounds = {};
+	Bounds.Min = Min;
+	Bounds.Max = Max;
+	return Bounds;
+	*/
+}
+
+export function GetBoundingBoxCenter(Box)
+{
+	const Min = Box.Min;
+	const Max = Box.Max;
+	
+	const x = (Min[0] + Max[0]) / 2;
+	const y = (Min[1] + Max[1]) / 2;
+	const z = (Min[2] + Max[2]) / 2;
+	return [x,y,z];
+}
+
+//	returns [x,y,z,radius]
+export function GetBoundingSphereFromBoundingBox(Box)
+{
+	const Center = GetBoundingBoxCenter(Box);
+	const Radius = Distance3( Center, Box.Max );
+	Center.push(Radius);
+	return Center;
+}
+
+
+export function IsBoundingBoxIntersectingFrustumPlanes(Box,Planes)
 {
 	//	convert to list of planes from .Left .Near .Far etc
 	if ( !Array.isArray(Planes) )
@@ -1283,7 +1225,7 @@ Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
 		let out = 0;
 		const Plane = Planes[i];
 		for ( let c=0;	c<BoxCorners.length;	c++ )
-			out += Math.Dot4( Plane, BoxCorners[c] ) < 0.0;
+			out += Dot4( Plane, BoxCorners[c] ) < 0.0;
 		
 		//	all corners are outside this plane
 		if( out == BoxCorners.length )
@@ -1301,7 +1243,7 @@ Math.IsBoundingBoxIntersectingFrustumPlanes = function(Box,Planes)
 	return true;
 }
 
-Math.IsPositionInsideBox3 = function(Position,BoxMin,BoxMax)
+export function IsPositionInsideBox3(Position,BoxMin,BoxMax)
 {
 	for ( let dim=0;	dim<3;	dim++ )
 	{
@@ -1317,20 +1259,20 @@ Math.IsPositionInsideBox3 = function(Position,BoxMin,BoxMax)
 	return true;
 }
 
-Math.IsInsideBox3 = function(Position,BoxMin,BoxMax)
+export function IsInsideBox3(Position,BoxMin,BoxMax)
 {
-	Pop.Warning(`Math.IsInsideBox3 Deprecated; use Math.IsPositionInsideBox3`);
-	return Math.IsPositionInsideBox3(...arguments);
+	//Pop.Warning(`Math.IsInsideBox3 Deprecated; use Math.IsPositionInsideBox3`);
+	return IsPositionInsideBox3(...arguments);
 }
 
 
 //	is this box wholly inside another box
-Math.IsBox3InsideBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+export function IsBox3InsideBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
 {
-	const CornersA = Math.GetBox3Corners(BoxMinA,BoxMaxA);
+	const CornersA = GetBox3Corners(BoxMinA,BoxMaxA);
 	for ( let Pos of CornersA )
 	{
-		const Inside = Math.IsPositionInsideBox3( Pos, BoxMinB, BoxMaxB );
+		const Inside = IsPositionInsideBox3( Pos, BoxMinB, BoxMaxB );
 		if ( !Inside )
 			return false;
 	}
@@ -1338,7 +1280,7 @@ Math.IsBox3InsideBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
 }
 
 //	get the AND of 2 box3s
-Math.GetOverlappedBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+export function GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
 {
 	//	get the overlapping area as a box
 	//	min = maximum min
@@ -1365,27 +1307,27 @@ Math.GetOverlappedBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
 }
 
 
-Math.IsBox3OverlappingBox3 = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+export function IsBox3OverlappingBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
 {
-	const OverlapBox = Math.GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
+	const OverlapBox = GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
 	
 	//	get overlapping amount
-	const OverlapArea = Math.GetBox3Area(OverlapBox.Min,OverlapBox.Max);
+	const OverlapArea = GetBox3Area(OverlapBox.Min,OverlapBox.Max);
 	if ( OverlapArea > 0 )
 		return true;
 	return false;
 }
 
-Math.GetBox3Overlap = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
+export function GetBox3Overlap(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
 {
-	const AreaA = Math.GetBox3Area( BoxMinA, BoxMaxA );
-	const AreaB = Math.GetBox3Area( BoxMinB, BoxMaxB );
-	const OverlapBox = Math.GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
-	const OverlapArea = Math.GetBox3Area(OverlapBox.Min,OverlapBox.Max);
+	const AreaA = GetBox3Area( BoxMinA, BoxMaxA );
+	const AreaB = GetBox3Area( BoxMinB, BoxMaxB );
+	const OverlapBox = GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
+	const OverlapArea = GetBox3Area(OverlapBox.Min,OverlapBox.Max);
 
 	if ( OverlapArea > AreaA || OverlapArea > AreaB )
 	{
-		const OverlapBox2 = Math.GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
+		const OverlapBox2 = GetOverlappedBox3(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB);
 		throw `Math error, Overlap is bigger than boxes`;
 	}
 	
@@ -1397,7 +1339,7 @@ Math.GetBox3Overlap = function(BoxMinA,BoxMaxA,BoxMinB,BoxMaxB)
 }
 
 
-Math.GetIntersectionTimeRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
+export function GetIntersectionTimeRayBox3(RayStart,RayDirection,BoxMin,BoxMax)
 {
 	let tmin = -Infinity;
 	let tmax = Infinity;
@@ -1419,7 +1361,8 @@ Math.GetIntersectionTimeRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
 	//	invalid input ray (dir = 000)
 	if ( tmin === null )
 	{
-		Pop.Debug("GetIntersectionRayBox3 invalid ray", RayStart, RayDirection );
+		//	gr: maybe this should throw
+		//Pop.Debug("GetIntersectionRayBox3 invalid ray", RayStart, RayDirection );
 		return false;
 	}
 	
@@ -1441,41 +1384,41 @@ Math.GetIntersectionTimeRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
 	return tmin;
 }
 
-Math.GetIntersectionRayBox3 = function(RayStart,RayDirection,BoxMin,BoxMax)
+export function GetIntersectionRayBox3(RayStart,RayDirection,BoxMin,BoxMax)
 {
-	const IntersectionTime = Math.GetIntersectionTimeRayBox3( RayStart, RayDirection, BoxMin, BoxMax );
+	const IntersectionTime = GetIntersectionTimeRayBox3( RayStart, RayDirection, BoxMin, BoxMax );
 	if ( IntersectionTime === false )
 		return false;
 	
-	let Intersection = Math.Multiply3( RayDirection, [IntersectionTime,IntersectionTime,IntersectionTime] );
-	Intersection = Math.Add3( RayStart, Intersection );
+	let Intersection = Multiply3( RayDirection, [IntersectionTime,IntersectionTime,IntersectionTime] );
+	Intersection = Add3( RayStart, Intersection );
 	
 	return Intersection;
 }
 
 
-Math.GetIntersectionLineBox3 = function(Start,End,BoxMin,BoxMax)
+export function GetIntersectionLineBox3(Start,End,BoxMin,BoxMax)
 {
-	const Direction = Math.Subtract3( End, Start );
+	const Direction = Subtract3( End, Start );
 	
-	const IntersectionTime = Math.GetIntersectionTimeRayBox3( Start, Direction, BoxMin, BoxMax );
+	const IntersectionTime = GetIntersectionTimeRayBox3( Start, Direction, BoxMin, BoxMax );
 	if ( IntersectionTime === false )
 		return false;
 
 	if ( IntersectionTime > 1 )
 		return false;
 
-	let Intersection = Math.Multiply3( Direction, [IntersectionTime,IntersectionTime,IntersectionTime] );
-	Intersection = Math.Add3( Start, Intersection );
+	let Intersection = Multiply3( Direction, [IntersectionTime,IntersectionTime,IntersectionTime] );
+	Intersection = Add3( Start, Intersection );
 	
 	return Intersection;
 }
 
 //	returns signed distance, so if negative, point is behind plane.
-Math.GetDistanceToPlane = function(Plane4,Position3)
+export function GetDistanceToPlane(Plane4,Position3)
 {
 	//	plane should be normalised
-	const Distance = Math.Dot3( Position3, Plane4 ) + Plane4[3];
+	const Distance = Dot3( Position3, Plane4 ) + Plane4[3];
 	return Distance;
 	/*
 	 // n must be normalized
@@ -1493,12 +1436,12 @@ Math.GetDistanceToPlane = function(Plane4,Position3)
 	 */
 }
 
-Math.InsideMinusOneToOne = function(f)
+export function InsideMinusOneToOne(f)
 {
 	return ( f>=-1 && f<= 1 );
 }
 
-Math.PositionInsideBoxXZ = function(Position3,Box3)
+export function PositionInsideBoxXZ(Position3,Box3)
 {
 	if ( Position3[0] < Box3.Min[0] )	return false;
 	//if ( Position3[1] < Box3.Min[1] )	return false;
@@ -1511,7 +1454,7 @@ Math.PositionInsideBoxXZ = function(Position3,Box3)
 
 
 //	4 control points
-Math.GetBezier4Position = function(Start,ControlA,ControlB,End,Time)
+export function GetBezier4Position(Start,ControlA,ControlB,End,Time)
 {
 	function GetBezier(p0,p1,p2,p3,t)
 	{
@@ -1541,7 +1484,7 @@ Math.GetBezier4Position = function(Start,ControlA,ControlB,End,Time)
 
 //	wait, is this cubic? it's not quadratic!
 //	gr: this uses 3 points, can calc middle, rename it!
-Math.GetCubicBezierPosition = function(Start,Middle,End,Time,TravelThroughMiddle=false)
+export function GetCubicBezierPosition(Start,Middle,End,Time,TravelThroughMiddle=false)
 {
 	//P = (1-t)2P1 + 2(1-t)tP2 + t2P3
 	
@@ -1606,7 +1549,7 @@ Math.GetCubicBezierPosition = function(Start,Middle,End,Time,TravelThroughMiddle
 
 
 //	this gives a point between Start & End
-Math.GetCatmullPosition = function(Previous,Start,End,Next,Time)
+export function GetCatmullPosition(Previous,Start,End,Next,Time)
 {
 	function GetCatmull(p0,p1,p2,p3,t)
 	{
@@ -1633,10 +1576,10 @@ Math.GetCatmullPosition = function(Previous,Start,End,Next,Time)
 }
 
 //	Time normalised along the path to cope with looping
-Math.GetCatmullPathPosition = function(Path,Time,Loop=false)
+export function GetCatmullPathPosition(Path,Time,Loop=false)
 {
 	if ( Time > 1 )
-		throw "Math.GetCatmullPathPosition(Time="+Time+") should have normalised time";
+		throw "GetCatmullPathPosition(Time="+Time+") should have normalised time";
 	
 	if ( Path.length < 4 )
 		throw "Catmull path must have at least 4 points (this has "+ Path.length + ")";
@@ -1655,7 +1598,7 @@ Math.GetCatmullPathPosition = function(Path,Time,Loop=false)
 	let Next = End + 1;
 	
 	//	we're calculating points between start & end
-	const Lerp = Math.range( Start, End, Time );
+	const Lerp = range( Start, End, Time );
 	if ( Lerp < 0 || Lerp > 1 )
 		throw "Trying to calculate wrong time between Start=" + Start + " End=" + End + " Time="+Time;
 
@@ -1676,7 +1619,7 @@ Math.GetCatmullPathPosition = function(Path,Time,Loop=false)
 	{
 		FixIndex = function(Index)
 		{
-			Index = Math.clamp( 0, Path.length-1, Index );
+			Index = clamp( 0, Path.length-1, Index );
 			return Index;
 		}
 	}
@@ -1692,15 +1635,15 @@ Math.GetCatmullPathPosition = function(Path,Time,Loop=false)
 	if ( Previous < 0 )
 		throw "Previous is wrong";
 	
-	const Pos = Math.GetCatmullPosition( Path[Previous], Path[Start], Path[End], Path[Next], Lerp );
+	const Pos = GetCatmullPosition( Path[Previous], Path[Start], Path[End], Path[Next], Lerp );
 	return Pos;
 }
 
 
 
 //	generic function, which we can cache
-Pop.Math.RandomFloatCache = {};
-Pop.Math.FillRandomFloat = function(Array,Min=0,Max=1)
+let RandomFloatCache = {};
+export function FillRandomFloat(Array,Min=0,Max=1)
 {
 	if ( Array.constructor != Float32Array )
 		throw `Expecting Array(${typeof Array}/${Array.constructor}) to be Float32Array`;
@@ -1712,16 +1655,16 @@ Pop.Math.FillRandomFloat = function(Array,Min=0,Max=1)
 	{
 		Pop.Debug(`WriteRandom(${Start},${Length})`,Array);
 		for ( let i=Start;	i<Start+Length;	i++ )
-			Array[i] = Math.Lerp( Min, Max, Math.random() );
+			Array[i] = Lerp( Min, Max, Math.random() );
 	}
 	
 	const TargetSize = Array.length;
 	
 	//	resize/create cache
-	if ( Pop.Math.RandomFloatCache.hasOwnProperty(CacheName) )
+	if ( RandomFloatCache.hasOwnProperty(CacheName) )
 	{
 		//	check if its big enough
-		const Cache = Pop.Math.RandomFloatCache[CacheName];
+		const Cache = RandomFloatCache[CacheName];
 		if ( Cache.length < TargetSize )
 		{
 			//	todo: save old, alloc new, memcpy into new
@@ -1729,22 +1672,22 @@ Pop.Math.FillRandomFloat = function(Array,Min=0,Max=1)
 		}
 	}
 	
-	if ( !Pop.Math.RandomFloatCache[CacheName] )
+	if ( !RandomFloatCache[CacheName] )
 	{
 		//	new cache
 		const Cache = new Float32Array(TargetSize);
 		WriteRandom(Cache,0,Cache.length);
-		Pop.Math.RandomFloatCache[CacheName] = Cache;
+		RandomFloatCache[CacheName] = Cache;
 	}
 	
 	//	copy to target
-	const Cache = Pop.Math.RandomFloatCache[CacheName];
+	const Cache = RandomFloatCache[CacheName];
 	Array.set( Cache, 0, Array.length );
 }
 
 
 //	expecting array[16]
-Pop.Math.GetMatrixTransposed = function(Matrix4x4)
+export function GetMatrixTransposed(Matrix4x4)
 {
 	//	todo: slice to retain input type (array, float32array etc)
 	//const Trans = Matrix4x4.slice();
@@ -1759,43 +1702,54 @@ Pop.Math.GetMatrixTransposed = function(Matrix4x4)
 	return Transposed;
 }
 
-/*
-bool GetPlaneIntersection(TRay Ray,float4 Plane,out vec3 IntersectionPos)
+
+//	expecting direction to be normalised
+export function GetRayPositionAtTime(Position,Direction,Time)
+{
+	let Offset = Multiply3( Direction, [Time,Time,Time] );
+	let RayPos = Add3( Position, Offset );
+	return RayPos; 
+}
+
+//	expecting ray & plane to be in same space
+//	expecting dir to be normalised
+//	returns null or intersection position
+export function GetPlaneIntersection(RayPosition,RayDirection,Plane)
 {
 	//	https://gist.github.com/doxas/e9a3d006c7d19d2a0047
-	float PlaneOffset = Plane.w;
-	float3 PlaneNormal = Plane.xyz;
-	float PlaneDistance = -PlaneOffset;
-	float Denom = dot( Ray.Dir, PlaneNormal);
-	float t = -(dot( Ray.Pos, PlaneNormal) + PlaneDistance) / Denom;
+	let PlaneOffset = Plane[3];
+	let PlaneNormal = Plane.slice(0,3);
+	let PlaneDistance = -PlaneOffset;
+	let Denom = Dot3( RayDirection, PlaneNormal);
+	let t = -( Dot3( RayPosition, PlaneNormal ) + PlaneDistance) / Denom;
 	
 	//	wrong side, enable for 2 sided
-	bool DoubleSided = false;
+	let DoubleSided = true;//false;
 	
-	float Min = 0.01;
+	let Min = 0.01;
 	
 	if ( t <= Min && !DoubleSided )
 		return false;
 	
-	IntersectionPos = GetRayPositionAtTime( Ray, t );
-	return true;
+	const IntersectionPos = GetRayPositionAtTime( RayPosition, RayDirection, t );
+	return IntersectionPos;
 }
-*/
-Math.GetIntersectionRayTriangle3 = function(RayStart,RayDirection,a,b,c)
+
+export function GetIntersectionRayTriangle3(RayStart,RayDirection,a,b,c)
 {
 	//	https://www.scratchapixel.com/lessons/3d-basic-rendering/ray-tracing-rendering-a-triangle/ray-triangle-intersection-geometric-solution
 	//	get plane normal
-	const ab = Math.Subtract3(b,a);
-	const ac = Math.Subtract3(c,a);
+	const ab = Subtract3(b,a);
+	const ac = Subtract3(c,a);
 	//	dont need to normalise?
-	let Normal = Math.Cross3(ab,ac);
+	let Normal = Cross3(ab,ac);
 	//const Area = Math.Length3(Normal);
 	
 	//	find intersection on plane
 	
 	//	check if ray and plane are parallel	|- so dot=0
 	const kEpsilon = 0.0001;
-	let NormalDotRayDirection = Math.Dot3( Normal, RayDirection );
+	let NormalDotRayDirection = Dot3( Normal, RayDirection );
 	if ( Math.abs(NormalDotRayDirection) < kEpsilon )
 		return false;
 	
@@ -1804,17 +1758,17 @@ Math.GetIntersectionRayTriangle3 = function(RayStart,RayDirection,a,b,c)
 	/*if ( NormalDotRayDirection > 0 )
 	{
 		Normal = Math.Cross3(ac,ab);
-		NormalDotRayDirection = Math.Dot3( Normal, RayDirection );
+		NormalDotRayDirection = Dot3( Normal, RayDirection );
 	}*/
 	
 	//	get plane distance (origin to plane, its the length a-0 along the normal)
-	const TrianglePlaneDistance = Math.Dot3( Normal, a );
+	const TrianglePlaneDistance = Dot3( Normal, a );
 	
 	//	solve
 	//	intersection = start + (dir*t)
 	//	get plane intersection time
 	//	RayToPlaneDistance is plane's D for the ray (compared to triangle plane distance)
-	const RayToPlaneDistance = Math.Dot3( Normal, RayStart);
+	const RayToPlaneDistance = Dot3( Normal, RayStart);
 	
 	//	therefore distance from ray origin to triangle is
 	//	RayToPlaneDistance + TrianglePlaneDistance
@@ -1832,7 +1786,7 @@ Math.GetIntersectionRayTriangle3 = function(RayStart,RayDirection,a,b,c)
 	}
 	
 	//	get the plane intersection pos
-	const IntersectionPosition = Math.Add3( RayStart, Math.Multiply3( RayDirection, [IntersectionTime,IntersectionTime,IntersectionTime] ) );
+	const IntersectionPosition = Add3( RayStart, Multiply3( RayDirection, [IntersectionTime,IntersectionTime,IntersectionTime] ) );
 	//Pop.Debug(`IntersectionTime=${IntersectionTime}`);
 	//return IntersectionPosition;
 	
@@ -1840,10 +1794,10 @@ Math.GetIntersectionRayTriangle3 = function(RayStart,RayDirection,a,b,c)
 	let TotalSign = 0;
 	{
 		const p = IntersectionPosition;
-		const ab = Math.Subtract3( b, a );
-		const pa = Math.Subtract3( p, a );
-		const cross = Math.Cross3( ab, pa );
-		const nc = Math.Dot3( Normal, cross );
+		const ab = Subtract3( b, a );
+		const pa = Subtract3( p, a );
+		const cross = Cross3( ab, pa );
+		const nc = Dot3( Normal, cross );
 		if ( nc < 0 )
 			return false;
 		TotalSign += nc;
@@ -1851,10 +1805,10 @@ Math.GetIntersectionRayTriangle3 = function(RayStart,RayDirection,a,b,c)
 	
 	{
 		const p = IntersectionPosition;
-		const bc = Math.Subtract3( c, b );
-		const pb = Math.Subtract3( p, b );
-		const cross = Math.Cross3( bc, pb );
-		const nc = Math.Dot3( Normal, cross );
+		const bc = Subtract3( c, b );
+		const pb = Subtract3( p, b );
+		const cross = Cross3( bc, pb );
+		const nc = Dot3( Normal, cross );
 		if ( nc < 0 )
 			return false;
 		TotalSign += nc;
@@ -1862,10 +1816,10 @@ Math.GetIntersectionRayTriangle3 = function(RayStart,RayDirection,a,b,c)
 
 	{
 		const p = IntersectionPosition;
-		const ca = Math.Subtract3( a, c );
-		const pc = Math.Subtract3( p, c );
-		const cross = Math.Cross3( ca, pc );
-		const nc = Math.Dot3( Normal, cross );
+		const ca = Subtract3( a, c );
+		const pc = Subtract3( p, c );
+		const cross = Cross3( ca, pc );
+		const nc = Dot3( Normal, cross );
 		if ( nc < 0 )
 			return false;
 		TotalSign += nc;
@@ -1879,16 +1833,16 @@ Math.GetIntersectionRayTriangle3 = function(RayStart,RayDirection,a,b,c)
 }
 
 /*	get SDF distance, merge with above
-Math.DistanceToTriangle3 = function(Position,a,b,c)
+DistanceToTriangle3 = function(Position,a,b,c)
 {
 	const p = Position;
-	const ba = Math.Subtract3(b, a);
-	const pa = Math.Subtract3(p, a);
-	const cb = Math.Subtract3(c, b);
-	const pb = Math.Subtract3(p, b);
-	const ac = Math.Subtract3(a, c);
-	const pc = Math.Subtract3(p, c);
-	const nor = Math.cross3( ba, ac );
+	const ba = Subtract3(b, a);
+	const pa = Subtract3(p, a);
+	const cb = Subtract3(c, b);
+	const pb = Subtract3(p, b);
+	const ac = Subtract3(a, c);
+	const pc = Subtract3(p, c);
+	const nor = cross3( ba, ac );
 
 	//	work out which side of each edge we're on
 	const Sideab = sign(dot(cross(ba,nor),pa));
@@ -1914,7 +1868,7 @@ Math.DistanceToTriangle3 = function(Position,a,b,c)
 }
 */
 
-Math.GetDistanceToRect = function(xy,Rect)
+export function GetDistanceToRect(xy,Rect)
 {
 	function sdBox(p,b)
 	{
@@ -1925,7 +1879,7 @@ Math.GetDistanceToRect = function(xy,Rect)
 		
 		//	return length(max(d,0.0)) + min(max(d.x,d.y),0.0);
 		const max_d_0 = [ Math.max(dx,0), Math.max(dy,0) ];
-		const length_max_d_0 = Math.Length2(max_d_0);
+		const length_max_d_0 = Length2(max_d_0);
 		const minmax_dx_0 = Math.min( Math.max(dx,dy), 0 );
 
 		return length_max_d_0 + minmax_dx_0;
@@ -1939,28 +1893,28 @@ Math.GetDistanceToRect = function(xy,Rect)
 	return sdBox( [px,py], [HalfWidth,HalfHeight] );
 }
 
-Math.GetDistanceToCircle = function(xy,CirclePosRadius)
+export function GetDistanceToCircle(xy,CirclePosRadius)
 {
-	const Distance = Math.Distance2(xy,CirclePosRadius);
+	const Distance = Distance2(xy,CirclePosRadius);
 	const Radius = CirclePosRadius[2];
 	return Distance - Radius;
 }
 
-Math.GetTimeAlongLine2 = function(Position,Start,End)
+export function GetTimeAlongLine2(Position,Start,End)
 {
 	//	direction or End-in-localspace
-	const Direction = Math.Subtract2( End, Start );
-	const DirectionLength = Math.Length2( Direction );
-	const LocalPosition = Math.Subtract2( Position, Start );
+	const Direction = Subtract2( End, Start );
+	const DirectionLength = Length2( Direction );
+	const LocalPosition = Subtract2( Position, Start );
 	if ( DirectionLength == 0 )
 		return 0;
-	const Projection = Math.Dot2( LocalPosition, Direction) / (DirectionLength*DirectionLength);
+	const Projection = Dot2( LocalPosition, Direction) / (DirectionLength*DirectionLength);
 	return Projection;
 }
 
-Math.GetNearestPointOnLine2 = function(Position,Start,End)
+export function GetNearestPointOnLine2(Position,Start,End)
 {
-	let Projection = Math.GetTimeAlongLine2( Position, Start, End );
+	let Projection = GetTimeAlongLine2( Position, Start, End );
 	
 	//	clamp to line
 	//	past start
@@ -1968,22 +1922,22 @@ Math.GetNearestPointOnLine2 = function(Position,Start,End)
 	//	past end
 	Projection = Math.min( 1.0, Projection );
 	
-	const Near = Math.Lerp2( Start, End, Projection );
+	const Near = Lerp2( Start, End, Projection );
 	return Near;
 }
 
-Math.GetDistanceToLine2 = function(Position,Start,End)
+export function GetDistanceToLine2(Position,Start,End)
 {
 	//	todo: LineButt & LineSquare versions
-	const Near = Math.GetNearestPointOnLine2(Position,Start,End);
-	const Distance = Math.Distance2(Position,Near);
+	const Near = GetNearestPointOnLine2(Position,Start,End);
+	const Distance = Distance2(Position,Near);
 	return Distance;
 }
 
 
 //	Corners is an array of [x,y] arrays
 //	gr: dont need a Center but current use pre-calcs it anyway
-Math.GetDistanceToPolygon2 = function(Position,Corners,Center)
+export function GetDistanceToPolygon2(Position,Corners,Center)
 {
 	const uv = Position;
 	
@@ -2010,33 +1964,33 @@ Math.GetDistanceToPolygon2 = function(Position,Corners,Center)
 	//	note GLSL and Math.clamp are different orders!
 	function clamp2(Value,Min,Max)
 	{
-		return Math.Clamp2(Min,Max,Value);
+		return Clamp2(Min,Max,Value);
 	}
 	function clamp(Value,Min,Max)
 	{
-		return Math.Clamp(Min,Max,Value);
+		return Clamp(Min,Max,Value);
 	}
 	
 	//	float sdSegment( in vec2 p, in vec2 a, in vec2 b )
 	function sdSegment(p,a,b)
 	{
-		const pa = Math.Subtract2(p,a);
-		const ba = Math.Subtract2(b,a);
-		const delta = Math.Dot2(ba,ba);
-		const h = (delta == 0) ? 0 : clamp( Math.Dot2(pa,ba)/delta, 0.0, 1.0 );
-		const baScaled = Math.Multiply2( ba, [h,h] );
-		return Math.Distance2( pa, baScaled );
+		const pa = Subtract2(p,a);
+		const ba = Subtract2(b,a);
+		const delta = Dot2(ba,ba);
+		const h = (delta == 0) ? 0 : clamp( Dot2(pa,ba)/delta, 0.0, 1.0 );
+		const baScaled = Multiply2( ba, [h,h] );
+		return Distance2( pa, baScaled );
 	}
 	
 	function sdTriangle(p,p0,p1,p2 )
 	{
 		//	get edges/deltas
-		const e0 = Math.Subtract2(p1,p0);
-		const e1 = Math.Subtract2(p2,p1);
-		const e2 = Math.Subtract2(p0,p2);
-		const v0 = Math.Subtract2(p ,p0);
-		const v1 = Math.Subtract2(p ,p1);
-		const v2 = Math.Subtract2(p ,p2);
+		const e0 = Subtract2(p1,p0);
+		const e1 = Subtract2(p2,p1);
+		const e2 = Subtract2(p0,p2);
+		const v0 = Subtract2(p ,p0);
+		const v1 = Subtract2(p ,p1);
+		const v2 = Subtract2(p ,p2);
 		const e0_x = e0[0];
 		const e0_y = e0[1];
 		const e1_x = e1[0];
@@ -2044,17 +1998,17 @@ Math.GetDistanceToPolygon2 = function(Position,Corners,Center)
 		const e2_x = e2[0];
 		const e2_y = e2[1];
 		
-		const e0_LocalScale = clamp( Math.Dot2(v0,e0)/Math.Dot2(e0,e0), 0.0, 1.0 );
-		const e1_LocalScale = clamp( Math.Dot2(v1,e1)/Math.Dot2(e1,e1), 0.0, 1.0 );
-		const e2_LocalScale = clamp( Math.Dot2(v2,e2)/Math.Dot2(e2,e2), 0.0, 1.0 );
-		const pq0 = Math.Subtract2(v0,Math.Multiply2(e0,[e0_LocalScale,e0_LocalScale]));
-		const pq1 = Math.Subtract2(v1,Math.Multiply2(e1,[e1_LocalScale,e1_LocalScale]));
-		const pq2 = Math.Subtract2(v2,Math.Multiply2(e2,[e2_LocalScale,e2_LocalScale]));
+		const e0_LocalScale = clamp( Dot2(v0,e0)/Dot2(e0,e0), 0.0, 1.0 );
+		const e1_LocalScale = clamp( Dot2(v1,e1)/Dot2(e1,e1), 0.0, 1.0 );
+		const e2_LocalScale = clamp( Dot2(v2,e2)/Dot2(e2,e2), 0.0, 1.0 );
+		const pq0 = Subtract2(v0,Multiply2(e0,[e0_LocalScale,e0_LocalScale]));
+		const pq1 = Subtract2(v1,Multiply2(e1,[e1_LocalScale,e1_LocalScale]));
+		const pq2 = Subtract2(v2,Multiply2(e2,[e2_LocalScale,e2_LocalScale]));
 		const s = sign( e0_x*e2_y - e0_y*e2_x );
 		
-		const pq0_lengthsq = Math.Dot2(pq0,pq0);
-		const pq1_lengthsq = Math.Dot2(pq1,pq1);
-		const pq2_lengthsq = Math.Dot2(pq2,pq2);
+		const pq0_lengthsq = Dot2(pq0,pq0);
+		const pq1_lengthsq = Dot2(pq1,pq1);
+		const pq2_lengthsq = Dot2(pq2,pq2);
 		
 		const v0_x = v0[0];
 		const v0_y = v0[1];
@@ -2067,7 +2021,7 @@ Math.GetDistanceToPolygon2 = function(Position,Corners,Center)
 		const pq1_signeddistance2 = [pq1_lengthsq, s*(v1_x*e1_y-v1_y*e1_x)];
 		const pq2_signeddistance2 = [pq2_lengthsq, s*(v2_x*e2_y-v2_y*e2_x)];
 		
-		const d = Math.min2( pq0_signeddistance2, pq1_signeddistance2, pq2_signeddistance2 );
+		const d = min2( pq0_signeddistance2, pq1_signeddistance2, pq2_signeddistance2 );
 		return -Math.sqrt(d[0]) * sign(d[1]);
 	}
 	
@@ -2111,3 +2065,437 @@ Math.GetDistanceToPolygon2 = function(Position,Corners,Center)
 	return MinDistance;
 }
 
+
+export function GetRayRayIntersection3(StartA,DirA,StartB,DirB)
+{
+	//	must be normalised to match c# version
+	const da = Normalise3(DirA);
+	const db = Normalise3(DirB);
+
+	const dc = Subtract3(StartB,StartA);
+
+	const dadb_cross = Cross3(da, db);
+	const dcdb_cross = Cross3(dc, db);
+	const dcda_cross = Cross3(dc, da);
+
+	const sa = Dot3(dcdb_cross, dadb_cross) / LengthSq3(dadb_cross);
+	const sb = Dot3(dcda_cross, dadb_cross) / LengthSq3(dadb_cross);
+
+	const Result = {};
+	Result.IntersectionTimeA = sa;
+	Result.IntersectionTimeB = sb;
+	return Result;
+}
+/*
+
+void GetLineLineIntersection3(float3 StartA,float3 EndA,float3 StartB,float3 EndB,out float IntersectionTimeA,out float IntersectionTimeB)
+{
+	float LengthA = length(EndA - StartA);
+	float LengthB = length(EndB - StartB);
+		
+	float3 DirA = (EndA - StartA);
+	float3 DirB = (EndB - StartB);
+	GetRayRayIntersection3( StartA, DirA, StartB, DirB, IntersectionTimeA, IntersectionTimeB );
+
+	//	Intersection time is along ray in world units, even though we normalised the dir. 
+	//	if they cross at ita=2 then thats still 2 in world space
+	//	so divide to get it relative to the line
+	IntersectionTimeA /= LengthA;
+	IntersectionTimeB /= LengthB;
+}
+
+
+void GetLineLineIntersection3Clamped(float3 StartA,float3 EndA,float3 StartB,float3 EndB,out float IntersectionTimeA,out float IntersectionTimeB)
+{
+	GetLineLineIntersection3( StartA, EndA, StartB, EndB, IntersectionTimeA, IntersectionTimeB);
+	IntersectionTimeA = Clamp01(IntersectionTimeA);
+	IntersectionTimeB = Clamp01(IntersectionTimeB);
+}
+*/
+
+
+
+function GaussianElimination(A,n)
+{
+	// originally by arturo castro - 08/01/2010
+	//
+	// ported to c from pseudocode in
+	// http://en.wikipedia.org/wiki/Gaussian_elimination
+	
+	let i = 0;
+	let m = n - 1;
+	for ( let j=0;	j<n && i<m;	j++ )
+	{
+		// Find pivot in column j, starting in row i:
+		let maxi = i;
+		for (let k = i + 1; k < m; k++)
+		{
+			let a_k_j = Math.abs(A[k][j]);
+			let a_maxi_j = Math.abs(A[maxi][j]);
+			if (a_k_j > a_maxi_j)
+			{
+				maxi = k;
+			}
+		}
+		let a_maxi_j = A[maxi][j];
+		if (a_maxi_j != 0)
+		{
+			//console.log( a_maxi_j + " != 0" );
+			//swap rows i and maxi, but do not change the value of i
+			if (i != maxi)
+			{
+				for (let k = 0; k < n; k++)
+				{
+					let aux = A[i][k];
+					A[i][k] = A[maxi][k];
+					A[maxi][k] = aux;
+				}
+			}
+			//Now A[i,j] will contain the old value of A[maxi,j].
+			//divide each entry in row i by A[i,j]
+			let A_ij = A[i][j];
+			for (let k = 0; k < n; k++)
+			{
+				A[i][k] /= A_ij;
+			}
+			//Now A[i,j] will have the value 1.
+			for (let u = i + 1; u < m; u++)
+			{
+				//subtract A[u,j] * row i from row u
+				let A_uj = A[u][j];
+				for (let k = 0; k < n; k++)
+				{
+					let neg = A_uj * A[i][k];
+					let auk = A[u][k];
+					A[u][k] = auk - neg;
+				}
+				//Now A[u,j] will be 0, since A[u,j] - A[i,j] * A[u,j] = A[u,j] - 1 * A[u,j] = 0.
+			}
+			
+			i++;
+		}
+	}
+	
+	//back substitution
+	for (let k = m - 2; k >= 0; k--)
+	{
+		for (let l = k + 1; l < n - 1; l++)
+		{
+			A[k][m] -= A[k][l] * A[l][m];
+			//A[i*n+j]=0;
+		}
+	}
+}
+	
+export function CalcHomography(src,dest,Plane='xy')
+{
+	function ArrayToXy(xy)
+	{
+		if ( xy.x !== undefined )
+			return xy;
+		const x = xy[0];
+		const y = xy[1];
+		xy = {};
+		xy.x = x;
+		xy.y = y;
+		return xy;
+	}
+	src = src.map(ArrayToXy);
+	dest = dest.map(ArrayToXy);
+	
+	// originally by arturo castro - 08/01/2010
+	//
+	// create the equation system to be solved
+	//
+	// from: Multiple View Geometry in Computer Vision 2ed
+	//       Hartley R. and Zisserman A.
+	//
+	// x' = xH
+	// where H is the homography: a 3 by 3 matrix
+	// that transformed to inhomogeneous coordinates for each point
+	// gives the following equations for each point:
+	//
+	// x' * (h31*x + h32*y + h33) = h11*x + h12*y + h13
+	// y' * (h31*x + h32*y + h33) = h21*x + h22*y + h23
+	//
+	// as the homography is scale independent we can let h33 be 1 (indeed any of the terms)
+	// so for 4 points we have 8 equations for 8 terms to solve: h11 - h32
+	// after ordering the terms it gives the following matrix
+	// that can be solved with gaussian elimination:
+	
+	
+	let P = [
+			 [-src[0].x, -src[0].y, -1,   0,   0,  0, src[0].x*dest[0].x, src[0].y*dest[0].x, -dest[0].x ], // h11
+			 [  0,   0,  0, -src[0].x, -src[0].y, -1, src[0].x*dest[0].y, src[0].y*dest[0].y, -dest[0].y ], // h12
+			 
+			 [-src[1].x, -src[1].y, -1,   0,   0,  0, src[1].x*dest[1].x, src[1].y*dest[1].x, -dest[1].x ], // h13
+			 [  0,   0,  0, -src[1].x, -src[1].y, -1, src[1].x*dest[1].y, src[1].y*dest[1].y, -dest[1].y ], // h21
+			 
+			 [-src[2].x, -src[2].y, -1,   0,   0,  0, src[2].x*dest[2].x, src[2].y*dest[2].x, -dest[2].x ], // h22
+			 [  0,   0,  0, -src[2].x, -src[2].y, -1, src[2].x*dest[2].y, src[2].y*dest[2].y, -dest[2].y ], // h23
+			 
+			 [-src[3].x, -src[3].y, -1,   0,   0,  0, src[3].x*dest[3].x, src[3].y*dest[3].x, -dest[3].x ], // h31
+			 [  0,   0,  0, -src[3].x, -src[3].y, -1, src[3].x*dest[3].y, src[3].y*dest[3].y, -dest[3].y ], // h32
+			 ];
+	
+	GaussianElimination( P, 9);
+	
+
+	let Row0,Row1,Row2,Row3;
+	
+	//	gr: to let us invert, need determinet to be non zero
+	let m22 = 1;
+	//	gr: don't know why this is transposed (in C and JS) compared to c#! maybe accessors are different for double arrays? madness
+	let Transpose = true;
+	
+	if (Transpose && Plane == 'xy' )
+	{
+		//	z = identity
+		Row0 = [ P[0][8], P[1][8],	0, P[2][8] ];
+		Row1 = [ P[3][8], P[4][8],	0, P[5][8] ];
+		Row2 = [ 0, 		0, 		m22, 0 ];
+		Row3 = [ P[6][8], P[7][8],	0, 1 ];
+	}
+	else if (Plane == 'xy' )
+	{
+		//	z = identity
+		Row0 = [ P[0][8], P[3][8],	0, P[6][8] ];
+		Row1 = [ P[1][8], P[4][8],	0, P[7][8] ];
+		Row2 = [ 0, 		0, 		m22, 0 ];
+		Row3 = [ P[2][8], P[5][8],	0, 1 ];
+	}
+	else if ( Plane == 'xz' )
+	{
+		//	y = identity
+		Row0 = [ P[0][8],	0,		P[3][8],	P[6][8] ];
+		Row1 = [ 0,			m22,	0,			0		 ];
+		Row2 = [ P[1][8],	0, 		P[4][8],	P[7][8] ];
+		Row3 = [ P[2][8],	0,		P[5][8],	1 ];
+	}
+	
+	//	if we setrow() for each, we'll get an exception as unity checks validity of the matrix
+	//let HomographyMtx = new Matrix4x4(Rows4[0], Rows4[1], Rows4[2], Rows4[3]);
+	const HomographyMtx = 
+	[
+		...Row0,
+		...Row1,
+		...Row2,
+		...Row3,
+	];
+	
+	return HomographyMtx;
+}
+
+
+
+//	returns false for parralel lines
+//	returns [x,y,TimeAlongAOfIntersection]
+export function GetRayRayIntersection(StartA,EndA,StartB,EndB)
+{
+	let Ax = StartA[0];
+	let Ay = StartA[1];
+	let Bx = EndA[0];
+	let By = EndA[1];
+	
+	let Cx = StartB[0];
+	let Cy = StartB[1];
+	let Dx = EndB[0];
+	let Dy = EndB[1];
+	
+	//  Fail if either line is undefined.
+	//if (Ax==Bx && Ay==By || Cx==Dx && Cy==Dy) return NO;
+	
+	//	Translate the system so that point A is on the origin.
+	Bx-=Ax;
+	By-=Ay;
+	Cx-=Ax; 
+	Cy-=Ay;
+	Dx-=Ax; 
+	Dy-=Ay;
+	
+	//  Discover the length of segment A-B.
+	let distAB = Math.hypot(Bx,By);
+	//	gr: todo; we COULD intersect a 1x1 line still!
+	if ( distAB == 0 )
+	{
+		console.warn(`todo: extra checks on a 1x1 line where ray/ray intersection fails`);
+		return false;
+	}
+	
+	//	Rotate the system so that point B is on the positive X axis.
+	let theCos = Bx / distAB;
+	let theSin = By / distAB;
+	
+	let newX = Cx*theCos + Cy*theSin;
+	Cy = Cy*theCos - Cx*theSin; 
+	Cx = newX;
+	
+	newX = Dx*theCos + Dy*theSin;
+	Dy = Dy*theCos - Dx*theSin;
+	Dx = newX;
+	
+	// Fail if the lines are parallel.
+	if ( Cy==Dy )
+		return false;
+	
+	//	Discover the position of the intersection point along line A-B.
+	let ABpos = Dx+(Cx-Dx) * Dy/(Dy-Cy);
+	
+	let IntersectionX = Ax + ABpos * theCos;
+	let IntersectionY = Ay + ABpos * theSin;
+
+	//	position div length = normalised time	
+	const TimeAlongA = ABpos / distAB;
+	//if ( isNaN(IntersectionX) ||isNaN(IntersectionX) ||isNaN(TimeAlongA) )
+	//	return false;
+	
+	return [IntersectionX,IntersectionY,TimeAlongA];
+}
+
+export function GetLineLineIntersection(StartA,EndA,StartB,EndB)
+{
+	//	get ray intersection
+	const Intersection = GetRayRayIntersection(StartA,EndA,StartB,EndB);
+	if ( Intersection === false )
+		return false;
+
+	//	clip to line A, return false if outside
+	const TimeAlongA = Intersection[2];
+	if ( TimeAlongA < 0 )
+		return false;
+	if ( TimeAlongA > 1 )
+		return false;
+	
+	return Intersection.slice(0,2);
+}
+
+//	return a "distance" to how much a is inside b
+//	this is essentially used to find overlapping lines, and to find
+//	the weakest (smallest) line
+//	a = [ [x,y] [x,y] ] 
+//	b= [ [x,y], [x,y] ]
+export function GetLineDistanceToLine(a,b)
+{
+	//	we could probably find the dot too as an early rejection
+	//	but we want a score
+	//	also, do we want to know if the lines intersect?
+	
+	//	find nearest start/end points on b
+	let NearStart = GetNearestPointOnLine2( a[0], b[0], b[1] );
+	let NearEnd = GetNearestPointOnLine2( a[1], b[0], b[1] );
+	
+	let StartDistance = Distance2( NearStart, a[0] );
+	let EndDistance = Distance2( NearEnd, a[1] );
+	
+	if ( isNaN(StartDistance) || isNaN(EndDistance) )
+		throw `GetLineDistanceToLine nan`;
+		
+	return StartDistance + EndDistance;
+}
+
+
+export function GetStraightnessOfPoints(Positions)
+{
+	let Directions = [];
+	for ( let i=1;	i<Positions.length;	i++ )
+	{
+		const Prev = Positions[i-1];
+		const Next = Positions[i-0];
+		const Direction = Normalise3(Subtract3(Prev,Next));
+		Directions.push(Direction);
+	}
+	let Dots = [];
+	for ( let i=1;	i<Directions.length;	i++ )
+	{
+		const Prev = Directions[i-1];
+		const Next = Directions[i-0];
+		const Dot = Dot3(Prev,Next);
+		Dots.push(Dot);
+	}
+	
+	let TotalDot = 1;
+	//	mult, or average?
+	for ( let Dot of Dots )
+		TotalDot *= Dot;
+	return TotalDot;
+}
+
+export function GetRectsFromIndexes(StartIndex,EndIndex,Width,Channels,RectsNeedToStripeIndexes=true)
+{
+	let Stride = Channels * Width;
+	
+	if ( StartIndex % Channels != 0 )
+		throw `Expecting first index ${StartIndex} to align with channels ${Channels}`;
+	if ( EndIndex % Channels != Channels-1 )
+		throw `Expecting end index ${EndIndex} to align with channels ${Channels}`;
+	
+	const StartPixel = StartIndex/Channels;
+	const EndPixel = Math.floor(EndIndex /Channels);
+	
+	const Rects = [];	
+	function PushRow(x,y,RowWidth)
+	{
+		let Rect = {};
+		Rect.StartIndex = (y*Width) + x;
+		Rect.EndIndex = Rect.StartIndex + RowWidth;
+		Rect.StartIndex *= Channels;
+		Rect.EndIndex *= Channels;
+		Rect.EndIndex -= 1;
+		Rect.x = x;
+		Rect.y = y;
+		Rect.w = RowWidth;
+		Rect.h = 1;
+		
+		function MergeRect(LastRect)
+		{
+			if ( LastRect.x != Rect.x )	return false;
+			if ( LastRect.w != Rect.w )	return false;
+			if ( LastRect.y+LastRect.h != Rect.y )	
+				return false;
+			
+			//	if we need data to stripe, (ie, full width rects), check it
+			if ( RectsNeedToStripeIndexes )
+			{
+				if ( Rect.StartIndex != LastRect.EndIndex+1 )
+					return false;
+			}
+			
+			const Bottom = Rect.y+Rect.h;
+			LastRect.h = Bottom - LastRect.y;
+			LastRect.EndIndex = Rect.EndIndex;
+			return true;
+		}
+		
+		//	merge with above if possible
+		if ( Rects.length )
+		{
+			const LastRect = Rects[Rects.length-1];
+			if ( MergeRect(LastRect) )
+				return;
+		}
+		Rects.push(Rect);
+	}
+	
+	//	split indexes into rows
+	let Pixel = StartPixel;
+	while ( Pixel <= EndPixel )
+	{
+		let y = Math.floor( Pixel / Width );
+		let RowStart = Pixel % Width;
+		
+		let RowStartPixel = (y*Width) + RowStart;
+		let RowEndPixel = (y*Width) + Width-1;
+		
+		RowEndPixel = Math.min( RowEndPixel, EndPixel );
+
+		const RowWidth = (RowEndPixel - RowStartPixel)+1;
+		
+		PushRow( RowStart, y, RowWidth );
+		
+		if ( RowWidth == 0 )
+			throw `mis calculation, avoid infinite loop`;
+		Pixel += RowWidth;
+	}
+	
+	return Rects;
+}

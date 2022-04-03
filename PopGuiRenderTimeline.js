@@ -70,7 +70,7 @@ Pop.Gui.RenderTimelineWindow = class
 		
 		if ( !this.Counters.hasOwnProperty(Name) )
 		{
-			this.Counters[Name] = new Pop.FrameCounter(Name,this.ReportFrequencyMs);
+			this.Counters[Name] = new FrameCounter(Name,this.ReportFrequencyMs);
 			//	catch report
 			function Report(CountPerSec)
 			{
