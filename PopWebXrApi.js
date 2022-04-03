@@ -539,11 +539,31 @@ let SupportedSessionMode = null;
 //	allow this to be overriden with custom polyfills
 //	todo: abstract these interfaces so we can have our own XR API along side navigator
 //let PlatformXr = navigator.xr;
+let OverridePlatformXr;
+let OverridePlatformLayerType;
+
 function GetPlatformXr()
 {
-	return navigator.xr;
+	return OverridePlatformXr || navigator.xr;
 }
-let PlatformXRWebGLLayer = (typeof XRWebGLLayer !== 'undefined') ? XRWebGLLayer : null; 
+
+function GetPlatformLayerType()
+{
+	let PlatformXRWebGLLayer = (typeof XRWebGLLayer !== 'undefined') ? XRWebGLLayer : null; 
+	return OverridePlatformLayerType || PlatformXRWebGLLayer;
+}
+
+export function SetPlatformXr(Platform)
+{
+	OverridePlatformXr = Platform;
+}
+
+export function SetPlatformLayerType(LayerType)
+{
+	OverridePlatformLayerType = LayerType;
+}
+
+
 
 async function GetSupportedSessionMode()
 {
@@ -729,6 +749,7 @@ class Device_t
 		}
 	
 		const gl = OpenglContext;
+		let PlatformXRWebGLLayerType = GetPlatformLayerType();
 		
 		if ( !ForcedLayerType )
 		{
@@ -736,7 +757,7 @@ class Device_t
 				ForcedLayerType = 'MultiView';
 			else if ( this.XrFactory )
 				ForcedLayerType = 'StereoLayer';
-			else if ( PlatformXRWebGLLayer )
+			else if ( PlatformXRWebGLLayerType )
 				ForcedLayerType = 'Classic';
 		}
 		
@@ -772,7 +793,7 @@ class Device_t
 			Options.framebufferScaleFactor = 1.0;
 			Options.antialias = true;
 			
-			this.Layer = new PlatformXRWebGLLayer( this.Session, OpenglContext, Options );
+			this.Layer = new PlatformXRWebGLLayerType( this.Session, OpenglContext, Options );
 			this.Session.updateRenderState({ baseLayer: this.Layer });
 		}
 		else
