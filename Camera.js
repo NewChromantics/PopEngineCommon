@@ -64,7 +64,7 @@ export class Camera
 			this.Rotation4x4 = CopyCamera.Rotation4x4;
 		}
 	}
-
+	
 	
 	FieldOfViewToFocalLengths(FovHorz,FovVert)
 	{
@@ -180,7 +180,8 @@ export class Camera
 	{
 		if ( this.FocalCenter !== false )
 			throw `Something is changing the .FocalCenter which is old API`;
-		
+
+		/*
 		if ( this.PixelFocals )
 		{
 			const Focal = this.PixelToOpenglFocalLengths( this.PixelFocals, this.PixelFocals.ImageSize );
@@ -215,6 +216,29 @@ export class Camera
 		
 		OpenglFocal.s = 0;
 		
+		return OpenglFocal;
+	}
+	*/
+
+		/*
+		const Focal = this.GetPixelFocalLengths();
+		//	image size from calibrated focal lengths
+		const ImageWidth = 800;
+		const ImageHeight = 800;
+		const OpenglFocal = this.PixelToOpenglFocalLengths( Focal, [ImageWidth, ImageHeight] );
+		*/
+		
+		const Aspect = ViewRect[2] / ViewRect[3];
+		const FovVertical = this.FovVertical;
+		//const FovHorizontal = FovVertical * Aspect;
+		
+		const OpenglFocal = {};
+		OpenglFocal.fy = 1.0 / Math.tan( PopMath.radians(FovVertical) / 2);
+		//OpenglFocal.fx = 1.0 / Math.tan( PopMath.radians(FovHorizontal) / 2);
+		OpenglFocal.fx = OpenglFocal.fy / Aspect;
+		OpenglFocal.cx = this.FocalCenterOffset[0];
+		OpenglFocal.cy = this.FocalCenterOffset[1];
+		OpenglFocal.s = 0;
 		return OpenglFocal;
 	}
 	
@@ -289,20 +313,20 @@ export class Camera
 			return this.ProjectionMatrix;
 		
 		const OpenglFocal = this.GetOpenglFocalLengths( ViewRect );
+		
 		const Far = this.FarDistance;
 		const Near = this.NearDistance;
-	
+		
 		let Matrix = [];
-		Matrix[0] = (Near) / OpenglFocal.fx;
+		Matrix[0] = OpenglFocal.fx;
 		Matrix[1] = OpenglFocal.s;
 		Matrix[2] = OpenglFocal.cx;
 		Matrix[3] = 0;
 		
 		Matrix[4] = 0;
-		Matrix[5] = (Near) / OpenglFocal.fy;
+		Matrix[5] = OpenglFocal.fy;
 		Matrix[6] = OpenglFocal.cy;
 		Matrix[7] = 0;
-		
 		
 		//	near...far in opengl needs to resovle to -1...1
 		//	gr: glDepthRange suggests programmable opengl pipeline is 0...1
@@ -311,7 +335,6 @@ export class Camera
 		//	http://ogldev.atspace.co.uk/www/tutorial12/tutorial12.html
 		Matrix[8] = 0;
 		Matrix[9] = 0;
-		/*
 		//	gr: this should now work in both ways, but one of them is mirrored.
 		//		false SHOULD match old engine style... but is directx
 		if ( this.ZForwardIsNegative )
@@ -326,17 +349,9 @@ export class Camera
 			Matrix[10] = (-Near-Far) / (Near-Far);
 			Matrix[11] = 1;
 		}
-		*/
-		const c = - ( Far + Near ) / ( Far - Near );
-		const d = - 2 * Far * Near / ( Far - Near );
-		//Matrix[10] = (-Near-Far) / (Near-Far);
-		Matrix[10] = c;
-		Matrix[11] = -1;
-			
 		Matrix[12] = 0;
 		Matrix[13] = 0;
-		//Matrix[14] = (2*Far*Near) / (Near-Far);
-		Matrix[14] = d;
+		Matrix[14] = (2*Far*Near) / (Near-Far);
 		Matrix[15] = 0;
 		
 		return Matrix;
