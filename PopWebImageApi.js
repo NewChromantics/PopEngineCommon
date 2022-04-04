@@ -337,6 +337,11 @@ export default class PopImage
 		this.LinearFilter = Linear;
 	}
 	
+	get width()		{	return this.GetWidth();	}
+	get Width()		{	return this.GetWidth();	}
+	get height()	{	return this.GetHeight();	}
+	get Height()	{	return this.GetHeight();	}
+
 	GetWidth()
 	{
 		return this.Size[0];
