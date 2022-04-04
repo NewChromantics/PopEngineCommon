@@ -863,6 +863,45 @@ export function GetMatrixTranslation(Matrix,DivW=false)
 	return xyz;
 }
 
+
+//	gr: alternative quaternion -> matrix
+//	https://github.com/immersive-web/webxr-polyfill/blob/0202e9d2b80fcce3d46010f21869b8684da9c4f5/build/webxr-polyfill.js#L340
+export function GetQuaternionFromMatrix4x4(mat) 
+{
+	let out = [0,0,0,1];
+  let trace = mat[0] + mat[5] + mat[10];
+  let S = 0;
+  if (trace > 0) {
+    S = Math.sqrt(trace + 1.0) * 2;
+    out[3] = 0.25 * S;
+    out[0] = (mat[6] - mat[9]) / S;
+    out[1] = (mat[8] - mat[2]) / S;
+    out[2] = (mat[1] - mat[4]) / S;
+  } else if ((mat[0] > mat[5]) && (mat[0] > mat[10])) {
+    S = Math.sqrt(1.0 + mat[0] - mat[5] - mat[10]) * 2;
+    out[3] = (mat[6] - mat[9]) / S;
+    out[0] = 0.25 * S;
+    out[1] = (mat[1] + mat[4]) / S;
+    out[2] = (mat[8] + mat[2]) / S;
+  } else if (mat[5] > mat[10]) {
+    S = Math.sqrt(1.0 + mat[5] - mat[0] - mat[10]) * 2;
+    out[3] = (mat[8] - mat[2]) / S;
+    out[0] = (mat[1] + mat[4]) / S;
+    out[1] = 0.25 * S;
+    out[2] = (mat[6] + mat[9]) / S;
+  } else {
+    S = Math.sqrt(1.0 + mat[10] - mat[0] - mat[5]) * 2;
+    out[3] = (mat[1] - mat[4]) / S;
+    out[0] = (mat[8] + mat[2]) / S;
+    out[1] = (mat[6] + mat[9]) / S;
+    out[2] = 0.25 * S;
+  }
+  return out;
+}
+
+
+//	same as above, get quaternion from matrix, 
+//	need to work out which is better and how they differ
 export function GetMatrixQuaternion(Matrix)
 {
 	function m(col,row)

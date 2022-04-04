@@ -6,42 +6,8 @@
 
 import {GetPoseEstimation} from './PoseEstimation.js'
 import CV from './Opencv.js'
+import {GetQuaternionFromMatrix4x4} from './Math.js'
 
-
-
-//	https://github.com/immersive-web/webxr-polyfill/blob/0202e9d2b80fcce3d46010f21869b8684da9c4f5/build/webxr-polyfill.js#L340
-function GetQuaternionFromMatrix4x4(mat) 
-{
-	let out = [0,0,0,1];
-  let trace = mat[0] + mat[5] + mat[10];
-  let S = 0;
-  if (trace > 0) {
-    S = Math.sqrt(trace + 1.0) * 2;
-    out[3] = 0.25 * S;
-    out[0] = (mat[6] - mat[9]) / S;
-    out[1] = (mat[8] - mat[2]) / S;
-    out[2] = (mat[1] - mat[4]) / S;
-  } else if ((mat[0] > mat[5]) && (mat[0] > mat[10])) {
-    S = Math.sqrt(1.0 + mat[0] - mat[5] - mat[10]) * 2;
-    out[3] = (mat[6] - mat[9]) / S;
-    out[0] = 0.25 * S;
-    out[1] = (mat[1] + mat[4]) / S;
-    out[2] = (mat[8] + mat[2]) / S;
-  } else if (mat[5] > mat[10]) {
-    S = Math.sqrt(1.0 + mat[5] - mat[0] - mat[10]) * 2;
-    out[3] = (mat[8] - mat[2]) / S;
-    out[0] = (mat[1] + mat[4]) / S;
-    out[1] = 0.25 * S;
-    out[2] = (mat[6] + mat[9]) / S;
-  } else {
-    S = Math.sqrt(1.0 + mat[10] - mat[0] - mat[5]) * 2;
-    out[3] = (mat[1] - mat[4]) / S;
-    out[0] = (mat[8] + mat[2]) / S;
-    out[1] = (mat[6] + mat[9]) / S;
-    out[2] = 0.25 * S;
-  }
-  return out;
-}
 
 
 
@@ -80,6 +46,64 @@ class WebBarcodeDetector
 }
 
 
+export function GetPoseFromMarkers(MarkerCorners,ImageWidth,ImageHeight,ObjectSizeOrCorners)
+{
+	const Flip = true;
+		
+	//	https://github.com/jcmellado/js-aruco/blob/master/samples/debug-posit/debug-posit.html#L220
+	//	marker corners need to be -0.5...0.5 in marker space
+	//	todo: move this to the pose() calc
+	function NormaliseCorner(Corner)
+	{
+		const x = Corner.x - (ImageWidth/2);
+		let y = Corner.y - (ImageHeight/2);
+		if ( Flip )
+			 y = (ImageHeight/2) - Corner.y;
+			
+		const xy = {};
+		xy.x = x;
+		xy.y = y;
+		return xy;
+	}
+	const ProcessCorners = MarkerCorners.map(NormaliseCorner);
+		
+	const FocalLength = ImageWidth;
+	const MarkerSize = ObjectSizeOrCorners;
+	const MarkerNormal = null;
+	const Pose = GetPoseEstimation(MarkerSize,MarkerNormal,FocalLength,ProcessCorners);
+
+	//	gr: these are 3x3, so I guess they're rodrigues rotations?
+	//	convert to a sensible matrix
+	const Rotation3x3 = Pose.bestRotation;
+	const Translation3 = Pose.bestTranslation;
+
+	const Rotation4x4 = 
+	[
+		Rotation3x3[0][0],	Rotation3x3[1][0],	Rotation3x3[2][0],	0,
+		Rotation3x3[0][1],	Rotation3x3[1][1],	Rotation3x3[2][1],	0,
+		Rotation3x3[0][2],	Rotation3x3[1][2],	Rotation3x3[2][2],	0,
+		0,					0,					0,					1
+	];		
+	
+	/*
+	const yaw = -Math.atan2(Rotation3x3[0][2], Rotation3x3[2][2]);
+	const pitch = -Math.asin(-Rotation3x3[1][2]);
+	const roll = Math.atan2(Rotation3x3[1][0], Rotation3x3[1][1]);
+	
+	Pop.Debug(`Rotation3x3=${Rotation3x3} Translation3=${Translation3} pitch=${pitch} yaw=${yaw} roll=${roll}`);
+	*/
+	const Quaternion = GetQuaternionFromMatrix4x4(Rotation4x4);
+		
+	Pose.RotationQuaternion = Quaternion;
+	Pose.RotationMatrix = Rotation4x4;
+	
+	//	position should be in camera space units	
+	Pose.Position = Translation3;
+
+	return Pose;
+}
+
+
 let DetectorInstance;
 
 //	todo: this is/shouldnt be ARUCO specific
@@ -107,69 +131,8 @@ async function DetectMarkers(imageData,MarkerSize=1)
 	
 	function AddPoseToMarker(Marker)
 	{
-		const Flip = true;
-		
-		//	https://github.com/jcmellado/js-aruco/blob/master/samples/debug-posit/debug-posit.html#L220
-		//	marker corners need to be -0.5...0.5 in marker space
-		//	todo: move this to the pose() calc
-		function NormaliseCorner(Corner)
-		{
-			const x = Corner.x - (ImageWidth/2);
-			let y = Corner.y - (ImageHeight/2);
-			if ( Flip )
-				 y = (ImageHeight/2) - Corner.y;
-			
-			const xy = {};
-			xy.x = x;
-			xy.y = y;
-			return xy;
-		}
-		const ProcessCorners = Marker.corners.map(NormaliseCorner);
-		
-		const FocalLength = ImageWidth;
-		const MarkerSize = 1;
-		const MarkerNormal = null;
-		const Pose = GetPoseEstimation(MarkerSize,MarkerNormal,FocalLength,ProcessCorners);
-
-		
-		//	gr: these are 3x3, so I guess they're rodrigues rotations?
-		//	convert to a sensible matrix
-		const Rotation3x3 = Pose.bestRotation;
-		const Translation3 = Pose.bestTranslation;
-		
-		const Rotation4x4 = 
-		[
-			Rotation3x3[0][0],	Rotation3x3[0][1],	Rotation3x3[0][2],	0,
-			Rotation3x3[1][0],	Rotation3x3[1][1],	Rotation3x3[1][2],	0,
-			Rotation3x3[2][0],	Rotation3x3[2][1],	Rotation3x3[2][2],	0,
-			0,					0,					0,					1
-		];	
-		const Rotation4x4_Transposed = 
-		[
-			Rotation3x3[0][0],	Rotation3x3[1][0],	Rotation3x3[2][0],	0,
-			Rotation3x3[0][1],	Rotation3x3[1][1],	Rotation3x3[2][1],	0,
-			Rotation3x3[0][2],	Rotation3x3[1][2],	Rotation3x3[2][2],	0,
-			0,					0,					0,					1
-		];		
-		
-		
-		/*
-		const yaw = -Math.atan2(Rotation3x3[0][2], Rotation3x3[2][2]);
-		const pitch = -Math.asin(-Rotation3x3[1][2]);
-		const roll = Math.atan2(Rotation3x3[1][0], Rotation3x3[1][1]);
-		
-		Pop.Debug(`Rotation3x3=${Rotation3x3} Translation3=${Translation3} pitch=${pitch} yaw=${yaw} roll=${roll}`);
-		*/
-		let Rotation = Rotation4x4_Transposed;
-		const Quaternion = GetQuaternionFromMatrix4x4(Rotation);
-		
-		Pose.Rotation = Quaternion;
-	
-		//	position should be in world space units	
-		Pose.Position = Translation3;
-		
-		//Pop.Debug(`Translation3 ${Pose.Position}`);
-		Marker.Pose = Pose;
+		const ObjectSizeOrCorners = 1;
+		Marker.Pose = GetPoseFromMarkers( Marker.corners, ImageWidth, ImageHeight, ObjectSizeOrCorners );
 	}
 	Markers.forEach(AddPoseToMarker);
 	
