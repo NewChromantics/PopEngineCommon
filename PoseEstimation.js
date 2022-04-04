@@ -37,8 +37,7 @@ class Posit
 		}
 		var half = modelSize / 2.0;
 
-		return 
-		[
+		return [
 			[-half,  half, 0.0],
 			[ half,  half, 0.0],
 			[ half, -half, 0.0],
