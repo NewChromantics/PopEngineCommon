@@ -1209,6 +1209,7 @@ class Device_t
 		Camera.Transform = View.transform;	//	stored for debugging
 		
 		//	write position (w should always be 0
+		//	gr: don't we want inverse transform too?
 		Camera.Position = [View.transform.position.x,View.transform.position.y,View.transform.position.z];
 		
 		//	get rotation but remove the translation (so we use .Position)
