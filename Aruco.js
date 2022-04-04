@@ -92,6 +92,9 @@ export function GetPoseFromMarkers(MarkerCorners,ImageWidth,ImageHeight,ObjectSi
 	
 	Pop.Debug(`Rotation3x3=${Rotation3x3} Translation3=${Translation3} pitch=${pitch} yaw=${yaw} roll=${roll}`);
 	*/
+	//	gr: the XR usage of this uses the inverse rotation
+	//		but we seem to be able to use the rotation4x4 without inverting...
+	//		maybe this Matrix->quaternion function is inverting the rotation....
 	const Quaternion = GetQuaternionFromMatrix4x4(Rotation4x4);
 		
 	Pose.RotationQuaternion = Quaternion;
@@ -123,8 +126,10 @@ async function DetectMarkers(imageData,MarkerSize=1)
 		}
 	}
 
-	const ImageWidth = imageData.width;
-	const ImageHeight = imageData.height;
+	//	.videoWidth to support video elements
+	//	somewhere in pop image code we have "get width/height from html element" function to cover all cases
+	const ImageWidth = imageData.videoWidth || imageData.width;
+	const ImageHeight = imageData.videoHeight || imageData.height;
 	const Markers = await DetectorInstance.detect(imageData);
 	
 	
