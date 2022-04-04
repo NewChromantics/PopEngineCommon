@@ -464,9 +464,11 @@ class Posit
 		}
 	  }
 
-	  for (i = 0; i < np; ++ i){
+	  for (i = 0; i < np; ++ i)
+	  {
 		projection[i] = [];
-		for (j = 0; j < 2; ++ j){
+		for (j = 0; j < 2; ++ j)
+		{
 		  projection[i][j] = this.focalLength * move[i][j] / move[i][2];
 		}
 	  }

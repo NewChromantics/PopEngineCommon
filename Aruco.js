@@ -46,7 +46,7 @@ class WebBarcodeDetector
 }
 
 
-export function GetPoseFromMarkers(MarkerCorners,ImageWidth,ImageHeight,ObjectSizeOrCorners)
+export function GetPoseFromMarkers(MarkerCorners,FocalLength,ImageWidth,ImageHeight,ObjectSizeOrCorners)
 {
 	const Flip = true;
 		
@@ -66,8 +66,8 @@ export function GetPoseFromMarkers(MarkerCorners,ImageWidth,ImageHeight,ObjectSi
 		return xy;
 	}
 	const ProcessCorners = MarkerCorners.map(NormaliseCorner);
-		
-	const FocalLength = ImageWidth;
+	
+	FocalLength = ImageWidth * FocalLength;
 	const MarkerSize = ObjectSizeOrCorners;
 	const MarkerNormal = null;
 	const Pose = GetPoseEstimation(MarkerSize,MarkerNormal,FocalLength,ProcessCorners);
@@ -115,7 +115,7 @@ let DetectorInstance;
 
 //	todo: this is/shouldnt be ARUCO specific
 //	marker -> pose
-async function DetectMarkers(imageData,MarkerSize=1)
+async function DetectMarkersAndPose(imageData,MarkerSize=1,FocalLength=null)
 {
 	if ( !DetectorInstance )
 	{
@@ -136,12 +136,13 @@ async function DetectMarkers(imageData,MarkerSize=1)
 	const ImageHeight = imageData.videoHeight || imageData.height;
 	const Markers = await DetectorInstance.detect(imageData);
 	
+	FocalLength = FocalLength || ImageWidth;
 	
 	
 	function AddPoseToMarker(Marker)
 	{
 		const ObjectSizeOrCorners = 1;
-		Marker.Pose = GetPoseFromMarkers( Marker.corners, ImageWidth, ImageHeight, ObjectSizeOrCorners );
+		Marker.Pose = GetPoseFromMarkers( Marker.corners, FocalLength, ImageWidth, ImageHeight, ObjectSizeOrCorners );
 	}
 	Markers.forEach(AddPoseToMarker);
 	
@@ -149,7 +150,7 @@ async function DetectMarkers(imageData,MarkerSize=1)
 	return Markers;
 }
 
-export default DetectMarkers;
+export default DetectMarkersAndPose;
 
 
 class ArucoMarker
