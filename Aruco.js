@@ -6,7 +6,7 @@
 
 import {GetPoseEstimation} from './PoseEstimation.js'
 import CV from './Opencv.js'
-import {GetQuaternionFromMatrix4x4} from './Math.js'
+import {GetMatrixTranslation,SetMatrixTranslation,MatrixInverse4x4,GetQuaternionFromMatrix4x4} from './Math.js'
 
 
 
@@ -77,14 +77,14 @@ export function GetPoseFromMarkers(MarkerCorners,ImageWidth,ImageHeight,ObjectSi
 	const Rotation3x3 = Pose.bestRotation;
 	const Translation3 = Pose.bestTranslation;
 
-	const Rotation4x4 = 
+	const Transform4x4 = 
 	[
 		Rotation3x3[0][0],	Rotation3x3[1][0],	Rotation3x3[2][0],	0,
 		Rotation3x3[0][1],	Rotation3x3[1][1],	Rotation3x3[2][1],	0,
 		Rotation3x3[0][2],	Rotation3x3[1][2],	Rotation3x3[2][2],	0,
-		0,					0,					0,					1
+		Translation3[0],	Translation3[1],	Translation3[2],	1
 	];		
-	
+
 	/*
 	const yaw = -Math.atan2(Rotation3x3[0][2], Rotation3x3[2][2]);
 	const pitch = -Math.asin(-Rotation3x3[1][2]);
@@ -94,14 +94,18 @@ export function GetPoseFromMarkers(MarkerCorners,ImageWidth,ImageHeight,ObjectSi
 	*/
 	//	gr: the XR usage of this uses the inverse rotation
 	//		but we seem to be able to use the rotation4x4 without inverting...
-	//		maybe this Matrix->quaternion function is inverting the rotation....
+	//		maybe this Matrix->quaternion function is inverting the rotation?
+	//		or is the translation inverted in extraction?
+	const Rotation4x4 = Transform4x4.slice();
+	SetMatrixTranslation( Rotation4x4, 0,0,0,1 );
 	const Quaternion = GetQuaternionFromMatrix4x4(Rotation4x4);
-		
+	const InverseTransform4x4 = MatrixInverse4x4(Transform4x4);
+	const InverseTranslation = GetMatrixTranslation(InverseTransform4x4,true);
+
 	Pose.RotationQuaternion = Quaternion;
 	Pose.RotationMatrix = Rotation4x4;
-	
-	//	position should be in camera space units	
-	Pose.Position = Translation3;
+	//Pose.Position = Translation3;
+	Pose.Position = InverseTranslation;
 
 	return Pose;
 }
