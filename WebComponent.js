@@ -378,7 +378,7 @@ export class PopEngineCanvas extends HTMLElement
 			}
 			catch(e)
 			{
-				//console.error(e);
+				console.error(e);
 
 				this.SomeCounter = (this.SomeCounter||0)+1;
 				let Green = (this.SomeCounter % 60) / 60;
