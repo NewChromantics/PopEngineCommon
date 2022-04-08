@@ -16,23 +16,15 @@ export async function FindImageMarkers(Image)
 	if ( !Markers.length )
 		return [];
 
-	let Features = {};
-	
+	//	turn to uvs
+	//	gr: turn into a new non-os struct?
 	for ( let Marker of Markers )
 	{
-		const Uvs = Marker.cornerPoints.map( PxToUv );
-		console.log(`Found ${Marker.format} ${Marker.rawValue} at ${Uvs}`);
-
-		const Key = Marker.rawValue;	//	url etc
-		
-		function UvToFeature(Uv,Index)
-		{
-			const FeatureKey = `${Key}${Index}`;
-			Features[FeatureKey] = Uv;
-		}
-		Uvs.forEach( UvToFeature );
+		Marker.Uvs = Marker.cornerPoints.map( PxToUv );
+		Marker.Key = Marker.rawValue;
+		//console.log(`Found ${Marker.format} ${Marker.rawValue} at ${Uvs}`);
 	}
 	
-	return Features;
+	return Markers;
 }
 
