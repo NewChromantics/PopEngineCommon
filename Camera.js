@@ -422,6 +422,16 @@ export class Camera
 		return Matrix;
 	}
 	
+	SetLocalToWorldTransform(Transform4x4)
+	{
+		if ( Transform4x4.length != (4*4) )
+			throw `SetLocalToWorldTransform(${Transform4x4}) expecting 16-element array`;
+			
+		this.Position = PopMath.GetMatrixTranslation(Transform4x4);
+		this.Rotation4x4 = Transform4x4.slice();
+		PopMath.SetMatrixTranslation( this.Rotation4x4, 0,0,0,1 );
+	}
+	
 	GetLocalToWorldMatrix()
 	{
 		let WorldToCameraMatrix = this.GetWorldToCameraMatrix();
