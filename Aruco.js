@@ -72,40 +72,34 @@ export function GetPoseFromMarkers(MarkerCorners,FocalLength,ImageWidth,ImageHei
 	const MarkerNormal = null;
 	const Pose = GetPoseEstimation(MarkerSize,MarkerNormal,FocalLength,ProcessCorners);
 
-	//	gr: these are 3x3, so I guess they're rodrigues rotations?
 	//	convert to a sensible matrix
 	const Rotation3x3 = Pose.bestRotation;
 	const Translation3 = Pose.bestTranslation;
 
-	const Transform4x4 = 
+
+	//	gr: for some reason the translation seems to be inverted when
+	//		used as a camera pose (but rotation is correct)
+	//		figure this out!
+	let CameraToWorld = 
 	[
 		Rotation3x3[0][0],	Rotation3x3[1][0],	Rotation3x3[2][0],	0,
 		Rotation3x3[0][1],	Rotation3x3[1][1],	Rotation3x3[2][1],	0,
 		Rotation3x3[0][2],	Rotation3x3[1][2],	Rotation3x3[2][2],	0,
-		Translation3[0],	Translation3[1],	Translation3[2],	1
-	];		
-
-	/*
-	const yaw = -Math.atan2(Rotation3x3[0][2], Rotation3x3[2][2]);
-	const pitch = -Math.asin(-Rotation3x3[1][2]);
-	const roll = Math.atan2(Rotation3x3[1][0], Rotation3x3[1][1]);
+		Translation3[0],	Translation3[1],	Translation3[2],	1,
+	];
+	const WorldToCamera = MatrixInverse4x4(CameraToWorld);
+	const CameraToWorldTranslation = GetMatrixTranslation(WorldToCamera,true);
+	const WorldToCameraTranslation = Translation3;
 	
-	Pop.Debug(`Rotation3x3=${Rotation3x3} Translation3=${Translation3} pitch=${pitch} yaw=${yaw} roll=${roll}`);
-	*/
-	//	gr: the XR usage of this uses the inverse rotation
-	//		but we seem to be able to use the rotation4x4 without inverting...
-	//		maybe this Matrix->quaternion function is inverting the rotation?
-	//		or is the translation inverted in extraction?
-	const Rotation4x4 = Transform4x4.slice();
-	SetMatrixTranslation( Rotation4x4, 0,0,0,1 );
-	const Quaternion = GetQuaternionFromMatrix4x4(Rotation4x4);
-	const InverseTransform4x4 = MatrixInverse4x4(Transform4x4);
-	const InverseTranslation = GetMatrixTranslation(InverseTransform4x4,true);
-
-	Pose.RotationQuaternion = Quaternion;
-	Pose.RotationMatrix = Rotation4x4;
-	//Pose.Position = Translation3;
-	Pose.Position = InverseTranslation;
+	CameraToWorld.splice( 12, 3, ...CameraToWorldTranslation );
+	WorldToCamera.splice( 12, 3, ...WorldToCameraTranslation );
+	
+	//	camera pose relative to object
+	Pose.CameraToWorldTransform = CameraToWorld;
+	
+	//	object's pose in camera space
+	//	gr: does this need to subtract the position of object corner[0]?
+	Pose.LocalToCameraTransform = WorldToCamera;
 
 	return Pose;
 }
