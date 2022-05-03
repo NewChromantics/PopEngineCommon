@@ -179,6 +179,10 @@ export function Multiply2(a,b)
 
 export function Multiply3(a,b)
 {
+	if ( !Array.isArray(a) )
+		a = [a,a,a];
+	if ( !Array.isArray(b) )
+		b = [b,b,b];
 	return [ a[0]*b[0], a[1]*b[1], a[2]*b[2] ];
 }
 
@@ -1057,6 +1061,18 @@ export function GetBox3Corners(BoxMin,BoxMax)
 	 [BoxMax[0], BoxMax[1], BoxMax[2] ],
 	 ];
 	return BoxCorners;
+}
+
+export function BoxCenterSizeToMinMax(Center,Size)
+{
+	//	if size is radius, this is halfed again
+	const HalfSize = Multiply3( Size, 0.5*0.50 );
+	const Box = {};
+	Box.Min = Subtract3( Center, HalfSize );
+	Box.Max = Add3( Center, HalfSize );
+	//Box.Size = HalfSize;
+	Box.Size = Subtract3( Box.Max, Box.Min );
+	return Box;
 }
 
 export function GetBoundingBoxsBoundingBox(BoundingBoxs)
@@ -2375,4 +2391,111 @@ export function GetLineDistanceToLine(a,b)
 		throw `GetLineDistanceToLine nan`;
 		
 	return StartDistance + EndDistance;
+}
+
+
+export function GetStraightnessOfPoints(Positions)
+{
+	let Directions = [];
+	for ( let i=1;	i<Positions.length;	i++ )
+	{
+		const Prev = Positions[i-1];
+		const Next = Positions[i-0];
+		const Direction = Normalise3(Subtract3(Prev,Next));
+		Directions.push(Direction);
+	}
+	let Dots = [];
+	for ( let i=1;	i<Directions.length;	i++ )
+	{
+		const Prev = Directions[i-1];
+		const Next = Directions[i-0];
+		const Dot = Dot3(Prev,Next);
+		Dots.push(Dot);
+	}
+	
+	let TotalDot = 1;
+	//	mult, or average?
+	for ( let Dot of Dots )
+		TotalDot *= Dot;
+	return TotalDot;
+}
+
+export function GetRectsFromIndexes(StartIndex,EndIndex,Width,Channels,RectsNeedToStripeIndexes=true)
+{
+	let Stride = Channels * Width;
+	
+	if ( StartIndex % Channels != 0 )
+		throw `Expecting first index ${StartIndex} to align with channels ${Channels}`;
+	if ( EndIndex % Channels != Channels-1 )
+		throw `Expecting end index ${EndIndex} to align with channels ${Channels}`;
+	
+	const StartPixel = StartIndex/Channels;
+	const EndPixel = Math.floor(EndIndex /Channels);
+	
+	const Rects = [];	
+	function PushRow(x,y,RowWidth)
+	{
+		let Rect = {};
+		Rect.StartIndex = (y*Width) + x;
+		Rect.EndIndex = Rect.StartIndex + RowWidth;
+		Rect.StartIndex *= Channels;
+		Rect.EndIndex *= Channels;
+		Rect.EndIndex -= 1;
+		Rect.x = x;
+		Rect.y = y;
+		Rect.w = RowWidth;
+		Rect.h = 1;
+		
+		function MergeRect(LastRect)
+		{
+			if ( LastRect.x != Rect.x )	return false;
+			if ( LastRect.w != Rect.w )	return false;
+			if ( LastRect.y+LastRect.h != Rect.y )	
+				return false;
+			
+			//	if we need data to stripe, (ie, full width rects), check it
+			if ( RectsNeedToStripeIndexes )
+			{
+				if ( Rect.StartIndex != LastRect.EndIndex+1 )
+					return false;
+			}
+			
+			const Bottom = Rect.y+Rect.h;
+			LastRect.h = Bottom - LastRect.y;
+			LastRect.EndIndex = Rect.EndIndex;
+			return true;
+		}
+		
+		//	merge with above if possible
+		if ( Rects.length )
+		{
+			const LastRect = Rects[Rects.length-1];
+			if ( MergeRect(LastRect) )
+				return;
+		}
+		Rects.push(Rect);
+	}
+	
+	//	split indexes into rows
+	let Pixel = StartPixel;
+	while ( Pixel <= EndPixel )
+	{
+		let y = Math.floor( Pixel / Width );
+		let RowStart = Pixel % Width;
+		
+		let RowStartPixel = (y*Width) + RowStart;
+		let RowEndPixel = (y*Width) + Width-1;
+		
+		RowEndPixel = Math.min( RowEndPixel, EndPixel );
+
+		const RowWidth = (RowEndPixel - RowStartPixel)+1;
+		
+		PushRow( RowStart, y, RowWidth );
+		
+		if ( RowWidth == 0 )
+			throw `mis calculation, avoid infinite loop`;
+		Pixel += RowWidth;
+	}
+	
+	return Rects;
 }

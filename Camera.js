@@ -36,6 +36,7 @@ export class Camera
 	constructor(CopyCamera)
 	{
 		this.FovVertical = 45;
+		this.ZForwardIsNegative = false;
 
 		this.Up = [0,1,0];
 		this.Position = [ 0,2,20 ];
@@ -180,14 +181,11 @@ export class Camera
 		if ( this.FocalCenter !== false )
 			throw `Something is changing the .FocalCenter which is old API`;
 		
-		/*
-		const Focal = this.GetPixelFocalLengths();
-		//	image size from calibrated focal lengths
-		const ImageWidth = 800;
-		const ImageHeight = 800;
-		const OpenglFocal = this.PixelToOpenglFocalLengths( Focal, [ImageWidth, ImageHeight] );
-		*/
-
+		if ( this.PixelFocals )
+		{
+			const Focal = this.PixelToOpenglFocalLengths( this.PixelFocals, this.PixelFocals.ImageSize );
+			return Focal;
+		}
 
 		const OpenglFocal = {};
 
@@ -257,6 +255,7 @@ export class Camera
 	}
 	
 	//	GetOpencvProjectionMatrix but 4x4 with z correction for near/far
+	//	rename to CameraToScreen/View
 	GetProjectionMatrix(ViewRect)
 	{
 		//	overriding user-provided matrix
@@ -288,8 +287,7 @@ export class Camera
 		Matrix[9] = 0;
 		//	gr: this should now work in both ways, but one of them is mirrored.
 		//		false SHOULD match old engine style... but is directx
-		const ZForwardIsNegative = false;
-		if ( ZForwardIsNegative )
+		if ( this.ZForwardIsNegative )
 		{
 			//	opengl
 			Matrix[10] = -(-Near-Far) / (Near-Far);
@@ -307,6 +305,13 @@ export class Camera
 		Matrix[15] = 0;
 		
 		return Matrix;
+	}
+
+	GetScreenToCameraTransform(ViewRect)
+	{
+		const CameraToScreen = this.GetProjectionMatrix(ViewRect);
+		const ScreenToCamera = PopMath.MatrixInverse4x4( CameraToScreen );
+		return ScreenToCamera;
 	}
 	
 	
@@ -393,11 +398,12 @@ export class Camera
 	{
 		//	todo: correct viewrect with aspect ratio of viewport
 		//		maybe change input to Viewport to match GetProjection matrix?
-		let Matrix = this.GetProjectionMatrix( ViewRect );
-		Matrix = PopMath.MatrixInverse4x4( Matrix );
+		let CameraToScreen = this.GetProjectionMatrix( ViewRect );
+		let ScreenToCamera = PopMath.MatrixInverse4x4( CameraToScreen );
 		//	put into world space
-		Matrix = PopMath.MatrixMultiply4x4( this.GetLocalToWorldMatrix(), Matrix );
-		return Matrix;
+		let LocalToWorld = this.GetLocalToWorldMatrix();
+		let ScreenToWorld = PopMath.MatrixMultiply4x4( LocalToWorld, ScreenToCamera );
+		return ScreenToWorld;
 	}
 	
 	GetUp()
@@ -670,8 +676,8 @@ export class Camera
 		const RayNear = this.NearDistance;
 		const RayFar = RayDistance || this.FarDistance;
 		
-		let ScreenToCameraTransform = Camera.GetProjectionMatrix( ViewRect );
-		ScreenToCameraTransform = PopMath.MatrixInverse4x4( ScreenToCameraTransform );
+		let CameraToScreenTransform = Camera.GetProjectionMatrix( ViewRect );
+		let ScreenToCameraTransform = PopMath.MatrixInverse4x4( CameraToScreenTransform );
 		
 		let StartMatrix = PopMath.CreateTranslationMatrix( x, y, RayNear );
 		let EndMatrix = PopMath.CreateTranslationMatrix( x, y, RayFar );
