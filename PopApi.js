@@ -175,6 +175,7 @@ export function BytesToBigInt(Bytes)
 	Bytes.forEach(AppendHex);
 	const HexString = `0x${Hex.join('')}`;
 	const Int = BigInt(HexString);
+	return Int;
 }
 
 
