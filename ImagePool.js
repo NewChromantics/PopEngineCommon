@@ -1,6 +1,5 @@
 import Pool from './Pool.js'
-//import PopImage from './PopWebImageApi.js'
-import { GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
+import { GetChannelsFromPixelFormat,IsFloatFormat } from './PopWebImageApi.js'
 const PopImage = Pop.Image;
 
 

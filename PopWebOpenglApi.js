@@ -9,7 +9,7 @@ import {IsTypedArray} from './PopApi.js'
 import DirtyBuffer from './DirtyBuffer.js'
 
 import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
-import { GetFormatElementSize,GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
+import { GetFormatElementSize,GetChannelsFromPixelFormat,IsFloatFormat } from './PopWebImageApi.js'
 
 
 
