@@ -1,5 +1,3 @@
-import { GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
-import {LoadFileAsImageAsync} from './FileSystem.js'
 import {Debug,Warning} from './PopWebApiCore.js'
 import DirtyBuffer from './DirtyBuffer.js'
 import {GetRectsFromIndexes} from './Math.js'
@@ -13,6 +11,61 @@ const WebApi_HtmlVideoElement = window.hasOwnProperty('HTMLVideoElement') ? wind
 
 //	webcodec output
 const WebApi_HtmlVideoFrame = window.hasOwnProperty('VideoFrame') ? window['VideoFrame'] : null;
+
+
+//	in c++ this is SoyPixelsFormat namespace
+export function GetChannelsFromPixelFormat(PixelFormat)
+{
+	switch(PixelFormat)
+	{
+		case 'Greyscale':	return 1;
+		case 'RGBA':		return 4;
+		case 'RGB':			return 3;
+		case 'Float3':		return 3;
+		case 'Float4':		return 4;
+		case 'ChromaU':		return 1;
+		case 'ChromaV':		return 1;
+		case 'Depth16mm':	return 2;	//	RG
+	}
+	throw `unhandled GetChannelsFromPixelFormat(${PixelFormat})`;
+}
+
+export function IsFloatFormat(Format)
+{
+	switch(Format)
+	{
+		case 'Float1':
+		case 'Float2':
+		case 'Float3':
+		case 'Float4':
+			return true;
+		default:
+			return false;
+	}
+}
+
+export function GetFormatElementSize(PixelFormat)
+{
+	switch(PixelFormat)
+	{
+		//	bytes
+		case 'ChromaU':
+		case 'ChromaV':
+		case 'Greyscale':
+		case 'RGBA':
+		case 'RGB':
+		case 'Depth16mm':	//	two channel x 1byte
+			return 1;
+			
+		case 'Float1':
+		case 'Float2':
+		case 'Float3':
+		case 'Float4':
+			return 4;
+	}
+	throw `unhandled GetFormatElementSize(${PixelFormat})`;
+}
+
 
 function IsHtmlElementPixels(Pixels)
 {
@@ -167,7 +220,34 @@ export async function PngBytesToImage(PngBytes)
 	//	re-using browser's loader
 	const PngBlob = new Blob( [ PngBytes ], { type: "image/png" } );
 	const ImageUrl = URL.createObjectURL( PngBlob );
-	const Image = await LoadFileAsImageAsync(ImageUrl);
+	
+	//	gr: this was LoadFileAsImageAsync() but cyclic include
+	//const Image = await LoadFileAsImageAsync(ImageUrl);
+	function LoadHtmlImageAsync()
+	{
+		let Promise = CreatePromise();
+		const HtmlImage = new Image();
+		HtmlImage.onload = function ()
+		{
+			Promise.Resolve(HtmlImage);
+		};
+		HtmlImage.addEventListener('load', HtmlImage.onload, false);
+		HtmlImage.onerror = function (Error)
+		{
+			Promise.Reject(Error);
+		}
+		HtmlImage.crossOrigin = "anonymous";
+		//  trigger load
+		HtmlImage.src = '';
+		HtmlImage.src = Filename;
+		return Promise;
+	}
+
+	//	the API expects to return an image, so wait for the load,
+	//	then make an image. This change will have broken the Pop.Image(Filename)
+	//	constructor as it uses the asset cache, which is only set after this
+	const HtmlImage = await LoadHtmlImageAsync();
+	const Image = new PopImage(HtmlImage);
 	return Image;
 }
 

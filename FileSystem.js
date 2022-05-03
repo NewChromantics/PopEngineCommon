@@ -144,7 +144,7 @@ async function FetchArrayBuffer(Url)
 	return Contents8;
 }
 
-async function FetchArrayBufferStream(Url,OnProgress)
+export async function FetchArrayBufferStream(Url,OnProgress)
 {
 	const Fetched = await CreateFetch(Url);
 
