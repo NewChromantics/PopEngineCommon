@@ -2035,6 +2035,7 @@ class VideoSampleDescription
 	{
 		const Reader = new AtomDataReader(Bytes);
 		
+		//	see https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-74522
 		this.Version = await Reader.Read16();
 		this.RevisionLevel = await Reader.Read16();
 		this.Vendor = await Reader.ReadString(4);
@@ -2053,25 +2054,56 @@ class VideoSampleDescription
 			throw `Unexpected non-zero data size in ${this.Fourcc} atom`;
 
 		this.FramesPerSample = await Reader.Read16();
+		//	apple docs say this is 32-byte pascal string
+		//	so still has length at the start (so 31, which seems to align)
 		const CompressorStringLength = await Reader.Read8();
-		this.Compressor = await Reader.ReadString(CompressorStringLength);
+		//this.Compressor = await Reader.ReadString(CompressorStringLength);
+		this.Compressor = await Reader.ReadString(31);
 		this.ColourDepth = await Reader.Read16();
 		this.ColourTableId = await Reader.Read16();
-		
-		//	gr: there's some data here before the avcc atom...
-		const Gap = await Reader.ReadBytes(31); 
-		
-		//	remaining data is blocks of extension atoms
-		while ( Reader.BytesRemaining )
+
+		//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-74522
+		//	If the color table ID is set to 0, a color table is contained within
+		//	the sample description itself. The color table immediately follows 
+		//	the color table ID field in the sample description. 
+		//	See Color Table Atoms for a complete description of a color table.
+		if ( this.ColourTableId == 0 )
 		{
-			const ExtensionAtom = await Reader.ReadNextAtom(GetSampleDescriptionExtensionType);
-			//	decode self
-			if ( ExtensionAtom.DecodeData )
-				await ExtensionAtom.DecodeData( ExtensionAtom.Data );
-			//Debug(`Atom ${this.Fourcc} found extension ${ExtensionAtom.Fourcc}`);
-			this.ExtensionAtoms.push( ExtensionAtom );
+			//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap2/qtff2.html#//apple_ref/doc/uid/TP40000939-CH204-25533
+			//	Size 32-bit integer that specifies the number of bytes in this color table atom.
+			//	Type A 32-bit integer that identifies the atom type; this field must be set to 'ctab'.
+			//	Color table seed A 32-bit integer that must be set to 0.
+			//	Color table flags A 16-bit integer that must be set to 0x8000.
+			//	Color table size A 16-bit integer that indicates the number of colors in the following color array. This is a zero-relative value; setting this field to 0 means that there is one color in the array.
+			//	Color array An array of colors. Each color is made of four unsigned 16-bit integers. The first integer must be set to 0, the second is the red value, the third is the green value, and the fourth is the blue value.
+			//	gr: the data here is lots of zeros, it does NOT contain 
+			//	an atom CTAB, 0x8000 flags
+			//	"This is a zero-relative value; setting this field to 0 means that there is one color in the array."
+			let ColourTableSize = await Reader.Read16();
+			ColourTableSize += 1;
+			for ( let c=0;	c<ColourTableSize;	c++ )
+			{
+				let ZeroRedGreenBlue = await Reader.ReadBytes(4);
+			}
 		}
 		
+		try
+		{
+			//	remaining data is blocks of extension atoms
+			while ( Reader.BytesRemaining )
+			{
+				const ExtensionAtom = await Reader.ReadNextAtom(GetSampleDescriptionExtensionType);
+				//	decode self
+				if ( ExtensionAtom.DecodeData )
+					await ExtensionAtom.DecodeData( ExtensionAtom.Data );
+				//Debug(`Atom ${this.Fourcc} found extension ${ExtensionAtom.Fourcc}`);
+				this.ExtensionAtoms.push( ExtensionAtom );
+			}
+		}
+		catch(e)
+		{
+			Warning(`Error parsing VideoSampleDescription extensions; ${e}`);
+		}
 	}
 }
 
