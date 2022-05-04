@@ -5,7 +5,11 @@ import {Atom_SampleDescriptionExtension_Avcc} from './Mp4.js'
 
 function IntToHexString(Integer)
 {
-	return (Integer).toString(16).toUpperCase();
+	let Hex = (Integer).toString(16).toUpperCase();
+	//	pad
+	if ( Hex.length < 2 )
+		Hex = '0' + Hex;
+	return Hex;
 }
 
 
