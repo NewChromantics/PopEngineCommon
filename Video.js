@@ -193,6 +193,11 @@ export class VideoDecoder
 		this.Mp4HadEof = false;
 		this.Mp4FileChunkQueue = new PromiseQueue(`Mp4 Input data ${DebugName}`);
 		
+		//	storing samples for frame metas
+		//	todo: use .FrameMetas
+		this.Samples = [];
+		this.VideoMetaChangedQueue = new PromiseQueue(`Video meta changes ${DebugName}`);
+		
 		//	make h264 decoding thread
 		this.H264Decoder = new WebcodecDecoder(OnFrameFreed);
 		this.OutputFrameQueue = new PromiseQueue(`Video Output Queue ${DebugName}`);
@@ -213,6 +218,11 @@ export class VideoDecoder
 	OnH264ThreadError(Error)
 	{
 		this.OutputFrameQueue.Reject(Error);
+	}
+	
+	async WaitForVideoMetaChange()
+	{
+		return this.VideoMetaChangedQueue.WaitForLatest();
 	}
 	
 	async WaitForNextFrame()
@@ -320,7 +330,20 @@ export class VideoDecoder
 		const FrameIndex = PresentationTime;
 		return FrameIndex;
 	}
-		
+	
+	GetVideoMeta()
+	{
+		const Meta = {};
+		Meta.Samples = this.Samples.slice();
+		return Meta;
+	}
+	
+	OnNewSamples(Samples)
+	{
+		this.Samples.push( ...Samples );
+		const Meta = this.GetVideoMeta();
+		this.VideoMetaChangedQueue.Push( Meta );
+	}
 		
 	async Mp4DecoderThread()
 	{
@@ -337,6 +360,8 @@ export class VideoDecoder
 			//	eof
 			if ( !NextSamples )
 				break;
+			
+			this.OnNewSamples(NextSamples);
 			
 			//	see if we ever get samples before we finish download
 			if ( false )
