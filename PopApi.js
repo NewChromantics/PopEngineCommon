@@ -335,6 +335,13 @@ export class ChunkArray
 	
 	push(Chunk)
 	{
+		//	check more types of inputs
+		//	we're expecting typed arrays...
+		
+		//	input is an array buffer, but not a typed-array view
+		if ( Chunk instanceof ArrayBuffer )
+			Chunk = new Uint8Array(Chunk);
+			
 		this.Chunks.push( Chunk );
 	}
 	
