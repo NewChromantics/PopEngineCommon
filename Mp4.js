@@ -2994,7 +2994,7 @@ export class Mp4FragmentedEncoder
 	OnEncodeEof()
 	{
 		Debug(`OnEncodeEof`);
-		this.EncodedDataQueue.Push(EndOfFileMarker);
+		this.EncodedDataQueue.Push(null);
 	}
 	
 	async EncodeThread()
