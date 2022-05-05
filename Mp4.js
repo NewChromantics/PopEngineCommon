@@ -2773,6 +2773,21 @@ export class Mp4FragmentedEncoder
 		return this.EncodedAtomQueue.WaitForNext();
 	}
 	
+	async PushExtraData(Data,TrackId)
+	{
+		//	todo: async because of DataReader in DecodeData
+		//		maybe this needs to be inserted as some job that needs to complete before
+		//		tracks are baked, could easily get a race condition
+		//	this function should be synchronous from the outside
+		//	insert as a sps/pps
+		//	parse
+		const Atom = new Atom_SampleDescriptionExtension_Avcc();
+		
+		await Atom.DecodeData(Data);
+		this.TrackSps[TrackId] = Atom.SpsDatas[0];
+		this.TrackPps[TrackId] = Atom.PpsDatas[0];
+	}
+	
 	PushSample(Data,DecodeTimeMs,PresentationTimeMs,TrackId)
 	{
 		//Debug(`PushSample DecodeTimeMs=${DecodeTimeMs}ms TrackId=${TrackId}`);
