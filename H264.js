@@ -210,6 +210,12 @@ export function SplitNalus(Packet)
 	{
 		return SplitNalus_Nalu4(Packet);
 	}
+	if ( Packet[0] == 0 &&
+		Packet[1] == 0 &&
+		Packet[2] == 1 )
+	{
+		return SplitNalus_Nalu4(Packet);
+	}
 
 	const Nalus = [];
 	let Pos = 0;
