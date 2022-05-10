@@ -1,6 +1,8 @@
 import {Debug,Warning} from './PopWebApiCore.js'
 import DirtyBuffer from './DirtyBuffer.js'
 import {GetRectsFromIndexes} from './Math.js'
+import {CreatePromise} from './PromiseQueue.js'
+
 
 //	gr: I forget what browser this was for! add comments when we know!
 //	ImageBitmap should also be supported
@@ -415,6 +417,11 @@ export default class PopImage
 		this.LinearFilter = Linear;
 	}
 	
+	get width()		{	return this.GetWidth();	}
+	get Width()		{	return this.GetWidth();	}
+	get height()	{	return this.GetHeight();	}
+	get Height()	{	return this.GetHeight();	}
+
 	GetWidth()
 	{
 		return this.Size[0];
@@ -441,27 +448,58 @@ export default class PopImage
 			return;
 		throw `Todo: Pixel format conversion from ${this.PixelsFormat} to ${NewFormat}`;
 	}
+	
+	async GetAsHtmlImage(Scale=1)
+	{
+		const ImageElement = document.createElement('img');
+		const ImageLoaded = CreatePromise();
+		ImageElement.onload = (x) => ImageLoaded.Resolve();
+		ImageElement.onerror = (e) => ImageLoaded.Reject(e);
+		ImageElement.src = await this.GetDataUrl(Scale);
+		await ImageLoaded;
+		return ImageElement;
+	}
 
-	GetDataUrl()
+	async GetAsHtmlCanvas(Scale=1)
 	{
 		const Canvas = document.createElement('canvas');
 		const Context = Canvas.getContext('2d');
 		const Width = this.GetWidth();
 		const Height = this.GetHeight();
-		Canvas.width = Width;
-		Canvas.height = Height;
+		Canvas.width = Math.floor(Width * Scale);
+		Canvas.height = Math.floor(Height * Scale);
 
 		let Pixels = new Uint8ClampedArray(this.GetPixelBuffer());
 		const Img = new ImageData(Pixels,Width,Height);
-		Context.putImageData(Img,0,0);
+		
+		if ( Scale == 1 )
+		{
+			Context.putImageData(Img,0,0);
+		}
+		else
+		{
+			//	Context.drawImage(Img,0,0,Canvas.width,Canvas.height);
+			const Bitmap = await createImageBitmap(Img);
+			Context.drawImage(Bitmap,0,0,Canvas.width,Canvas.height);
+		}
+		
+		//	make a Free() function
+		Canvas.Free = function()
+		{
+			//	destroy canvas (safari suggests its hanging around)
+			//	this frees up canvas memory
+			Canvas.width = 0;
+			Canvas.height = 0;
+			//delete Canvas;	//	not allowed in strict mode
+		};
+		return Canvas;
+	}
 
+	async GetDataUrl(Scale=1)
+	{
+		const Canvas = await this.GetAsHtmlCanvas(Scale);
 		const data = Canvas.toDataURL("image/png");
-
-		//	destroy canvas (safari suggests its hanging around)
-		Canvas.width = 0;
-		Canvas.height = 0;
-		//delete Canvas;	//	not allowed in strict mode
-
+		Canvas.Free();
 		return data;
 	}
 

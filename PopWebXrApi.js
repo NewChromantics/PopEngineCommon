@@ -539,11 +539,31 @@ let SupportedSessionMode = null;
 //	allow this to be overriden with custom polyfills
 //	todo: abstract these interfaces so we can have our own XR API along side navigator
 //let PlatformXr = navigator.xr;
+let OverridePlatformXr;
+let OverridePlatformLayerType;
+
 function GetPlatformXr()
 {
-	return navigator.xr;
+	return OverridePlatformXr || navigator.xr;
 }
-let PlatformXRWebGLLayer = (typeof XRWebGLLayer !== 'undefined') ? XRWebGLLayer : null; 
+
+function GetPlatformLayerType()
+{
+	let PlatformXRWebGLLayer = (typeof XRWebGLLayer !== 'undefined') ? XRWebGLLayer : null; 
+	return OverridePlatformLayerType || PlatformXRWebGLLayer;
+}
+
+export function SetPlatformXr(Platform)
+{
+	OverridePlatformXr = Platform;
+}
+
+export function SetPlatformLayerType(LayerType)
+{
+	OverridePlatformLayerType = LayerType;
+}
+
+
 
 async function GetSupportedSessionMode()
 {
@@ -729,6 +749,7 @@ class Device_t
 		}
 	
 		const gl = OpenglContext;
+		let PlatformXRWebGLLayerType = GetPlatformLayerType();
 		
 		if ( !ForcedLayerType )
 		{
@@ -736,7 +757,7 @@ class Device_t
 				ForcedLayerType = 'MultiView';
 			else if ( this.XrFactory )
 				ForcedLayerType = 'StereoLayer';
-			else if ( PlatformXRWebGLLayer )
+			else if ( PlatformXRWebGLLayerType )
 				ForcedLayerType = 'Classic';
 		}
 		
@@ -772,7 +793,7 @@ class Device_t
 			Options.framebufferScaleFactor = 1.0;
 			Options.antialias = true;
 			
-			this.Layer = new PlatformXRWebGLLayer( this.Session, OpenglContext, Options );
+			this.Layer = new PlatformXRWebGLLayerType( this.Session, OpenglContext, Options );
 			this.Session.updateRenderState({ baseLayer: this.Layer });
 		}
 		else
@@ -969,7 +990,7 @@ class Device_t
 		{
 			const DeviceFrameBuffer = gl.getParameter(gl.FRAMEBUFFER_BINDING);
 			for ( let View of Pose.views )
-				this.FrameUpdate_RenderClassic( Frame, Pose, View, DeviceFrameBuffer );
+				this.FrameUpdate_RenderClassic( Frame, Pose, View, DeviceFrameBuffer, Frame.BackgroundImage );
 		}
 		else if ( this.LayerType == 'StereoLayer' )
 		{
@@ -1188,6 +1209,7 @@ class Device_t
 		Camera.Transform = View.transform;	//	stored for debugging
 		
 		//	write position (w should always be 0
+		//	gr: don't we want inverse transform too?
 		Camera.Position = [View.transform.position.x,View.transform.position.y,View.transform.position.z];
 		
 		//	get rotation but remove the translation (so we use .Position)
@@ -1202,12 +1224,13 @@ class Device_t
 	}
 	
 	//	non-layer rendering
-	FrameUpdate_RenderClassic(Frame,Pose,View,DeviceFrameBuffer)
+	FrameUpdate_RenderClassic(Frame,Pose,View,DeviceFrameBuffer,BackgroundImage)
 	{
 		const RenderTarget = new RenderTargetViewProxy( this.Layer, View, this.RenderContext );
 		
 		//	generate camera
 		const Camera = this.GetXrCamera(Frame,Pose,View);
+		Camera.BackgroundImage = BackgroundImage;
 
 		//	would be nice if we could have some generic camera uniforms and only generate one set of commands?
 		let RenderCommands = this.GetRenderCommands( this.RenderContext, Camera );

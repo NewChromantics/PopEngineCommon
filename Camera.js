@@ -64,7 +64,7 @@ export class Camera
 			this.Rotation4x4 = CopyCamera.Rotation4x4;
 		}
 	}
-
+	
 	
 	FieldOfViewToFocalLengths(FovHorz,FovVert)
 	{
@@ -180,7 +180,8 @@ export class Camera
 	{
 		if ( this.FocalCenter !== false )
 			throw `Something is changing the .FocalCenter which is old API`;
-		
+
+		/*
 		if ( this.PixelFocals )
 		{
 			const Focal = this.PixelToOpenglFocalLengths( this.PixelFocals, this.PixelFocals.ImageSize );
@@ -215,6 +216,29 @@ export class Camera
 		
 		OpenglFocal.s = 0;
 		
+		return OpenglFocal;
+	}
+	*/
+
+		/*
+		const Focal = this.GetPixelFocalLengths();
+		//	image size from calibrated focal lengths
+		const ImageWidth = 800;
+		const ImageHeight = 800;
+		const OpenglFocal = this.PixelToOpenglFocalLengths( Focal, [ImageWidth, ImageHeight] );
+		*/
+		
+		const Aspect = ViewRect[2] / ViewRect[3];
+		const FovVertical = this.FovVertical;
+		//const FovHorizontal = FovVertical * Aspect;
+		
+		const OpenglFocal = {};
+		OpenglFocal.fy = 1.0 / Math.tan( PopMath.radians(FovVertical) / 2);
+		//OpenglFocal.fx = 1.0 / Math.tan( PopMath.radians(FovHorizontal) / 2);
+		OpenglFocal.fx = OpenglFocal.fy / Aspect;
+		OpenglFocal.cx = this.FocalCenterOffset[0];
+		OpenglFocal.cy = this.FocalCenterOffset[1];
+		OpenglFocal.s = 0;
 		return OpenglFocal;
 	}
 	
@@ -254,6 +278,32 @@ export class Camera
 		return Matrix;
 	}
 	
+	
+	makePerspective( left, right, top, bottom, near, far ) 
+	{
+		if ( far === undefined ) {
+
+			console.warn( 'THREE.Matrix4: .makePerspective() has been redefined and has a new signature. Please check the docs.' );
+
+		}
+
+		const te = [];
+		const x = 2 * near / ( right - left );
+		const y = 2 * near / ( top - bottom );
+
+		const a = ( right + left ) / ( right - left );
+		const b = ( top + bottom ) / ( top - bottom );
+		const c = - ( far + near ) / ( far - near );
+		const d = - 2 * far * near / ( far - near );
+
+		te[ 0 ] = x;	te[ 4 ] = 0;	te[ 8 ] = a;	te[ 12 ] = 0;
+		te[ 1 ] = 0;	te[ 5 ] = y;	te[ 9 ] = b;	te[ 13 ] = 0;
+		te[ 2 ] = 0;	te[ 6 ] = 0;	te[ 10 ] = c;	te[ 14 ] = d;
+		te[ 3 ] = 0;	te[ 7 ] = 0;	te[ 11 ] = - 1;	te[ 15 ] = 0;
+
+		return te;
+	}
+	
 	//	GetOpencvProjectionMatrix but 4x4 with z correction for near/far
 	//	rename to CameraToScreen/View
 	GetProjectionMatrix(ViewRect)
@@ -263,6 +313,9 @@ export class Camera
 			return this.ProjectionMatrix;
 		
 		const OpenglFocal = this.GetOpenglFocalLengths( ViewRect );
+		
+		const Far = this.FarDistance;
+		const Near = this.NearDistance;
 		
 		let Matrix = [];
 		Matrix[0] = OpenglFocal.fx;
@@ -274,9 +327,6 @@ export class Camera
 		Matrix[5] = OpenglFocal.fy;
 		Matrix[6] = OpenglFocal.cy;
 		Matrix[7] = 0;
-		
-		const Far = this.FarDistance;
-		const Near = this.NearDistance;
 		
 		//	near...far in opengl needs to resovle to -1...1
 		//	gr: glDepthRange suggests programmable opengl pipeline is 0...1
@@ -370,6 +420,16 @@ export class Camera
 		let Matrix = PopMath.MatrixMultiply4x4( Rotation, Translation );
 		//Pop.Debug("GetWorldToCameraMatrix", Matrix.slice(12,16) );
 		return Matrix;
+	}
+	
+	SetLocalToWorldTransform(Transform4x4)
+	{
+		if ( Transform4x4.length != (4*4) )
+			throw `SetLocalToWorldTransform(${Transform4x4}) expecting 16-element array`;
+			
+		this.Position = PopMath.GetMatrixTranslation(Transform4x4);
+		this.Rotation4x4 = Transform4x4.slice();
+		PopMath.SetMatrixTranslation( this.Rotation4x4, 0,0,0,1 );
 	}
 	
 	GetLocalToWorldMatrix()
