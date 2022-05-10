@@ -653,6 +653,12 @@ export default class PopImage
 		}
 	}
 	
+	OnOpenglRenderedTo()
+	{
+		const LatestVersion = this.GetLatestVersion();
+		this.OpenglVersion = LatestVersion+1;
+	}
+	
 	UpdateTexturePixels(RenderContext)
 	{
 		//	texture is from an old context

@@ -1266,6 +1266,12 @@ export class Context
 						console.error(`Error reading back texture in pass; ${e}`);
 					}
 				}
+				else if ( PassRenderTarget.ColourImages )
+				{
+					//	todo: need to support depth textures here
+					const TargetImage0 = PassRenderTarget.ColourImages[0];
+					TargetImage0.OnOpenglRenderedTo();
+				}
 			
 				//	endpass()
 				//	unbind targets?
@@ -2424,6 +2430,10 @@ class TextureRenderTarget extends RenderTarget
 				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, FilterMode);
 				*/
 				//gl.bindTexture(gl.TEXTURE_2D,null);
+
+				//	increment image's version
+				//	gr: it's easy here... but to sync with ReadBack, we do it in render commands
+				//this.ColourImages.forEach( Img => Img.OnOpenglRenderedTo() );
 			}
 		}
 		
