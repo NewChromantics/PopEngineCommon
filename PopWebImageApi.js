@@ -515,6 +515,12 @@ export default class PopImage
 	
 	GetPixelBuffer()
 	{
+		const LatestVersion = this.GetLatestVersion();
+		const PixelsVersion = this.PixelsVersion;
+		
+		if ( LatestVersion != PixelsVersion )
+			throw `GetPixelBuffer() with out of date pixel version(${PixelsVersion}) vs latest ${LatestVersion}`;
+		
 		if (!this.Pixels)
 			return this.Pixels;
 
