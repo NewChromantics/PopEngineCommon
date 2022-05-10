@@ -469,7 +469,12 @@ export default class PopImage
 		Canvas.width = Math.floor(Width * Scale);
 		Canvas.height = Math.floor(Height * Scale);
 
-		let Pixels = new Uint8ClampedArray(this.GetPixelBuffer());
+		let Pixels = this.GetPixelBuffer();
+		//	eek slow/bad conversion
+		if ( Pixels instanceof Float32Array )
+			Pixels = Pixels.map( x => x*255 );
+		//	force into rgba
+		Pixels = new Uint8ClampedArray(Pixels);
 		const Img = new ImageData(Pixels,Width,Height);
 		
 		if ( Scale == 1 )
