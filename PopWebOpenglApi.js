@@ -2786,6 +2786,10 @@ export class Shader
 		return Metas[Name];
 	}
 	
+	Free()
+	{
+		console.warn(`todo: free shader`);
+	}
 }
 
 
