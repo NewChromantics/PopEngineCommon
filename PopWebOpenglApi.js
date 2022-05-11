@@ -7,7 +7,7 @@ import {CreatePromise} from './PopApi.js'
 import Pool from './Pool.js'
 import {IsTypedArray} from './PopApi.js'
 import DirtyBuffer from './DirtyBuffer.js'
-
+import { ExtractShaderUniforms } from './Shaders.js'
 import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
 import { GetFormatElementSize,GetChannelsFromPixelFormat,IsFloatFormat } from './PopWebImageApi.js'
 
@@ -2546,6 +2546,24 @@ export class Shader
 		this.AttributeMetaCache = null;	//	may need to invalidate this on new context
 		this.VertShaderSource = VertShaderSource;
 		this.FragShaderSource = FragShaderSource;
+		this.SourceUniforms = ExtractShaderUniforms( VertShaderSource, FragShaderSource );
+	}
+	
+	get UniformMetas()
+	{
+		//	collate all uniforms from shader & source (for extra user-meta opengl ignores)
+		const Metas = {};
+		function PushUniform(Name,Meta)
+		{
+			Metas[Name] = Object.assign( Metas[Name]||{}, Meta );
+		}
+	
+		this.SourceUniforms.forEach( Meta => PushUniform(Meta.Name,Meta) );
+	
+		if ( this.UniformMetaCache )
+			Object.entries( this.UniformMetaCache ).forEach( e => PushUniform(...e) );
+		
+		return Metas;
 	}
 
 	GetGlContext()
