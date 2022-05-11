@@ -23,6 +23,8 @@ export function GetChannelsFromPixelFormat(PixelFormat)
 		case 'Greyscale':	return 1;
 		case 'RGBA':		return 4;
 		case 'RGB':			return 3;
+		case 'Float1':		return 1;
+		case 'Float2':		return 2;
 		case 'Float3':		return 3;
 		case 'Float4':		return 4;
 		case 'ChromaU':		return 1;
@@ -103,7 +105,7 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 		{
 			switch ( PixelFormat )
 			{
-				case 'Float1':		return [ gl.R32F,		gl.FLOAT];
+				case 'Float1':		return [ gl.RED,		gl.FLOAT];
 				case 'Float2':		return [ gl.RG32F,		gl.FLOAT];
 				case 'Float3':		return [ gl.RGB32F,		gl.FLOAT];
 				//case 'Float4':		return [ gl.RGBA32F,	gl.FLOAT];
@@ -114,7 +116,7 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 		{
 			switch ( PixelFormat )
 			{
-				case 'Float1':		return [ gl.LUMINANCE,	gl.FLOAT];
+				case 'Float1':		return [ gl.RED,	gl.FLOAT];
 				case 'Float2':		return [ gl.LUMINANCE_ALPHA,	gl.FLOAT];
 				case 'Float3':		return [ gl.RGB,		gl.FLOAT];
 				case 'Float4':		return [ gl.RGBA,		gl.FLOAT];
@@ -460,23 +462,49 @@ export default class PopImage
 		return ImageElement;
 	}
 
-	async GetAsHtmlCanvas(Scale=1)
+	async GetAsHtmlImageData()
 	{
-		const Canvas = document.createElement('canvas');
-		const Context = Canvas.getContext('2d');
 		const Width = this.GetWidth();
 		const Height = this.GetHeight();
-		Canvas.width = Math.floor(Width * Scale);
-		Canvas.height = Math.floor(Height * Scale);
-
 		let Pixels = this.GetPixelBuffer();
+		
+		//	convert to rgba
+		const Channels = this.GetChannels();
+		if ( Channels != 4 )
+		{
+			const NewPixels = new Float32Array( Width * Height * 4 );
+			for ( let p=0;	p<Pixels.length;	p++ )
+			{
+				let np = p*4;
+				NewPixels[np+0] = Pixels[p];
+				NewPixels[np+1] = Pixels[p];
+				NewPixels[np+2] = Pixels[p];
+				NewPixels[np+3] = 1;
+			}
+			Pixels = NewPixels;
+		}
+		
 		//	eek slow/bad conversion
 		if ( Pixels instanceof Float32Array )
 			Pixels = Pixels.map( x => x*255 );
 		//	force into rgba
 		Pixels = new Uint8ClampedArray(Pixels);
 		const Img = new ImageData(Pixels,Width,Height);
+		return Img;
+	}
+
+
+	async GetAsHtmlCanvas(Scale=1)
+	{
+		const Img = await this.GetAsHtmlImageData();
 		
+		const Canvas = document.createElement('canvas');
+		const Context = Canvas.getContext('2d');
+		const Width = this.GetWidth();
+		const Height = this.GetHeight();
+		Canvas.width = Math.floor(Width * Scale);
+		Canvas.height = Math.floor(Height * Scale);
+	
 		if ( Scale == 1 )
 		{
 			Context.putImageData(Img,0,0);
