@@ -222,8 +222,19 @@ function GetPixelsFromHtmlImageElement(Img)
 export async function PngBytesToImage(PngBytes)
 {
 	//	re-using browser's loader
-	const PngBlob = new Blob( [ PngBytes ], { type: "image/png" } );
-	const ImageUrl = URL.createObjectURL( PngBlob );
+	let ImageUrl;
+
+	//	allow DataUrl strings
+	if ( typeof PngBytes == typeof '' )
+	{
+		//	todo: check data url prefix
+		ImageUrl = PngBytes;
+	}
+	else
+	{
+		const PngBlob = new Blob( [ PngBytes ], { type: "image/png" } );
+		ImageUrl = URL.createObjectURL( PngBlob );
+	}
 	
 	//	gr: this was LoadFileAsImageAsync() but cyclic include
 	//const Image = await LoadFileAsImageAsync(ImageUrl);
