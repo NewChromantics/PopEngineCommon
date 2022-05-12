@@ -509,7 +509,7 @@ export const WriteStringToFile = WriteToFile;
 
 
 
-export async function LoadFilePromptAsStringAsync(Filename)
+async function LoadFilePromptAsFileAsync(Filename)
 {
 	const OnChangedPromise = CreatePromise();
 	const InputElement = window.document.createElement('input');
@@ -536,8 +536,24 @@ export async function LoadFilePromptAsStringAsync(Filename)
 	//	read file contents
 	//	currently only interested in first
 	const File = Files[0];
+	return File;
+}
+
+export async function LoadFilePromptAsStringAsync(Filename)
+{
+	const File = await LoadFilePromptAsFileAsync(Filename);
 	const Contents = await File.text();
 	return Contents;
+}
+
+
+export async function LoadFilePromptAsArrayBufferAsync(Filename)
+{
+	const File = await LoadFilePromptAsFileAsync(Filename);
+	const Contents = await File.arrayBuffer();
+	const Mime = File.type;
+	return Contents;
+
 }
 
 //	on web, this is a "can I synchronously load file" check
