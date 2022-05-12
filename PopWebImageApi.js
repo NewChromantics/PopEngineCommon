@@ -243,7 +243,7 @@ export async function PngBytesToImage(PngBytes)
 		HtmlImage.crossOrigin = "anonymous";
 		//  trigger load
 		HtmlImage.src = '';
-		HtmlImage.src = Filename;
+		HtmlImage.src = ImageUrl;
 		return Promise;
 	}
 
