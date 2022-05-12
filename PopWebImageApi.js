@@ -480,7 +480,7 @@ export default class PopImage
 		return ImageElement;
 	}
 
-	async GetAsHtmlImageData()
+	GetAsHtmlImageData()
 	{
 		const Width = this.GetWidth();
 		const Height = this.GetHeight();
@@ -511,8 +511,7 @@ export default class PopImage
 		return Img;
 	}
 
-
-	async GetAsHtmlCanvas(Scale=1)
+	async GetAsHtmlCanvasScaled(Scale=1)
 	{
 		const Img = await this.GetAsHtmlImageData();
 		
@@ -546,9 +545,45 @@ export default class PopImage
 		return Canvas;
 	}
 
-	async GetDataUrl(Scale=1)
+	GetAsHtmlCanvas(Scale=1)
 	{
-		const Canvas = await this.GetAsHtmlCanvas(Scale);
+		if ( Scale !== 1 )
+			throw `GetAsHtmlCanvas(${Scale}) with a scale must use async GetAsHtmlCanvasScaled()`;
+			
+		const Img = this.GetAsHtmlImageData();
+		
+		const Canvas = document.createElement('canvas');
+		const Context = Canvas.getContext('2d');
+		const Width = this.GetWidth();
+		const Height = this.GetHeight();
+		Canvas.width = Math.floor(Width * Scale);
+		Canvas.height = Math.floor(Height * Scale);
+	
+		Context.putImageData(Img,0,0);
+		
+		//	make a Free() function
+		Canvas.Free = function()
+		{
+			//	destroy canvas (safari suggests its hanging around)
+			//	this frees up canvas memory
+			Canvas.width = 0;
+			Canvas.height = 0;
+			//delete Canvas;	//	not allowed in strict mode
+		};
+		return Canvas;
+	}
+
+	async GetDataUrlScaled(Scale=1)
+	{
+		const Canvas = await this.GetAsHtmlCanvasScaled(Scale);
+		const data = Canvas.toDataURL("image/png");
+		Canvas.Free();
+		return data;
+	}
+	
+	GetDataUrl()
+	{
+		const Canvas = this.GetAsHtmlCanvas();
 		const data = Canvas.toDataURL("image/png");
 		Canvas.Free();
 		return data;
