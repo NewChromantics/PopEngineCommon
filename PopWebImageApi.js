@@ -251,8 +251,15 @@ export async function PngBytesToImage(PngBytes)
 	//	then make an image. This change will have broken the Pop.Image(Filename)
 	//	constructor as it uses the asset cache, which is only set after this
 	const HtmlImage = await LoadHtmlImageAsync();
-	const Image = new PopImage(HtmlImage);
-	return Image;
+	
+	//	add a free() function to release this when done with it
+	HtmlImage.Free = function()
+	{
+		URL.revokeObjectURL(ImageUrl);
+	}
+	
+	const OutputImage = new PopImage(HtmlImage);
+	return OutputImage;
 }
 
 
