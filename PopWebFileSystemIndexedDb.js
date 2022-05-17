@@ -97,12 +97,18 @@ export async function LoadFileAsStringAsync(Filename)
 	async function Read(ObjectStore)
 	{
 		const ReadRequest = ObjectStore.get(Filename);
-		ReadRequest.onsuccess = (Event) => ReadResult.Resolve( Event.target.result );
+		function OnSuccess(Event)
+		{
+			ReadResult.Resolve( Event.target.result );
+		}
+		ReadRequest.onsuccess = OnSuccess;
 		ReadRequest.onerror = ReadResult.Reject;
 	}
 	await GetFileTransaction(Read);
 
 	const Result = await ReadResult;
+	if ( !Result )
+		throw `Loaded file from store, but is ${Result}`;
 	const Content = Result.Content;
 	return Content;
 }
