@@ -50,21 +50,30 @@ async function GetConnection()
 
 export async function GetFilenames(Directory)
 {
-	const AllFilenames = [];
+	let AllFilenames = [];
 	async function ReadKeys(ObjectStore)
 	{
-		function OnOpenCursor(Event)
+		const JustKeys = true;
+		//	faster
+		if ( JustKeys )
 		{
-			const Cursor = event.target.result;
-			if ( !Cursor )
-				return;	//	dont call .continue()
-
-			//	.value = { .Filename .Key }
-			//AllFilenames.push(Cursor.value);
-			AllFilenames.push(Cursor.key);
-			Cursor.continue();
+			ObjectStore.getAllKeys().onsuccess = (Event) => AllFilenames = Event.target.result;
 		}
-		ObjectStore.openCursor().onsuccess = OnOpenCursor;
+		else
+		{
+			function OnOpenCursor(Event)
+			{
+				const Cursor = event.target.result;
+				if ( !Cursor )
+					return;	//	dont call .continue()
+
+				//	.value = { .Filename .Key }
+				//AllFilenames.push(Cursor.value);
+				AllFilenames.push(Cursor.key);
+				Cursor.continue();
+			}
+			ObjectStore.openCursor().onsuccess = OnOpenCursor;
+		}
 	}
 	await GetFileTransaction(ReadKeys);
 	return AllFilenames;
