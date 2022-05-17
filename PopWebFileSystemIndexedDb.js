@@ -50,14 +50,35 @@ async function GetConnection()
 
 export async function GetFilenames(Directory)
 {
-	//	todo
-	return [];
+	const AllFilenames = [];
+	async function ReadKeys(ObjectStore)
+	{
+		function OnOpenCursor(Event)
+		{
+			const Cursor = event.target.result;
+			if ( !Cursor )
+				return;	//	dont call .continue()
+
+			//	.value = { .Filename .Key }
+			//AllFilenames.push(Cursor.value);
+			AllFilenames.push(Cursor.key);
+			Cursor.continue();
+		}
+		ObjectStore.openCursor().onsuccess = OnOpenCursor;
+	}
+	await GetFileTransaction(ReadKeys);
+	return AllFilenames;
 }
 
 export async function FileExists(Filename)
 {
-	//	todo
-	return false;
+	const Filenames = await GetFilenames('Documents/');
+	if ( !Filenames.includes(Filename) )
+	{
+		console.warn(`File not found ${Filename}`);
+		return false;
+	}
+	return true;
 }
 
 async function GetFileTransaction(ProcessObjectStore)
