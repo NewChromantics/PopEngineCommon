@@ -5,6 +5,8 @@ import {Debug,Warning,CreatePromise,Yield} from './PopWebApiCore.js'
 import {IsObjectInstanceOf,ParseExeArguments} from './PopApi.js'
 
 
+const FileCache = new FileCache_t();
+
 //	gr: if we call fetch() 100 times for the same url, we make 100 requests
 //		quick fix, have a cache of pending fetch() requests
 //	gr: we cannot consume the result (.text or .arrayBuffer) more than once
@@ -467,6 +469,7 @@ export function WriteToFile(Filename,Contents,Append=false)
 }
 
 export const WriteStringToFile = WriteToFile;
+export const WriteStringToFileAsync = WriteToFileAsync;
 
 
 
