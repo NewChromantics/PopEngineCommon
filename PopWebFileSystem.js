@@ -47,11 +47,36 @@ export function GetExeArguments()
 	return ParseExeArguments(UrlArgs);	
 }
 
+function GetFileSystem(Filename)
+{
+	if ( IsDocumentsFilename(Filename) )
+		return DocumentFiles;
+	else
+		return ExternalFiles;
+}
+
 export function GetFilenames(Directory)
 {
-	if ( IsDocumentsFilename(Directory) )
-		return DocumentFiles.GetFilenames(Directory);
-	else
-		return ExternalFiles.GetFilenames(Directory);
+	const FileSystem = GetFileSystem(Directory);
+	return FileSystem.GetFilenames(...arguments);
 }
+
+export function FileExists(Directory)
+{
+	const FileSystem = GetFileSystem(Directory);
+	return FileSystem.FileExists(...arguments);
+}
+
+export function WriteStringToFileAsync(Directory)
+{
+	const FileSystem = GetFileSystem(Directory);
+	return FileSystem.WriteStringToFileAsync(...arguments);
+}
+
+export function LoadFileAsStringAsync(Directory)
+{
+	const FileSystem = GetFileSystem(Directory);
+	return FileSystem.LoadFileAsStringAsync(...arguments);
+}
+
 
