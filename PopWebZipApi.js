@@ -1,7 +1,7 @@
 // This relies on the NPM package https://github.com/nika-begiashvili/libarchivejs
 //	gr: moved this to be a submodule... but the worker url isn't relative to the module!
 import { Archive as LibArchive } from './libarchive.js/main.js';
-import {LoadFileAsArrayBufferAsync,LoadFileAsImageAsync} from './FileSystem.js';
+import {LoadFileAsArrayBufferAsync,LoadFileAsImageAsync} from './PopWebFileSystem.js';
 import {CreatePromise} from './PopApi.js'
 
 //	gr: I hate not having the source to hand, but this is the fix for now

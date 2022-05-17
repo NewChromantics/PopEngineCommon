@@ -4,45 +4,6 @@ import PromiseQueue from './PromiseQueue.js'
 import {Debug,Warning,CreatePromise,Yield} from './PopWebApiCore.js'
 import {IsObjectInstanceOf,ParseExeArguments} from './PopApi.js'
 
-const Default = 'FileSystem.js Module';
-export default Default;
-
-//	file cache, not asset cache!
-//	rework this system so we have an async version on desktop too
-export const FileCache = new FileCache_t();
-
-
-//	we're interpreting the url as
-//	http://exefilename/exedirectory/?exearguments
-export function GetExeFilename()
-{
-	return window.location.hostname;
-}
-
-export function GetExeDirectory()
-{
-	//	exe could be path location.pathname
-	const Path = window.location.pathname;
-	//	including /
-	const Directory = Path.substr( 0, Path.lastIndexOf("/") + 1 );
-	return Directory;
-}
-
-export function GetExeArguments()
-{
-	//	gr: probably shouldn't lowercase now it's proper
-	const UrlArgs = window.location.search.replace('?',' ').trim().split('&');
-	
-	return ParseExeArguments(UrlArgs);	
-}
-
-
-//	push a file into the file system
-export function SetFileCache(Filename,Contents)
-{
-	FileCache.Set(Filename,Contents);
-}
-
 
 //	gr: if we call fetch() 100 times for the same url, we make 100 requests
 //		quick fix, have a cache of pending fetch() requests

@@ -36,7 +36,7 @@ Pop.Websocket = Websocket;
 import * as Xr from './PopWebXrApi.js'
 Pop.Xr = Xr;
 
-import * as FileSystem from './FileSystem.js'
+import * as FileSystem from './PopWebFileSystem.js'
 //	gr: hmm these are root functions, so they need to go into PopWebApi?
 Pop.FileSystem = FileSystem;
 //Pop.LoadFileAsStringAsync = Pop.FileSystem.LoadFileAsStringAsync;

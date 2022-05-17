@@ -1,6 +1,6 @@
 import PromiseQueue from './PromiseQueue.js'
 import * as Pop from './PopWebApiCore.js'
-import * as FileSystem from './FileSystem.js'
+import * as FileSystem from './PopWebFileSystem.js'
 import * as ColourUtils from './Colour.js'
 
 const Default = 'Pop Gui module';
