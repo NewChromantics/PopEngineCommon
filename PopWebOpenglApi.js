@@ -874,7 +874,9 @@ export class Context
 	
 	CreateContext()
 	{
-		const ContextMode = "webgl2";
+		const Webgl2Supported = ( typeof WebGL2RenderingContext != 'undefined');
+		
+		const ContextMode = Webgl2Supported ? "webgl2" : "webgl";
 		const Canvas = this.GetCanvasElement();
 		if ( !Canvas )
 			throw `RenderContext has no canvas`;
@@ -890,7 +892,7 @@ export class Context
 		if (Options.premultipliedAlpha == undefined) Options.premultipliedAlpha = false;
 		if (Options.alpha == undefined) Options.alpha = true;	//	have alpha buffer
 		const Context = Canvas.getContext( ContextMode, Options );
-		const IsWebgl2 = ( Context instanceof WebGL2RenderingContext );
+		const IsWebgl2 = Webgl2Supported ? (Context instanceof WebGL2RenderingContext ) : false;
 		
 		if ( !Context )
 			throw "Failed to initialise " + ContextMode;
