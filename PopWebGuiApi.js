@@ -217,8 +217,8 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		else if ( MouseEvent.Touches )
 			MouseEvent = MouseEvent.Touches[0];
 		
-		const ClientX = MouseEvent.pageX || MouseEvent.clientX;
-		const ClientY = MouseEvent.pageY || MouseEvent.clientY;
+		const ClientX = MouseEvent.clientX || MouseEvent.pageX;
+		const ClientY = MouseEvent.clientY || MouseEvent.pageY;
 		const x = ClientX - Rect.left;
 		const y = ClientY - Rect.top;
 		return [x,y];
