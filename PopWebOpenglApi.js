@@ -989,6 +989,12 @@ export class Context
 			}
 		}
 		
+		function InitBlendMinMax(Context,Extension)
+		{
+			Context.MIN = Extension.MIN_EXT;
+			Context.MAX = Extension.MAX_EXT;
+		}
+		
 		const EnableExtension = function(ExtensionName,Init)
 		{
 			try
@@ -1014,7 +1020,7 @@ export class Context
 			EnableExtension('OES_texture_float_linear',InitFloatLinearTexture);
 		}
 		EnableExtension('WEBGL_depth_texture',InitDepthTexture);
-		EnableExtension('EXT_blend_minmax');
+		EnableExtension('EXT_blend_minmax',InitBlendMinMax);
 		EnableExtension('OES_vertex_array_object', this.InitVaoExtension.bind(this) );
 		EnableExtension('WEBGL_draw_buffers', this.InitMultipleRenderTargets.bind(this) );
 		EnableExtension('OES_element_index_uint', this.Init32BitBufferIndexes.bind(this) );
@@ -2013,7 +2019,7 @@ export class RenderTarget
 	SetBlendModeMax()
 	{
 		const gl = this.GetGlContext();
-		if ( gl.EXT_blend_minmax === undefined )
+		if ( !gl.MAX )
 			throw "EXT_blend_minmax hasn't been setup on this context";
 		
 		//	set mode
@@ -2021,14 +2027,14 @@ export class RenderTarget
 		gl.enable( gl.BLEND );
 		gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
 		//gl.blendEquation( gl.FUNC_ADD );
-		gl.blendEquation( gl.EXT_blend_minmax.MAX_EXT );
+		gl.blendEquation( gl.MAX );
 		//GL_FUNC_ADD
 	}
 	
 	SetBlendModeMin()
 	{
 		const gl = this.GetGlContext();
-		if ( gl.EXT_blend_minmax === undefined )
+		if ( !gl.MIN )
 			throw "EXT_blend_minmax hasn't been setup on this context";
 		
 		//	set mode
@@ -2036,7 +2042,7 @@ export class RenderTarget
 		gl.enable( gl.BLEND );
 		gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
 		//gl.blendEquation( gl.FUNC_ADD );
-		gl.blendEquation( gl.EXT_blend_minmax.MIN_EXT );
+		gl.blendEquation( gl.MIN );
 		//GL_FUNC_ADD
 	}
 	
