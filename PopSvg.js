@@ -1,4 +1,19 @@
-Pop.Svg = {};
+const Debug = console.log;
+const Warning = console.warn;
+
+//	webspecific api!
+function ParseXml(Xml)
+{
+	//	web version makes use of the dom parser
+	//	https://stackoverflow.com/a/7951947/355753
+	if ( typeof window.DOMParser == 'undefined' )
+		throw "XML parser not supported";
+	
+	const Parser = new window.DOMParser();
+	const Dom = Parser.parseFromString(Xml, 'text/xml');
+	const Object = Dom.documentElement;
+	return Object;
+}
 
 
 function ParseCss(CssString)
@@ -42,7 +57,7 @@ function CleanSvg(DomSvg)
 		}
 		catch(e)
 		{
-			Pop.Debug(`Exception in GetStyleFromClass; ${e}`);
+			Debug(`Exception in GetStyleFromClass; ${e}`);
 			return GetDefaultStyle();
 		}
 	}
@@ -50,7 +65,7 @@ function CleanSvg(DomSvg)
 	function PushGroup(Node,Parent)
 	{
 		const GroupName = Node.attributes.id;
-		Pop.Debug(`Todo process group ${GroupName}`,Node);
+		Debug(`Todo process group ${GroupName}`,Node);
 	}
 
 	function GetShape(Node)
@@ -98,7 +113,7 @@ function CleanSvg(DomSvg)
 	
 	function GetDefaultStyle()
 	{
-		// Pop.Debug("GetDefaultStyle");
+		// Debug("GetDefaultStyle");
 		//	defaults;
 		//	https://www.w3.org/TR/SVG/painting.html#StrokeWidthProperty
 		const SvgDefaults = {};
@@ -133,10 +148,10 @@ function CleanSvg(DomSvg)
 			
 			//	overwrite new values
 			Object.assign( CurrentStyle, Style );
-			// Pop.Debug(`Merged style ${SelectorName};`,CurrentStyle);
+			// Debug(`Merged style ${SelectorName};`,CurrentStyle);
 			CssMap[SelectorName] = CurrentStyle;
 		}
-		//Pop.Debug('SelectorNames',SelectorNames,"Style",Style);
+		//Debug('SelectorNames',SelectorNames,"Style",Style);
 	}
 	
 	function ParseCssjsStyle(CssRule)
@@ -167,7 +182,7 @@ function CleanSvg(DomSvg)
 		//	Node.sheet not on safari, so use 3rd party
 		//	3rd party parser
 		const CssRules = ParseCss(CssText);
-		// Pop.Debug('css',JSON.stringify(CssRules));
+		// Debug('css',JSON.stringify(CssRules));
 		CssRules.forEach( ParseCssjsStyle );
 
 		/*
@@ -229,7 +244,7 @@ function CleanSvg(DomSvg)
 	}
 	Array.from(DomSvg.children).forEach(PushRootChild);
 	
-	// Pop.Debug("CSS selectors", Object.keys(CssMap) );
+	// Debug("CSS selectors", Object.keys(CssMap) );
 	
 	return Svg;
 }
@@ -422,7 +437,7 @@ function ProcessPathCommands(Commands, TreePath)
 	
 	function ProcessArc(RadiusX,RadiusY,Rotation,Arc,Sweep,EndX,EndY)
 	{
-		// Pop.Debug('ProcessArc');
+		// Debug('ProcessArc');
 		//	for now grab points
 		const PointCount = 10;
 
@@ -519,7 +534,7 @@ function ProcessPathCommands(Commands, TreePath)
 	
 	function ProcessQuadratic(ControlX,ControlY,EndX,EndY)
 	{
-		Pop.Debug("todo: process quadratic");
+		Debug("todo: process quadratic");
 		ProcessLine( EndX, EndY );
 	}
 	
@@ -534,7 +549,7 @@ function ProcessPathCommands(Commands, TreePath)
 	
 	function ProcessQuadraticReflection(EndX,EndY)
 	{
-		Pop.Debug("todo: process quadratic reflection");
+		Debug("todo: process quadratic reflection");
 		ProcessLine( EndX, EndY );
 	}
 	
@@ -624,7 +639,7 @@ function ProcessPathCommands(Commands, TreePath)
 				default:	throw `Unhandled path command ${Cmd}`;
 			}
 
-			// if ( Args.length > 0 ) Pop.Warning(`Multiple iteration of path command ${Cmd}`);
+			// if ( Args.length > 0 ) Warning(`Multiple iteration of path command ${Cmd}`);
 		}
 		while(Args.length > 0);
 	}
@@ -651,7 +666,7 @@ function ParseSvgPathCommandContours(Commands, TreePath)
 		//	find all floats
 		const Matches = [...String.matchAll(IsNumber)];
 		let Floats = Matches.map( m => m[0] );
-		// Pop.Debug(`Floats: ${String}`,Matches);
+		// Debug(`Floats: ${String}`,Matches);
 		
 		Floats = Floats.map( parseFloat );
 		if ( Floats.some( isNaN ) )
@@ -670,24 +685,46 @@ function ParseSvgPathCommandContours(Commands, TreePath)
 	}
 	
 	//	split into commands & coords
-	// Pop.Debug(`ParseSvgPathCommands(${Commands})`);
+	// Debug(`ParseSvgPathCommands(${Commands})`);
 	const Matches = Commands.split(IsCommandPattern);
 	const MatchesNotEmpty = Matches.filter( s => s.length );
 	const MatchesWithFloats = MatchesNotEmpty.map(ConvertIfNumbers);
 	//const Matches = [...Commands.matchAll( Pattern )];
-	// Pop.Debug(MatchesWithFloats);
+	// Debug(MatchesWithFloats);
 	
 	const Contours = ProcessPathCommands(MatchesWithFloats, TreePath);
 	return Contours;
 }
 
-Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
+export default async function ParseSvg(Contents,OnShape,FixPosition=null)
 {
 	FixPosition = FixPosition || function(xy,DocumentBounds)	{	return xy;	}
-	let Svg = Pop.Xml.Parse(Contents);
+	
+	
+	const TranslateRegex = new RegExp("translate\\((.*)\\)");
+	function ApplyTransform(xy,Transform,Bounds)
+	{
+		if ( Transform )
+		{
+			//transform="translate(-20.401999,6.3428249)" 
+			let Translate = Transform.match(TranslateRegex);
+			if ( Translate )
+			{
+				Translate = Translate[1].split(',');
+				Translate = Translate.map( x => Number(x) );
+				xy[0] += Translate[0];
+				xy[1] += Translate[1];
+			}
+		}
+		
+		xy = FixPosition( xy, Bounds );
+		return xy;
+	}
+	
+	let Svg = ParseXml(Contents);
 	//	note: the DOMParser in chrome turns this into a proper svg object, not just a structure
 	Svg = CleanSvg(Svg);
-	// Pop.Debug( JSON.stringify(Svg) );
+	// Debug( JSON.stringify(Svg) );
 	
 	//	name for each shape is group/group/name
 	const PathSeperator = '/';
@@ -695,35 +732,19 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 	const Meta = Svg.svg;
 	const Bounds = StringToFloats( Svg.ViewBox );
 	
-	function FixPositionArray(Points)
+	function FixPositionArray(Points,Transform)
 	{
-		// Pop.Debug(`FixPositionArray`);
+		// Debug(`FixPositionArray`);
 		//	modify array of pairs
 		for ( let xy of Points )
 		{
-			let NewXy = FixPosition(xy,Bounds);
+			let NewXy = FixPosition(xy,Transform,Bounds);
 			xy[0] = NewXy[0];
 			xy[1] = NewXy[1];
 		}
 	}
 	
-	function NormaliseSize(Value)
-	{
-		if ( Array.isArray(Value) )
-		{
-			const NormValues = Value.map(NormaliseSize);
-			return NormValues;
-		}
 		
-		//Pop.Debug("Normalise", Value);
-		//	todo: center
-		//	scale down to largest width or height
-		if ( Bounds[2] > Bounds[3] )
-			return Value / Bounds[2];
-		else
-			return Value / Bounds[3];
-	}
-	
 	//	center bounds so ratio is around height
 	if ( false )
 	{
@@ -777,7 +798,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 	
 	function StringToFloat2Coords(String)
 	{
-		const Float2s = StringToFloat2s( String, NormaliseSize );
+		const Float2s = StringToFloat2s( String );
 		return Float2s;
 	}
 	
@@ -809,7 +830,6 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 	function StringToSize(String)
 	{
 		let x = StringToFloat(String);
-		x = NormaliseSize(x);
 		return x;
 	}
 	
@@ -828,7 +848,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 		let y = StringToCoord( Node['cy'] );
 		let r = StringToSize( Node['r'] );
 		
-		const xy = FixPosition([x,y],Bounds);
+		const xy = ApplyTransform([x,y],Node.transform,Bounds);
 		x = xy[0];
 		y = xy[1];
 		
@@ -855,7 +875,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 		let rx = StringToSize( Node['rx'] );
 		let ry = StringToSize( Node['ry'] );
 		
-		const xy = FixPosition([x,y],Bounds);
+		const xy = FixPosition([x,y],Node.transform,Bounds);
 		x = xy[0];
 		y = xy[1];
 		
@@ -870,7 +890,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 	
 	function ParsePath(Node,ChildIndex,PathName)
 	{
-		// Pop.Debug(`ParsePath(${Node.id})`);
+		// Debug(`ParsePath(${Node.id})`);
 		const Shape = {};
 		Shape.NodeType = Node.Type;
 		Shape.Style = Node.Style;
@@ -886,18 +906,18 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 		{
 			//	is it a line or a poly
 			let PathShape = {};
-			// Pop.Debug("Countour",Contour);
+			// Debug("Countour",Contour);
 			if ( Shape.Style.fill == "none" )
 			{
 				PathShape.Line = {};
-				PathShape.Line.Points = Contour.Points.map( NormaliseSize );
-				FixPositionArray(PathShape.Line.Points);
+				PathShape.Line.Points = Contour.Points.slice();
+				FixPositionArray(PathShape.Line.Points,Node.transform);
 			}
 			else
 			{
 				PathShape.Polygon = {};
-				PathShape.Polygon.Points = Contour.Points.map( NormaliseSize );
-				FixPositionArray(PathShape.Polygon.Points);
+				PathShape.Polygon.Points = Contour.Points.slice();
+				FixPositionArray(PathShape.Polygon.Points,Node.transform);
 			}
 
 			const OutputShape = Object.assign({},Shape);
@@ -919,7 +939,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 
 		Shape.Polygon = {};
 		Shape.Polygon.Points = StringToFloat2Coords(Node['points']);
-		FixPositionArray(Shape.Polygon.Points);
+		FixPositionArray(Shape.Polygon.Points,Node.transform);
 
 		OnShape(Shape);
 	}
@@ -942,7 +962,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 		Shape.Line.Points = [];
 		Shape.Line.Points.push( [x1,y1] );
 		Shape.Line.Points.push( [x2,y2] );
-		FixPositionArray(Shape.Line.Points);
+		FixPositionArray(Shape.Line.Points,Node.transform);
 
 		OnShape( Shape );
 	}
@@ -958,7 +978,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 
 		Shape.Line = {};
 		Shape.Line.Points = StringToFloat2Coords(Node['points']);
-		FixPositionArray(Shape.Line.Points);
+		FixPositionArray(Shape.Line.Points,Node.transform);
 		
 		OnShape( Shape );
 	}
@@ -977,7 +997,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 		let w = StringToSize( Node['width'] );
 		let h = StringToSize( Node['height'] );
 		
-		const xy = FixPosition([x,y],Bounds);
+		const xy = FixPosition([x,y],Node.transform,Bounds);
 		x = xy[0];
 		y = xy[1];
 		
@@ -1009,7 +1029,7 @@ Pop.Svg.ParseShapes = function(Contents,OnShape,FixPosition=null)
 		}
 		catch(e)
 		{
-			Pop.Warning(`Failed to parse shape ${Node.Type}; ${e}`);
+			Warning(`Failed to parse shape ${Node.Type}; ${e}`);
 		}
 	}
 	

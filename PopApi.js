@@ -17,7 +17,8 @@ export function GetZeroFloatArray(Length)
 }
 
 
-
+//	todo: change this to an arraybuffer and return a subarray (sub-view) of the array
+//		one allocation, view-on-demand at little cost
 const IndexArrayCache = {};	//	[Length] = Float32Array(0's)
 export function GetIndexArray(Length)
 {
