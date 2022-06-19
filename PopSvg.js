@@ -11,6 +11,9 @@ function ParseXml(Xml)
 	
 	const Parser = new window.DOMParser();
 	const Dom = Parser.parseFromString(Xml, 'text/xml');
+	const ErrorNode = Dom.querySelector('parsererror');
+	if ( ErrorNode )
+		throw ErrorNode.innerText;
 	const Object = Dom.documentElement;
 	return Object;
 }
@@ -29,7 +32,15 @@ function CleanSvg(DomSvg)
 	//	the DOMParser turns the svg into a proper svg object, so this func cleans it up
 	const Svg = {};
 	
-	Svg.ViewBox = DomSvg.attributes.viewBox.value;
+	if ( DomSvg.attributes.viewBox )
+	{
+		Svg.ViewBox = DomSvg.attributes.viewBox.value;
+	}
+	else
+	{
+		console.warn(`SVG has no viewBox`);
+		Svg.ViewBox = "0,0,100,100";
+	}
 	
 	function CreateGroup()
 	{
