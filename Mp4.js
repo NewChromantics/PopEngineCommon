@@ -784,13 +784,9 @@ export class Mp4Decoder
 		
 		//	now go through all the trak children
 		const TrakAtoms = Atom.GetChildAtoms('trak');
-		for ( let ta=0;	ta<TrakAtoms.length;	ta++ )
+		for ( let TrakAtom of TrakAtoms )
 		{
-			//	gr: there are proper track/pid/stream id's somewhere!
-			//		they are supposed to start at 1... but presumably meta somewhere that refers to trackids uses these pids
-			const TrackId = ta+1;
-			const TrakAtom = TrakAtoms[ta];
-			const Track = await this.DecodeAtom_Trak(TrakAtom,TrackId,MovieHeader);
+			const Track = await this.DecodeAtom_Trak(TrakAtom,MovieHeader);
 			this.OnNewTrack(Track);
 		}
 	}
@@ -889,13 +885,16 @@ export class Mp4Decoder
 		return Header;
 	}
 	
-	async DecodeAtom_Trak(Atom,TrackId,MovieHeader)
+	async DecodeAtom_Trak(Atom,MovieHeader)
 	{
 		await Atom.DecodeChildAtoms();
 		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
 		
+		const TrackHeader = await Atom_Tkhd.Read( Atom.GetChildAtom('tkhd') );
+		
 		const Track = {};
-		Track.Id = TrackId;
+		Track.Id = TrackHeader.TrackId;
+		
 		const Medias = [];
 		
 		const MediaAtoms = Atom.GetChildAtoms('mdia');
@@ -1590,6 +1589,29 @@ class Atom_Tkhd extends Atom_t
 		DataWriter.WriteBytes( this.Matrix );
 		DataWriter.Write32( this.PixelsWidth );
 		DataWriter.Write32( this.PixelsHeight );
+	}
+	
+	static async Read(AnonymousAtom,EnumChildAtom)
+	{
+		const Reader = new AtomDataReader(AnonymousAtom.Data,AnonymousAtom.DataFilePosition);
+		const Atom = new Atom_Tkhd();
+		Atom.Version = await Reader.Read8();
+		Atom.Flags = await Reader.Read24();
+		Atom.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904( await Reader.Read32() );
+		Atom.ModificationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904( await Reader.Read32() );
+		Atom.TrackId = await Reader.Read32();
+		const Reserved = await Reader.Read32();
+		Atom.Duration = await Reader.Read32();
+		const Reserved8 = await Reader.ReadBytes(8);
+		Atom.Layer = await Reader.Read16();
+		Atom.AlternateGroup = await Reader.Read16();
+		Atom.Volume = await Reader.Read16();
+		const Reserved16 = await Reader.Read16();
+		Atom.Matrix = await Reader.ReadBytes( 3*3 *4 );//	u32 * 3x3
+		Atom.PixelsWidth = await Reader.Read32();
+		Atom.PixelsHeight = await Reader.Read32();
+
+		return Atom;
 	}
 }
 
