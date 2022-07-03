@@ -711,6 +711,7 @@ export class Mp4Decoder
 			if (HeaderPos != MoofPos)
 			{
 				Debug("Expected Header Pos(" + HeaderPos + ") and moof pos(" + MoofPos + ") to be the same");
+				Header.BaseDataOffset = MoofPos;
 			}
 		}
 		const MoofPosition = (Header.BaseDataOffset!==undefined) ? Header.BaseDataOffset : MoofAtom.FilePosition;
