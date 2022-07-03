@@ -176,6 +176,7 @@ export class VideoDecoder
 		 
 		//	gone through all blocks
 		this.OnMp4Decoded = OnMp4Decoded || function(){};
+		this.OnFrameFreed = OnFrameFreed;
 		
 		//	sample meta has been extracted AND the data from MDAT has been extracted
 		this.OnMp4SampleExtracted = OnMp4SampleExtracted || function(){};
@@ -193,21 +194,34 @@ export class VideoDecoder
 		this.Mp4HadEof = false;
 		this.Mp4FileChunkQueue = new PromiseQueue(`Mp4 Input data ${DebugName}`);
 		
-		//	storing samples for frame metas
-		//	todo: use .FrameMetas
 		this.Samples = [];
 		this.VideoMetaChangedQueue = new PromiseQueue(`Video meta changes ${DebugName}`);
 		
 		//	make h264 decoding thread
-		this.H264Decoder = new WebcodecDecoder(OnFrameFreed);
+		this.H264Decoders = {};	//	[Track] = Decoder
 		this.OutputFrameQueue = new PromiseQueue(`Video Output Queue ${DebugName}`);
 
 		//	make h264 consumer thread
 		this.Mp4DecoderThreadPromise = this.Mp4DecoderThread();
-		this.H264OutputThreadPromise = this.H264OutputThread();
-		
 		this.Mp4DecoderThreadPromise.catch(this.OnMp4ThreadError.bind(this));
-		this.H264OutputThreadPromise.catch(this.OnH264ThreadError.bind(this));
+	}
+	
+	GetH264Decoder(Track)
+	{
+		if ( !Number.isInteger(Track) )
+			throw `Invalid track id for GetH264Decoder(Track=${Track})`;
+		
+		if ( !this.H264Decoders.hasOwnProperty(Track) )
+		{
+			const Decoder = {};
+			Decoder.Decoder = new WebcodecDecoder( this.OnFrameFreed );
+			Decoder.FrameCount = 0;
+			Decoder.Track = Track;
+			this.H264Decoders[Track] = Decoder;
+			Decoder.OutputThreadPromise = this.H264OutputThread(Decoder.Decoder,Track);
+			Decoder.OutputThreadPromise.catch(this.OnH264ThreadError.bind(this));
+		}
+		return this.H264Decoders[Track];
 	}
 	
 	OnMp4ThreadError(Error)
@@ -351,9 +365,6 @@ export class VideoDecoder
 		//	we need to fetch all the samples first, sort by decode order...
 		//	i think thats always the order in mp4 though...
 		
-		//	temp until we fix time in mp4 decoder
-		let FrameIndex = 0;
-		
 		while ( true )
 		{
 			const NextSamples = await this.Mp4Decoder.WaitForNextSamples();
@@ -382,7 +393,10 @@ export class VideoDecoder
 				if ( !Data )
 					Data = await this.GetSampleData(Sample);
 					
-					
+				const H264Decoder = this.GetH264Decoder(Sample.TrackId);
+				
+				const FrameIndex = H264Decoder.FrameCount;
+				
 				//	hack: I believe the mp4 decoder is decoding time wrong,
 				//		but more importantly in order to sync, we're currently
 				//		syncing by frame number
@@ -395,7 +409,7 @@ export class VideoDecoder
 				
 				//	decoder should figure this out
 				const IsKeyframe = Sample.IsKeyframe;
-				if ( !this.H264Decoder.PushData( Data, PresentationTimeMs, IsKeyframe ) )
+				if ( !H264Decoder.Decoder.PushData( Data, PresentationTimeMs, IsKeyframe ) )
 				{
 					//	gr: not 
 					//throw `Error pushing sample to H264 decoder`;
@@ -406,18 +420,18 @@ export class VideoDecoder
 				
 				//	increase frame index if not sps/pps
 				if ( !Sample.Data )
-					FrameIndex++;
+					H264Decoder.FrameCount++;
 			}
 		}
 		this.H264Decoder.PushEndOfFile();
 		//console.log(`Mp4(not h264) decoder thread finished`);
 	}
 	
-	async H264OutputThread()
+	async H264OutputThread(Decoder,Track)
 	{
 		while ( true )
 		{
-			const FrameImage = await this.H264Decoder.WaitForNextFrame();
+			const FrameImage = await Decoder.WaitForNextFrame();
 			//	eof
 			if ( !FrameImage )
 				break;
@@ -425,6 +439,7 @@ export class VideoDecoder
 			const Frame = {};
 			Frame.Data = FrameImage;
 			Frame.FrameIndex = this.H264TimeToFrameIndex(FrameImage.timestamp);
+			Frame.Track = Track;
 
 			//	Client is expected to call .Free() when they're done with this frame
 			this.OutputFrameQueue.Push(Frame);
@@ -432,7 +447,7 @@ export class VideoDecoder
 
 		//	push an EOF frame
 		this.OutputFrameQueue.Push(null);
-		this.Free();
+		Decoder.Free();
 	}
 	
 	Free()
