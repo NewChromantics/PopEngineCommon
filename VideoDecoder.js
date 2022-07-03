@@ -312,7 +312,7 @@ export class VideoDecoder
 		//	todo: may need to check here if we've got EOF and will never get
 		while ( !this.Mp4HadEof && this.Mp4FileContent.length < End )
 		{
-			//console.log(`Waiting for MP4 chunk [${Start}...${End}]/${this.Mp4FileContent.length}...`);
+			console.log(`Waiting for MP4 chunk [${Start}...${End}]/${this.Mp4FileContent.length}...`);
 			//	dont need to check each change, and we can assume last will be null
 			const NextData = await this.WaitForMp4FileDataChanged();
 			if ( !NextData )
@@ -364,6 +364,14 @@ export class VideoDecoder
 		//	todo: we need to graciously handle OOP
 		//	we need to fetch all the samples first, sort by decode order...
 		//	i think thats always the order in mp4 though...
+	
+		//	gr: on web, with multiple tracks, we get all the samples, push them to decoder
+		//		the decoder then outputs a burst of packets
+		//		THEN we get samples for next track. I think they're in seperate atoms, but
+		//		there's a noticable delay AFTER consuming new frames that track2 samples appear
+		//		see if we can only process X samples at a time, but try and interleave samples so
+		//		tracks can be played in sync
+		//		Adding a pause for requestAnimationFrame/Pop.WaitForFrame() helps spread this out via h264 decder
 		
 		while ( true )
 		{
@@ -372,6 +380,7 @@ export class VideoDecoder
 			if ( !NextSamples )
 				break;
 			
+			//console.log(`got ${NextSamples.length} new samples (est track =${NextSamples[0].TrackId})`);
 			this.OnNewSamples(NextSamples);
 			
 			//	see if we ever get samples before we finish download
@@ -435,6 +444,8 @@ export class VideoDecoder
 			//	eof
 			if ( !FrameImage )
 				break;
+			
+			//console.log(`Got frame ${Track}/${FrameImage.timestamp} queue: ${this.OutputFrameQueue.GetQueueSize()}`);
 			
 			const Frame = {};
 			Frame.Data = FrameImage;
