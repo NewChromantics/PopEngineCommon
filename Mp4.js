@@ -501,10 +501,6 @@ export class Mp4Decoder
 		this.Mdats.push(MdatAtom);
 	}
 	
-	PushFragmentTrack(Track)
-	{
-		this.Tracks.push(Track);
-	}
 	
 	async ReadNextAtom()
 	{
@@ -561,10 +557,18 @@ export class Mp4Decoder
 		this.OnNewSamples(null);
 	}
 	
-	OnNewTrack(Track,TrackId)
+	OnNewTrack(Track)
 	{
 		this.Tracks.push(Track);
 		this.NewTrackQueue.Push(Track);
+	}
+	
+	GetTrack(TrackId)
+	{
+		const Track = this.Tracks.find( t => t.Id == TrackId );
+		if ( !Track )
+			throw `No track ${TrackId}`;
+		return Track;
 	}
 	
 	async DecodeAtom_Mdat(Atom)
@@ -608,7 +612,7 @@ export class Mp4Decoder
 		{
 			const MdatIdent = null;
 			const Track = await this.DecodeAtom_TrackFragment( TrackFragmentAtom, Atom, Header, MdatIdent );
-			this.PushFragmentTrack(Track);
+			this.OnNewTrack(Track);
 		}
 	}
 	
@@ -732,6 +736,8 @@ export class Mp4Decoder
 		let DefaultSampleSize = Header.DefaultSampleSize || 0;
 		let DefaultSampleFlags = Header.DefaultSampleFlags || 0;
 
+		const Track = this.GetTrack(TrackHeader.TrackId);
+		
 		for ( let sd=0;	sd<EntryCount;	sd++)
 		{
 			let SampleDuration = await (SampleDurationPresent ? Reader.Read32() : DefaultSampleDuration);
@@ -753,6 +759,7 @@ export class Mp4Decoder
 			Sample.PresentationTimeMs = TimeToMs(CurrentTime+SampleCompositionTimeOffset);
 			Sample.Flags = TrunBoxSampleFlags;
 			Sample.TrackId = TrackHeader.TrackId;
+			Sample.ContentType = Track.ContentType;
 			Samples.push(Sample);
 
 			CurrentTime += SampleDuration;
@@ -905,6 +912,7 @@ export class Mp4Decoder
 		}
 		
 		Track.Medias = Medias;
+		Track.ContentType = Object.keys(Medias[0].MediaInfo)[0];
 		//Debug(`Found x${Medias.length} media atoms`);
 		return Track;
 	}
@@ -969,6 +977,16 @@ export class Mp4Decoder
 		for ( let Dinf of Dinfs )
 			await this.DecodeAtom_Dinf(Dinf);
 		
+		const MediaInfo = {};
+		
+		//	subtitle meta
+		const Tx3g = MediaHeader.SampleMeta.GetChildAtom('tx3g');
+		if ( Tx3g )
+		{
+			MediaInfo.Subtitle = Tx3g;
+
+		}
+		
 		//	todo: should we convert header to samples? (SPS & PPS)
 		//		does this ONLY apply to h264/video?
 		const Avc1 = MediaHeader.SampleMeta.GetChildAtom('avc1');
@@ -977,6 +995,9 @@ export class Mp4Decoder
 			const Avcc = Avc1.GetChildAtom('avcC');
 			if ( Avcc )
 			{
+				const ContentType = 'H264';
+				MediaInfo[ContentType] = Avcc;
+				
 				//	it's possible to get this header with no samples
 				//	(fragmented mp4?)
 				//	so we dont have a first deocde/presentation time...
@@ -991,6 +1012,7 @@ export class Mp4Decoder
 				SpsSample.DecodeTimeMs = FirstSample.DecodeTimeMs;
 				SpsSample.PresentationTimeMs = FirstSample.PresentationTimeMs;
 				SpsSample.TrackId = FirstSample.TrackId;
+				SpsSample.ContentType = ContentType;
 				SpsSample.DurationMs = 0;
 
 				const PpsSample = new Sample_t();
@@ -998,6 +1020,7 @@ export class Mp4Decoder
 				PpsSample.DecodeTimeMs = FirstSample.DecodeTimeMs;
 				PpsSample.PresentationTimeMs = FirstSample.PresentationTimeMs;
 				PpsSample.TrackId = FirstSample.TrackId;
+				PpsSample.ContentType = ContentType;
 				PpsSample.DurationMs = 0;
 
 				this.OnNewSamples( [SpsSample,PpsSample] );
@@ -1009,6 +1032,8 @@ export class Mp4Decoder
 		//	hdlr
 		//	dinf
 		//	stbl
+		
+		return MediaInfo;
 	}
 	
 	async DecodeAtom_Dinf(Atom)
@@ -1851,6 +1876,8 @@ function GetSampleDescriptionExtensionType(Fourcc)
 		case Atom_SampleDescriptionExtension_Btrt.Fourcc:	return Atom_SampleDescriptionExtension_Btrt;
 		case Atom_SampleDescriptionExtension_Pasp.Fourcc:	return Atom_SampleDescriptionExtension_Pasp;
 
+		case Atom_SampleDescriptionExtension_tx3g.Fourcc:	return Atom_SampleDescriptionExtension_tx3g;
+
 		default:
 			return Atom_t;
 	}
@@ -1963,6 +1990,7 @@ export class Atom_SampleDescriptionExtension_Avcc extends Atom_t
 }
 
 
+
 class Atom_SampleDescriptionExtension_Pasp extends Atom_t
 {
 	static get Fourcc()	{	return 'pasp';	}
@@ -1977,6 +2005,76 @@ class Atom_SampleDescriptionExtension_Pasp extends Atom_t
 		DataWriter.WriteBytes( this.Data );
 	}
 }
+
+
+export class Atom_SampleDescriptionExtension_tx3g extends Atom_t
+{
+	static get Fourcc()	{	return 'tx3g';	}
+
+	constructor()
+	{
+		super( Atom_SampleDescriptionExtension_tx3g.Fourcc );
+	}
+	
+	EncodeData(DataWriter)
+	{
+		throw `todo`;
+	}
+	
+	//	is different to Read()? (no atom headers etc)
+	async DecodeData(Bytes)
+	{
+		const Reader = new DataReader(Bytes);
+		
+		this.DisplayFlags = await Reader.Read32();
+		
+		const Vertical = 0x20000000;
+		const SomeForced = 0x40000000;
+		const AllForced = 0x80000000;
+		
+		const Reserved1 = await Reader.Read8();
+		if ( Reserved1 != 1 )
+			Debug(`tx3g atom reserved1(${Reserved1})!=1`);
+
+		const ReservedMinus1 = await Reader.Read8();
+		if ( ReservedMinus1 != 0xff )
+			Debug(`tx3g atom ReservedMinus1(${ReservedMinus1})!=0xff`);
+
+		const Reserved0 = await Reader.Read32();
+		if ( Reserved0 != 0 )
+			Debug(`tx3g atom Reserved0(${Reserved0})!=0`);
+
+		//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-SW81
+		//	Default text box
+		//	A 64-bit rectangle that specifies an area to receive text
+		//	(each 16 bits indicate top, left, bottom, and right,
+		//	respectively) within the subtitle track. This rectangle must
+		//	fill the track header dimensions exactly; that is, top is 0,
+		//	left is 0, bottom is the height of the subtitle track header,
+		//	and right is the width of the subtitle track header.
+		//	See Subtitle Track Header Size and Placement.
+		this.RectTop = await Reader.Read16();
+		this.RectLeft = await Reader.Read16();
+		this.RectBottom = await Reader.Read16();
+		this.RectRight = await Reader.Read16();
+
+		const Reserved00 = await Reader.Read32();
+		if ( Reserved00 != 0 )
+			Debug(`tx3g atom Reserved00(${Reserved00})!=0`);
+
+		this.FontIdentifier = await Reader.Read16();
+		this.FontStyleFlags = await Reader.Read8();	//	called FontFace in docs
+		const Bold = 0x0001;
+		const Italic = 0x0002;
+		const Underline = 0x0004;
+
+		//	An 8-bit value that should always be 0.05 multiplied by the video track header height. For example, if the video track header is 720 points in height, this should be 36 (points). This size should be used in the default style record and in any per-sample style records. If a subtitle does not fit in the text box, the subtitle media handler may choose to shrink the font size so that the subtitle fits.
+		this.FontSize = await Reader.Read8();
+		
+		this.ForegroundRgba = await Reader.Read32();
+	}
+}
+
 
 class VideoSampleDescription
 {

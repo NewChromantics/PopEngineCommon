@@ -11,7 +11,7 @@ import {Mp4Decoder,Atom_SampleDescriptionExtension_Avcc,Atom_t} from './Mp4.js'
 import WebcodecDecoder from './PopH264WebApi.js'
 import * as H264 from './H264.js'
 import PromiseQueue from './PromiseQueue.js'
-import {JoinTypedArrays,ChunkArray} from './PopApi.js'
+import {JoinTypedArrays,ChunkArray,BytesToString} from './PopApi.js'
 import {Yield} from './PopWebApiCore.js'
 
 
@@ -199,11 +199,27 @@ export class VideoDecoder
 		
 		//	make h264 decoding thread
 		this.H264Decoders = {};	//	[Track] = Decoder
+		this.SubtitleDecoders = {};
 		this.OutputFrameQueue = new PromiseQueue(`Video Output Queue ${DebugName}`);
 
 		//	make h264 consumer thread
 		this.Mp4DecoderThreadPromise = this.Mp4DecoderThread();
 		this.Mp4DecoderThreadPromise.catch(this.OnMp4ThreadError.bind(this));
+	}
+	
+	GetSubtitleDecoder(Track)
+	{
+		if ( !Number.isInteger(Track) )
+			throw `Invalid track id for GetSubtitleDecoder(Track=${Track})`;
+		
+		if ( !this.SubtitleDecoders.hasOwnProperty(Track) )
+		{
+			const Decoder = {};
+			Decoder.FrameCount = 0;
+			Decoder.Track = Track;
+			this.SubtitleDecoders[Track] = Decoder;
+		}
+		return this.SubtitleDecoders[Track];
 	}
 	
 	GetH264Decoder(Track)
@@ -401,35 +417,57 @@ export class VideoDecoder
 				let Data = Sample.Data;
 				if ( !Data )
 					Data = await this.GetSampleData(Sample);
-					
-				const H264Decoder = this.GetH264Decoder(Sample.TrackId);
 				
-				const FrameIndex = H264Decoder.FrameCount;
-				
-				//	hack: I believe the mp4 decoder is decoding time wrong,
-				//		but more importantly in order to sync, we're currently
-				//		syncing by frame number
-				//		pass the reliable frame index as a time, and get it out again
-				//	we use a dumb function to explicitly highlight where the hack is used
-				//	we should store meta
-				const PresentationTimeMs = this.FrameMetaToH264Time(Sample,FrameIndex);
-				
-				this.OnMp4SampleExtracted(FrameIndex);
-				
-				//	decoder should figure this out
-				const IsKeyframe = Sample.IsKeyframe;
-				if ( !H264Decoder.Decoder.PushData( Data, PresentationTimeMs, IsKeyframe ) )
+				if ( Sample.ContentType == 'H264' )
 				{
-					//	gr: not 
-					//throw `Error pushing sample to H264 decoder`;
-				}
+					const H264Decoder = this.GetH264Decoder(Sample.TrackId);
+					
+					const FrameIndex = H264Decoder.FrameCount;
+					
+					//	hack: I believe the mp4 decoder is decoding time wrong,
+					//		but more importantly in order to sync, we're currently
+					//		syncing by frame number
+					//		pass the reliable frame index as a time, and get it out again
+					//	we use a dumb function to explicitly highlight where the hack is used
+					//	we should store meta
+					const PresentationTimeMs = this.FrameMetaToH264Time(Sample,FrameIndex);
+					
+					this.OnMp4SampleExtracted(FrameIndex);
+					
+					//	decoder should figure this out
+					const IsKeyframe = Sample.IsKeyframe;
+					if ( !H264Decoder.Decoder.PushData( Data, PresentationTimeMs, IsKeyframe ) )
+					{
+						//	gr: not
+						//throw `Error pushing sample to H264 decoder`;
+					}
 
-				//	I thought maybe we're flooding the webcodec decoder a bit, but doesnt seem to make much difference
-				await Yield(0);
-				
-				//	increase frame index if not sps/pps
-				if ( !Sample.Data )
-					H264Decoder.FrameCount++;
+					//	I thought maybe we're flooding the webcodec decoder a bit, but doesnt seem to make much difference
+					await Yield(0);
+					
+					//	increase frame index if not sps/pps
+					if ( !Sample.Data )
+						H264Decoder.FrameCount++;
+				}
+				else if ( Sample.ContentType == 'Subtitle' )
+				{
+					const SubtitleDecoder = this.GetSubtitleDecoder(Sample.TrackId);
+					
+					//	gr: first byte always 0?
+					//	gr: second byte rarely an ascii
+					const Text = BytesToString(Data.slice(2));
+					
+					const Frame = {};
+					Frame.Track = Sample.TrackId;
+					Frame.Data = `${Text}`;
+					Frame.FrameIndex = SubtitleDecoder.FrameCount;
+					this.OutputFrameQueue.Push(Frame);
+					SubtitleDecoder.FrameCount++;
+				}
+				else
+				{
+					console.log(`Unhandled sample type ${Sample.ContentType}`);
+				}
 			}
 		}
 		this.H264Decoder.PushEndOfFile();
