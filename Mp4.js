@@ -962,7 +962,17 @@ export class Mp4Decoder
 			const Avcc = Avc1.GetChildAtom('avcC');
 			if ( Avcc )
 			{
-				const FirstSample = Samples[0];
+				//	it's possible to get this header with no samples
+				//	(fragmented mp4?)
+				//	so we dont have a first deocde/presentation time...
+				//	bit of a flaw in the system... should we hold here?
+				const DummyFirstSample =
+				{
+				TrackId:0,
+				DecodeTimeMs:0,
+				PresentationTimeMs:0
+				};
+				const FirstSample = Samples[0] || DummyFirstSample;
 			
 				//	messy hack! should start with nalu size prefix
 				const SpsSample = new Sample_t();
