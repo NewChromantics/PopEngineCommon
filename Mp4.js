@@ -132,9 +132,10 @@ class Sample_t
 {
 	constructor()
 	{
-		this.DecodeTimeMs;
-		this.PresentationTimeMs;
+		this.DecodeTimeMs = null;
+		this.PresentationTimeMs = null;
 		this.IsKeyframe = true;
+		this.TrackId = null;
 
 		//	decoder
 		this.DataSize;
@@ -144,7 +145,6 @@ class Sample_t
 		
 		//	encoder
 		this.Data;
-		this.TrackId;
 		this.CompositionTimeOffset;
 	}
 	
@@ -413,6 +413,15 @@ export class Mp4Decoder
 			this.NewSamplesQueue.Push( Samples );
 			return;
 		}
+		
+		function VerifySample(Sample)
+		{
+			if ( !Number.isInteger(Sample.TrackId) )
+				throw `Sample has invalid track id ${Sample.TrackId}`;
+		}
+		
+		//	detect bad sample input
+		Samples.forEach(VerifySample);
 		
 		//	remove samples we've already output
 		//	we need this because if we inject a tail-moov and output samples, 
@@ -742,6 +751,7 @@ export class Mp4Decoder
 			Sample.DecodeTimeMs = TimeToMs(CurrentTime);
 			Sample.PresentationTimeMs = TimeToMs(CurrentTime+SampleCompositionTimeOffset);
 			Sample.Flags = TrunBoxSampleFlags;
+			Sample.TrackId = TrackHeader.TrackId;
 			Samples.push(Sample);
 
 			CurrentTime += SampleDuration;
@@ -773,9 +783,13 @@ export class Mp4Decoder
 		
 		//	now go through all the trak children
 		const TrakAtoms = Atom.GetChildAtoms('trak');
-		for ( let TrakAtom of TrakAtoms )
+		for ( let ta=0;	ta<TrakAtoms.length;	ta++ )
 		{
-			const Track = await this.DecodeAtom_Trak(TrakAtom,MovieHeader);
+			//	gr: there are proper track/pid/stream id's somewhere!
+			//		they are supposed to start at 1... but presumably meta somewhere that refers to trackids uses these pids
+			const TrackId = ta+1;
+			const TrakAtom = TrakAtoms[ta];
+			const Track = await this.DecodeAtom_Trak(TrakAtom,TrackId,MovieHeader);
 			this.OnNewTrack(Track);
 		}
 	}
@@ -874,12 +888,13 @@ export class Mp4Decoder
 		return Header;
 	}
 	
-	async DecodeAtom_Trak(Atom,MovieHeader)
+	async DecodeAtom_Trak(Atom,TrackId,MovieHeader)
 	{
 		await Atom.DecodeChildAtoms();
 		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
 		
 		const Track = {};
+		Track.Id = TrackId;
 		const Medias = [];
 		
 		const MediaAtoms = Atom.GetChildAtoms('mdia');
@@ -911,7 +926,7 @@ export class Mp4Decoder
 			Media.MediaHeader.TimeScale = 1000;
 		}
 		
-		Media.MediaInfo = await this.DecodeAtom_MediaInfo( Atom.GetChildAtom('minf'), Media.MediaHeader, MovieHeader );
+		Media.MediaInfo = await this.DecodeAtom_MediaInfo( Atom.GetChildAtom('minf'), Track.Id, Media.MediaHeader, MovieHeader );
 		return Media;
 	}
 
@@ -940,7 +955,7 @@ export class Mp4Decoder
 		return Header;
 	}
 	
-	async DecodeAtom_MediaInfo(Atom,MediaHeader,MovieHeader)
+	async DecodeAtom_MediaInfo(Atom,TrackId,MediaHeader,MovieHeader)
 	{
 		if ( !Atom )
 			return null;
@@ -948,7 +963,7 @@ export class Mp4Decoder
 		await Atom.DecodeChildAtoms();
 		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
 		
-		const Samples = await this.DecodeAtom_SampleTable( Atom.GetChildAtom('stbl'), MediaHeader, MovieHeader );
+		const Samples = await this.DecodeAtom_SampleTable( Atom.GetChildAtom('stbl'), TrackId, MediaHeader, MovieHeader );
 		
 		const Dinfs = Atom.GetChildAtoms('dinf');
 		for ( let Dinf of Dinfs )
@@ -966,12 +981,8 @@ export class Mp4Decoder
 				//	(fragmented mp4?)
 				//	so we dont have a first deocde/presentation time...
 				//	bit of a flaw in the system... should we hold here?
-				const DummyFirstSample =
-				{
-				TrackId:0,
-				DecodeTimeMs:0,
-				PresentationTimeMs:0
-				};
+				const DummyFirstSample = new Sample_t();
+				DummyFirstSample.TrackId = TrackId;
 				const FirstSample = Samples[0] || DummyFirstSample;
 			
 				//	messy hack! should start with nalu size prefix
@@ -1008,7 +1019,7 @@ export class Mp4Decoder
 	}
 	
 	//	todo: see how much this overlaps with DecodeAtom_FragmentSampleTable
-	async DecodeAtom_SampleTable(Atom,MediaHeader,MovieHeader)
+	async DecodeAtom_SampleTable(Atom,TrackId,MediaHeader,MovieHeader)
 	{
 		if ( !Atom )
 			return null;
@@ -1131,6 +1142,7 @@ export class Mp4Decoder
 				Sample.DecodeTimeMs = TimeToMs( SampleDecodeTimes[SampleIndex] );
 				Sample.DurationMs = TimeToMs( SampleDurations[SampleIndex] );
 				Sample.PresentationTimeMs = TimeToMs( SampleDecodeTimes[SampleIndex] + SamplePresentationTimeOffsets[SampleIndex] );
+				Sample.TrackId = TrackId;
 				Samples.push(Sample);
 
 				ChunkFileOffset += Sample.DataSize;
