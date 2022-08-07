@@ -1,8 +1,8 @@
-import { GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
-import {LoadFileAsImageAsync} from './FileSystem.js'
 import {Debug,Warning} from './PopWebApiCore.js'
 import DirtyBuffer from './DirtyBuffer.js'
 import {GetRectsFromIndexes} from './Math.js'
+import {CreatePromise} from './PromiseQueue.js'
+
 
 //	gr: I forget what browser this was for! add comments when we know!
 //	ImageBitmap should also be supported
@@ -13,6 +13,63 @@ const WebApi_HtmlVideoElement = window.hasOwnProperty('HTMLVideoElement') ? wind
 
 //	webcodec output
 const WebApi_HtmlVideoFrame = window.hasOwnProperty('VideoFrame') ? window['VideoFrame'] : null;
+
+
+//	in c++ this is SoyPixelsFormat namespace
+export function GetChannelsFromPixelFormat(PixelFormat)
+{
+	switch(PixelFormat)
+	{
+		case 'Greyscale':	return 1;
+		case 'RGBA':		return 4;
+		case 'RGB':			return 3;
+		case 'Float1':		return 1;
+		case 'Float2':		return 2;
+		case 'Float3':		return 3;
+		case 'Float4':		return 4;
+		case 'ChromaU':		return 1;
+		case 'ChromaV':		return 1;
+		case 'Depth16mm':	return 2;	//	RG
+	}
+	throw `unhandled GetChannelsFromPixelFormat(${PixelFormat})`;
+}
+
+export function IsFloatFormat(Format)
+{
+	switch(Format)
+	{
+		case 'Float1':
+		case 'Float2':
+		case 'Float3':
+		case 'Float4':
+			return true;
+		default:
+			return false;
+	}
+}
+
+export function GetFormatElementSize(PixelFormat)
+{
+	switch(PixelFormat)
+	{
+		//	bytes
+		case 'ChromaU':
+		case 'ChromaV':
+		case 'Greyscale':
+		case 'RGBA':
+		case 'RGB':
+		case 'Depth16mm':	//	two channel x 1byte
+			return 1;
+			
+		case 'Float1':
+		case 'Float2':
+		case 'Float3':
+		case 'Float4':
+			return 4;
+	}
+	throw `unhandled GetFormatElementSize(${PixelFormat})`;
+}
+
 
 function IsHtmlElementPixels(Pixels)
 {
@@ -48,7 +105,7 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 		{
 			switch ( PixelFormat )
 			{
-				case 'Float1':		return [ gl.R32F,		gl.FLOAT];
+				case 'Float1':		return [ gl.RED,		gl.FLOAT];
 				case 'Float2':		return [ gl.RG32F,		gl.FLOAT];
 				case 'Float3':		return [ gl.RGB32F,		gl.FLOAT];
 				//case 'Float4':		return [ gl.RGBA32F,	gl.FLOAT];
@@ -59,7 +116,7 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 		{
 			switch ( PixelFormat )
 			{
-				case 'Float1':		return [ gl.LUMINANCE,	gl.FLOAT];
+				case 'Float1':		return [ gl.RED,	gl.FLOAT];
 				case 'Float2':		return [ gl.LUMINANCE_ALPHA,	gl.FLOAT];
 				case 'Float3':		return [ gl.RGB,		gl.FLOAT];
 				case 'Float4':		return [ gl.RGBA,		gl.FLOAT];
@@ -165,10 +222,55 @@ function GetPixelsFromHtmlImageElement(Img)
 export async function PngBytesToImage(PngBytes)
 {
 	//	re-using browser's loader
-	const PngBlob = new Blob( [ PngBytes ], { type: "image/png" } );
-	const ImageUrl = URL.createObjectURL( PngBlob );
-	const Image = await LoadFileAsImageAsync(ImageUrl);
-	return Image;
+	let ImageUrl;
+
+	//	allow DataUrl strings
+	if ( typeof PngBytes == typeof '' )
+	{
+		//	todo: check data url prefix
+		ImageUrl = PngBytes;
+	}
+	else
+	{
+		const PngBlob = new Blob( [ PngBytes ], { type: "image/png" } );
+		ImageUrl = URL.createObjectURL( PngBlob );
+	}
+	
+	//	gr: this was LoadFileAsImageAsync() but cyclic include
+	//const Image = await LoadFileAsImageAsync(ImageUrl);
+	function LoadHtmlImageAsync()
+	{
+		let Promise = CreatePromise();
+		const HtmlImage = new Image();
+		HtmlImage.onload = function ()
+		{
+			Promise.Resolve(HtmlImage);
+		};
+		HtmlImage.addEventListener('load', HtmlImage.onload, false);
+		HtmlImage.onerror = function (Error)
+		{
+			Promise.Reject(Error);
+		}
+		HtmlImage.crossOrigin = "anonymous";
+		//  trigger load
+		HtmlImage.src = '';
+		HtmlImage.src = ImageUrl;
+		return Promise;
+	}
+
+	//	the API expects to return an image, so wait for the load,
+	//	then make an image. This change will have broken the Pop.Image(Filename)
+	//	constructor as it uses the asset cache, which is only set after this
+	const HtmlImage = await LoadHtmlImageAsync();
+	
+	//	add a free() function to release this when done with it
+	HtmlImage.Free = function()
+	{
+		URL.revokeObjectURL(ImageUrl);
+	}
+	
+	const OutputImage = new PopImage(HtmlImage);
+	return OutputImage;
 }
 
 
@@ -335,6 +437,11 @@ export default class PopImage
 		this.LinearFilter = Linear;
 	}
 	
+	get width()		{	return this.GetWidth();	}
+	get Width()		{	return this.GetWidth();	}
+	get height()	{	return this.GetHeight();	}
+	get Height()	{	return this.GetHeight();	}
+
 	GetWidth()
 	{
 		return this.Size[0];
@@ -361,27 +468,124 @@ export default class PopImage
 			return;
 		throw `Todo: Pixel format conversion from ${this.PixelsFormat} to ${NewFormat}`;
 	}
-
-	GetDataUrl()
+	
+	async GetAsHtmlImage(Scale=1)
 	{
+		const ImageElement = document.createElement('img');
+		const ImageLoaded = CreatePromise();
+		ImageElement.onload = (x) => ImageLoaded.Resolve();
+		ImageElement.onerror = (e) => ImageLoaded.Reject(e);
+		ImageElement.src = await this.GetDataUrl(Scale);
+		await ImageLoaded;
+		return ImageElement;
+	}
+
+	GetAsHtmlImageData()
+	{
+		const Width = this.GetWidth();
+		const Height = this.GetHeight();
+		let Pixels = this.GetPixelBuffer();
+		
+		//	convert to rgba
+		const Channels = this.GetChannels();
+		if ( Channels != 4 )
+		{
+			const NewPixels = new Float32Array( Width * Height * 4 );
+			for ( let p=0;	p<Pixels.length;	p++ )
+			{
+				let np = p*4;
+				NewPixels[np+0] = Pixels[p];
+				NewPixels[np+1] = Pixels[p];
+				NewPixels[np+2] = Pixels[p];
+				NewPixels[np+3] = 1;
+			}
+			Pixels = NewPixels;
+		}
+		
+		//	eek slow/bad conversion
+		if ( Pixels instanceof Float32Array )
+			Pixels = Pixels.map( x => x*255 );
+		//	force into rgba
+		Pixels = new Uint8ClampedArray(Pixels);
+		const Img = new ImageData(Pixels,Width,Height);
+		return Img;
+	}
+
+	async GetAsHtmlCanvasScaled(Scale=1)
+	{
+		const Img = await this.GetAsHtmlImageData();
+		
 		const Canvas = document.createElement('canvas');
 		const Context = Canvas.getContext('2d');
 		const Width = this.GetWidth();
 		const Height = this.GetHeight();
-		Canvas.width = Width;
-		Canvas.height = Height;
+		Canvas.width = Math.floor(Width * Scale);
+		Canvas.height = Math.floor(Height * Scale);
+	
+		if ( Scale == 1 )
+		{
+			Context.putImageData(Img,0,0);
+		}
+		else
+		{
+			//	Context.drawImage(Img,0,0,Canvas.width,Canvas.height);
+			const Bitmap = await createImageBitmap(Img);
+			Context.drawImage(Bitmap,0,0,Canvas.width,Canvas.height);
+		}
+		
+		//	make a Free() function
+		Canvas.Free = function()
+		{
+			//	destroy canvas (safari suggests its hanging around)
+			//	this frees up canvas memory
+			Canvas.width = 0;
+			Canvas.height = 0;
+			//delete Canvas;	//	not allowed in strict mode
+		};
+		return Canvas;
+	}
 
-		let Pixels = new Uint8ClampedArray(this.GetPixelBuffer());
-		const Img = new ImageData(Pixels,Width,Height);
+	GetAsHtmlCanvas(Scale=1)
+	{
+		if ( Scale !== 1 )
+			throw `GetAsHtmlCanvas(${Scale}) with a scale must use async GetAsHtmlCanvasScaled()`;
+			
+		const Img = this.GetAsHtmlImageData();
+		
+		const Canvas = document.createElement('canvas');
+		const Context = Canvas.getContext('2d');
+		const Width = this.GetWidth();
+		const Height = this.GetHeight();
+		Canvas.width = Math.floor(Width * Scale);
+		Canvas.height = Math.floor(Height * Scale);
+	
 		Context.putImageData(Img,0,0);
+		
+		//	make a Free() function
+		Canvas.Free = function()
+		{
+			//	destroy canvas (safari suggests its hanging around)
+			//	this frees up canvas memory
+			Canvas.width = 0;
+			Canvas.height = 0;
+			//delete Canvas;	//	not allowed in strict mode
+		};
+		return Canvas;
+	}
 
+	async GetDataUrlScaled(Scale=1)
+	{
+		const Canvas = await this.GetAsHtmlCanvasScaled(Scale);
 		const data = Canvas.toDataURL("image/png");
-
-		//	destroy canvas (safari suggests its hanging around)
-		Canvas.width = 0;
-		Canvas.height = 0;
-		//delete Canvas;	//	not allowed in strict mode
-
+		Canvas.Free();
+		return data;
+	}
+	
+	GetDataUrl()
+	{
+		const Canvas = this.GetAsHtmlCanvas();
+		const data = Canvas.toDataURL("image/png");
+		Canvas.Free();
 		return data;
 	}
 
@@ -397,6 +601,12 @@ export default class PopImage
 	
 	GetPixelBuffer()
 	{
+		const LatestVersion = this.GetLatestVersion();
+		const PixelsVersion = this.PixelsVersion;
+		
+		if ( LatestVersion != PixelsVersion )
+			throw `GetPixelBuffer() with out of date pixel version(${PixelsVersion}) vs latest ${LatestVersion}`;
+		
 		if (!this.Pixels)
 			return this.Pixels;
 
@@ -483,10 +693,17 @@ export default class PopImage
 	{
 		//	auto cleanup any html elements - this may want to be somewhere else
 		//	.close is for decoded video frames
+		if ( this.Pixels && this.Pixels.Free )
+		{
+			this.Pixels.ClosedByPopImage = this.Pixels.timestamp;
+			this.Pixels.Free();
+			this.Pixels = null;
+		}
 		if ( this.Pixels && this.Pixels.close )
 		{
 			this.Pixels.ClosedByPopImage = this.Pixels.timestamp;
 			this.Pixels.close();
+			this.Pixels = null;
 		}
 		
 		this.PixelsVersion = null;
@@ -526,6 +743,12 @@ export default class PopImage
 		{
 			Pop.Debug("Error deleteing opengl texture",e);
 		}
+	}
+	
+	OnOpenglRenderedTo()
+	{
+		const LatestVersion = this.GetLatestVersion();
+		this.OpenglVersion = LatestVersion+1;
 	}
 	
 	UpdateTexturePixels(RenderContext)
@@ -778,8 +1001,8 @@ export default class PopImage
 		const RepeatMode = gl.CLAMP_TO_EDGE;
 		//const RepeatMode = gl.MIRRORED_REPEAT;
 		//	gr: check support of FloatLinearTextureSupported before allowing linear
-		//const FilterMode = this.LinearFilter ? gl.LINEAR : gl.NEAREST;
-		const FilterMode = gl.NEAREST;
+		const FilterMode = this.LinearFilter ? gl.LINEAR : gl.NEAREST;
+		//const FilterMode = gl.NEAREST;
 		
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, RepeatMode);
 		gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, RepeatMode);

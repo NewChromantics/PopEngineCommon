@@ -104,7 +104,17 @@ export class DataReader
 		const Bytes = await this.GetBytes(this.FilePosition,64/8);
 		this.FilePosition += 64/8;
 		const Int = BytesToBigInt(Bytes);
-		return Int;
+		
+		//	gr: later we will get errors of mixing bigint's and numbers
+		//		in mp4 decoder we probably need to convert all file positions 
+		//		& sizes to BigInt's
+		//	for now, assume we'll be okay... but catch it
+		const Int32 = Number(Int);
+		if ( isNaN(Int32) )
+		{
+			throw `Got actual 64bit number, but code doesn't handle bigint properly at the moment`;
+		}
+		return Int32;
 	}
 	
 	async ReadBytes(Length)

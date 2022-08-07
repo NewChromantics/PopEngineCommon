@@ -210,17 +210,33 @@ export function SplitNalus(Packet)
 	{
 		return SplitNalus_Nalu4(Packet);
 	}
+	if ( Packet[0] == 0 &&
+		Packet[1] == 0 &&
+		Packet[2] == 1 )
+	{
+		return SplitNalus_Nalu4(Packet);
+	}
 
 	const Nalus = [];
 	let Pos = 0;
 	while ( Pos < Packet.length )
 	{
 		let Length = 0;
-		Length += Packet[Pos+0] << 24;
-		Length += Packet[Pos+1] << 16;
-		Length += Packet[Pos+2] << 8;
-		Length += Packet[Pos+3] << 0;
-		const Data = Packet.slice( Pos, Pos+Length+4 );
+		const a = Packet[Pos+0];
+		const b = Packet[Pos+1];
+		const c = Packet[Pos+2];
+		const d = Packet[Pos+3];
+		Length += a << 24;
+		Length += b << 16;
+		Length += c << 8;
+		Length += d << 0;
+		if ( Length < 0 )
+		{
+			const abcd = [a,b,c,d].map( x => '0x' + x.toString('hex') );
+			throw `Got invalid length ${Length} from 4 bytes ${abcd}`;
+		}
+		//	todo? check if this is out of range?
+		const Data = Packet.subarray( Pos, Pos+Length+4 );
 		Nalus.push( Data );
 		Pos += 4;
 		Pos += Length;

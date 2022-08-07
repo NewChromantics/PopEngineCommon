@@ -7,9 +7,9 @@ import {CreatePromise} from './PopApi.js'
 import Pool from './Pool.js'
 import {IsTypedArray} from './PopApi.js'
 import DirtyBuffer from './DirtyBuffer.js'
-
+import { ExtractShaderUniforms } from './Shaders.js'
 import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
-import { GetFormatElementSize,GetChannelsFromPixelFormat,IsFloatFormat } from './Images.js'
+import { GetFormatElementSize,GetChannelsFromPixelFormat,IsFloatFormat } from './PopWebImageApi.js'
 
 
 
@@ -457,6 +457,8 @@ RenderCommandTypeMap['ReadPixels'] = RenderCommand_ReadPixels;
 
 function ParseRenderCommand(PushCommand,CommandParams)
 {
+	if ( !CommandParams )
+		return;
 	const Name = CommandParams[0];//.shift();
 	const Type = RenderCommandTypeMap[Name];
 	if ( !Type )
@@ -872,7 +874,9 @@ export class Context
 	
 	CreateContext()
 	{
-		const ContextMode = "webgl2";
+		const Webgl2Supported = ( typeof WebGL2RenderingContext != 'undefined');
+		
+		const ContextMode = Webgl2Supported ? "webgl2" : "webgl";
 		const Canvas = this.GetCanvasElement();
 		if ( !Canvas )
 			throw `RenderContext has no canvas`;
@@ -888,7 +892,7 @@ export class Context
 		if (Options.premultipliedAlpha == undefined) Options.premultipliedAlpha = false;
 		if (Options.alpha == undefined) Options.alpha = true;	//	have alpha buffer
 		const Context = Canvas.getContext( ContextMode, Options );
-		const IsWebgl2 = ( Context instanceof WebGL2RenderingContext );
+		const IsWebgl2 = Webgl2Supported ? (Context instanceof WebGL2RenderingContext ) : false;
 		
 		if ( !Context )
 			throw "Failed to initialise " + ContextMode;
@@ -985,6 +989,12 @@ export class Context
 			}
 		}
 		
+		function InitBlendMinMax(Context,Extension)
+		{
+			Context.MIN = Extension.MIN_EXT;
+			Context.MAX = Extension.MAX_EXT;
+		}
+		
 		const EnableExtension = function(ExtensionName,Init)
 		{
 			try
@@ -1010,7 +1020,7 @@ export class Context
 			EnableExtension('OES_texture_float_linear',InitFloatLinearTexture);
 		}
 		EnableExtension('WEBGL_depth_texture',InitDepthTexture);
-		EnableExtension('EXT_blend_minmax');
+		EnableExtension('EXT_blend_minmax',InitBlendMinMax);
 		EnableExtension('OES_vertex_array_object', this.InitVaoExtension.bind(this) );
 		EnableExtension('WEBGL_draw_buffers', this.InitMultipleRenderTargets.bind(this) );
 		EnableExtension('OES_element_index_uint', this.Init32BitBufferIndexes.bind(this) );
@@ -1263,6 +1273,12 @@ export class Context
 					{
 						console.error(`Error reading back texture in pass; ${e}`);
 					}
+				}
+				else if ( PassRenderTarget.ColourImages )
+				{
+					//	todo: need to support depth textures here
+					const TargetImage0 = PassRenderTarget.ColourImages[0];
+					TargetImage0.OnOpenglRenderedTo();
 				}
 			
 				//	endpass()
@@ -2003,7 +2019,7 @@ export class RenderTarget
 	SetBlendModeMax()
 	{
 		const gl = this.GetGlContext();
-		if ( gl.EXT_blend_minmax === undefined )
+		if ( !gl.MAX )
 			throw "EXT_blend_minmax hasn't been setup on this context";
 		
 		//	set mode
@@ -2011,14 +2027,14 @@ export class RenderTarget
 		gl.enable( gl.BLEND );
 		gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
 		//gl.blendEquation( gl.FUNC_ADD );
-		gl.blendEquation( gl.EXT_blend_minmax.MAX_EXT );
+		gl.blendEquation( gl.MAX );
 		//GL_FUNC_ADD
 	}
 	
 	SetBlendModeMin()
 	{
 		const gl = this.GetGlContext();
-		if ( gl.EXT_blend_minmax === undefined )
+		if ( !gl.MIN )
 			throw "EXT_blend_minmax hasn't been setup on this context";
 		
 		//	set mode
@@ -2026,7 +2042,7 @@ export class RenderTarget
 		gl.enable( gl.BLEND );
 		gl.blendFunc( gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA );
 		//gl.blendEquation( gl.FUNC_ADD );
-		gl.blendEquation( gl.EXT_blend_minmax.MIN_EXT );
+		gl.blendEquation( gl.MIN );
 		//GL_FUNC_ADD
 	}
 	
@@ -2422,6 +2438,10 @@ class TextureRenderTarget extends RenderTarget
 				gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, FilterMode);
 				*/
 				//gl.bindTexture(gl.TEXTURE_2D,null);
+
+				//	increment image's version
+				//	gr: it's easy here... but to sync with ReadBack, we do it in render commands
+				//this.ColourImages.forEach( Img => Img.OnOpenglRenderedTo() );
 			}
 		}
 		
@@ -2534,6 +2554,24 @@ export class Shader
 		this.AttributeMetaCache = null;	//	may need to invalidate this on new context
 		this.VertShaderSource = VertShaderSource;
 		this.FragShaderSource = FragShaderSource;
+		this.SourceUniforms = ExtractShaderUniforms( VertShaderSource, FragShaderSource );
+	}
+	
+	get UniformMetas()
+	{
+		//	collate all uniforms from shader & source (for extra user-meta opengl ignores)
+		const Metas = {};
+		function PushUniform(Name,Meta)
+		{
+			Metas[Name] = Object.assign( Metas[Name]||{}, Meta );
+		}
+	
+		this.SourceUniforms.forEach( Meta => PushUniform(Meta.Name,Meta) );
+	
+		if ( this.UniformMetaCache )
+			Object.entries( this.UniformMetaCache ).forEach( e => PushUniform(...e) );
+		
+		return Metas;
 	}
 
 	GetGlContext()
@@ -2774,6 +2812,10 @@ export class Shader
 		return Metas[Name];
 	}
 	
+	Free()
+	{
+		console.warn(`todo: free shader`);
+	}
 }
 
 

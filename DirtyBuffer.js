@@ -64,6 +64,12 @@ export default class DirtyBuffer
 		this.Data = JoinTypedArrays( [this.Data, Array] );
 		this.MarkChanged( NewIndex, Array.length );
 	}
+	
+	//	end is not inclusive
+	subarray(begin,end)
+	{
+		return this.Data.subarray(begin,end);
+	}
 }
 
 

@@ -2,7 +2,7 @@
 //	gr: moved this to be a submodule... but the worker url isn't relative to the module!
 import { Archive as LibArchive } from './libarchive.js/main.js';
 import {LoadFileAsArrayBufferAsync,LoadFileAsImageAsync} from './FileSystem.js';
-import {CreatePromise} from './PopApi.js'
+import {CreatePromise,StringToBytes} from './PopApi.js'
 
 //	gr: I hate not having the source to hand, but this is the fix for now
 //		until I can figure out how to get these ES modules out of the damned repos :)
@@ -23,6 +23,29 @@ const WorkerUrl = GetLibArchiveWorkerUrl();
 LibArchive.init( {
 	workerUrl: WorkerUrl
 } );
+
+
+export function IsZip(Data)
+{
+	//	check header
+	//	maybe need to check more than this?
+	const PKHeader = [...StringToBytes("PK"),0x03,0x04];
+	//const PKHeader = [0x50,0x4B,0x03,0x04];
+
+	if ( Data instanceof ArrayBuffer )
+		Data = new Uint8Array( Data, 0, PKHeader.length );
+
+	if ( !(Data instanceof Uint8Array) )
+		throw `IsZip(${typeof Data}) expects uint8array or arraybuffer`;
+	
+	//	gr: should this throw? or just fail
+	//if ( Data.length < PKHeader.length )
+	//	throw `Not enough data x{Data.length} to verify is PK zip`;
+	
+	if ( !PKHeader.every( (HeaderByte,i) => Data[i] == HeaderByte ) )
+		return false;
+	return true;
+}
 
 
 //	todo: merge these together!

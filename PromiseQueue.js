@@ -54,10 +54,38 @@ export default class PromiseQueue
 		return Promise;
 	}
 	
-	ClearQueue()
+	//	filter non-reject values in the queue
+	FilterPending(Filter)
+	{
+		//	fifo!
+		function DoFilter(Pending)
+		{
+			//	is a rejection, keep it
+			if ( !Pending.ResolveValues )
+				return true;
+			const Keep = Filter( Pending.ResolveValues[0] );
+			return Keep;
+		}
+		const Kept = this.PendingValues.filter( DoFilter );
+		this.PendingValues = Kept;
+	}
+
+	ClearQueue(OnDropped)
 	{
 		//	delete values, losing data!
+		const DroppedValues = this.PendingValues;
 		this.PendingValues = [];
+		
+		//	callback for every item we've gotten rid of
+		if ( OnDropped )
+		{
+			function OnDroppedPending(Pending)
+			{
+				const Value = (Pending.ResolveValues||Pending.RejectValues)[0];
+				OnDropped( Value );
+			}
+			DroppedValues.forEach(OnDroppedPending);
+		}	
 	}
 	
 	//	allocate a promise, maybe deprecate this for the API WaitForNext() that makes more sense for a caller

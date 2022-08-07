@@ -36,6 +36,7 @@ export class Camera
 	constructor(CopyCamera)
 	{
 		this.FovVertical = 45;
+		this.ZForwardIsNegative = false;
 
 		this.Up = [0,1,0];
 		this.Position = [ 0,2,20 ];
@@ -63,7 +64,7 @@ export class Camera
 			this.Rotation4x4 = CopyCamera.Rotation4x4;
 		}
 	}
-
+	
 	
 	FieldOfViewToFocalLengths(FovHorz,FovVert)
 	{
@@ -179,15 +180,13 @@ export class Camera
 	{
 		if ( this.FocalCenter !== false )
 			throw `Something is changing the .FocalCenter which is old API`;
-		
-		/*
-		const Focal = this.GetPixelFocalLengths();
-		//	image size from calibrated focal lengths
-		const ImageWidth = 800;
-		const ImageHeight = 800;
-		const OpenglFocal = this.PixelToOpenglFocalLengths( Focal, [ImageWidth, ImageHeight] );
-		*/
 
+		/*
+		if ( this.PixelFocals )
+		{
+			const Focal = this.PixelToOpenglFocalLengths( this.PixelFocals, this.PixelFocals.ImageSize );
+			return Focal;
+		}
 
 		const OpenglFocal = {};
 
@@ -217,6 +216,29 @@ export class Camera
 		
 		OpenglFocal.s = 0;
 		
+		return OpenglFocal;
+	}
+	*/
+
+		/*
+		const Focal = this.GetPixelFocalLengths();
+		//	image size from calibrated focal lengths
+		const ImageWidth = 800;
+		const ImageHeight = 800;
+		const OpenglFocal = this.PixelToOpenglFocalLengths( Focal, [ImageWidth, ImageHeight] );
+		*/
+		
+		const Aspect = ViewRect[2] / ViewRect[3];
+		const FovVertical = this.FovVertical;
+		//const FovHorizontal = FovVertical * Aspect;
+		
+		const OpenglFocal = {};
+		OpenglFocal.fy = 1.0 / Math.tan( PopMath.radians(FovVertical) / 2);
+		//OpenglFocal.fx = 1.0 / Math.tan( PopMath.radians(FovHorizontal) / 2);
+		OpenglFocal.fx = OpenglFocal.fy / Aspect;
+		OpenglFocal.cx = this.FocalCenterOffset[0];
+		OpenglFocal.cy = this.FocalCenterOffset[1];
+		OpenglFocal.s = 0;
 		return OpenglFocal;
 	}
 	
@@ -256,7 +278,34 @@ export class Camera
 		return Matrix;
 	}
 	
+	
+	makePerspective( left, right, top, bottom, near, far ) 
+	{
+		if ( far === undefined ) {
+
+			console.warn( 'THREE.Matrix4: .makePerspective() has been redefined and has a new signature. Please check the docs.' );
+
+		}
+
+		const te = [];
+		const x = 2 * near / ( right - left );
+		const y = 2 * near / ( top - bottom );
+
+		const a = ( right + left ) / ( right - left );
+		const b = ( top + bottom ) / ( top - bottom );
+		const c = - ( far + near ) / ( far - near );
+		const d = - 2 * far * near / ( far - near );
+
+		te[ 0 ] = x;	te[ 4 ] = 0;	te[ 8 ] = a;	te[ 12 ] = 0;
+		te[ 1 ] = 0;	te[ 5 ] = y;	te[ 9 ] = b;	te[ 13 ] = 0;
+		te[ 2 ] = 0;	te[ 6 ] = 0;	te[ 10 ] = c;	te[ 14 ] = d;
+		te[ 3 ] = 0;	te[ 7 ] = 0;	te[ 11 ] = - 1;	te[ 15 ] = 0;
+
+		return te;
+	}
+	
 	//	GetOpencvProjectionMatrix but 4x4 with z correction for near/far
+	//	rename to CameraToScreen/View
 	GetProjectionMatrix(ViewRect)
 	{
 		//	overriding user-provided matrix
@@ -264,6 +313,9 @@ export class Camera
 			return this.ProjectionMatrix;
 		
 		const OpenglFocal = this.GetOpenglFocalLengths( ViewRect );
+		
+		const Far = this.FarDistance;
+		const Near = this.NearDistance;
 		
 		let Matrix = [];
 		Matrix[0] = OpenglFocal.fx;
@@ -276,9 +328,6 @@ export class Camera
 		Matrix[6] = OpenglFocal.cy;
 		Matrix[7] = 0;
 		
-		const Far = this.FarDistance;
-		const Near = this.NearDistance;
-		
 		//	near...far in opengl needs to resovle to -1...1
 		//	gr: glDepthRange suggests programmable opengl pipeline is 0...1
 		//		not sure about this, but matrix has changed below so 1 is forward on z
@@ -288,8 +337,7 @@ export class Camera
 		Matrix[9] = 0;
 		//	gr: this should now work in both ways, but one of them is mirrored.
 		//		false SHOULD match old engine style... but is directx
-		const ZForwardIsNegative = false;
-		if ( ZForwardIsNegative )
+		if ( this.ZForwardIsNegative )
 		{
 			//	opengl
 			Matrix[10] = -(-Near-Far) / (Near-Far);
@@ -307,6 +355,13 @@ export class Camera
 		Matrix[15] = 0;
 		
 		return Matrix;
+	}
+
+	GetScreenToCameraTransform(ViewRect)
+	{
+		const CameraToScreen = this.GetProjectionMatrix(ViewRect);
+		const ScreenToCamera = PopMath.MatrixInverse4x4( CameraToScreen );
+		return ScreenToCamera;
 	}
 	
 	
@@ -367,6 +422,16 @@ export class Camera
 		return Matrix;
 	}
 	
+	SetLocalToWorldTransform(Transform4x4)
+	{
+		if ( Transform4x4.length != (4*4) )
+			throw `SetLocalToWorldTransform(${Transform4x4}) expecting 16-element array`;
+			
+		this.Position = PopMath.GetMatrixTranslation(Transform4x4);
+		this.Rotation4x4 = Transform4x4.slice();
+		PopMath.SetMatrixTranslation( this.Rotation4x4, 0,0,0,1 );
+	}
+	
 	GetLocalToWorldMatrix()
 	{
 		let WorldToCameraMatrix = this.GetWorldToCameraMatrix();
@@ -393,11 +458,12 @@ export class Camera
 	{
 		//	todo: correct viewrect with aspect ratio of viewport
 		//		maybe change input to Viewport to match GetProjection matrix?
-		let Matrix = this.GetProjectionMatrix( ViewRect );
-		Matrix = PopMath.MatrixInverse4x4( Matrix );
+		let CameraToScreen = this.GetProjectionMatrix( ViewRect );
+		let ScreenToCamera = PopMath.MatrixInverse4x4( CameraToScreen );
 		//	put into world space
-		Matrix = PopMath.MatrixMultiply4x4( this.GetLocalToWorldMatrix(), Matrix );
-		return Matrix;
+		let LocalToWorld = this.GetLocalToWorldMatrix();
+		let ScreenToWorld = PopMath.MatrixMultiply4x4( LocalToWorld, ScreenToCamera );
+		return ScreenToWorld;
 	}
 	
 	GetUp()
@@ -670,8 +736,8 @@ export class Camera
 		const RayNear = this.NearDistance;
 		const RayFar = RayDistance || this.FarDistance;
 		
-		let ScreenToCameraTransform = Camera.GetProjectionMatrix( ViewRect );
-		ScreenToCameraTransform = PopMath.MatrixInverse4x4( ScreenToCameraTransform );
+		let CameraToScreenTransform = Camera.GetProjectionMatrix( ViewRect );
+		let ScreenToCameraTransform = PopMath.MatrixInverse4x4( CameraToScreenTransform );
 		
 		let StartMatrix = PopMath.CreateTranslationMatrix( x, y, RayNear );
 		let EndMatrix = PopMath.CreateTranslationMatrix( x, y, RayFar );
