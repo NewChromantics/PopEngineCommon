@@ -5,6 +5,22 @@ export default Default;
 
 
 
+export function SplitArrayEveryN(TheArray,ChunkSize)
+{
+	if ( !Number.isInteger(ChunkSize) )
+		throw `SplitArrayEveryN(${ChunkSize}) expects integer`;
+	if ( ChunkSize<0 )
+		throw `SplitArrayEveryN(${ChunkSize}) expects integer above zero`;
+	
+	const NewArray = [];
+	for ( let i=0;	i<TheArray.length;	i+=ChunkSize )
+	{
+		let Slice = TheArray.slice( i, i+ChunkSize );
+		NewArray.push(Slice);
+	}
+	return NewArray;
+}
+
 const ZeroFloatArrayCache = {};	//	[Length] = Float32Array(0's)
 export function GetZeroFloatArray(Length)
 {
