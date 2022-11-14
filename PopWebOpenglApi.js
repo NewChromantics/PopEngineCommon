@@ -2520,9 +2520,12 @@ export class Shader
 
 function GetOpenglElementType(OpenglContext,Elements)
 {
+	if ( !Elements )
+		throw `GetOpenglElementType( ${Elements} )`;
 	if ( Elements instanceof Float32Array )	return OpenglContext.FLOAT;
+	if ( Elements instanceof Uint32Array )	return OpenglContext.UNSIGNED_INT;
 	
-	throw "GetOpenglElementType unhandled type; " + Elements.prototype.constructor;
+	throw `GetOpenglElementType unhandled type; ${Elements.constructor.name}`;
 }
 
 
@@ -2927,8 +2930,11 @@ export class TriangleBuffer
 		if ( this.TriangleIndexes )
 		{
 			const Offset = 0;
-			//gl.drawElements( this.PrimitiveType, this.IndexCount, this.TriangleIndexesType, Offset, Instances );
-			gl.drawElementsInstanced( this.PrimitiveType, this.IndexCount, this.TriangleIndexesType, Offset, Instances );
+			//	todo less magic numbers!
+			if ( this.PrimitiveType != gl.TRIANGLES )
+				throw `todo: Handle element drawing with non-triangle primitives`;
+			const ElementCount = this.IndexCount / 3;
+			gl.drawElementsInstanced( this.PrimitiveType, ElementCount, this.TriangleIndexesType, Offset, Instances );
 		}
 		else
 		{
