@@ -3235,7 +3235,9 @@ export class TriangleBuffer
 			//	todo less magic numbers!
 			if ( this.PrimitiveType != gl.TRIANGLES )
 				throw `todo: Handle element drawing with non-triangle primitives`;
-			const ElementCount = this.IndexCount / 3;
+			//	gr: this should be number of VERTEXES not number of primitives.
+			//		don't change this again! (fix client code which makes me change this)
+			const ElementCount = this.IndexCount;
 			gl.drawElementsInstanced( this.PrimitiveType, ElementCount, this.TriangleIndexesType, Offset, Instances );
 		}
 		else
