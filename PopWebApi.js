@@ -126,7 +126,7 @@ export function GetExeDirectory()
 export function GetExeArguments()
 {
 	//	gr: probably shouldn't lowercase now it's proper
-	const UrlArgs = window.location.search.replace('?',' ').trim().split('&');
+	const UrlArgs = window.location.search.replace('?',' ').split('&').map(x=>x.trim()).filter( x=>x.length>0 );
 	
 	//	turn into keys & values - gr: we're not doing this in engine! fix so they match!
 	const UrlParams = {};
