@@ -1,6 +1,39 @@
 //	some generic javascript helpers used in web & native
+//	mostly array related things
 const Default = 'PopApi.js module';
 export default Default; 
+
+
+
+const ZeroFloatArrayCache = {};	//	[Length] = Float32Array(0's)
+export function GetZeroFloatArray(Length)
+{
+	if ( !ZeroFloatArrayCache[Length] )
+	{
+		ZeroFloatArrayCache[Length] = new Float32Array(Length);
+		ZeroFloatArrayCache[Length].fill(0);
+	}
+	return ZeroFloatArrayCache[Length];
+}
+
+
+//	todo: change this to an arraybuffer and return a subarray (sub-view) of the array
+//		one allocation, view-on-demand at little cost
+const IndexArrayCache = {};	//	[Length] = Float32Array(0's)
+export function GetIndexArray(Length)
+{
+	if ( !Number.isInteger(Length) )
+		throw `Invalid index-array length ${Length}, needs to be an integer`;
+		 
+	if ( !IndexArrayCache[Length] )
+	{
+		const Values = new Array(Length).fill(0).map( (zero,index) => index );
+		IndexArrayCache[Length] = new Float32Array(Values);
+	}
+	return IndexArrayCache[Length];
+}
+
+
 
 export function GetArrayRandomIndex(Array)
 {
@@ -143,6 +176,7 @@ export function BytesToBigInt(Bytes)
 	Bytes.forEach(AppendHex);
 	const HexString = `0x${Hex.join('')}`;
 	const Int = BigInt(HexString);
+	return Int;
 }
 
 
@@ -218,7 +252,7 @@ export function JoinTypedArrays(Arrays,DeprecatedSecondArray)
 {
 	if ( DeprecatedSecondArray )
 	{
-		Pop.Debug(`JoinTypedArrays(a,b,c) deprecated, pass an array of typed arrays as first arg`);
+		throw `JoinTypedArrays(a,b,c) deprecated, pass an array of typed arrays as first arg`;
 		Arrays = Array.from(arguments);
 	}
 	
@@ -257,7 +291,23 @@ export function JoinTypedArrays(Arrays,DeprecatedSecondArray)
 	return NewArray;
 }
 
-
+export function SplitArrayIntoChunks(TheArray,ChunkSize)
+{
+	if ( ChunkSize == 1 )
+		return TheArray;
+	if ( !Number.isInteger(ChunkSize) || ChunkSize < 2 )
+		throw `SplitArrayIntoChunks(${ChunkSize}) needs an integer >= 1 to split into`;
+	
+	//	find out if there's a faster approach
+	const Chunks = [];
+	for ( let i=0;	i<TheArray.length;	i+=ChunkSize )
+	{
+		const SliceFunc = TheArray.subarray ? TheArray.subarray : TheArray.slice;
+		const Chunk = SliceFunc.call( TheArray, i, i+ChunkSize );
+		Chunks.push(Chunk);
+	}
+	return Chunks;
+}
 
 //	array of chunks to avoid joining typed arrays, with
 //	a handy function to grab a slice that could straddle
@@ -286,6 +336,13 @@ export class ChunkArray
 	
 	push(Chunk)
 	{
+		//	check more types of inputs
+		//	we're expecting typed arrays...
+		
+		//	input is an array buffer, but not a typed-array view
+		if ( Chunk instanceof ArrayBuffer )
+			Chunk = new Uint8Array(Chunk);
+			
 		this.Chunks.push( Chunk );
 	}
 	

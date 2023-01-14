@@ -217,8 +217,8 @@ function TElementMouseHandler(Element,OnMouseDown,OnMouseMove,OnMouseUp,OnMouseS
 		else if ( MouseEvent.Touches )
 			MouseEvent = MouseEvent.Touches[0];
 		
-		const ClientX = MouseEvent.pageX || MouseEvent.clientX;
-		const ClientY = MouseEvent.pageY || MouseEvent.clientY;
+		const ClientX = MouseEvent.clientX || MouseEvent.pageX;
+		const ClientY = MouseEvent.clientY || MouseEvent.pageY;
 		const x = ClientX - Rect.left;
 		const y = ClientY - Rect.top;
 		return [x,y];
@@ -1100,40 +1100,42 @@ export class BaseControl
 		this.OnDragDropRenameFiles = null;
 	}
 
-	BindEvents()
+	BindEvents(BindMouseEvents=true)
 	{
 		//Pop.Debug(`BindEvents`);
 		const Element = this.GetElement();
 		Element.addEventListener('drop',this.OnDragDrop.bind(this));
 		Element.addEventListener('dragover',this.OnTryDragDropEvent.bind(this));
 		
-		
-		//	gr: is this all the new input system, which does
-		//		multitouch, XR, mouse
-		//		Name,[x,y,z]
-		const OnMouseDown = function()	{	return this.OnMouseDown ? this.OnMouseDown(...arguments) : false;	};
-		const OnMouseMove = function()	{	return this.OnMouseMove ? this.OnMouseMove(...arguments) : false;	};
-		const OnMouseUp = function()	{	return this.OnMouseUp ? this.OnMouseUp(...arguments) : false;	};
-		const OnMouseScroll = function(){	return this.OnMouseScroll ? this.OnMouseScroll(...arguments) : false;	};
-		
-		TElementMouseHandler( Element, OnMouseDown.bind(this), OnMouseMove.bind(this), OnMouseUp.bind(this) , OnMouseScroll.bind(this) );
+		if ( BindMouseEvents )
+		{
+			//	gr: is this all the new input system, which does
+			//		multitouch, XR, mouse
+			//		Name,[x,y,z]
+			const OnMouseDown = function()	{	return this.OnMouseDown ? this.OnMouseDown(...arguments) : false;	};
+			const OnMouseMove = function()	{	return this.OnMouseMove ? this.OnMouseMove(...arguments) : false;	};
+			const OnMouseUp = function()	{	return this.OnMouseUp ? this.OnMouseUp(...arguments) : false;	};
+			const OnMouseScroll = function(){	return this.OnMouseScroll ? this.OnMouseScroll(...arguments) : false;	};
+			
+			TElementMouseHandler( Element, OnMouseDown.bind(this), OnMouseMove.bind(this), OnMouseUp.bind(this) , OnMouseScroll.bind(this) );
 
-		/*
-		//	need to move all these from Opengl window
-		Element.addEventListener('wheel', this.OnMouseWheelEvent.bind(this) );
+			/*
+			//	need to move all these from Opengl window
+			Element.addEventListener('wheel', this.OnMouseWheelEvent.bind(this) );
+			
+			/*
+			Element.addEventListener('mousemove', MouseMove );
+			Element.addEventListener('wheel', MouseWheel, false );
+			Element.addEventListener('contextmenu', ContextMenu, false );
+			Element.addEventListener('mousedown', MouseDown, false );
+			Element.addEventListener('mouseup', MouseUp, false );
 		
-		/*
-		Element.addEventListener('mousemove', MouseMove );
-		Element.addEventListener('wheel', MouseWheel, false );
-		Element.addEventListener('contextmenu', ContextMenu, false );
-		Element.addEventListener('mousedown', MouseDown, false );
-		Element.addEventListener('mouseup', MouseUp, false );
-	
-		Element.addEventListener('touchmove', MouseMove );
-		Element.addEventListener('touchstart', MouseDown, false );
-		Element.addEventListener('touchend', MouseUp, false );
-		Element.addEventListener('touchcancel', MouseUp, false );
-		*/
+			Element.addEventListener('touchmove', MouseMove );
+			Element.addEventListener('touchstart', MouseDown, false );
+			Element.addEventListener('touchend', MouseUp, false );
+			Element.addEventListener('touchcancel', MouseUp, false );
+			*/
+		}
 	}
 	
 
@@ -2017,6 +2019,9 @@ export class Tree extends BaseControl
 	
 	BindEvents()
 	{
+		const BindMouseEvents = false;
+		super.BindEvents(BindMouseEvents);
+	
 		this.Element.onchange = function(Json,Change)
 		{
 			this.ChangePromiseQueue.Push(Change);

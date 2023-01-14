@@ -6,6 +6,34 @@ export default Default;
 export const GlslVersion = 100;
 
 
+
+export function InsertMacrosToShader(Source,Macros)
+{
+	if ( !Macros )
+		return Source;
+		
+	//	work out if we need to insert it after some other preprocessors that need to come first
+	let Lines = Source.split('\n');
+	let InsertAtLine = 0;
+	if ( Lines[0].startsWith(`#version`) )
+		InsertAtLine = 1;
+		
+	function MacroToSource(Macro)
+	{
+		const Key = Macro[0];
+		let Value = Macro[1];
+		if ( Value === undefined )
+			Value = '';
+		return `#define ${Key}	${Value}`;
+	}
+	let MacroLines = Object.entries(Macros).map(MacroToSource);
+	Lines.splice( InsertAtLine, 0, ...MacroLines );
+	
+	const NewSource = Lines.join('\n');
+		
+	return NewSource;
+}
+
 //	this is currenly in c++ in the engine. need to swap to javascript
 export function RefactorGlslShader(Source)
 {

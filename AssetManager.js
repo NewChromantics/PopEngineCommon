@@ -1,4 +1,4 @@
-import { CleanShaderSource,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
+import { CleanShaderSource,InsertMacrosToShader,RefactorFragShader,RefactorVertShader} from './OpenglShaders.js'
 import {GetUniqueHash} from './Hash.js'
 import {ExtractShaderUniforms,ExtractShaderAttributes} from './Shaders.js'
 import * as Pop from './PopEngine.js'
@@ -62,6 +62,14 @@ function OnAssetChanged()
 	
 }
 
+export function HasFetchFunction(Name)
+{
+	if ( PopAssetManager.AssetFetchAsyncFunctions.hasOwnProperty(Name) )
+		return true;
+	if ( PopAssetManager.AssetFetchFunctions.hasOwnProperty(Name) )
+		return true;
+	return false;
+}
 
 export function GetAsset(Name,RenderContext)
 {
@@ -83,9 +91,8 @@ export function GetAsset(Name,RenderContext)
 	if ( ContextAssets.hasOwnProperty(Name) )
 		return ContextAssets[Name];
 	
-	if ( !AssetFetchAsyncFunctions.hasOwnProperty(Name) )
-		if ( !AssetFetchFunctions.hasOwnProperty(Name) )
-			throw `No known asset named ${Name} registered`;
+	if ( !HasFetchFunction(Name) )
+		throw `No known asset named ${Name} registered`;
 	
 	Pop.Debug(`Generating asset ${Name} on context ${ContextKey}...`);
 	const Timer_Start = Pop.GetTimeNowMs();
@@ -114,7 +121,7 @@ export function GetAsset(Name,RenderContext)
 	function OnFailedToLoadAsset(Error)
 	{
 		Pop.Warning(`todo: handle failed async loading of ${Name}! ${Error}`);
-		delete ContextPendings[Name];
+		//delete ContextPendings[Name];
 	}
 	
 	//	start async load
@@ -134,19 +141,50 @@ export function GetAsset(Name,RenderContext)
 	}
 }
 
+function ShaderMacrosToHash(Macros)
+{
+	if ( !Macros )
+		return ``;
+		
+	let Hash = `_`;
+	for ( let [Macro,Value] of Object.entries(Macros) )
+	{
+		Hash += `${Macro}=${Value}_`;
+	}
+	return Hash;
+}
+
+export async function CompileShader(RenderContext,Name,VertSource,FragSource,Macros)
+{
+	//FragSource = RefactorFragShader(FragSource);
+	//VertSource = RefactorVertShader(VertSource);
+	FragSource = InsertMacrosToShader(FragSource,Macros);
+	VertSource = InsertMacrosToShader(VertSource,Macros);
+
+	const ShaderUniforms = ExtractShaderUniforms( FragSource, VertSource );
+	const ShaderAttributes = ExtractShaderAttributes( FragSource, VertSource );
+
+	Pop.Debug(`LoadAndCompileShader ${Name}. Uniforms; ${JSON.stringify(ShaderUniforms)}`);
+	const Shader = await RenderContext.CreateShader( VertSource, FragSource, ShaderUniforms, ShaderAttributes );
+	return Shader;
+}
+
+
 //	this returns the "asset name"
 //	gr: should this be somewhere else, not in the core asset manager?
-export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUniforms,ShaderAttribs)
+export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderMacros,/*ShaderUniforms,*/ShaderAttribs)
 {
 	//	we now extract these with regex
-	if ( ShaderUniforms )	
-		Pop.Debug(`RegisterShaderAssetFilename(${FragFilename}): ShaderUniforms no longer need to be supplied`);
+	//	gr: 3rd arg is now defines/macros
+	//if ( ShaderUniforms )	
+	//	Pop.Debug(`RegisterShaderAssetFilename(${FragFilename}): ShaderUniforms no longer need to be supplied`);
 		
 	if ( ShaderAttribs )
 		Pop.Debug(`RegisterShaderAssetFilename(${FragFilename}): ShaderAttribs no longer need to be supplied`);
 		
 	//	we use / as its not a valid filename char
-	const AssetName = FragFilename+PopAssetManager.AssetFilenameJoinString+VertFilename;
+	let AssetName = FragFilename+PopAssetManager.AssetFilenameJoinString+VertFilename;
+	AssetName += ShaderMacrosToHash(ShaderMacros);
 
 	async function LoadAndCompileShader(RenderContext)
 	{
@@ -154,17 +192,7 @@ export function RegisterShaderAssetFilename(FragFilename,VertFilename,ShaderUnif
 		let FragSource = await Pop.LoadFileAsStringAsync(FragFilename);
 		let VertSource = await Pop.LoadFileAsStringAsync(VertFilename);
 
-		FragSource = RefactorFragShader(FragSource);
-		VertSource = RefactorVertShader(VertSource);
-
-		const ShaderUniforms = ExtractShaderUniforms( FragSource, VertSource );
-		const ShaderAttribute = ExtractShaderAttributes( FragSource, VertSource );
-
-		//const Shader = new Pop.Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
-		//const Shader = new Opengl.Shader( RenderContext, ShaderName, VertSource, FragSource );
-		Pop.Debug(`LoadAndCompileShader ${AssetName}. Uniforms; ${JSON.stringify(ShaderUniforms)}`);
-		const Shader = await RenderContext.CreateShader( VertSource, FragSource, ShaderUniforms, ShaderAttribs );
-		return Shader;
+		return await CompileShader( RenderContext, AssetName, VertSource, FragSource, ShaderMacros );
 	}
 
 	RegisterAssetAsyncFetchFunction(AssetName,LoadAndCompileShader);

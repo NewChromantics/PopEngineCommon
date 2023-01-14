@@ -179,7 +179,20 @@ export function Multiply2(a,b)
 
 export function Multiply3(a,b)
 {
+	if ( !Array.isArray(a) )
+		a = [a,a,a];
+	if ( !Array.isArray(b) )
+		b = [b,b,b];
 	return [ a[0]*b[0], a[1]*b[1], a[2]*b[2] ];
+}
+
+export function Divide3(a,b)
+{
+	if ( !Array.isArray(a) )
+		a = [a,a,a];
+	if ( !Array.isArray(b) )
+		b = [b,b,b];
+	return [ a[0]/b[0], a[1]/b[1], a[2]/b[2] ];
 }
 
 export function Cross3(a,b)
@@ -850,6 +863,45 @@ export function GetMatrixTranslation(Matrix,DivW=false)
 	return xyz;
 }
 
+
+//	gr: alternative quaternion -> matrix
+//	https://github.com/immersive-web/webxr-polyfill/blob/0202e9d2b80fcce3d46010f21869b8684da9c4f5/build/webxr-polyfill.js#L340
+export function GetQuaternionFromMatrix4x4(mat) 
+{
+	let out = [0,0,0,1];
+  let trace = mat[0] + mat[5] + mat[10];
+  let S = 0;
+  if (trace > 0) {
+    S = Math.sqrt(trace + 1.0) * 2;
+    out[3] = 0.25 * S;
+    out[0] = (mat[6] - mat[9]) / S;
+    out[1] = (mat[8] - mat[2]) / S;
+    out[2] = (mat[1] - mat[4]) / S;
+  } else if ((mat[0] > mat[5]) && (mat[0] > mat[10])) {
+    S = Math.sqrt(1.0 + mat[0] - mat[5] - mat[10]) * 2;
+    out[3] = (mat[6] - mat[9]) / S;
+    out[0] = 0.25 * S;
+    out[1] = (mat[1] + mat[4]) / S;
+    out[2] = (mat[8] + mat[2]) / S;
+  } else if (mat[5] > mat[10]) {
+    S = Math.sqrt(1.0 + mat[5] - mat[0] - mat[10]) * 2;
+    out[3] = (mat[8] - mat[2]) / S;
+    out[0] = (mat[1] + mat[4]) / S;
+    out[1] = 0.25 * S;
+    out[2] = (mat[6] + mat[9]) / S;
+  } else {
+    S = Math.sqrt(1.0 + mat[10] - mat[0] - mat[5]) * 2;
+    out[3] = (mat[1] - mat[4]) / S;
+    out[0] = (mat[8] + mat[2]) / S;
+    out[1] = (mat[6] + mat[9]) / S;
+    out[2] = 0.25 * S;
+  }
+  return out;
+}
+
+
+//	same as above, get quaternion from matrix, 
+//	need to work out which is better and how they differ
 export function GetMatrixQuaternion(Matrix)
 {
 	function m(col,row)
@@ -1057,6 +1109,18 @@ export function GetBox3Corners(BoxMin,BoxMax)
 	 [BoxMax[0], BoxMax[1], BoxMax[2] ],
 	 ];
 	return BoxCorners;
+}
+
+export function BoxCenterSizeToMinMax(Center,Size)
+{
+	//	if size is radius, this is halfed again
+	const HalfSize = Multiply3( Size, 0.5*0.50 );
+	const Box = {};
+	Box.Min = Subtract3( Center, HalfSize );
+	Box.Max = Add3( Center, HalfSize );
+	//Box.Size = HalfSize;
+	Box.Size = Subtract3( Box.Max, Box.Min );
+	return Box;
 }
 
 export function GetBoundingBoxsBoundingBox(BoundingBoxs)
@@ -2229,32 +2293,28 @@ export function CalcHomography(src,dest,Plane='xy')
 	
 	//	gr: to let us invert, need determinet to be non zero
 	let m22 = 1;
-	//	gr: don't know why this is transposed (in C and JS) compared to c#! maybe accessors are different for double arrays? madness
-	let Transpose = true;
 	
-	if (Transpose && Plane == 'xy' )
+	if ( Plane == 'xy' )
 	{
 		//	z = identity
 		Row0 = [ P[0][8], P[1][8],	0, P[2][8] ];
 		Row1 = [ P[3][8], P[4][8],	0, P[5][8] ];
 		Row2 = [ 0, 		0, 		m22, 0 ];
+		//	translation
 		Row3 = [ P[6][8], P[7][8],	0, 1 ];
-	}
-	else if (Plane == 'xy' )
-	{
-		//	z = identity
-		Row0 = [ P[0][8], P[3][8],	0, P[6][8] ];
-		Row1 = [ P[1][8], P[4][8],	0, P[7][8] ];
-		Row2 = [ 0, 		0, 		m22, 0 ];
-		Row3 = [ P[2][8], P[5][8],	0, 1 ];
 	}
 	else if ( Plane == 'xz' )
 	{
 		//	y = identity
-		Row0 = [ P[0][8],	0,		P[3][8],	P[6][8] ];
+		Row0 = [ P[0][8],	0,		P[1][8],	P[2][8] ];
 		Row1 = [ 0,			m22,	0,			0		 ];
-		Row2 = [ P[1][8],	0, 		P[4][8],	P[7][8] ];
-		Row3 = [ P[2][8],	0,		P[5][8],	1 ];
+		Row2 = [ P[3][8],	0, 		P[4][8],	P[5][8] ];
+		//	translation
+		Row3 = [ P[6][8],	0,		P[7][8],	1 ];
+	}
+	else
+	{
+		throw `Unhandled output plane ${Plane}; expecting xy or xz`;
 	}
 	
 	//	if we setrow() for each, we'll get an exception as unity checks validity of the matrix
@@ -2270,7 +2330,144 @@ export function CalcHomography(src,dest,Plane='xy')
 	return HomographyMtx;
 }
 
+//	this expects to be a homography transform to a... 0..1 square on a plane
+//	if you decide 0...1 means something else, that's fine!
+export function GetCameraPoseFromHomography(Homography4x4)
+{
+	//	gr: all this code is based on 3x3 column major
+	//		which we dont do. depending on the plane mode we've filled a row
+	//	which is what xyw() is for
+	/*
+	//	z = identity
+		Row0 = [ P[0][8], P[1][8],	0, P[2][8] ];
+		Row1 = [ P[3][8], P[4][8],	0, P[5][8] ];
+		Row2 = [ 0, 		0, 		m22, 0 ];
+		//	translation
+		Row3 = [ P[6][8], P[7][8],	0, 1 ];
+	*/
+	if ( Homography4x4.length != 4*4 )
+		throw `Expecting a 4x4 homography; length=${Homography4x4.length}`;
 
+	function GetColumn(c)
+	{
+		return GetRow(c);
+		let Col = [c+0,c+4,c+8,c+12].map( Index => Homography4x4[Index] );
+		return xyw(Col);
+	}
+	function GetRow(r)
+	{
+		let Row = Homography4x4.slice( r*4, (r+1)*4 );
+		return xyw(Row);
+	}
+	
+	//	https://stackoverflow.com/a/10781165/355753
+	//pose = Mat::eye(3, 4, CV_32FC1);      // 3x4 matrix, the camera pose
+	//let Pose = CreateIdentityMatrix();
+	let Pose4x4 = 
+	[
+		1,0,0,0,
+		0,1,0,0,
+		0,0,1,0,
+		0,0,0,1
+	];
+	function SetColumn(c,xyz)
+	{
+		//Pose4x4[c+0] = xyz[0];
+		//Pose4x4[c+4] = xyz[1];
+		//Pose4x4[c+8] = xyz[2];
+		//	set transposed
+		//	column is row when transposed
+		Pose4x4[ (c*4)+0 ] = xyz[0];
+		Pose4x4[ (c*4)+1 ] = xyz[1];
+		Pose4x4[ (c*4)+2 ] = xyz[2];
+	}
+	
+	let norm1 = Length3(GetColumn(0));
+	let norm2 = Length3(GetColumn(1));
+	let tnorm = (norm1 + norm2) / 2.0;	// Normalization value 
+
+	function xyw(xyzw)
+	{
+		return [xyzw[0], xyzw[1], xyzw[3] ];
+	}
+
+	//	another implementation here
+	//	https://stackoverflow.com/q/17027277/355753
+
+	//Mat p1 = H.col(0);       // Pointer to first column of H
+	//Mat p2 = pose.col(0);    // Pointer to first column of pose (empty)
+	//cv::normalize(p1, p2);   // Normalize the rotation, and copies the column to pose
+	let col0 = Normalise3( GetColumn(0) );
+	SetColumn(0, col0);
+
+	//p1 = H.col(1);           // Pointer to second column of H
+	//p2 = pose.col(1);        // Pointer to second column of pose (empty)
+	//cv::normalize(p1, p2);   // Normalize the rotation and copies the column to pose
+	let col1 = Normalise3( GetColumn(1) );
+	SetColumn(1, col1);
+
+	//Mat p3 = p1.cross(p2);   // Computes the cross-product of p1 and p2
+	//Mat c2 = pose.col(2);    // Pointer to third column of pose
+	//p3.copyTo(c2);       // Third column is the crossproduct of columns one and two
+	let p1 = col0;//GetColumn(0);
+	let p2 = col1;//GetColumn(1);
+	let p3 = Cross3( p1, p2 );
+	SetColumn(2,p3);
+
+	//	translation
+	//pose.col(3) = H.col(2) / tnorm;  //vector t [R|t] is the last column of pose
+	//	col2 is col3 in our 4x4
+	//let col2 = GetColumn(2);
+	let col2 = GetColumn(3);
+	col2 = Divide3( col2, [tnorm,tnorm,tnorm] );
+	SetColumn(3,col2);
+
+	return Pose4x4;
+/*
+	//	gr: adapted from my c# version, https://github.com/NewChromantics/PopOpenvrOsc/blob/e36841046d06344b8411695c94e760d43f75e1b0/Assets/Calibration/PopHomography.cs#L10
+	//	which I think was just taken from opencv's decompose homography
+	//	https://stackoverflow.com/questions/17027277/android-opencv-homography-to-camera-pose-considering-camera-intrinsics-and-ba 
+	//	opencv says, dont do that though, use solvepnp
+	
+	
+	
+	let h = Homography4x4;
+	let norm1 = Length4(GetColumn(0));
+	let norm2 = Length4(GetColumn(1));
+	let tnorm = (norm1 + norm2) / 2.0;	// Normalization value 
+
+	function xyw(xyzw)
+	{
+		return [xyzw[0], xyzw[1], xyzw[3] ];
+	}
+
+	function Mult(v3,Scale)
+	{
+		return Mult3( v3, [Scale,Scale,Scale] );
+	}
+
+	//  actually 3x4 so normalisation might need to be corrected (extra 0 in z!) 
+	let col0 = Normalise3( xyw( GetColumn(0) ) ); 
+	let col1 = Normalise3( xyw( GetColumn(1) ) ); 
+	//Pose.SetColumn(0, ); 
+	//Pose.SetColumn(1,); 
+	let col2 = Cross3( col0, col1 );
+	
+	//double[] buffer = new double[3]; 
+	//h.col(2).get(0, 0, buffer); 
+	var Buffer0 = col2.x; 
+	var Buffer1 = col2.y; 
+	var Buffer2 = col2.z; 
+	//  row 0 col 3  
+	var Row0Col3 = Buffer0 / tnorm; 
+	var Row1Col3 = Buffer1 / tnorm; 
+	var Row2Col3 = Buffer2 / tnorm; 
+	var Col3 = new Vector4(Row0Col3, Row1Col3, Row2Col3, 1); 
+
+	Position = Col3; 
+	//Rotation = Quaternion.LookRotation(col2, mult(col1,1) ); 
+	*/
+}
 
 //	returns false for parralel lines
 //	returns [x,y,TimeAlongAOfIntersection]
@@ -2375,4 +2572,111 @@ export function GetLineDistanceToLine(a,b)
 		throw `GetLineDistanceToLine nan`;
 		
 	return StartDistance + EndDistance;
+}
+
+
+export function GetStraightnessOfPoints(Positions)
+{
+	let Directions = [];
+	for ( let i=1;	i<Positions.length;	i++ )
+	{
+		const Prev = Positions[i-1];
+		const Next = Positions[i-0];
+		const Direction = Normalise3(Subtract3(Prev,Next));
+		Directions.push(Direction);
+	}
+	let Dots = [];
+	for ( let i=1;	i<Directions.length;	i++ )
+	{
+		const Prev = Directions[i-1];
+		const Next = Directions[i-0];
+		const Dot = Dot3(Prev,Next);
+		Dots.push(Dot);
+	}
+	
+	let TotalDot = 1;
+	//	mult, or average?
+	for ( let Dot of Dots )
+		TotalDot *= Dot;
+	return TotalDot;
+}
+
+export function GetRectsFromIndexes(StartIndex,EndIndex,Width,Channels,RectsNeedToStripeIndexes=true)
+{
+	let Stride = Channels * Width;
+	
+	if ( StartIndex % Channels != 0 )
+		throw `Expecting first index ${StartIndex} to align with channels ${Channels}`;
+	if ( EndIndex % Channels != Channels-1 )
+		throw `Expecting end index ${EndIndex} to align with channels ${Channels}`;
+	
+	const StartPixel = StartIndex/Channels;
+	const EndPixel = Math.floor(EndIndex /Channels);
+	
+	const Rects = [];	
+	function PushRow(x,y,RowWidth)
+	{
+		let Rect = {};
+		Rect.StartIndex = (y*Width) + x;
+		Rect.EndIndex = Rect.StartIndex + RowWidth;
+		Rect.StartIndex *= Channels;
+		Rect.EndIndex *= Channels;
+		Rect.EndIndex -= 1;
+		Rect.x = x;
+		Rect.y = y;
+		Rect.w = RowWidth;
+		Rect.h = 1;
+		
+		function MergeRect(LastRect)
+		{
+			if ( LastRect.x != Rect.x )	return false;
+			if ( LastRect.w != Rect.w )	return false;
+			if ( LastRect.y+LastRect.h != Rect.y )	
+				return false;
+			
+			//	if we need data to stripe, (ie, full width rects), check it
+			if ( RectsNeedToStripeIndexes )
+			{
+				if ( Rect.StartIndex != LastRect.EndIndex+1 )
+					return false;
+			}
+			
+			const Bottom = Rect.y+Rect.h;
+			LastRect.h = Bottom - LastRect.y;
+			LastRect.EndIndex = Rect.EndIndex;
+			return true;
+		}
+		
+		//	merge with above if possible
+		if ( Rects.length )
+		{
+			const LastRect = Rects[Rects.length-1];
+			if ( MergeRect(LastRect) )
+				return;
+		}
+		Rects.push(Rect);
+	}
+	
+	//	split indexes into rows
+	let Pixel = StartPixel;
+	while ( Pixel <= EndPixel )
+	{
+		let y = Math.floor( Pixel / Width );
+		let RowStart = Pixel % Width;
+		
+		let RowStartPixel = (y*Width) + RowStart;
+		let RowEndPixel = (y*Width) + Width-1;
+		
+		RowEndPixel = Math.min( RowEndPixel, EndPixel );
+
+		const RowWidth = (RowEndPixel - RowStartPixel)+1;
+		
+		PushRow( RowStart, y, RowWidth );
+		
+		if ( RowWidth == 0 )
+			throw `mis calculation, avoid infinite loop`;
+		Pixel += RowWidth;
+	}
+	
+	return Rects;
 }

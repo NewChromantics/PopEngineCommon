@@ -132,9 +132,10 @@ class Sample_t
 {
 	constructor()
 	{
-		this.DecodeTimeMs;
-		this.PresentationTimeMs;
+		this.DecodeTimeMs = null;
+		this.PresentationTimeMs = null;
 		this.IsKeyframe = true;
+		this.TrackId = null;
 
 		//	decoder
 		this.DataSize;
@@ -144,7 +145,6 @@ class Sample_t
 		
 		//	encoder
 		this.Data;
-		this.TrackId;
 		this.CompositionTimeOffset;
 	}
 	
@@ -414,6 +414,15 @@ export class Mp4Decoder
 			return;
 		}
 		
+		function VerifySample(Sample)
+		{
+			if ( !Number.isInteger(Sample.TrackId) )
+				throw `Sample has invalid track id ${Sample.TrackId}`;
+		}
+		
+		//	detect bad sample input
+		Samples.forEach(VerifySample);
+		
 		//	remove samples we've already output
 		//	we need this because if we inject a tail-moov and output samples, 
 		//	when the file comes across that moov again, it processes them and outputs new samples
@@ -492,10 +501,6 @@ export class Mp4Decoder
 		this.Mdats.push(MdatAtom);
 	}
 	
-	PushFragmentTrack(Track)
-	{
-		this.Tracks.push(Track);
-	}
 	
 	async ReadNextAtom()
 	{
@@ -552,10 +557,18 @@ export class Mp4Decoder
 		this.OnNewSamples(null);
 	}
 	
-	OnNewTrack(Track,TrackId)
+	OnNewTrack(Track)
 	{
 		this.Tracks.push(Track);
 		this.NewTrackQueue.Push(Track);
+	}
+	
+	GetTrack(TrackId)
+	{
+		const Track = this.Tracks.find( t => t.Id == TrackId );
+		if ( !Track )
+			throw `No track ${TrackId}`;
+		return Track;
 	}
 	
 	async DecodeAtom_Mdat(Atom)
@@ -599,7 +612,7 @@ export class Mp4Decoder
 		{
 			const MdatIdent = null;
 			const Track = await this.DecodeAtom_TrackFragment( TrackFragmentAtom, Atom, Header, MdatIdent );
-			this.PushFragmentTrack(Track);
+			this.OnNewTrack(Track);
 		}
 	}
 	
@@ -702,6 +715,7 @@ export class Mp4Decoder
 			if (HeaderPos != MoofPos)
 			{
 				Debug("Expected Header Pos(" + HeaderPos + ") and moof pos(" + MoofPos + ") to be the same");
+				Header.BaseDataOffset = MoofPos;
 			}
 		}
 		const MoofPosition = (Header.BaseDataOffset!==undefined) ? Header.BaseDataOffset : MoofAtom.FilePosition;
@@ -722,6 +736,8 @@ export class Mp4Decoder
 		let DefaultSampleSize = Header.DefaultSampleSize || 0;
 		let DefaultSampleFlags = Header.DefaultSampleFlags || 0;
 
+		const Track = this.GetTrack(TrackHeader.TrackId);
+		
 		for ( let sd=0;	sd<EntryCount;	sd++)
 		{
 			let SampleDuration = await (SampleDurationPresent ? Reader.Read32() : DefaultSampleDuration);
@@ -742,6 +758,8 @@ export class Mp4Decoder
 			Sample.DecodeTimeMs = TimeToMs(CurrentTime);
 			Sample.PresentationTimeMs = TimeToMs(CurrentTime+SampleCompositionTimeOffset);
 			Sample.Flags = TrunBoxSampleFlags;
+			Sample.TrackId = TrackHeader.TrackId;
+			Sample.ContentType = Track.ContentType;
 			Samples.push(Sample);
 
 			CurrentTime += SampleDuration;
@@ -879,7 +897,11 @@ export class Mp4Decoder
 		await Atom.DecodeChildAtoms();
 		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
 		
+		const TrackHeader = await Atom_Tkhd.Read( Atom.GetChildAtom('tkhd') );
+		
 		const Track = {};
+		Track.Id = TrackHeader.TrackId;
+		
 		const Medias = [];
 		
 		const MediaAtoms = Atom.GetChildAtoms('mdia');
@@ -890,6 +912,7 @@ export class Mp4Decoder
 		}
 		
 		Track.Medias = Medias;
+		Track.ContentType = Object.keys(Medias[0].MediaInfo)[0];
 		//Debug(`Found x${Medias.length} media atoms`);
 		return Track;
 	}
@@ -911,7 +934,7 @@ export class Mp4Decoder
 			Media.MediaHeader.TimeScale = 1000;
 		}
 		
-		Media.MediaInfo = await this.DecodeAtom_MediaInfo( Atom.GetChildAtom('minf'), Media.MediaHeader, MovieHeader );
+		Media.MediaInfo = await this.DecodeAtom_MediaInfo( Atom.GetChildAtom('minf'), Track.Id, Media.MediaHeader, MovieHeader );
 		return Media;
 	}
 
@@ -940,7 +963,7 @@ export class Mp4Decoder
 		return Header;
 	}
 	
-	async DecodeAtom_MediaInfo(Atom,MediaHeader,MovieHeader)
+	async DecodeAtom_MediaInfo(Atom,TrackId,MediaHeader,MovieHeader)
 	{
 		if ( !Atom )
 			return null;
@@ -948,11 +971,21 @@ export class Mp4Decoder
 		await Atom.DecodeChildAtoms();
 		Atom.ChildAtoms.forEach( a => this.NewAtomQueue.Push(a) );
 		
-		const Samples = await this.DecodeAtom_SampleTable( Atom.GetChildAtom('stbl'), MediaHeader, MovieHeader );
+		const Samples = await this.DecodeAtom_SampleTable( Atom.GetChildAtom('stbl'), TrackId, MediaHeader, MovieHeader );
 		
 		const Dinfs = Atom.GetChildAtoms('dinf');
 		for ( let Dinf of Dinfs )
 			await this.DecodeAtom_Dinf(Dinf);
+		
+		const MediaInfo = {};
+		
+		//	subtitle meta
+		const Tx3g = MediaHeader.SampleMeta.GetChildAtom('tx3g');
+		if ( Tx3g )
+		{
+			MediaInfo.Subtitle = Tx3g;
+
+		}
 		
 		//	todo: should we convert header to samples? (SPS & PPS)
 		//		does this ONLY apply to h264/video?
@@ -962,7 +995,16 @@ export class Mp4Decoder
 			const Avcc = Avc1.GetChildAtom('avcC');
 			if ( Avcc )
 			{
-				const FirstSample = Samples[0];
+				const ContentType = 'H264';
+				MediaInfo[ContentType] = Avcc;
+				
+				//	it's possible to get this header with no samples
+				//	(fragmented mp4?)
+				//	so we dont have a first deocde/presentation time...
+				//	bit of a flaw in the system... should we hold here?
+				const DummyFirstSample = new Sample_t();
+				DummyFirstSample.TrackId = TrackId;
+				const FirstSample = Samples[0] || DummyFirstSample;
 			
 				//	messy hack! should start with nalu size prefix
 				const SpsSample = new Sample_t();
@@ -970,6 +1012,7 @@ export class Mp4Decoder
 				SpsSample.DecodeTimeMs = FirstSample.DecodeTimeMs;
 				SpsSample.PresentationTimeMs = FirstSample.PresentationTimeMs;
 				SpsSample.TrackId = FirstSample.TrackId;
+				SpsSample.ContentType = ContentType;
 				SpsSample.DurationMs = 0;
 
 				const PpsSample = new Sample_t();
@@ -977,6 +1020,7 @@ export class Mp4Decoder
 				PpsSample.DecodeTimeMs = FirstSample.DecodeTimeMs;
 				PpsSample.PresentationTimeMs = FirstSample.PresentationTimeMs;
 				PpsSample.TrackId = FirstSample.TrackId;
+				PpsSample.ContentType = ContentType;
 				PpsSample.DurationMs = 0;
 
 				this.OnNewSamples( [SpsSample,PpsSample] );
@@ -988,6 +1032,8 @@ export class Mp4Decoder
 		//	hdlr
 		//	dinf
 		//	stbl
+		
+		return MediaInfo;
 	}
 	
 	async DecodeAtom_Dinf(Atom)
@@ -998,7 +1044,7 @@ export class Mp4Decoder
 	}
 	
 	//	todo: see how much this overlaps with DecodeAtom_FragmentSampleTable
-	async DecodeAtom_SampleTable(Atom,MediaHeader,MovieHeader)
+	async DecodeAtom_SampleTable(Atom,TrackId,MediaHeader,MovieHeader)
 	{
 		if ( !Atom )
 			return null;
@@ -1121,6 +1167,7 @@ export class Mp4Decoder
 				Sample.DecodeTimeMs = TimeToMs( SampleDecodeTimes[SampleIndex] );
 				Sample.DurationMs = TimeToMs( SampleDurations[SampleIndex] );
 				Sample.PresentationTimeMs = TimeToMs( SampleDecodeTimes[SampleIndex] + SamplePresentationTimeOffsets[SampleIndex] );
+				Sample.TrackId = TrackId;
 				Samples.push(Sample);
 
 				ChunkFileOffset += Sample.DataSize;
@@ -1568,6 +1615,29 @@ class Atom_Tkhd extends Atom_t
 		DataWriter.Write32( this.PixelsWidth );
 		DataWriter.Write32( this.PixelsHeight );
 	}
+	
+	static async Read(AnonymousAtom,EnumChildAtom)
+	{
+		const Reader = new AtomDataReader(AnonymousAtom.Data,AnonymousAtom.DataFilePosition);
+		const Atom = new Atom_Tkhd();
+		Atom.Version = await Reader.Read8();
+		Atom.Flags = await Reader.Read24();
+		Atom.CreationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904( await Reader.Read32() );
+		Atom.ModificationTime = GetDateTimeFromSecondsSinceMidnightJan1st1904( await Reader.Read32() );
+		Atom.TrackId = await Reader.Read32();
+		const Reserved = await Reader.Read32();
+		Atom.Duration = await Reader.Read32();
+		const Reserved8 = await Reader.ReadBytes(8);
+		Atom.Layer = await Reader.Read16();
+		Atom.AlternateGroup = await Reader.Read16();
+		Atom.Volume = await Reader.Read16();
+		const Reserved16 = await Reader.Read16();
+		Atom.Matrix = await Reader.ReadBytes( 3*3 *4 );//	u32 * 3x3
+		Atom.PixelsWidth = await Reader.Read32();
+		Atom.PixelsHeight = await Reader.Read32();
+
+		return Atom;
+	}
 }
 
 class Atom_Mdia extends Atom_t
@@ -1806,6 +1876,8 @@ function GetSampleDescriptionExtensionType(Fourcc)
 		case Atom_SampleDescriptionExtension_Btrt.Fourcc:	return Atom_SampleDescriptionExtension_Btrt;
 		case Atom_SampleDescriptionExtension_Pasp.Fourcc:	return Atom_SampleDescriptionExtension_Pasp;
 
+		case Atom_SampleDescriptionExtension_tx3g.Fourcc:	return Atom_SampleDescriptionExtension_tx3g;
+
 		default:
 			return Atom_t;
 	}
@@ -1918,6 +1990,7 @@ export class Atom_SampleDescriptionExtension_Avcc extends Atom_t
 }
 
 
+
 class Atom_SampleDescriptionExtension_Pasp extends Atom_t
 {
 	static get Fourcc()	{	return 'pasp';	}
@@ -1932,6 +2005,76 @@ class Atom_SampleDescriptionExtension_Pasp extends Atom_t
 		DataWriter.WriteBytes( this.Data );
 	}
 }
+
+
+export class Atom_SampleDescriptionExtension_tx3g extends Atom_t
+{
+	static get Fourcc()	{	return 'tx3g';	}
+
+	constructor()
+	{
+		super( Atom_SampleDescriptionExtension_tx3g.Fourcc );
+	}
+	
+	EncodeData(DataWriter)
+	{
+		throw `todo`;
+	}
+	
+	//	is different to Read()? (no atom headers etc)
+	async DecodeData(Bytes)
+	{
+		const Reader = new DataReader(Bytes);
+		
+		this.DisplayFlags = await Reader.Read32();
+		
+		const Vertical = 0x20000000;
+		const SomeForced = 0x40000000;
+		const AllForced = 0x80000000;
+		
+		const Reserved1 = await Reader.Read8();
+		if ( Reserved1 != 1 )
+			Debug(`tx3g atom reserved1(${Reserved1})!=1`);
+
+		const ReservedMinus1 = await Reader.Read8();
+		if ( ReservedMinus1 != 0xff )
+			Debug(`tx3g atom ReservedMinus1(${ReservedMinus1})!=0xff`);
+
+		const Reserved0 = await Reader.Read32();
+		if ( Reserved0 != 0 )
+			Debug(`tx3g atom Reserved0(${Reserved0})!=0`);
+
+		//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-SW81
+		//	Default text box
+		//	A 64-bit rectangle that specifies an area to receive text
+		//	(each 16 bits indicate top, left, bottom, and right,
+		//	respectively) within the subtitle track. This rectangle must
+		//	fill the track header dimensions exactly; that is, top is 0,
+		//	left is 0, bottom is the height of the subtitle track header,
+		//	and right is the width of the subtitle track header.
+		//	See Subtitle Track Header Size and Placement.
+		this.RectTop = await Reader.Read16();
+		this.RectLeft = await Reader.Read16();
+		this.RectBottom = await Reader.Read16();
+		this.RectRight = await Reader.Read16();
+
+		const Reserved00 = await Reader.Read32();
+		if ( Reserved00 != 0 )
+			Debug(`tx3g atom Reserved00(${Reserved00})!=0`);
+
+		this.FontIdentifier = await Reader.Read16();
+		this.FontStyleFlags = await Reader.Read8();	//	called FontFace in docs
+		const Bold = 0x0001;
+		const Italic = 0x0002;
+		const Underline = 0x0004;
+
+		//	An 8-bit value that should always be 0.05 multiplied by the video track header height. For example, if the video track header is 720 points in height, this should be 36 (points). This size should be used in the default style record and in any per-sample style records. If a subtitle does not fit in the text box, the subtitle media handler may choose to shrink the font size so that the subtitle fits.
+		this.FontSize = await Reader.Read8();
+		
+		this.ForegroundRgba = await Reader.Read32();
+	}
+}
+
 
 class VideoSampleDescription
 {
@@ -2035,6 +2178,7 @@ class VideoSampleDescription
 	{
 		const Reader = new AtomDataReader(Bytes);
 		
+		//	see https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-74522
 		this.Version = await Reader.Read16();
 		this.RevisionLevel = await Reader.Read16();
 		this.Vendor = await Reader.ReadString(4);
@@ -2053,25 +2197,56 @@ class VideoSampleDescription
 			throw `Unexpected non-zero data size in ${this.Fourcc} atom`;
 
 		this.FramesPerSample = await Reader.Read16();
+		//	apple docs say this is 32-byte pascal string
+		//	so still has length at the start (so 31, which seems to align)
 		const CompressorStringLength = await Reader.Read8();
-		this.Compressor = await Reader.ReadString(CompressorStringLength);
+		//this.Compressor = await Reader.ReadString(CompressorStringLength);
+		this.Compressor = await Reader.ReadString(31);
 		this.ColourDepth = await Reader.Read16();
 		this.ColourTableId = await Reader.Read16();
-		
-		//	gr: there's some data here before the avcc atom...
-		const Gap = await Reader.ReadBytes(31); 
-		
-		//	remaining data is blocks of extension atoms
-		while ( Reader.BytesRemaining )
+
+		//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap3/qtff3.html#//apple_ref/doc/uid/TP40000939-CH205-74522
+		//	If the color table ID is set to 0, a color table is contained within
+		//	the sample description itself. The color table immediately follows 
+		//	the color table ID field in the sample description. 
+		//	See Color Table Atoms for a complete description of a color table.
+		if ( this.ColourTableId == 0 )
 		{
-			const ExtensionAtom = await Reader.ReadNextAtom(GetSampleDescriptionExtensionType);
-			//	decode self
-			if ( ExtensionAtom.DecodeData )
-				await ExtensionAtom.DecodeData( ExtensionAtom.Data );
-			//Debug(`Atom ${this.Fourcc} found extension ${ExtensionAtom.Fourcc}`);
-			this.ExtensionAtoms.push( ExtensionAtom );
+			//	https://developer.apple.com/library/archive/documentation/QuickTime/QTFF/QTFFChap2/qtff2.html#//apple_ref/doc/uid/TP40000939-CH204-25533
+			//	Size 32-bit integer that specifies the number of bytes in this color table atom.
+			//	Type A 32-bit integer that identifies the atom type; this field must be set to 'ctab'.
+			//	Color table seed A 32-bit integer that must be set to 0.
+			//	Color table flags A 16-bit integer that must be set to 0x8000.
+			//	Color table size A 16-bit integer that indicates the number of colors in the following color array. This is a zero-relative value; setting this field to 0 means that there is one color in the array.
+			//	Color array An array of colors. Each color is made of four unsigned 16-bit integers. The first integer must be set to 0, the second is the red value, the third is the green value, and the fourth is the blue value.
+			//	gr: the data here is lots of zeros, it does NOT contain 
+			//	an atom CTAB, 0x8000 flags
+			//	"This is a zero-relative value; setting this field to 0 means that there is one color in the array."
+			let ColourTableSize = await Reader.Read16();
+			ColourTableSize += 1;
+			for ( let c=0;	c<ColourTableSize;	c++ )
+			{
+				let ZeroRedGreenBlue = await Reader.ReadBytes(4);
+			}
 		}
 		
+		try
+		{
+			//	remaining data is blocks of extension atoms
+			while ( Reader.BytesRemaining )
+			{
+				const ExtensionAtom = await Reader.ReadNextAtom(GetSampleDescriptionExtensionType);
+				//	decode self
+				if ( ExtensionAtom.DecodeData )
+					await ExtensionAtom.DecodeData( ExtensionAtom.Data );
+				//Debug(`Atom ${this.Fourcc} found extension ${ExtensionAtom.Fourcc}`);
+				this.ExtensionAtoms.push( ExtensionAtom );
+			}
+		}
+		catch(e)
+		{
+			Warning(`Error parsing VideoSampleDescription extensions; ${e}`);
+		}
 	}
 }
 
@@ -2741,6 +2916,21 @@ export class Mp4FragmentedEncoder
 		return this.EncodedAtomQueue.WaitForNext();
 	}
 	
+	async PushExtraData(Data,TrackId)
+	{
+		//	todo: async because of DataReader in DecodeData
+		//		maybe this needs to be inserted as some job that needs to complete before
+		//		tracks are baked, could easily get a race condition
+		//	this function should be synchronous from the outside
+		//	insert as a sps/pps
+		//	parse
+		const Atom = new Atom_SampleDescriptionExtension_Avcc();
+		
+		await Atom.DecodeData(Data);
+		this.TrackSps[TrackId] = Atom.SpsDatas[0];
+		this.TrackPps[TrackId] = Atom.PpsDatas[0];
+	}
+	
 	PushSample(Data,DecodeTimeMs,PresentationTimeMs,TrackId)
 	{
 		//Debug(`PushSample DecodeTimeMs=${DecodeTimeMs}ms TrackId=${TrackId}`);
@@ -2962,7 +3152,7 @@ export class Mp4FragmentedEncoder
 	OnEncodeEof()
 	{
 		Debug(`OnEncodeEof`);
-		this.EncodedDataQueue.Push(EndOfFileMarker);
+		this.EncodedDataQueue.Push(null);
 	}
 	
 	async EncodeThread()

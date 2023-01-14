@@ -2,7 +2,7 @@ import PopImage from './PopWebImageApi.js'
 import FileCache_t from './FileCache.js'
 import PromiseQueue from './PromiseQueue.js'
 import {Debug,Warning,CreatePromise,Yield} from './PopWebApiCore.js'
-import {ParseExeArguments} from './PopApi.js'
+import {IsObjectInstanceOf,ParseExeArguments} from './PopApi.js'
 
 const Default = 'FileSystem.js Module';
 export default Default;
@@ -144,7 +144,7 @@ async function FetchArrayBuffer(Url)
 	return Contents8;
 }
 
-async function FetchArrayBufferStream(Url,OnProgress)
+export async function FetchArrayBufferStream(Url,OnProgress)
 {
 	const Fetched = await CreateFetch(Url);
 
@@ -325,6 +325,12 @@ export async function LoadFileAsStringAsync(Filename)
 	return Contents;
 }
 
+export async function LoadFileAsJsonAsync(Filename)
+{
+	const String = await LoadFileAsStringAsync(Filename);
+	const Json = JSON.parse(String);
+	return Json;
+}
 
 export async function LoadFileAsArrayBufferAsync(Filename)
 {
@@ -503,7 +509,7 @@ export const WriteStringToFile = WriteToFile;
 
 
 
-export async function LoadFilePromptAsStringAsync(Filename)
+async function LoadFilePromptAsFileAsync(Filename)
 {
 	const OnChangedPromise = CreatePromise();
 	const InputElement = window.document.createElement('input');
@@ -530,8 +536,24 @@ export async function LoadFilePromptAsStringAsync(Filename)
 	//	read file contents
 	//	currently only interested in first
 	const File = Files[0];
+	return File;
+}
+
+export async function LoadFilePromptAsStringAsync(Filename)
+{
+	const File = await LoadFilePromptAsFileAsync(Filename);
 	const Contents = await File.text();
 	return Contents;
+}
+
+
+export async function LoadFilePromptAsArrayBufferAsync(Filename)
+{
+	const File = await LoadFilePromptAsFileAsync(Filename);
+	const Contents = await File.arrayBuffer();
+	const Mime = File.type;
+	return Contents;
+
 }
 
 //	on web, this is a "can I synchronously load file" check
