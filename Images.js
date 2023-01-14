@@ -1,6 +1,7 @@
 //	web api needs to import PopImageWebApi here...
 //	this might be where we need generic import names and ignore them natively
 import * as Pop from './PopEngine.js'
+import {GetChannelsFromPixelFormat,IsFloatFormat} from './PopWebImageApi.js'
 
 
 const Default = 'Image utility module';

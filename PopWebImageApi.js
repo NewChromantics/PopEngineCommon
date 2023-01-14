@@ -20,39 +20,6 @@ const WebApi_HtmlVideoElement = window.hasOwnProperty('HTMLVideoElement') ? wind
 const WebApi_HtmlVideoFrame = window.hasOwnProperty('VideoFrame') ? window['VideoFrame'] : null;
 
 
-//	in c++ this is SoyPixelsFormat namespace
-export function GetChannelsFromPixelFormat(PixelFormat)
-{
-	switch(PixelFormat)
-	{
-		case 'Greyscale':	return 1;
-		case 'RGBA':		return 4;
-		case 'RGB':			return 3;
-		case 'Float1':		return 1;
-		case 'Float2':		return 2;
-		case 'Float3':		return 3;
-		case 'Float4':		return 4;
-		case 'ChromaU':		return 1;
-		case 'ChromaV':		return 1;
-		case 'Depth16mm':	return 2;	//	RG
-	}
-	throw `unhandled GetChannelsFromPixelFormat(${PixelFormat})`;
-}
-
-export function IsFloatFormat(Format)
-{
-	switch(Format)
-	{
-		case 'Float1':
-		case 'Float2':
-		case 'Float3':
-		case 'Float4':
-			return true;
-		default:
-			return false;
-	}
-}
-
 export function GetFormatElementSize(PixelFormat)
 {
 	switch(PixelFormat)
