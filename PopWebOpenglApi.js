@@ -587,7 +587,7 @@ export class Context
 
 	OnCanvasResizeObservation(Event)
 	{
-		this.RefreshCanvasResolution();
+		this.InvalidateCanvasResolution();
 	}
 
 	Close()
@@ -643,7 +643,7 @@ export class Context
 	
 		//	resize to original rect
 		const Canvas = this.GetCanvasElement();
-		this.RefreshCanvasResolution();
+		this.InvalidateCanvasResolution();
 	}
 	
 	ResetActiveTextureSlots()
@@ -810,6 +810,13 @@ export class Context
 		
 		throw `Don't know how to get canvas size`;
 	}
+	
+	InvalidateCanvasResolution()
+	{
+		//	assume something has happened that has made us this the size has changed, make sure it gets refreshed
+		//	this should also signal that the canvas width&height needs updating
+		this.ScreenRectCache = null;
+	}
 		
 	RefreshCanvasResolution()
 	{
@@ -831,8 +838,13 @@ export class Context
 		const h = Rect[3];
 		
 		//	re-set resolution to match
+		//	gr: todo: change this so we only resize the canvas (and invalidate it's contents)
+		//		on render
 		Canvas.width = w;
 		Canvas.height = h;
+		
+		//	re-cache rect
+		this.GetScreenRect();
 	}
 	
 	OnLostContext(Error)
@@ -1202,6 +1214,11 @@ export class Context
 
 			for ( let RenderCommands of PendingRenderCommands )
 			{
+				//	todo: only do this when rendering explicitly to the canvas/screen
+				//	canvas has been invalidated
+				if ( !this.ScreenRectCache )
+					this.RefreshCanvasResolution();
+				
 				try
 				{
 					const DeviceRenderTarget = new WindowRenderTarget(this);
