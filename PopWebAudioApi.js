@@ -953,6 +953,7 @@ export class WaveSampleData_t
 		//Pop.Debug(`WaveSampleData_t( x${this.WaveData.length} )`);
 		this.WaveData = WaveData;
 		this.SampleBuffer = null;
+		this.SampleBufferPromise = null;
 	}
 	
 	async DecodeAudioBuffer(Context,WaveData)
@@ -984,6 +985,15 @@ export class WaveSampleData_t
 	HasDecodedData()
 	{
 		return this.SampleBuffer != null;
+	}
+	
+	async GetSampleBuffer(Context)
+	{
+		if ( !this.SampleBufferPromise )
+		{
+			this.SampleBufferPromise = this.Decode(Context);
+		}
+		return this.SampleBufferPromise;
 	}
 	
 	async Decode(Context)
