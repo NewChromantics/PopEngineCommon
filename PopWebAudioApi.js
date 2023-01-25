@@ -1,9 +1,11 @@
 import PromiseQueue from './PromiseQueue.js'
 import {CreatePromise} from './PromiseQueue.js'
-import {Debug,Warning} from './PopWebApiCore.js'
+import {Warning} from './PopWebApiCore.js'
 
 import {JoinTypedArrays} from './PopApi.js'
 import {WaitForForegroundChange,IsForeground} from './PopWebApi.js'
+
+const Debug = function(){};	//	console.log
 
 //	gr: back to a sound pool system
 //	gr: all this is designed for SimpleSound
