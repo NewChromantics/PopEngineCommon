@@ -753,9 +753,12 @@ class Device_t
 		
 		if ( !ForcedLayerType )
 		{
-			if ( RenderContext.MultiView && this.XrFactory )
+			//	gr: android has XRWebGLBinding (xrfactory) now, for webxr, but not layers!
+			const HasProjectionLayers = this.XrFactory.createProjectionLayer;
+			
+			if ( RenderContext.MultiView && this.XrFactory && HasProjectionLayers )
 				ForcedLayerType = 'MultiView';
-			else if ( this.XrFactory )
+			else if ( this.XrFactory && HasProjectionLayers )
 				ForcedLayerType = 'StereoLayer';
 			else if ( PlatformXRWebGLLayerType )
 				ForcedLayerType = 'Classic';
@@ -1552,7 +1555,7 @@ export async function CreateDevice(RenderContext,GetRenderCommands,OnWaitForCall
 		}
 		catch(e)
 		{
-			Pop.Debug("Error creating XR session",e);
+			console.error("Error creating XR session",e);
 			await Pop.Yield(10*1000);
 		}
 	}
