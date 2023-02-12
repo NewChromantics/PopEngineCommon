@@ -414,7 +414,12 @@ export class PopEngineCanvas extends HTMLElement
 		async function FetchTriangleBuffer(RenderContext)
 		{
 			const Geometry = await GetGeometryAsync();
-			const TriangleBuffer = await RenderContext.CreateGeometry(Geometry);
+			const Indexes = Geometry.Indexes;
+			//	as we remove indexes, do a shallow copy
+			const GeometryNoIndexes = Object.assign({}, Geometry);
+			delete GeometryNoIndexes.Indexes;
+
+			const TriangleBuffer = await RenderContext.CreateGeometry( GeometryNoIndexes, Indexes );
 			return TriangleBuffer;
 		}
 		this.AssetManager.RegisterAssetAsyncFetchFunction(Name,FetchTriangleBuffer);

@@ -278,7 +278,6 @@ class TCreateGeometry
 function ParseGeometryObject(VertexAttributesObject)
 {
 	return VertexAttributesObject;
-	throw `todo: ParseGeometryObject()`;
 }
 
 
