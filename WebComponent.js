@@ -3,7 +3,7 @@ const ElementName = `popengine-canvas`;
 export default ElementName;
 
 
-import Pop from './PopEngine.js'
+import * as Pop from './PopEngine.js'
 import Camera_t from './Camera.js'
 import AssetManager from './AssetManager.js'
 import {CompileShader} from './AssetManager.js'
