@@ -863,7 +863,20 @@ export class PopImage
 			//Pop.Debug("Image from Image",this.PixelsFormat);
 			const SourceFormat = gl.RGBA;
 			const SourceType = gl.UNSIGNED_BYTE;
-			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, SourceFormat, SourceType, PixelData );
+			
+			//	for safari, dirty the texture first
+			//if ( this.HasRendered )
+			{
+				const InternalFormat = SourceFormat;
+				const DirtyPixels = new Uint8Array([100,255,0,255]);
+				gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, 1,1, 0, SourceFormat, SourceType, DirtyPixels );
+			}
+			//else
+			{
+				gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, SourceFormat, SourceType, PixelData );
+			}
+			this.HasRendered = true;
+			
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * PixelData.width * PixelData.height;
 			if ( isNaN(this.OpenglByteSize) )
 			{
@@ -968,7 +981,7 @@ export class PopImage
 			{
 				gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, Width, Height, Border, SourceFormat, SourceType, PixelData );
 			}
-
+			
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * Width * Height;
 			if ( isNaN(this.OpenglByteSize) )
 			{
@@ -998,6 +1011,9 @@ export class PopImage
 			throw `Unhandled Pixel buffer format ${typeof this.Pixels} (${Constructor})`;
 		}
 		
+		if ( PixelData && PixelData.OnRendered )
+			PixelData.OnRendered();
+
 		RenderContext.OnAllocatedTexture( this );
 		
 		//	non-power of 2 must be clamp to edge
