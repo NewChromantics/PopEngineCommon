@@ -864,18 +864,7 @@ export class PopImage
 			const SourceFormat = gl.RGBA;
 			const SourceType = gl.UNSIGNED_BYTE;
 			
-			//	for safari, dirty the texture first
-			//if ( this.HasRendered )
-			{
-				const InternalFormat = SourceFormat;
-				const DirtyPixels = new Uint8Array([100,255,0,255]);
-				gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, 1,1, 0, SourceFormat, SourceType, DirtyPixels );
-			}
-			//else
-			{
-				gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, SourceFormat, SourceType, PixelData );
-			}
-			this.HasRendered = true;
+			gl.texImage2D( gl.TEXTURE_2D, MipLevel, InternalFormat, SourceFormat, SourceType, PixelData );
 			
 			this.OpenglByteSize = GetTextureFormatPixelByteSize(gl,InternalFormat,SourceType) * PixelData.width * PixelData.height;
 			if ( isNaN(this.OpenglByteSize) )
