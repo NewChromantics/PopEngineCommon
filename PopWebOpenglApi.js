@@ -2943,6 +2943,14 @@ export class TriangleBuffer
 					TriangleIndexes = TriangleIndexes16;
 				}
 			}
+			else if ( TriangleIndexes instanceof Uint8Array )
+			{
+				//	if we don't support 8bit, convert to 16bit
+				if ( !gl.UNSIGNED_BYTE )
+				{
+					throw `8 bit indexes not supported`;
+				}
+			}
 			else if ( TriangleIndexes instanceof Uint16Array )
 			{
 			}
