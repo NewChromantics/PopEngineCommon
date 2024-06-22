@@ -3073,6 +3073,14 @@ export class TriangleBuffer
 			throw "Triangle index count not divisible by 3";
 		}
 		
+		let MinVertexIndex = this.TriangleIndexes[0];
+		let MaxVertexIndex = this.TriangleIndexes[0];
+		for ( let VertexIndex of this.TriangleIndexes )
+		{
+			MinVertexIndex = Math.min( MinVertexIndex, VertexIndex );
+			MaxVertexIndex = Math.max( MaxVertexIndex, VertexIndex );
+		}
+		console.log(`Triangle->VertexIndex min=${MinVertexIndex} max=${MaxVertexIndex}`);
 		
 		//	get the opengl-vertex/attrib layout
 		this.OpenglAttributes = GetOpenglAttributes(Attribs,gl);
@@ -3081,16 +3089,27 @@ export class TriangleBuffer
 		for ( let Attrib of Object.values(Attribs) )
 			TotalByteLength += Attrib.Data.byteLength;
 		
-		
+		function GetAttribVertexCount(Attrib)
+		{
+			return Attrib.Data.length / Attrib.Size;
+		}
+		for ( let AttribName of Object.keys(Attribs) )
+		{
+			const Attrib = Attribs[AttribName];
+			const AttribVertexCount = GetAttribVertexCount( Attrib );
+			console.log(`${AttribName} Vertex count = ${AttribVertexCount} x${Attrib.Size}`);
+		}
+
 		//	todo: detect when attribs all use same buffer and have a stride (interleaved data)
 		//	concat data
+		//	gr: not floats if we have byte attribs!
 		let TotalData = new Float32Array( TotalByteLength / 4 );//Float32Array.BYTES_PER_ELEMENT );
 		
 		let TotalDataOffset = 0;
 		for ( let Attrib of this.OpenglAttributes )
 		{
 			TotalData.set( Attrib.Floats, TotalDataOffset );
-			Attrib.ByteOffset = TotalDataOffset * Float32Array.BYTES_PER_ELEMENT;
+			Attrib.ByteOffset = TotalDataOffset * Attrib.Floats.BYTES_PER_ELEMENT;
 			TotalDataOffset += Attrib.Floats.length;
 			this.OpenglByteSize = TotalDataOffset;
 		}
