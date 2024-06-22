@@ -3096,10 +3096,6 @@ export class TriangleBuffer
 		//	get the opengl-vertex/attrib layout
 		this.OpenglAttributes = GetOpenglAttributes(Attribs,gl);
 
-		let TotalByteLength = 0;
-		for ( let Attrib of Object.values(Attribs) )
-			TotalByteLength += Attrib.Data.byteLength;
-		
 		function GetAttribVertexCount(Attrib)
 		{
 			return Attrib.Data.length / Attrib.Size;
@@ -3111,22 +3107,42 @@ export class TriangleBuffer
 			console.log(`${AttribName} Vertex count = ${AttribVertexCount} x${Attrib.Size}`);
 		}
 
-		//	todo: detect when attribs all use same buffer and have a stride (interleaved data)
-		//	concat data
-		//	gr: not floats if we have byte attribs!
-		let TotalData = new Float32Array( TotalByteLength / 4 );//Float32Array.BYTES_PER_ELEMENT );
+		let TotalByteLength = 0;
+		for ( let Attrib of Object.values(Attribs) )
+			TotalByteLength += Attrib.Data.byteLength;
 		
-		let TotalDataOffset = 0;
-		for ( let Attrib of this.OpenglAttributes )
+		const InterleavedData = this.OpenglAttributes[0].Stride != 0;
+		//const InterleavedData = false;
+
+		//	when using stride, we assume they're all using the same buffer.
+		//	need to handle when different buffers and still concat
+		let TotalData = null;
+		if ( InterleavedData )
 		{
-			TotalData.set( Attrib.Floats, TotalDataOffset );
-			Attrib.ByteOffset = TotalDataOffset * Attrib.Floats.BYTES_PER_ELEMENT;
-			TotalDataOffset += Attrib.Floats.length;
-			this.OpenglByteSize = TotalDataOffset;
+			//TotalData = this.OpenglAttributes[0].Floats;
+			this.OpenglByteSize = this.OpenglAttributes[0].Floats.byteLength;
+			TotalByteLength = this.OpenglAttributes[0].Floats.byteLength;
 		}
-		
-		//	set the total buffer data
+		else
+		{
+			//	concat data into one vertex buffer, and re-write ByteOffset
+			//	gr: not floats if we have byte attribs!
+			let TotalData = new Float32Array( TotalByteLength / 4 );//Float32Array.BYTES_PER_ELEMENT );
+			
+			let TotalDataOffset = 0;
+			for ( let Attrib of this.OpenglAttributes )
+			{
+				TotalData.set( Attrib.Floats, TotalDataOffset );
+				Attrib.ByteOffset = TotalDataOffset * Attrib.Floats.BYTES_PER_ELEMENT;
+				Attrib.Stride = 0;
+				TotalDataOffset += Attrib.Floats.length;
+			}
+			this.OpenglByteSize = TotalData.byteLength;
+		}
+
 		gl.bindBuffer( gl.ARRAY_BUFFER, this.VertexBuffer );
+		
+		//	concatonated, just push all the data
 		if ( TotalData )
 		{
 			gl.bufferData( gl.ARRAY_BUFFER, TotalData, gl.STATIC_DRAW );
@@ -3134,19 +3150,53 @@ export class TriangleBuffer
 		else
 		{
 			//	init buffer size
-			gl.bufferData(gl.ARRAY_BUFFER, TotalByteLength, gl.STREAM_DRAW);
+			//gl.bufferData(gl.ARRAY_BUFFER, TotalByteLength, gl.STREAM_DRAW);
+			gl.bufferData(gl.ARRAY_BUFFER, TotalByteLength, gl.STATIC_DRAW);
+			//gl.bufferData(gl.ARRAY_BUFFER, this.OpenglAttributes[0].Floats, gl.STREAM_DRAW);
 			//gl.bufferData( gl.ARRAY_BUFFER, VertexData, gl.STATIC_DRAW );
 
-			let AttribByteOffset = 0;
-			function BufferAttribData(Attrib)
+			if ( InterleavedData )
 			{
-				//gl.bufferData( gl.ARRAY_BUFFER, VertexData, gl.STATIC_DRAW );
-				gl.bufferSubData( gl.ARRAY_BUFFER, AttribByteOffset, Attrib.Floats );
-				Attrib.ByteOffset = AttribByteOffset;
-				AttribByteOffset += Attrib.Floats.byteLength;
+				const GlAttribs = this.OpenglAttributes;
+				const InterleavedBuffer = GlAttribs[0].Floats;
+				//	this assumes they're all using the same buffer
+				gl.bufferSubData( gl.ARRAY_BUFFER, 0, InterleavedBuffer );
+				
+
+				function GetFirstByteOffset(DataIndex)
+				{
+					let FirstByteOffset = 0;
+					for ( let Attrib of GlAttribs )
+					{
+						if ( Attrib.DataIndex < DataIndex )
+						{
+							const AttribSizeBytes = Attrib.Size * Attrib.Floats.BYTES_PER_ELEMENT;
+							FirstByteOffset += AttribSizeBytes;
+						}
+					}
+					return FirstByteOffset;
+				}
+
+				//	need to write byte offsets
+				function BufferAttribData(Attrib)
+				{
+					Attrib.ByteOffset = GetFirstByteOffset(Attrib.DataIndex);
+				}
+				this.OpenglAttributes.forEach( BufferAttribData );
 			}
-			this.OpenglAttributes.forEach( BufferAttribData );
-			this.OpenglByteSize = AttribByteOffset;
+			else
+			{
+				let AttribByteOffset = 0;
+				function BufferAttribData(Attrib)
+				{
+					//gl.bufferData( gl.ARRAY_BUFFER, VertexData, gl.STATIC_DRAW );
+					gl.bufferSubData( gl.ARRAY_BUFFER, AttribByteOffset, Attrib.Floats );
+					Attrib.ByteOffset = AttribByteOffset;
+					AttribByteOffset += Attrib.Floats.byteLength;
+				}
+				this.OpenglAttributes.forEach( BufferAttribData );
+				this.OpenglByteSize = AttribByteOffset;
+			}
 		}
 		
 		RenderContext.OnAllocatedGeometry( this );
