@@ -2826,6 +2826,7 @@ function GetOpenglElementType(OpenglContext,Elements)
 		throw `GetOpenglElementType( ${Elements} )`;
 	if ( Elements instanceof Float32Array )	return OpenglContext.FLOAT;
 	if ( Elements instanceof Uint32Array )	return OpenglContext.UNSIGNED_INT;
+	if ( Elements instanceof Uint8Array )	return OpenglContext.UNSIGNED_BYTE;
 	
 	throw `GetOpenglElementType unhandled type; ${Elements.constructor.name}`;
 }
@@ -2853,6 +2854,16 @@ function GetOpenglAttributes(Attribs,RenderContext)
 		//	should get location from shader binding!
 		const Attrib = Attribs[Name];
 		CleanupAttrib(Attrib);
+		
+		//	hack whilst all attribs are floats
+		if ( !(Attrib.Data instanceof Float32Array) )
+		{
+			const Dataf = new Float32Array( Attrib.Data.length );
+			for ( let i=0;	i<Attrib.Data.length;	i++ )
+				Dataf[i] = Attrib.Data[i];
+			Attrib.Data = Dataf;
+			//Attrib.Stride *= 4;	//	byte -> float
+		}
 		
 		const OpenglAttrib = {};
 		OpenglAttrib.Name = Name;
