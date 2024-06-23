@@ -1,9 +1,11 @@
 import PromiseQueue from './PromiseQueue.js'
 import {CreatePromise} from './PromiseQueue.js'
-import {Debug,Warning} from './PopWebApiCore.js'
+import {Warning} from './PopWebApiCore.js'
 
 import {JoinTypedArrays} from './PopApi.js'
 import {WaitForForegroundChange,IsForeground} from './PopWebApi.js'
+
+const Debug = function(){};	//	console.log
 
 //	gr: back to a sound pool system
 //	gr: all this is designed for SimpleSound
@@ -953,6 +955,7 @@ export class WaveSampleData_t
 		//Pop.Debug(`WaveSampleData_t( x${this.WaveData.length} )`);
 		this.WaveData = WaveData;
 		this.SampleBuffer = null;
+		this.SampleBufferPromise = null;
 	}
 	
 	async DecodeAudioBuffer(Context,WaveData)
@@ -984,6 +987,15 @@ export class WaveSampleData_t
 	HasDecodedData()
 	{
 		return this.SampleBuffer != null;
+	}
+	
+	async GetSampleBuffer(Context)
+	{
+		if ( !this.SampleBufferPromise )
+		{
+			this.SampleBufferPromise = this.Decode(Context);
+		}
+		return this.SampleBufferPromise;
 	}
 	
 	async Decode(Context)

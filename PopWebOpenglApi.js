@@ -278,7 +278,6 @@ class TCreateGeometry
 function ParseGeometryObject(VertexAttributesObject)
 {
 	return VertexAttributesObject;
-	throw `todo: ParseGeometryObject()`;
 }
 
 
@@ -587,7 +586,7 @@ export class Context
 
 	OnCanvasResizeObservation(Event)
 	{
-		this.RefreshCanvasResolution();
+		this.InvalidateCanvasResolution();
 	}
 
 	Close()
@@ -643,7 +642,7 @@ export class Context
 	
 		//	resize to original rect
 		const Canvas = this.GetCanvasElement();
-		this.RefreshCanvasResolution();
+		this.InvalidateCanvasResolution();
 	}
 	
 	ResetActiveTextureSlots()
@@ -810,6 +809,13 @@ export class Context
 		
 		throw `Don't know how to get canvas size`;
 	}
+	
+	InvalidateCanvasResolution()
+	{
+		//	assume something has happened that has made us this the size has changed, make sure it gets refreshed
+		//	this should also signal that the canvas width&height needs updating
+		this.ScreenRectCache = null;
+	}
 		
 	RefreshCanvasResolution()
 	{
@@ -823,16 +829,29 @@ export class Context
 		//	assume something has happened that has made us this the size has changed, make sure it gets refreshed
 		this.ScreenRectCache = null;		
 
-		//	gr: this function now should always just get the rect via dom, 
-		//		if it can't get it from itself, from it's parent
-		//	GetScreenRect should be using canvas w/h, so this must always be called before
-		const Rect = this.GetCanvasDomRect(Canvas);
-		const w = Rect[2];
-		const h = Rect[3];
-		
-		//	re-set resolution to match
-		Canvas.width = w;
-		Canvas.height = h;
+		//	GetCanvasDomRect will throw if the element has been disconnected from the dom
+		try
+		{
+			//	gr: this function now should always just get the rect via dom,
+			//		if it can't get it from itself, from it's parent
+			//	GetScreenRect should be using canvas w/h, so this must always be called before
+			const Rect = this.GetCanvasDomRect(Canvas);
+			const w = Rect[2];
+			const h = Rect[3];
+			
+			//	re-set resolution to match
+			//	gr: todo: change this so we only resize the canvas (and invalidate it's contents)
+			//		on render
+			Canvas.width = w;
+			Canvas.height = h;
+			
+			//	re-cache rect
+			this.GetScreenRect();
+		}
+		catch(e)
+		{
+			console.warn(`RefreshCanvasResolution() ${e}`);
+		}
 	}
 	
 	OnLostContext(Error)
@@ -1202,6 +1221,11 @@ export class Context
 
 			for ( let RenderCommands of PendingRenderCommands )
 			{
+				//	todo: only do this when rendering explicitly to the canvas/screen
+				//	canvas has been invalidated
+				if ( !this.ScreenRectCache )
+					this.RefreshCanvasResolution();
+				
 				try
 				{
 					const DeviceRenderTarget = new WindowRenderTarget(this);

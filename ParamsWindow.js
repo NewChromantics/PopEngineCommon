@@ -1,6 +1,6 @@
 import PromiseQueue from './PromiseQueue.js'
 import * as PopMath from './Math.js'
-import Pop from './PopEngine.js'	//	for pop.gui.xxx
+import * as Pop from './PopEngine.js'
 
 //	gr: need to sort a dependency system
 //		PopEngineCommon/PopMath.js

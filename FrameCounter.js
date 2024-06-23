@@ -1,4 +1,4 @@
-import Pop from './PopEngine.js'
+import * as Pop from './PopEngine.js'
 
 
 export class Clock

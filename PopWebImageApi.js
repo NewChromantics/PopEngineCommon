@@ -1,8 +1,13 @@
+//import {LoadFileAsImageAsync} from './FileSystem.js'
 import {Debug,Warning} from './PopWebApiCore.js'
 import DirtyBuffer from './DirtyBuffer.js'
 import {GetRectsFromIndexes} from './Math.js'
 import {CreatePromise} from './PromiseQueue.js'
 
+function LoadFileAsImageAsync()
+{
+	throw `Cyclical include; fix the use of this`;
+}
 
 //	gr: I forget what browser this was for! add comments when we know!
 //	ImageBitmap should also be supported
@@ -14,39 +19,6 @@ const WebApi_HtmlVideoElement = window.hasOwnProperty('HTMLVideoElement') ? wind
 //	webcodec output
 const WebApi_HtmlVideoFrame = window.hasOwnProperty('VideoFrame') ? window['VideoFrame'] : null;
 
-
-//	in c++ this is SoyPixelsFormat namespace
-export function GetChannelsFromPixelFormat(PixelFormat)
-{
-	switch(PixelFormat)
-	{
-		case 'Greyscale':	return 1;
-		case 'RGBA':		return 4;
-		case 'RGB':			return 3;
-		case 'Float1':		return 1;
-		case 'Float2':		return 2;
-		case 'Float3':		return 3;
-		case 'Float4':		return 4;
-		case 'ChromaU':		return 1;
-		case 'ChromaV':		return 1;
-		case 'Depth16mm':	return 2;	//	RG
-	}
-	throw `unhandled GetChannelsFromPixelFormat(${PixelFormat})`;
-}
-
-export function IsFloatFormat(Format)
-{
-	switch(Format)
-	{
-		case 'Float1':
-		case 'Float2':
-		case 'Float3':
-		case 'Float4':
-			return true;
-		default:
-			return false;
-	}
-}
 
 export function GetFormatElementSize(PixelFormat)
 {
@@ -136,6 +108,37 @@ function PixelFormatToOpenglFormat(OpenglContext,PixelFormat)
 		case 'RGBA32':		return [ gl.RGBA,		gl.UNSIGNED_INT_24_8];
 	}
 	throw "PixelFormatToOpenglFormat: Unhandled pixel format " + PixelFormat;
+}
+
+//	in c++ this is SoyPixelsFormat namespace
+export function GetChannelsFromPixelFormat(PixelFormat)
+{
+	switch(PixelFormat)
+	{
+		case 'Greyscale':	return 1;
+		case 'RGBA':		return 4;
+		case 'RGB':			return 3;
+		case 'Float3':		return 3;
+		case 'Float4':		return 4;
+		case 'ChromaU':		return 1;
+		case 'ChromaV':		return 1;
+		case 'Depth16mm':	return 2;	//	RG
+	}
+	throw `unhandled GetChannelsFromPixelFormat(${PixelFormat})`;
+}
+
+export function IsFloatFormat(Format)
+{
+	switch(Format)
+	{
+		case 'Float1':
+		case 'Float2':
+		case 'Float3':
+		case 'Float4':
+			return true;
+		default:
+			return false;
+	}
 }
 
 
@@ -362,7 +365,7 @@ function FloatToInt8Pixels(FloatArray,FloatFormat,Width,Height)
 }
 
 
-export default class PopImage
+export class PopImage
 {
 	constructor(Filename)
 	{
@@ -1043,3 +1046,5 @@ export default class PopImage
 		throw `todo: create html ImageBitmap from ${typeof this.Pixels} pixels`;
 	}
 }
+
+export default PopImage;

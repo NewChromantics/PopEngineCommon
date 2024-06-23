@@ -3,7 +3,7 @@ const ElementName = `popengine-canvas`;
 export default ElementName;
 
 
-import Pop from './PopEngine.js'
+import * as Pop from './PopEngine.js'
 import Camera_t from './Camera.js'
 import AssetManager from './AssetManager.js'
 import {CompileShader} from './AssetManager.js'
@@ -345,26 +345,38 @@ export class PopEngineCanvas extends HTMLElement
 		Button.onclick = OnClick;
 	}
 	
+	UpdateRenderCommands(Commands,RenderContext)
+	{
+		//	convert new rendercommands (names for assets)
+		//	to old system (assets)
+		//	we will move this at some point to the engine
+		//	when we figure out how to deal with images in the same way
+		function UpdateRenderCommand(Command)
+		{
+			if ( !Command )	return;
+			if ( Command[0] == 'Draw' )
+			{
+				//	geo
+				Command[1] = this.AssetManager.GetAsset(Command[1],RenderContext);
+				//	shader
+				Command[2] = this.AssetManager.GetAsset(Command[2],RenderContext);
+			}
+			return Command;
+		}
+		return Commands.map( UpdateRenderCommand.bind(this) );
+	}
+	
+	async RenderCommands(Commands)
+	{
+		const RenderContext = this.Renderer.GetRenderContext();
+		Commands = this.UpdateRenderCommands( Commands, RenderContext );
+		await RenderContext.Render(Commands);
+	}
+	
 	async RenderThread()
 	{
 		function GetRenderCommands(RenderContext,Camera,ScreenRect)
 		{
-			//	convert new rendercommands (names for assets)
-			//	to old system (assets)
-			//	we will move this at some point to the engine
-			//	when we figure out how to deal with images in the same way
-			function UpdateRenderCommand(Command)
-			{
-				if ( !Command )	return;
-				if ( Command[0] == 'Draw' )
-				{
-					//	geo
-					Command[1] = this.AssetManager.GetAsset(Command[1],RenderContext);
-					//	shader
-					Command[2] = this.AssetManager.GetAsset(Command[2],RenderContext);
-				}
-			}
-					
 			try
 			{
 				//	dont send render context to external commands any more
@@ -372,9 +384,12 @@ export class PopEngineCanvas extends HTMLElement
 				const ExternalCommands = this.CallDomEvent('getrendercommands',GetRenderCommandsArgs);
 				if ( !ExternalCommands )
 					throw `No external commands returned from event`;
+				
 				//	gr; should this make a copy?
-				ExternalCommands.forEach( UpdateRenderCommand.bind(this) );
-				return ExternalCommands;
+				const Commands = this.UpdateRenderCommands( ExternalCommands, RenderContext );
+				return Commands;
+				//ExternalCommands.forEach( UpdateRenderCommand.bind(this) );
+				//return ExternalCommands;
 			}
 			catch(e)
 			{
@@ -399,7 +414,12 @@ export class PopEngineCanvas extends HTMLElement
 		async function FetchTriangleBuffer(RenderContext)
 		{
 			const Geometry = await GetGeometryAsync();
-			const TriangleBuffer = await RenderContext.CreateGeometry(Geometry);
+			const Indexes = Geometry.Indexes;
+			//	as we remove indexes, do a shallow copy
+			const GeometryNoIndexes = Object.assign({}, Geometry);
+			delete GeometryNoIndexes.Indexes;
+
+			const TriangleBuffer = await RenderContext.CreateGeometry( GeometryNoIndexes, Indexes );
 			return TriangleBuffer;
 		}
 		this.AssetManager.RegisterAssetAsyncFetchFunction(Name,FetchTriangleBuffer);
