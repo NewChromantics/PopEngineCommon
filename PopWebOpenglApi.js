@@ -2855,19 +2855,11 @@ function GetOpenglAttributes(Attribs,RenderContext)
 		const Attrib = Attribs[Name];
 		CleanupAttrib(Attrib);
 		
-		//	hack whilst all attribs are floats
-		if ( !(Attrib.Data instanceof Float32Array) )
-		{
-			const Dataf = new Float32Array( Attrib.Data.length );
-			for ( let i=0;	i<Attrib.Data.length;	i++ )
-				Dataf[i] = Attrib.Data[i];
-			Attrib.Data = Dataf;
-			//Attrib.Stride *= 4;	//	byte -> float
-		}
-		
+		//	gr: note the data here is already offset by gltf importer...
+		//		we may want to undo that in the importer
 		const OpenglAttrib = {};
 		OpenglAttrib.Name = Name;
-		OpenglAttrib.Floats = Attrib.Data;
+		OpenglAttrib.Floats = Attrib.Data;	//	gr: not all floats now!
 		OpenglAttrib.Size = Attrib.Size;
 		OpenglAttrib.Type = GetOpenglElementType( gl, Attrib.Data );
 		OpenglAttrib.DataIndex = Index;
@@ -3042,10 +3034,12 @@ export class TriangleBuffer
 			
 			//	setup buffer & bind stuff in the vao
 			gl.bindVertexArray( this.Vao );
+			/*
 			//	we'll need this if we start having multiple attributes
-			//if ( DisableOldVertexAttribArrays )
-			//	for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
-			//		gl.disableVertexAttribArray(i);
+			if ( DisableOldVertexAttribArrays )
+				for ( let i=0;	i<gl.getParameter(gl.MAX_VERTEX_ATTRIBS);	i++)
+					gl.disableVertexAttribArray(i);
+			 */
 			this.BindVertexPointers( RenderContext, Shader );
 		
 			gl.bindVertexArray( null );
@@ -3100,6 +3094,12 @@ export class TriangleBuffer
 		{
 			return Attrib.Data.length / Attrib.Size;
 		}
+		
+		function GetAttribByteSize(Attrib)
+		{
+			return Attrib.Size * Attrib.Data.BYTES_PER_ELEMENT;
+		}
+		
 		for ( let AttribName of Object.keys(Attribs) )
 		{
 			const Attrib = Attribs[AttribName];
@@ -3111,7 +3111,7 @@ export class TriangleBuffer
 		for ( let Attrib of Object.values(Attribs) )
 			TotalByteLength += Attrib.Data.byteLength;
 		
-		const InterleavedData = this.OpenglAttributes[0].Stride != 0;
+		const InterleavedData = (this.OpenglAttributes[0].Stride != 0) ? this.OpenglAttributes[0].Floats : null;
 		//const InterleavedData = false;
 
 		//	when using stride, we assume they're all using the same buffer.
@@ -3119,6 +3119,25 @@ export class TriangleBuffer
 		let TotalData = null;
 		if ( InterleavedData )
 		{
+			//	all strides need to be the same, otherwise, they're probably pointing at different data
+			//	or stomping over each other, which could be possible!
+			const AttribSizes = Object.values(Attribs).map( GetAttribByteSize );
+			const Strides = this.OpenglAttributes.map( a => a.Stride );
+			const StrideMisMatches = Strides.filter( s => s!=Strides[0] );
+			if ( StrideMisMatches.length )
+				throw `Got attributes with mis matched strides; ${Strides.join()}`;
+
+			const DataS = Object.values(Attribs).map( a => a.Data );
+			const DataBuffers = Object.values(Attribs).map( a => a.Data.buffer );
+			const DataBufferMisMatches = DataBuffers.filter( s => s!=DataBuffers[0] );
+			if ( DataBufferMisMatches.length )
+				throw `Got interleaved data with different underlying buffers`;
+
+			const VertexStride = Strides[0];
+			//	gr: this is wrong, but interestingly /12
+			const VertexCount = InterleavedData.byteLength / VertexStride;
+			console.log(`Interleaved vertex count ${VertexCount}`);
+			
 			//TotalData = this.OpenglAttributes[0].Floats;
 			this.OpenglByteSize = this.OpenglAttributes[0].Floats.byteLength;
 			TotalByteLength = this.OpenglAttributes[0].Floats.byteLength;
@@ -3126,16 +3145,15 @@ export class TriangleBuffer
 		else
 		{
 			//	concat data into one vertex buffer, and re-write ByteOffset
-			//	gr: not floats if we have byte attribs!
-			let TotalData = new Float32Array( TotalByteLength / 4 );//Float32Array.BYTES_PER_ELEMENT );
+			let TotalData = new Uint8Array( TotalByteLength );
 			
 			let TotalDataOffset = 0;
 			for ( let Attrib of this.OpenglAttributes )
 			{
 				TotalData.set( Attrib.Floats, TotalDataOffset );
-				Attrib.ByteOffset = TotalDataOffset * Attrib.Floats.BYTES_PER_ELEMENT;
+				Attrib.ByteOffset = TotalDataOffset;// * Attrib.Floats.BYTES_PER_ELEMENT;
 				Attrib.Stride = 0;
-				TotalDataOffset += Attrib.Floats.length;
+				TotalDataOffset += Attrib.Floats.byteLength;
 			}
 			this.OpenglByteSize = TotalData.byteLength;
 		}
