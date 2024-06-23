@@ -3107,6 +3107,11 @@ export class TriangleBuffer
 			console.log(`${AttribName} Vertex count = ${AttribVertexCount} x${Attrib.Size}`);
 		}
 
+		const AttribVertexCount = GetAttribVertexCount( Object.values(Attribs)[0] );
+		if ( MinVertexIndex <0 || MaxVertexIndex >= AttribVertexCount )
+			console.error(`Triangles out of range; Vertexes=${AttribVertexCount} triangle min=${MinVertexIndex} triangle max=${MaxVertexIndex}`);
+
+		
 		let TotalByteLength = 0;
 		for ( let Attrib of Object.values(Attribs) )
 			TotalByteLength += Attrib.Data.byteLength;
