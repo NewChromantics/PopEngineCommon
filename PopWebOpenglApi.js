@@ -1457,10 +1457,10 @@ export class Context
 				}
 			}
 		}
-		/*
 		catch(e)
 		{
-		}*/
+			console.error(`RenderError: ${e}`);
+		}
 		finally
 		{
 			EndPass();
@@ -3086,14 +3086,26 @@ export class TriangleBuffer
 		this.VertexBufferContextVersion = RenderContext.ContextVersion;
 		
 		this.PrimitiveType = gl.TRIANGLES;
+		
+		let MinVertexIndex = 0;
+		let MaxVertexIndex = 0;
 		if ( this.TriangleIndexes )
 		{
 			this.IndexCount = this.TriangleIndexes.length;
+			MinVertexIndex = this.TriangleIndexes[0];
+			MaxVertexIndex = this.TriangleIndexes[0];
+			for ( let VertexIndex of this.TriangleIndexes )
+			{
+				MinVertexIndex = Math.min( MinVertexIndex, VertexIndex );
+				MaxVertexIndex = Math.max( MaxVertexIndex, VertexIndex );
+			}
 		}
 		else
 		{
 			const FirstAttrib = Attribs[Object.keys(Attribs)[0]];
 			this.IndexCount = (FirstAttrib.Data.length / FirstAttrib.Size);
+			MinVertexIndex = 0;
+			MaxVertexIndex = this.IndexCount - 1;
 		}
 		
 		//	this needs changing for non-triangle geometry
@@ -3102,13 +3114,6 @@ export class TriangleBuffer
 			throw "Triangle index count not divisible by 3";
 		}
 		
-		let MinVertexIndex = this.TriangleIndexes[0];
-		let MaxVertexIndex = this.TriangleIndexes[0];
-		for ( let VertexIndex of this.TriangleIndexes )
-		{
-			MinVertexIndex = Math.min( MinVertexIndex, VertexIndex );
-			MaxVertexIndex = Math.max( MaxVertexIndex, VertexIndex );
-		}
 		console.log(`Triangle->VertexIndex min=${MinVertexIndex} max=${MaxVertexIndex}`);
 		
 		//	get the opengl-vertex/attrib layout
