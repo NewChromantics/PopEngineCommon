@@ -2850,8 +2850,9 @@ function GetOpenglElementType(OpenglContext,Elements)
 		throw `GetOpenglElementType( ${Elements} )`;
 	if ( Elements instanceof Float32Array )	return OpenglContext.FLOAT;
 	if ( Elements instanceof Uint32Array )	return OpenglContext.UNSIGNED_INT;
+	if ( Elements instanceof Uint16Array )	return OpenglContext.UNSIGNED_SHORT;
 	if ( Elements instanceof Uint8Array )	return OpenglContext.UNSIGNED_BYTE;
-	
+
 	throw `GetOpenglElementType unhandled type; ${Elements.constructor.name}`;
 }
 
