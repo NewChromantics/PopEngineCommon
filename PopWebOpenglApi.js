@@ -2720,7 +2720,7 @@ export class Shader
 		let ValuesExpanded = [];
 		let EnumValue = function(v)
 		{
-			if ( Array.isArray(v) )
+			if ( Array.isArray(v) || ArrayBuffer.isView(v) )	//	array || typedarray
 				ValuesExpanded.push(...v);
 			else if ( typeof v == "object" )
 				v.Enum( function(v)	{	ValuesExpanded.push(v);	} );
