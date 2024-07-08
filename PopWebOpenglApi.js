@@ -2707,12 +2707,13 @@ export class Shader
 		//	providing MORE values, do a quick slice. Should we warn about this?
 		if ( Values.length >= ExpectedValueCount )
 		{
+			Pop.Debug(`SetUniformArray(${UniformName}) culling range ${Values.length} values/${ExpectedValueCount} in shader`);
 			const ValuesCut = Values.slice(0,ExpectedValueCount);
 			UniformMeta.SetValues( ValuesCut );
 			return;
 		}
 		
-		//Pop.Debug("SetUniformArray("+UniformName+") slow path");
+		//Pop.Debug(`SetUniformArray(${UniformName}) slow path`);
 		
 		//	note: uniform iv may need to be Int32Array;
 		//	https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/uniform
